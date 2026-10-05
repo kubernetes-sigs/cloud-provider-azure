@@ -567,13 +567,20 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 						return fmt.Errorf("NAT Gateway ID after recovery = %q, want %q", recoveredNatGatewayID, natGatewayID)
 					}
 
+					want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+					if err != nil {
+						return err
+					}
+					if gotPods != numPods {
+						return fmt.Errorf("live egress pod count after recovery = %d, want %d", gotPods, numPods)
+					}
 					registeredPods, err := countRegisteredEndpoints(egressName)
 					if err != nil {
 						return err
 					}
 					utils.Logf("Registered %d pod IPs for egress gateway after recovery", registeredPods)
-					if registeredPods != numPods {
-						return fmt.Errorf("registered pod count after recovery = %d, want %d", registeredPods, numPods)
+					if registeredPods != len(want) {
+						return fmt.Errorf("registered pod IP count after recovery = %d, want %d", registeredPods, len(want))
 					}
 					return nil
 				}
@@ -615,7 +622,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		}
 
 		By("Waiting for the NAT gateway to provision and pods to register")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressRegisteredPodCount(cs, ns.Name, egressName, numPods, waitTime)
 
 		// Delete the egress pods, then immediately crash CCM so the in-flight pod-deletion tracking
 		// (the in-memory pendingPodDeletions) is lost. On recovery those pods are mid-deletion but no
@@ -751,15 +758,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		By("Waiting for CCM to reconcile")
 		expectedPods := initialPods + additionalPods
 		Eventually(func() error {
-			registeredPods, err := countRegisteredEndpoints(egressName)
-			if err != nil {
-				return err
-			}
-			utils.Logf("Expected %d pods, found %d registered", expectedPods, registeredPods)
-			if registeredPods != expectedPods {
-				return fmt.Errorf("registered pod count after recovery = %d, want %d", registeredPods, expectedPods)
-			}
-			return nil
+			return egressRegisteredPodCountErr(cs, ns.Name, egressName, expectedPods)
 		}, 60*time.Second, 10*time.Second).Should(Succeed(),
 			"all pods should be registered after CCM recovery")
 	})
@@ -873,6 +872,9 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		Expect(err).NotTo(HaveOccurred())
 
 		for _, egressName := range egressGateways {
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(gotPods).To(Equal(podsPerGateway))
 			registeredPods := 0
 			for _, location := range alResponse.Value {
 				for _, addr := range location.Addresses {
@@ -884,7 +886,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 				}
 			}
 			utils.Logf("Egress gateway '%s' has %d registered pods", egressName, registeredPods)
-			Expect(registeredPods).To(Equal(podsPerGateway), "All pods should be registered for %s", egressName)
+			Expect(registeredPods).To(Equal(len(want)), "All pod IPs should be registered for %s", egressName)
 		}
 	})
 })

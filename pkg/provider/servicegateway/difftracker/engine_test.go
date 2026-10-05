@@ -17,6 +17,7 @@ limitations under the License.
 package difftracker
 
 import (
+	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -24,10 +25,16 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -181,6 +188,667 @@ func TestReconcileInboundService(t *testing.T) {
 		err := dt.ReconcileInboundService(newService("", 80))
 
 		assert.Error(t, err)
+	})
+}
+
+const dualStackUID = "11111111-2222-3333-4444-555555555555"
+
+func newDualStackService(families ...v1.IPFamily) *v1.Service {
+	return &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "test-namespace", Name: "web", UID: types.UID(dualStackUID)},
+		Spec: v1.ServiceSpec{
+			Type:       v1.ServiceTypeLoadBalancer,
+			IPFamilies: families,
+			Ports:      []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP, TargetPort: intstr.FromInt(8080)}},
+		},
+	}
+}
+
+func TestReconcileInboundService_DualStack(t *testing.T) {
+	secondaryV6 := dualStackUID + "-v6"
+
+	t.Run("creates one unit per IP family", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.SetClusterName("cluster")
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+
+		for unit, family := range map[string]string{dualStackUID: "IPv4", secondaryV6: "IPv6"} {
+			op := dt.pendingServiceOps[unit]
+			if assert.NotNil(t, op, unit) {
+				assert.Equal(t, StateNotStarted, op.State, unit)
+				assert.Equal(t, []string{family}, op.Config.InboundConfig.IPFamilies, unit)
+				assert.Equal(t, "test-namespace", op.Config.Namespace, unit)
+				assert.Equal(t, "web", op.Config.Name, unit)
+				assert.Equal(t, "cluster", op.Config.InboundConfig.ClusterName, unit)
+			}
+		}
+		assert.Equal(t, []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, dt.inboundFamilies[dualStackUID])
+	})
+
+	t.Run("an IPv6 primary keeps the Service UID and adds an IPv4 unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol, v1.IPv4Protocol)))
+
+		if assert.Contains(t, dt.pendingServiceOps, dualStackUID) {
+			assert.Equal(t, []string{"IPv6"}, dt.pendingServiceOps[dualStackUID].Config.InboundConfig.IPFamilies)
+		}
+		if assert.Contains(t, dt.pendingServiceOps, dualStackUID+"-v4") {
+			assert.Equal(t, []string{"IPv4"}, dt.pendingServiceOps[dualStackUID+"-v4"].Config.InboundConfig.IPFamilies)
+		}
+	})
+
+	created := func(dt *DiffTracker) {
+		for _, op := range dt.pendingServiceOps {
+			op.State = StateCreated
+			applied := op.Config
+			op.LastAppliedConfig = &applied
+			dt.NRPResources.LoadBalancers.Insert(op.ServiceUID)
+		}
+	}
+
+	t.Run("becoming single-stack deletes only the secondary unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+		created(dt)
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+
+		assert.Equal(t, StateCreated, dt.pendingServiceOps[dualStackUID].State, "the primary unit and its IP are untouched")
+		if assert.Contains(t, dt.pendingServiceOps, secondaryV6) {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, dt.pendingServiceOps[secondaryV6].State)
+		}
+		assert.Equal(t, []v1.IPFamily{v1.IPv4Protocol}, dt.inboundFamilies[dualStackUID])
+	})
+
+	// After a restart, units exist only in Azure until the Service reconciles successfully.
+	knownOnlyToAzure := func() *DiffTracker {
+		dt := newTestDiffTracker()
+		dt.NRPResources.LoadBalancers.Insert(dualStackUID, secondaryV6)
+		return dt
+	}
+	assertInboundUnitDeleted := func(t *testing.T, dt *DiffTracker, unit string) {
+		if op := dt.pendingServiceOps[unit]; assert.NotNil(t, op, unit) {
+			assert.True(t, op.Config.IsInbound, unit)
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, op.State, unit)
+		}
+	}
+
+	t.Run("becoming single-stack deletes a secondary unit known only to Azure", func(t *testing.T) {
+		dt := knownOnlyToAzure()
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+
+		assertInboundUnitDeleted(t, dt, secondaryV6)
+	})
+
+	t.Run("deleting the Service deletes every unit known only to Azure", func(t *testing.T) {
+		dt := knownOnlyToAzure()
+
+		assert.NoError(t, dt.DeleteInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+
+		assertInboundUnitDeleted(t, dt, secondaryV6)
+		assertInboundUnitDeleted(t, dt, dualStackUID)
+	})
+
+	t.Run("becoming dual-stack adds only the secondary unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		created(dt)
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+
+		assert.Equal(t, StateCreated, dt.pendingServiceOps[dualStackUID].State, "the primary unit is not updated")
+		if assert.Contains(t, dt.pendingServiceOps, secondaryV6) {
+			assert.Equal(t, StateNotStarted, dt.pendingServiceOps[secondaryV6].State)
+		}
+	})
+
+	t.Run("a changed primary family recreates the primary unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+		created(dt)
+		changed := newDualStackService(v1.IPv6Protocol)
+		changed.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "20.1.2.3"}, {IP: "2603:1030::7"}}
+		kube := fake.NewSimpleClientset(changed)
+		dt.kubeClient = kube
+
+		// IPv4 first, then IPv6 only, without the delete in between being seen (through ExternalName).
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		got, err := kube.CoreV1().Services("test-namespace").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::7"}}, got.Status.LoadBalancer.Ingress,
+			"the released IPv4 address must leave the status before the primary unit is recreated")
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol, v1.IPv4Protocol)))
+
+		primary := dt.pendingServiceOps[dualStackUID]
+		assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, primary.State)
+		assert.True(t, primary.RecreateAfterDeletion, "the primary unit is recreated in the new family")
+		assert.Equal(t, []string{"IPv6"}, primary.Config.InboundConfig.IPFamilies)
+		assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, dt.pendingServiceOps[secondaryV6].State)
+		got, err = kube.CoreV1().Services("test-namespace").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::7"}}, got.Status.LoadBalancer.Ingress, "a family still served keeps its IP")
+		if assert.Contains(t, dt.pendingServiceOps, dualStackUID+"-v4") {
+			assert.Equal(t, StateNotStarted, dt.pendingServiceOps[dualStackUID+"-v4"].State)
+		}
+	})
+
+	t.Run("a parked primary with last-applied family is recreated on primary family change", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		created(dt)
+		op := dt.pendingServiceOps[dualStackUID]
+		op.State = StateNotStarted
+		op.CreationFailedTerminal = true
+		dt.NRPResources.LoadBalancers.Insert(dualStackUID)
+		kube := fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		dt.kubeClient = kube
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, op.State)
+			assert.True(t, op.RecreateAfterDeletion)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+	})
+
+	t.Run("a primary family changed while the controller was down recreates the primary unit", func(t *testing.T) {
+		recorded := func(statusErr error) (*DiffTracker, *fake.Clientset) {
+			svc := newDualStackService(v1.IPv6Protocol)
+			svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}
+			kube := fake.NewSimpleClientset(svc)
+			if statusErr != nil {
+				kube.PrependReactor("get", "services", func(k8stesting.Action) (bool, runtime.Object, error) { return true, nil, statusErr })
+			}
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.LoadBalancers.Insert(dualStackUID)
+			dt.provisionedFamilies = map[string]string{dualStackUID: "IPv4"}
+			return dt, kube
+		}
+
+		dt, _ := recorded(errors.New("apiserver unavailable"))
+		assert.Error(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		assert.NotContains(t, dt.pendingServiceOps, dualStackUID, "the unit is left alone while its old IP cannot leave the status")
+		assert.Equal(t, "IPv4", dt.provisionedFamilies[dualStackUID], "the next reconcile retries")
+
+		dt, kube := recorded(nil)
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		if op := dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, op.State)
+			assert.True(t, op.RecreateAfterDeletion)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+		assert.Equal(t, "IPv4", dt.provisionedFamilies[dualStackUID])
+		got, err := kube.CoreV1().Services("test-namespace").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Empty(t, got.Status.LoadBalancer.Ingress, "the released IPv4 address leaves the status")
+
+		dt, _ = recorded(nil)
+		dt.provisionedFamilies[dualStackUID] = "IPv6"
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		assert.Equal(t, StateUpdateInProgress, dt.pendingServiceOps[dualStackUID].State, "a unit of the right family is only updated")
+		assert.Equal(t, "IPv6", dt.provisionedFamilies[dualStackUID])
+	})
+
+	t.Run("a restart primary flip during the first update recreates the primary unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.kubeClient = fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		dt.NRPResources.LoadBalancers.Insert(dualStackUID)
+		dt.provisionedFamilies = map[string]string{dualStackUID: "IPv4"}
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		if op := dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateUpdateInProgress, op.State)
+			assert.Nil(t, op.LastAppliedConfig)
+		}
+		assert.Equal(t, "IPv4", dt.provisionedFamilies[dualStackUID])
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+
+		if op := dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, op.State)
+			assert.True(t, op.RecreateAfterDeletion)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+			assert.NotEqual(t, StateUpdateInProgress, op.State, "the family flip must not update the IPv4 unit in place")
+		}
+	})
+
+	t.Run("a restart primary flip during the first unrecorded update recreates the primary unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.kubeClient = fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		dt.NRPResources.LoadBalancers.Insert(dualStackUID)
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		if op := dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateUpdateInProgress, op.State)
+			assert.Nil(t, op.LastAppliedConfig)
+			assert.Nil(t, op.InFlightConfig)
+			assert.Equal(t, []string{"IPv4"}, op.Config.InboundConfig.IPFamilies)
+		}
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+
+		if op := dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, op.State)
+			assert.True(t, op.RecreateAfterDeletion)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+	})
+
+	t.Run("a queued primary flip propagates status removal errors", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		kube := fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		dt.kubeClient = kube
+		dt.NRPResources.LoadBalancers.Insert(dualStackUID)
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		kube.PrependReactor("get", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("apiserver unavailable")
+		})
+
+		assert.Error(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		op := dt.pendingServiceOps[dualStackUID]
+		if assert.NotNil(t, op) {
+			assert.Equal(t, StateUpdateInProgress, op.State)
+			assert.Equal(t, []string{"IPv4"}, op.Config.InboundConfig.IPFamilies)
+		}
+	})
+
+	t.Run("a restart primary flip parked by terminal create failure does not loop deletes", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.kubeClient = fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		dt.NRPResources.LoadBalancers.Insert(dualStackUID)
+		dt.provisionedFamilies = map[string]string{dualStackUID: "IPv4"}
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		op := dt.pendingServiceOps[dualStackUID]
+		inflight := op.Config
+		op.InFlightConfig = &inflight
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		dt.OnServiceCreationComplete(dualStackUID, true, nil)
+		assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[dualStackUID].State)
+
+		dt.OnServiceCreationComplete(dualStackUID, true, nil)
+		assert.NotContains(t, dt.provisionedFamilies, dualStackUID, "delete success must forget the old-family PIP")
+		op = dt.pendingServiceOps[dualStackUID]
+		recreate := op.Config
+		op.State = StateCreationInProgress
+		op.InFlightConfig = &recreate
+		op.AttemptedCreateConfig = &recreate
+
+		dt.OnServiceCreationComplete(dualStackUID, false, newTerminalError(errors.New("IPv6 create rejected")))
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State)
+			assert.True(t, op.CreationFailedTerminal)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State, "unchanged resync must keep the terminal recreate parked, not delete again")
+			assert.True(t, op.CreationFailedTerminal)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+	})
+
+	t.Run("a primary flip after a transient create failure recreates the primary unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		op := dt.pendingServiceOps[dualStackUID]
+		inflight := op.Config
+		op.State = StateCreationInProgress
+		op.InFlightConfig = &inflight
+
+		dt.OnServiceCreationComplete(dualStackUID, false, errors.New("transient create failure"))
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State)
+			assert.Equal(t, 1, op.RetryCount)
+			assert.Nil(t, op.InFlightConfig)
+			if assert.NotNil(t, op.AttemptedCreateConfig) {
+				assert.Equal(t, []string{"IPv4"}, op.AttemptedCreateConfig.InboundConfig.IPFamilies)
+			}
+		}
+
+		dt.kubeClient = fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, op.State)
+			assert.True(t, op.RecreateAfterDeletion)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+			assert.NotEqual(t, StateNotStarted, op.State, "the family flip must not be left as an in-place retry")
+		}
+
+		dt.OnServiceCreationComplete(dualStackUID, true, nil)
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State, "resync must keep the recreate queued, not delete again")
+			assert.Nil(t, op.AttemptedCreateConfig)
+		}
+	})
+
+	t.Run("a primary flip while create is in flight recreates after the create", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		dt.kubeClient = fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		op := dt.pendingServiceOps[dualStackUID]
+		inflight := op.Config
+		op.State = StateCreationInProgress
+		op.InFlightConfig = &inflight
+		op.AttemptedCreateConfig = &inflight
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), dualStackUID, "20.1.2.3"))
+		got, err := dt.kubeClient.CoreV1().Services("test-namespace").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Empty(t, got.Status.LoadBalancer.Ingress, "a stale IPv4 create must not re-add status after the Service flips to IPv6")
+
+		dt.OnServiceCreationComplete(dualStackUID, true, nil)
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateDeletionInProgress, op.State)
+			assert.True(t, op.RecreateAfterDeletion)
+			assert.Nil(t, op.InFlightConfig)
+		}
+
+		dt.OnServiceCreationComplete(dualStackUID, true, nil)
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+			assert.Nil(t, op.LastAppliedConfig)
+			assert.Nil(t, op.AttemptedCreateConfig)
+		}
+
+		dt.provisionedFamilies = map[string]string{dualStackUID: "IPv4"}
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		if op = dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State, "a stale old-family record must not trigger a second delete once recreate is queued")
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), dualStackUID, "2603:1030::7"))
+		got, err = dt.kubeClient.CoreV1().Services("test-namespace").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::7"}}, got.Status.LoadBalancer.Ingress)
+	})
+
+	t.Run("a parked primary recreate is not deleted again on resync", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		created(dt)
+		kube := fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		dt.kubeClient = kube
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		op := dt.pendingServiceOps[dualStackUID]
+		assert.True(t, op.RecreateAfterDeletion)
+		op.RetriesExhausted = true
+		op.NextRetryAt = time.Now().Add(time.Hour)
+		kube.ClearActions()
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+
+		assert.Empty(t, kube.Actions())
+		assert.True(t, op.RetriesExhausted)
+		assert.True(t, op.RecreateAfterDeletion)
+	})
+
+	t.Run("a terminally parked update primary flip recreates and unparks", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.kubeClient = fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		dt.NRPResources.LoadBalancers.Insert(dualStackUID)
+		config := NewInboundServiceConfig(dualStackUID, makeInboundConfig(80))
+		config.InboundConfig.IPFamilies = []string{"IPv4"}
+		dt.pendingServiceOps[dualStackUID] = &ServiceOperationState{
+			ServiceUID:             dualStackUID,
+			Config:                 config,
+			State:                  StateNotStarted,
+			CreationFailedTerminal: true,
+			CorrelationID:          "terminal-update",
+		}
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		if op := dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, op.State)
+			assert.True(t, op.RecreateAfterDeletion)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+
+		dt.OnServiceCreationComplete(dualStackUID, true, nil)
+		if op := dt.pendingServiceOps[dualStackUID]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State)
+			assert.False(t, op.CreationFailedTerminal)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+	})
+
+	t.Run("provisioned family is cleared after a successful apply", func(t *testing.T) {
+		appliedConfig := func() ServiceConfig {
+			config := NewInboundServiceConfig(dualStackUID, makeInboundConfig(80))
+			config.InboundConfig.IPFamilies = []string{"IPv4"}
+			return config
+		}
+
+		for _, tc := range []struct {
+			name  string
+			state ResourceState
+		}{
+			{name: "create", state: StateCreationInProgress},
+			{name: "update", state: StateUpdateInProgress},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				dt := newTestDiffTracker()
+				dt.provisionedFamilies = map[string]string{dualStackUID: "IPv4"}
+				config := appliedConfig()
+				inflight := config
+				dt.pendingServiceOps[dualStackUID] = &ServiceOperationState{
+					ServiceUID:     dualStackUID,
+					Config:         config,
+					InFlightConfig: &inflight,
+					State:          tc.state,
+				}
+
+				dt.OnServiceCreationComplete(dualStackUID, true, nil)
+
+				assert.NotContains(t, dt.provisionedFamilies, dualStackUID)
+			})
+		}
+	})
+
+	t.Run("the primary unit is kept while its old family's IP cannot leave the status", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		created(dt)
+		kube := fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		kube.PrependReactor("get", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("apiserver unavailable")
+		})
+		dt.kubeClient = kube
+
+		assert.Error(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		assert.Equal(t, StateCreated, dt.pendingServiceOps[dualStackUID].State)
+	})
+
+	t.Run("a failed primary flip keeps endpoint routing on the old family", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		created(dt)
+		oldEndpoints := map[string]string{"10.1.0.11": "10.0.0.4"}
+		newEndpoints := map[string]string{"fd01::11": "fd00::4"}
+		dt.UpdateEndpoints(dualStackUID, nil, oldEndpoints)
+		kube := fake.NewSimpleClientset(newDualStackService(v1.IPv6Protocol))
+		svc, err := kube.CoreV1().Services("test-namespace").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}
+		_, err = kube.CoreV1().Services("test-namespace").UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		kube.PrependReactor("patch", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("apiserver unavailable")
+		})
+		dt.kubeClient = kube
+
+		assert.Error(t, dt.ReconcileInboundService(newDualStackService(v1.IPv6Protocol)))
+		dt.UpdateEndpoints(dualStackUID, oldEndpoints, newEndpoints)
+
+		if node, ok := dt.K8sResources.Nodes["10.0.0.4"]; ok {
+			assert.NotContains(t, node.Pods, "10.1.0.11", "old-family removals must still reach the old primary")
+		}
+		if node, ok := dt.K8sResources.Nodes["fd00::4"]; ok {
+			assert.NotContains(t, node.Pods, "fd01::11", "new-family additions must not route to the old primary before the flip delete succeeds")
+		}
+	})
+
+	t.Run("a rejected dual-stack Service provisions no family", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		service := newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)
+		service.Annotations = map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]: "my-pip",
+			consts.ServiceAnnotationPIPNameDualStack[true]:  "my-pip",
+		}
+
+		var warningErr WarningEventError
+		if assert.ErrorAs(t, dt.ReconcileInboundService(service), &warningErr) {
+			reason, _ := warningErr.WarningEvent()
+			assert.Equal(t, "ConflictingPublicIPSettings", reason)
+		}
+		assert.Empty(t, dt.pendingServiceOps)
+	})
+
+	t.Run("deleting the Service deletes every unit", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+		created(dt)
+
+		assert.NoError(t, dt.DeleteInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+
+		for _, unit := range []string{dualStackUID, secondaryV6} {
+			assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, dt.pendingServiceOps[unit].State, unit)
+		}
+		assert.NotContains(t, dt.inboundFamilies, dualStackUID)
+	})
+
+	t.Run("an egress identity named like a secondary unit is never treated as one", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.kubeClient = fake.NewSimpleClientset(newDualStackService(v1.IPv4Protocol))
+		egress := NewOutboundServiceConfig(secondaryV6, &OutboundConfig{})
+		// Still being created: known from its operation only.
+		dt.pendingServiceOps[secondaryV6] = &ServiceOperationState{ServiceUID: secondaryV6, Config: egress, State: StateCreated}
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+		assert.Equal(t, StateCreated, dt.pendingServiceOps[secondaryV6].State, "reconciling the Service leaves the egress identity alone")
+		_, left := dt.secondaryUnitLeft(dualStackUID)
+		assert.False(t, left, "the primary unit does not wait for an egress identity")
+		_, err := dt.getServiceByUID(context.Background(), secondaryV6)
+		assert.True(t, apierrors.IsNotFound(err), "an egress identity is not resolved to the Service: %v", err)
+
+		var warningErr WarningEventError
+		if assert.ErrorAs(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)), &warningErr) {
+			reason, _ := warningErr.WarningEvent()
+			assert.Equal(t, "ServiceGatewayNameConflict", reason)
+		}
+		assert.False(t, dt.pendingServiceOps[secondaryV6].Config.IsInbound, "becoming dual-stack does not take over the egress identity")
+		assert.Equal(t, StateCreated, dt.pendingServiceOps[secondaryV6].State)
+
+		assert.NoError(t, dt.DeleteInboundService(newDualStackService(v1.IPv4Protocol)))
+		assert.Equal(t, StateCreated, dt.pendingServiceOps[secondaryV6].State, "deleting the Service leaves the egress identity alone")
+		delete(dt.pendingServiceOps, dualStackUID)
+		delete(dt.pendingServiceDeletions, dualStackUID)
+		assert.False(t, dt.IsInboundServiceTracked(dualStackUID), "only the egress identity is left")
+
+		// After a restart the egress identity is known only from its NAT gateway.
+		delete(dt.pendingServiceOps, secondaryV6)
+		dt.NRPResources.NATGateways.Insert(secondaryV6)
+		_, err = dt.getServiceByUID(context.Background(), secondaryV6)
+		assert.True(t, apierrors.IsNotFound(err), "an egress identity known from NRP is not resolved to the Service: %v", err)
+		if assert.ErrorAs(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)), &warningErr) {
+			reason, _ := warningErr.WarningEvent()
+			assert.Equal(t, "ServiceGatewayNameConflict", reason)
+		}
+		assert.Nil(t, dt.pendingServiceOps[secondaryV6], "becoming dual-stack does not take over an egress identity known from NRP")
+	})
+
+	t.Run("an applied egress identity named like the Service does not crash reconciliation", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		egress := NewOutboundServiceConfig(dualStackUID, &OutboundConfig{})
+		dt.pendingServiceOps[dualStackUID] = &ServiceOperationState{ServiceUID: dualStackUID, Config: egress, LastAppliedConfig: &egress, State: StateCreated}
+
+		assert.NotPanics(t, func() { assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol))) })
+	})
+
+	t.Run("endpoints go to the unit of their IP family", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+
+		dt.UpdateEndpoints(dualStackUID, nil, map[string]string{"10.1.0.11": "10.0.0.4", "fd01::11": "fd00::4"})
+
+		buffered := func(unit string) map[string]string {
+			addresses := map[string]string{}
+			for _, update := range dt.pendingEndpoints[unit] {
+				for podIP, nodeIP := range update.PodIPToNodeIP {
+					addresses[podIP] = nodeIP
+				}
+			}
+			return addresses
+		}
+		assert.Equal(t, map[string]string{"10.1.0.11": "10.0.0.4"}, buffered(dualStackUID))
+		assert.Equal(t, map[string]string{"fd01::11": "fd00::4"}, buffered(secondaryV6))
+	})
+
+	t.Run("removed endpoints leave the unit of their IP family", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+		created(dt)
+		both := map[string]string{"10.1.0.11": "10.0.0.4", "fd01::11": "fd00::4"}
+
+		dt.UpdateEndpoints(dualStackUID, nil, both)
+		assert.Len(t, dt.K8sResources.Nodes, 2)
+		dt.UpdateEndpoints(dualStackUID, both, map[string]string{})
+
+		for nodeIP, node := range dt.K8sResources.Nodes {
+			assert.Empty(t, node.Pods, "node %s must have no pods left", nodeIP)
+		}
+	})
+
+	t.Run("a unit created after its endpoints arrived is seeded with its family's addresses", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		setTestNodeLister(t, dt, &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+			Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+				{Type: v1.NodeInternalIP, Address: "10.0.0.4"}, {Type: v1.NodeInternalIP, Address: "fd00::4"},
+			}},
+		})
+		dt.updateEndpointSliceCache(nil, &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{Name: "web-v6", Namespace: "test-namespace",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: "web", UID: dualStackUID}}},
+			Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"10.1.0.11", "fd01::11"}, NodeName: ptr.To("node-1")}},
+		})
+
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol, v1.IPv6Protocol)))
+
+		if assert.Len(t, dt.pendingEndpoints[secondaryV6], 1) {
+			assert.Equal(t, map[string]string{"fd01::11": "fd00::4"}, dt.pendingEndpoints[secondaryV6][0].PodIPToNodeIP)
+		}
+		if assert.Len(t, dt.pendingEndpoints[dualStackUID], 1) {
+			assert.Equal(t, map[string]string{"10.1.0.11": "10.0.0.4"}, dt.pendingEndpoints[dualStackUID][0].PodIPToNodeIP)
+		}
+	})
+
+	t.Run("endpoints of a family the Service does not serve are dropped", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		assert.NoError(t, dt.ReconcileInboundService(newDualStackService(v1.IPv4Protocol)))
+
+		dt.UpdateEndpoints(dualStackUID, nil, map[string]string{"10.1.0.11": "10.0.0.4", "fd01::11": "fd00::4"})
+
+		if assert.Len(t, dt.pendingEndpoints[dualStackUID], 1) {
+			assert.Equal(t, map[string]string{"10.1.0.11": "10.0.0.4"}, dt.pendingEndpoints[dualStackUID][0].PodIPToNodeIP)
+		}
+		assert.NotContains(t, dt.pendingEndpoints, secondaryV6)
 	})
 }
 
@@ -1717,6 +2385,39 @@ func TestAddPod_RejectsEgressIdentityCollidingWithInboundService(t *testing.T) {
 		assert.False(t, ctlOp.Config.IsInbound, "control: that operation must be outbound")
 	}
 	assert.Equal(t, 1, ctlBuffered, "control: the egress pod must be buffered for its own service")
+
+	// After a restart a provisioned unit has no operation until its Service is reconciled.
+	const secondaryUnit = inboundUID + "-v4"
+	dt.NRPResources.LoadBalancers.Insert(secondaryUnit)
+	dt.AddPodWithUID(secondaryUnit, "attacker/pod2", "pod-uid-3", "10.0.0.3", "10.244.0.7")
+	dt.mu.Lock()
+	_, unitOpCreated := dt.pendingServiceOps[secondaryUnit]
+	unitBuffered := len(dt.pendingPods[secondaryUnit])
+	dt.mu.Unlock()
+	assert.False(t, unitOpCreated, "an egress pod must not claim a provisioned unit's name")
+	assert.Zero(t, unitBuffered, "the colliding pod must not be buffered against a provisioned unit")
+
+	dt.NRPResources.Locations["10.0.0.3"] = NRPLocation{
+		Addresses: map[string]NRPAddress{"10.244.0.7": {Services: utilsets.NewString(secondaryUnit)}},
+	}
+	dt.DeletePod(secondaryUnit, "10.0.0.3", []string{"10.244.0.7"}, "attacker", "pod2", "pod-uid-3")
+	dt.mu.Lock()
+	_, unitOpCreated = dt.pendingServiceOps[secondaryUnit]
+	_, unitDeletionQueued := dt.pendingServiceDeletions[secondaryUnit]
+	dt.mu.Unlock()
+	assert.False(t, unitOpCreated, "an egress pod deletion must not claim a provisioned unit's name")
+	assert.False(t, unitDeletionQueued, "an egress pod deletion must not queue a provisioned unit for deletion")
+
+	dt.DeletePodWithoutAddresses(secondaryUnit, "attacker", "pod2", "pod-uid-3")
+	dt.DeletePodWithoutAddresses(inboundUID, "attacker", "pod", "pod-uid-1")
+	dt.mu.Lock()
+	_, unitDeletionQueued = dt.pendingServiceDeletions[secondaryUnit]
+	_, primaryDeletionQueued := dt.pendingServiceDeletions[inboundUID]
+	primaryState := dt.pendingServiceOps[inboundUID].State
+	dt.mu.Unlock()
+	assert.False(t, unitDeletionQueued, "a no-IP egress pod deletion must not queue a provisioned unit for deletion")
+	assert.False(t, primaryDeletionQueued, "a no-IP egress pod deletion must not queue an inbound service for deletion")
+	assert.Equal(t, StateCreated, primaryState, "a no-IP egress pod deletion must leave the inbound operation untouched")
 }
 
 // TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted pins that the revive only fires

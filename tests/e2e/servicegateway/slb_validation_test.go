@@ -32,10 +32,9 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
-// The difftracker rejects two service shapes it cannot map to a PodIP backend, parking the
-// service terminally (no Azure resources): a named targetPort (cannot be resolved to a
-// concrete backend port) and a dual-stack service (a PodIP backend pool is single-family).
-// These specs assert the service never provisions an LB.
+// The difftracker rejects service shapes it cannot map to a PodIP backend, parking the service
+// terminally (no Azure resources): a named targetPort (cannot be resolved to a concrete backend
+// port) and a protocol other than TCP and UDP. These specs assert the service never provisions an LB.
 var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 	basename := "slb-validation-test"
 
@@ -180,48 +179,6 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 			"a service with an SCTP port must be terminally rejected (unsupported protocol)")
 
 		utils.Logf("✓ SCTP service was terminally rejected with no Azure resources")
-	})
-
-	It("should terminally reject a dual-stack service", func() {
-		const serviceName = "dualstack-service"
-		labels := map[string]string{"app": serviceName}
-
-		By("Creating a dual-stack LoadBalancer service")
-		dualStack := v1.IPFamilyPolicyRequireDualStack
-		service := &v1.Service{
-			ObjectMeta: metav1.ObjectMeta{Name: serviceName, Namespace: ns.Name},
-			Spec: v1.ServiceSpec{
-				Type:           v1.ServiceTypeLoadBalancer,
-				Selector:       labels,
-				IPFamilyPolicy: &dualStack,
-				IPFamilies:     []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
-				Ports: []v1.ServicePort{
-					{Name: "http", Port: 80, TargetPort: intstr.FromInt(8080), Protocol: v1.ProtocolTCP},
-				},
-			},
-		}
-		created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
-		if err != nil {
-			// A single-stack cluster rejects dual-stack at the K8s API; nothing to validate here.
-			if strings.Contains(err.Error(), "IPv6") || strings.Contains(err.Error(), "dual") || strings.Contains(err.Error(), "ipFamilies") {
-				Skip("cluster does not support dual-stack services: " + err.Error())
-			}
-			Expect(err).NotTo(HaveOccurred())
-		}
-		serviceUID := string(created.UID)
-		utils.Logf("Dual-stack service created with UID=%s, ipFamilies=%v", serviceUID, created.Spec.IPFamilies)
-
-		// If the cluster coerced the service to single-stack, the dual-stack rejection path is
-		// not exercised; skip rather than assert the wrong thing.
-		if len(created.Spec.IPFamilies) < 2 {
-			Skip("cluster coerced the service to single-stack; dual-stack rejection not exercised")
-		}
-
-		By("Verifying the dual-stack service is terminally rejected and never provisions Azure resources")
-		expectTerminallyRejected(serviceName, serviceUID, "UnsupportedDualStack",
-			"a dual-stack service must be terminally rejected (no PIP/LB/SGW registration)")
-
-		utils.Logf("✓ Dual-stack service was terminally rejected with no Azure resources")
 	})
 
 	It("should reject an internal LoadBalancer service and surface a warning event", func() {

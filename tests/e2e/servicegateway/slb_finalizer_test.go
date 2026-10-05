@@ -490,7 +490,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 
 		By("Waiting for Azure NAT Gateway provisioning")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, numPods)
+			return egressRegisteredPodCountErr(cs, ns.Name, egressName, numPods)
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"egress service should be reconciled with NAT Gateway and registered pods")
 
@@ -691,7 +691,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 
 		By("Waiting for Azure NAT Gateway provisioning and pod registration")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, 1)
+			return egressRegisteredPodCountErr(cs, ns.Name, egressName, 1)
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"egress service should be reconciled with NAT Gateway and the registered pod")
 

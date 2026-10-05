@@ -17,6 +17,7 @@ limitations under the License.
 package difftracker
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -60,15 +61,6 @@ func TestValidateInboundConfig(t *testing.T) {
 				BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}, {Port: 5353, Protocol: "UDP"}},
 				IPFamilies:    []string{"IPv4"},
 			},
-		},
-		{
-			name: "dual-stack rejected",
-			config: &InboundConfig{
-				FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
-				BackendPorts:  []PortMapping{{Port: 80, Protocol: "TCP"}},
-				IPFamilies:    []string{"IPv4", "IPv6"},
-			},
-			wantReason: "UnsupportedDualStack",
 		},
 		{
 			name: "named target port rejected",
@@ -363,24 +355,29 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 const testPrefixID = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/prefix"
 
 func TestPublicIPPrefixID_FollowsTheServiceFamily(t *testing.T) {
-	svc := func(family v1.IPFamily, annotations map[string]string) *v1.Service {
+	svc := func(annotations map[string]string, families ...v1.IPFamily) *v1.Service {
 		return &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{Annotations: annotations},
-			Spec:       v1.ServiceSpec{IPFamilies: []v1.IPFamily{family}},
+			Spec:       v1.ServiceSpec{IPFamilies: families},
 		}
 	}
 	both := map[string]string{
 		consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "v4-prefix",
 		consts.ServiceAnnotationPIPPrefixIDDualStack[true]:  "v6-prefix",
 	}
-	assert.Equal(t, "v4-prefix", publicIPPrefixID(svc(v1.IPv4Protocol, both)))
-	assert.Equal(t, "v6-prefix", publicIPPrefixID(svc(v1.IPv6Protocol, both)))
-	assert.Equal(t, "v4-prefix", publicIPPrefixID(svc(v1.IPv6Protocol, map[string]string{
-		consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "v4-prefix",
-	})), "an IPv6 Service falls back to the plain annotation")
-	assert.Empty(t, publicIPPrefixID(svc(v1.IPv4Protocol, map[string]string{
-		consts.ServiceAnnotationPIPPrefixIDDualStack[true]: "v6-prefix",
-	})))
+	v4Only := map[string]string{consts.ServiceAnnotationPIPPrefixIDDualStack[false]: "v4-prefix"}
+	v6Only := map[string]string{consts.ServiceAnnotationPIPPrefixIDDualStack[true]: "v6-prefix"}
+
+	assert.Equal(t, "v4-prefix", publicIPPrefixID(svc(both, v1.IPv4Protocol), v1.IPv4Protocol))
+	assert.Equal(t, "v6-prefix", publicIPPrefixID(svc(both, v1.IPv6Protocol), v1.IPv6Protocol))
+	assert.Equal(t, "v4-prefix", publicIPPrefixID(svc(v4Only, v1.IPv6Protocol), v1.IPv6Protocol), "an IPv6 Service falls back to the plain annotation")
+	assert.Empty(t, publicIPPrefixID(svc(v6Only, v1.IPv4Protocol), v1.IPv4Protocol))
+
+	dualStack := svc(both, v1.IPv4Protocol, v1.IPv6Protocol)
+	assert.Equal(t, "v4-prefix", publicIPPrefixID(dualStack, v1.IPv4Protocol))
+	assert.Equal(t, "v6-prefix", publicIPPrefixID(dualStack, v1.IPv6Protocol))
+	assert.Empty(t, publicIPPrefixID(svc(v4Only, v1.IPv6Protocol, v1.IPv4Protocol), v1.IPv6Protocol),
+		"each family of a dual-stack Service reads only its own annotation")
 }
 
 func TestBuildInboundServiceResources_PublicIPSettings(t *testing.T) {
@@ -783,15 +780,17 @@ func TestNewIgnoreCaseSetFromSlice_WithItems(t *testing.T) {
 	assert.True(t, set.Has("SERVICE3"))
 }
 
-// TestBuildInboundServiceResources_IPFamilies verifies that the Public IP version follows the
-// Service IP family, and that dual-stack (unsupported for PodIP backend pools) is rejected.
+// TestBuildInboundServiceResources_IPFamilies verifies that the Public IP version follows the IP
+// family of the unit: a dual-stack Service builds one Public IP per family.
 func TestBuildInboundServiceResources_IPFamilies(t *testing.T) {
-	build := func(fams ...v1.IPFamily) (armnetwork.PublicIPAddress, error) {
-		cfg := ExtractInboundConfigFromService(&v1.Service{Spec: v1.ServiceSpec{
+	service := func(fams ...v1.IPFamily) *v1.Service {
+		return &v1.Service{ObjectMeta: metav1.ObjectMeta{UID: "11111111-1111-1111-1111-111111111111"}, Spec: v1.ServiceSpec{
 			IPFamilies: fams,
 			Ports:      []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP, TargetPort: intstr.FromInt(80)}},
-		}})
-		pip, _, _, err := buildInboundServiceResources("svc", cfg, testConfig())
+		}}
+	}
+	build := func(fams ...v1.IPFamily) (armnetwork.PublicIPAddress, error) {
+		pip, _, _, err := buildInboundServiceResources("svc", ExtractInboundConfigFromService(service(fams...)), testConfig())
 		return pip, err
 	}
 
@@ -803,8 +802,22 @@ func TestBuildInboundServiceResources_IPFamilies(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, armnetwork.IPVersionIPv6, *pip6.Properties.PublicIPAddressVersion)
 
-	_, err = build(v1.IPv4Protocol, v1.IPv6Protocol)
-	assert.Error(t, err, "dual-stack services must be rejected for PodIP backend pools")
+	dualStack := service(v1.IPv6Protocol, v1.IPv4Protocol)
+	units := InboundUnits(dualStack)
+	if !assert.Len(t, units, 2) {
+		return
+	}
+	for _, unit := range units {
+		pip, lb, services, err := buildInboundServiceResources(unit.Name, extractInboundUnitConfig(dualStack, unit), testConfig())
+		if !assert.NoError(t, err) {
+			continue
+		}
+		assert.Equal(t, armnetwork.IPVersion(unit.Family), *pip.Properties.PublicIPAddressVersion, unit.Name)
+		assert.Equal(t, unit.Name+"-pip", *pip.Name)
+		assert.Equal(t, unit.Name, *lb.Name)
+		assert.Equal(t, unit.Name, services.Services[0].Service)
+	}
+	assert.Equal(t, "11111111-1111-1111-1111-111111111111-v4", units[1].Name)
 }
 
 // TestExtractInboundConfigFromService_NamedTargetPortRecorded verifies that a named (string)
@@ -988,6 +1001,14 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 		}, "UnsupportedPrivateLinkService"},
 		{"loadBalancerIP that is not an address", func(s *v1.Service) { s.Spec.LoadBalancerIP = "not-an-ip" }, "InvalidLoadBalancerIP"},
 		{"IPv6 loadBalancerIP on an IPv4 Service", func(s *v1.Service) { s.Spec.LoadBalancerIP = "2001:db8::1" }, "InvalidLoadBalancerIP"},
+		{"IPv6 loadBalancerIP on a single-stack IPv4 Service", func(s *v1.Service) {
+			s.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+			s.Spec.LoadBalancerIP = "2001:db8::1"
+		}, "InvalidLoadBalancerIP"},
+		{"IPv4 loadBalancerIP on a single-stack IPv6 Service", func(s *v1.Service) {
+			s.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+			s.Spec.LoadBalancerIP = "203.0.113.7"
+		}, "InvalidLoadBalancerIP"},
 		{"loadBalancerSourceRanges", func(s *v1.Service) { s.Spec.LoadBalancerSourceRanges = []string{"203.0.113.0/24"} }, "UnsupportedAccessRestriction"},
 		{"source ranges mixing allow-all with a restriction", func(s *v1.Service) {
 			s.Spec.LoadBalancerSourceRanges = []string{"::/0", "203.0.113.0/24"}
@@ -1055,10 +1076,6 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 			s.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0", "::/0"}
 			s.Annotations = map[string]string{consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true"}
 		}, "UnsupportedAccessRestriction"},
-		{"dual-stack with an IPv6 Public IP name", func(s *v1.Service) {
-			s.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
-			s.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "my-pip-v6"}
-		}, "UnsupportedDualStack"},
 		{"Private Link Service creation with a value that does not disable it", func(s *v1.Service) {
 			s.Annotations = map[string]string{consts.ServiceAnnotationPLSCreation: "no"}
 		}, "UnsupportedAnnotations"},
@@ -1750,4 +1767,247 @@ func TestOwnsPublicIPByTags(t *testing.T) {
 	assert.Empty(t, clusterOwnershipTag(pip(map[string]string{consts.ClusterNameKey: " "})))
 	assert.False(t, ownsPublicIPByTags(nil, "ns/svc", "cluster"))
 	assert.False(t, ownsPublicIPByTags(pip(map[string]string{consts.ServiceTagKey: ""}), "", "cluster"))
+}
+
+func TestInboundUnitNames(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	service := func(families ...v1.IPFamily) *v1.Service {
+		return &v1.Service{ObjectMeta: metav1.ObjectMeta{UID: uid}, Spec: v1.ServiceSpec{IPFamilies: families}}
+	}
+
+	assert.Equal(t, []InboundUnit{{Name: uid, Family: v1.IPv4Protocol, Primary: true}}, InboundUnits(service()))
+	assert.Equal(t, []InboundUnit{{Name: uid, Family: v1.IPv6Protocol, Primary: true}}, InboundUnits(service(v1.IPv6Protocol)))
+	assert.Equal(t, []InboundUnit{
+		{Name: uid, Family: v1.IPv4Protocol, Primary: true},
+		{Name: uid + "-v6", Family: v1.IPv6Protocol},
+	}, InboundUnits(service(v1.IPv4Protocol, v1.IPv6Protocol)))
+	assert.Equal(t, []InboundUnit{
+		{Name: uid, Family: v1.IPv6Protocol, Primary: true},
+		{Name: uid + "-v4", Family: v1.IPv4Protocol},
+	}, InboundUnits(service(v1.IPv6Protocol, v1.IPv4Protocol)))
+	assert.Nil(t, InboundUnits(nil))
+
+	for name, want := range map[string]struct {
+		parent    string
+		secondary bool
+		unit      bool
+	}{
+		uid:                            {uid, false, true},
+		uid + "-v6":                    {uid, true, true},
+		uid + "-V4":                    {uid, true, true},
+		uid + "-v5":                    {uid + "-v5", false, false},
+		"egress-v6":                    {"egress-v6", false, false},
+		"default-natgw":                {"default-natgw", false, false},
+		"11111111-2222-3333-4444-5-v6": {"11111111-2222-3333-4444-5-v6", false, false},
+	} {
+		parent, secondary := ParentServiceUID(name)
+		assert.Equal(t, want.parent, parent, name)
+		assert.Equal(t, want.secondary, secondary, name)
+		assert.Equal(t, want.unit, IsInboundUnitName(name), name)
+	}
+
+	// An egress identity's IPv6 Public IP keeps its own naming and is not taken for a unit.
+	identity, ok := identityFromPublicIPName(PublicIPNameV6(uid))
+	assert.True(t, ok)
+	assert.Equal(t, uid, identity)
+	identity, _ = identityFromPublicIPName(PublicIPName(uid + "-v6"))
+	assert.Equal(t, uid+"-v6", identity)
+}
+
+func TestAdmitInboundServiceUnits_DualStack(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	service := func(annotations map[string]string, families ...v1.IPFamily) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{UID: uid, Namespace: "ns", Name: "web", Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Type:       v1.ServiceTypeLoadBalancer,
+				IPFamilies: families,
+				Ports:      []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP, TargetPort: intstr.FromInt(8080)}},
+			},
+		}
+	}
+	reason := func(err error) string {
+		var ve *InboundConfigValidationError
+		if errors.As(err, &ve) {
+			return ve.Reason
+		}
+		return ""
+	}
+
+	t.Run("each family reads its own Public IP settings", func(t *testing.T) {
+		units, err := AdmitInboundServiceUnits(service(map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]:       "pip-v4",
+			consts.ServiceAnnotationPIPNameDualStack[true]:        "pip-v6",
+			consts.ServiceAnnotationPIPPrefixIDDualStack[true]:    "",
+			consts.ServiceAnnotationAzurePIPTags:                  "team=a",
+			consts.ServiceAnnotationLoadBalancerIdleTimeout:       "10",
+			consts.ServiceAnnotationLoadBalancerResourceGroup:     "user-rg",
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "",
+		}, v1.IPv4Protocol, v1.IPv6Protocol))
+		assert.NoError(t, err)
+		if !assert.Len(t, units, 2) {
+			return
+		}
+		for i, want := range []struct{ name, family, pip string }{{uid, "IPv4", "pip-v4"}, {uid + "-v6", "IPv6", "pip-v6"}} {
+			assert.Equal(t, want.name, units[i].Unit.Name)
+			assert.Equal(t, []string{want.family}, units[i].Config.IPFamilies)
+			assert.Equal(t, want.pip, units[i].Config.PIPName)
+			assert.Equal(t, "user-rg", units[i].Config.PIPResourceGroup)
+			assert.Equal(t, map[string]string{"team": "a"}, units[i].Config.PIPTags)
+			assert.Equal(t, int32(10), *units[i].Config.IdleTimeoutMinutes)
+		}
+	})
+
+	t.Run("each family reads its own address and prefix", func(t *testing.T) {
+		units, err := AdmitInboundServiceUnits(service(map[string]string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "20.1.2.3",
+			consts.ServiceAnnotationPIPPrefixIDDualStack[true]:     testPrefixID,
+		}, v1.IPv6Protocol, v1.IPv4Protocol))
+		assert.NoError(t, err)
+		if assert.Len(t, units, 2) {
+			assert.Empty(t, units[0].Config.LoadBalancerIP, "the IPv6 primary does not take the IPv4 address")
+			assert.Equal(t, testPrefixID, units[0].Config.PIPPrefixID)
+			assert.Equal(t, "20.1.2.3", units[1].Config.LoadBalancerIP)
+			assert.Empty(t, units[1].Config.PIPPrefixID, "the IPv4 unit does not take the IPv6 prefix")
+		}
+	})
+
+	t.Run("each family can choose its own Public IP prefix", func(t *testing.T) {
+		v4Prefix := strings.Replace(testPrefixID, "prefix", "prefix-v4", 1)
+		v6Prefix := strings.Replace(testPrefixID, "prefix", "prefix-v6", 1)
+		units, err := AdmitInboundServiceUnits(service(map[string]string{
+			consts.ServiceAnnotationPIPPrefixIDDualStack[false]: v4Prefix,
+			consts.ServiceAnnotationPIPPrefixIDDualStack[true]:  v6Prefix,
+		}, v1.IPv4Protocol, v1.IPv6Protocol))
+		assert.NoError(t, err)
+		if assert.Len(t, units, 2) {
+			assert.Equal(t, v4Prefix, units[0].Config.PIPPrefixID)
+			assert.Equal(t, v6Prefix, units[1].Config.PIPPrefixID)
+		}
+	})
+
+	t.Run("spec.loadBalancerIP applies to its own family", func(t *testing.T) {
+		svc := service(nil, v1.IPv4Protocol, v1.IPv6Protocol)
+		svc.Spec.LoadBalancerIP = "2603:1030::7"
+		units, err := AdmitInboundServiceUnits(svc)
+		assert.NoError(t, err)
+		if assert.Len(t, units, 2) {
+			assert.Empty(t, units[0].Config.LoadBalancerIP)
+			assert.Equal(t, "2603:1030::7", units[1].Config.LoadBalancerIP)
+		}
+
+		svc.Spec.LoadBalancerIP = "not-an-ip"
+		_, err = AdmitInboundServiceUnits(svc)
+		assert.Equal(t, "InvalidLoadBalancerIP", reason(err))
+	})
+
+	t.Run("spec.loadBalancerIP conflicts only with the matching family annotation", func(t *testing.T) {
+		svc := service(map[string]string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2603:1030::7",
+		}, v1.IPv4Protocol, v1.IPv6Protocol)
+		svc.Spec.LoadBalancerIP = "20.1.2.3"
+		units, err := AdmitInboundServiceUnits(svc)
+		assert.NoError(t, err)
+		if assert.Len(t, units, 2) {
+			assert.Equal(t, "20.1.2.3", units[0].Config.LoadBalancerIP)
+			assert.Equal(t, "2603:1030::7", units[1].Config.LoadBalancerIP)
+		}
+
+		svc.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[false]] = "20.1.2.4"
+		_, err = AdmitInboundServiceUnits(svc)
+		assert.Equal(t, "ConflictingPublicIPSettings", reason(err))
+
+		svc = service(map[string]string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2603:1030::8",
+		}, v1.IPv4Protocol, v1.IPv6Protocol)
+		svc.Spec.LoadBalancerIP = "2603:1030::7"
+		_, err = AdmitInboundServiceUnits(svc)
+		assert.Equal(t, "ConflictingPublicIPSettings", reason(err))
+	})
+
+	t.Run("single-stack spec.loadBalancerIP conflicts with any served-family address annotation", func(t *testing.T) {
+		svc := service(map[string]string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "20.1.2.3",
+		}, v1.IPv4Protocol)
+		svc.Spec.LoadBalancerIP = "2001:db8::1"
+		_, err := AdmitInboundServiceUnits(svc)
+		assert.Equal(t, "ConflictingPublicIPSettings", reason(err))
+
+		svc = service(map[string]string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "20.1.2.3",
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "2603:1030::7",
+		}, v1.IPv4Protocol, v1.IPv6Protocol)
+		svc.Spec.LoadBalancerIP = "20.1.2.3"
+		units, err := AdmitInboundServiceUnits(svc)
+		assert.NoError(t, err)
+		if assert.Len(t, units, 2) {
+			assert.Equal(t, "20.1.2.3", units[0].Config.LoadBalancerIP)
+			assert.Equal(t, "2603:1030::7", units[1].Config.LoadBalancerIP)
+		}
+	})
+
+	t.Run("the same Public IP for both families is rejected", func(t *testing.T) {
+		_, err := AdmitInboundServiceUnits(service(map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]: "shared",
+			consts.ServiceAnnotationPIPNameDualStack[true]:  "SHARED",
+		}, v1.IPv4Protocol, v1.IPv6Protocol))
+		assert.Equal(t, "ConflictingPublicIPSettings", reason(err))
+	})
+
+	t.Run("an invalid setting of one family rejects the whole Service", func(t *testing.T) {
+		units, err := AdmitInboundServiceUnits(service(map[string]string{
+			consts.ServiceAnnotationPIPPrefixIDDualStack[true]: "not-a-prefix-id",
+		}, v1.IPv4Protocol, v1.IPv6Protocol))
+		assert.Equal(t, "InvalidPublicIPPrefix", reason(err))
+		assert.Nil(t, units)
+	})
+
+	t.Run("allowing every source needs the /0 of every family", func(t *testing.T) {
+		for ranges, want := range map[string]string{
+			"0.0.0.0/0":      "UnsupportedAccessRestriction",
+			"::/0":           "UnsupportedAccessRestriction",
+			"0.0.0.0/0,::/0": "",
+		} {
+			svc := service(nil, v1.IPv4Protocol, v1.IPv6Protocol)
+			svc.Spec.LoadBalancerSourceRanges = strings.Split(ranges, ",")
+			_, err := AdmitInboundServiceUnits(svc)
+			assert.Equal(t, want, reason(err), ranges)
+
+			annotated := service(map[string]string{v1.AnnotationLoadBalancerSourceRangesKey: ranges}, v1.IPv4Protocol, v1.IPv6Protocol)
+			_, err = AdmitInboundServiceUnits(annotated)
+			assert.Equal(t, want, reason(err), "annotation "+ranges)
+		}
+	})
+
+	t.Run("both families Public IP annotations of a dual-stack Service are supported", func(t *testing.T) {
+		svc := service(map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]:       "pip-v4",
+			consts.ServiceAnnotationPIPNameDualStack[true]:        "pip-v6",
+			consts.ServiceAnnotationPIPPrefixIDDualStack[false]:   testPrefixID,
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2603:1030::7",
+			consts.ServiceAnnotationLoadBalancerResourceGroup:     "user-rg",
+		}, v1.IPv4Protocol, v1.IPv6Protocol)
+		assert.Empty(t, UnsupportedServiceAnnotations(svc), "the resource group is used by a chosen Public IP")
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+		assert.Equal(t, []string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true],
+			consts.ServiceAnnotationPIPNameDualStack[true],
+		}, UnsupportedServiceAnnotations(svc), "an IPv4 Service uses the plain Public IP annotations; only the IPv6 ones have no effect")
+	})
+
+	t.Run("IPv6-only Public IP name makes resource group supported on a dual-stack Service", func(t *testing.T) {
+		svc := service(map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[true]:    "pip-v6",
+			consts.ServiceAnnotationLoadBalancerResourceGroup: "user-rg",
+		}, v1.IPv4Protocol, v1.IPv6Protocol)
+		assert.Empty(t, UnsupportedServiceAnnotations(svc), "the resource group is used by the IPv6 Public IP name")
+
+		units, err := AdmitInboundServiceUnits(svc)
+		assert.NoError(t, err)
+		if assert.Len(t, units, 2) {
+			assert.Empty(t, units[0].Config.PIPName)
+			assert.Equal(t, "pip-v6", units[1].Config.PIPName)
+			assert.Equal(t, "user-rg", units[1].Config.PIPResourceGroup)
+		}
+	})
 }

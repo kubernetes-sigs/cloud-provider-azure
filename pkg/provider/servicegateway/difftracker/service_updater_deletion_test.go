@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/record"
+	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
@@ -153,6 +154,633 @@ func TestServiceUpdaterDeleteInboundService_Succeeds(t *testing.T) {
 	}
 	_, stillTracked := dt.pendingServiceOps["uid-1"]
 	assert.False(t, stillTracked, "service tracking should be cleared after successful deletion")
+}
+
+// TestServiceUpdaterDeleteInboundService_DualStackUnits pins who finalizes a dual-stack Service: a
+// secondary unit never removes the finalizer, and drops its family's ingress IP only from a Service that
+// keeps serving; the primary unit removes the finalizer once no secondary unit is left.
+func TestServiceUpdaterDeleteInboundService_DualStackUnits(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	secondary := uid + "-v6"
+	newService := func(deleting bool, families ...v1.IPFamily) *v1.Service {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: uid, Finalizers: []string{ServiceGatewayServiceCleanupFinalizer}},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, IPFamilies: families},
+			Status: v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{
+				{IP: "20.1.2.3"}, {IP: "2603:1030::7"},
+			}}},
+		}
+		if deleting {
+			svc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		}
+		return svc
+	}
+	track := func(dt *DiffTracker, units ...string) {
+		for _, unit := range units {
+			dt.NRPResources.LoadBalancers.Insert(unit)
+			dt.pendingServiceOps[unit] = &ServiceOperationState{ServiceUID: unit, Config: NewInboundServiceConfig(unit, nil), State: StateDeletionInProgress}
+			dt.pendingServiceDeletions[unit] = &PendingServiceDeletion{ServiceUID: unit, IsInbound: true}
+		}
+	}
+	get := func(t *testing.T, kube *fake.Clientset) *v1.Service {
+		svc, err := kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		return svc
+	}
+	run := func(t *testing.T, kube *fake.Clientset, units []string, unit string) (bool, *DiffTracker) {
+		ctrl := gomock.NewController(t)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = deletionTestFactory(ctrl)
+		track(dt, units...)
+		succeeded := false
+		su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		})
+		su.deleteInboundService(unit, "corr")
+		return succeeded, dt
+	}
+
+	t.Run("a secondary unit of a live Service drops only its family's IP", func(t *testing.T) {
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv4Protocol))
+		ok, dt := run(t, kube, []string{uid, secondary}, secondary)
+
+		assert.True(t, ok)
+		svc := get(t, kube)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}, svc.Status.LoadBalancer.Ingress)
+		assert.Contains(t, svc.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		assert.NotContains(t, dt.pendingServiceOps, secondary)
+		assert.True(t, dt.NRPResources.LoadBalancers.Has(uid), "the primary unit is untouched")
+	})
+
+	t.Run("a secondary unit leaves Azure alone until its family's IP is out of the status", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv4Protocol))
+		kube.PrependReactor("patch", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("apiserver unavailable")
+		})
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		// No Azure client may be used: the released address must never stay advertised.
+		dt.networkClientFactory = mock_azclient.NewMockClientFactory(ctrl)
+		track(dt, uid, secondary)
+		succeeded := true
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(secondary, "corr")
+
+		assert.False(t, succeeded)
+		assert.True(t, dt.NRPResources.LoadBalancers.Has(secondary))
+		assert.Len(t, get(t, kube).Status.LoadBalancer.Ingress, 2)
+	})
+
+	t.Run("the IPv4 secondary unit of an IPv6 Service drops only the IPv4 IP", func(t *testing.T) {
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv6Protocol))
+		ok, _ := run(t, kube, []string{uid, uid + "-v4"}, uid+"-v4")
+
+		assert.True(t, ok)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::7"}}, get(t, kube).Status.LoadBalancer.Ingress)
+	})
+
+	t.Run("a stale secondary unit removes only its own released IP", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		oldPIPID := publicIPAddressID("sub", "rg", PublicIPName(secondary))
+		lb.EXPECT().Get(gomock.Any(), "rg", secondary, gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(oldPIPID)},
+			}}},
+		}}, nil)
+		lb.EXPECT().Delete(gomock.Any(), "rg", secondary).Return(nil)
+		pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(secondary), gomock.Any()).Return(&armnetwork.PublicIPAddress{
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("2603:1030::b")},
+		}, nil).AnyTimes()
+		pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(secondary)).Return(nil).AnyTimes()
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv6Protocol, v1.IPv4Protocol))
+		svc := get(t, kube)
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}, {IP: "2603:1030::b"}}
+		_, err := kube.CoreV1().Services("default").UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = f
+		track(dt, uid, secondary)
+		succeeded := false
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(secondary, "corr")
+
+		assert.True(t, succeeded)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}}, get(t, kube).Status.LoadBalancer.Ingress)
+	})
+
+	t.Run("a stale secondary unit waits when its Public IP cannot be read", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		oldPIPID := publicIPAddressID("sub", "rg", PublicIPName(secondary))
+		lb.EXPECT().Get(gomock.Any(), "rg", secondary, gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(oldPIPID)},
+			}}},
+		}}, nil)
+		lb.EXPECT().Delete(gomock.Any(), "rg", secondary).Times(0)
+		pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(secondary), gomock.Any()).Return(nil, context.DeadlineExceeded)
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv6Protocol, v1.IPv4Protocol))
+		svc := get(t, kube)
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}, {IP: "2603:1030::b"}}
+		_, err := kube.CoreV1().Services("default").UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = f
+		track(dt, uid, secondary)
+		succeeded := true
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(secondary, "corr")
+
+		assert.False(t, succeeded)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}, {IP: "2603:1030::b"}}, get(t, kube).Status.LoadBalancer.Ingress)
+	})
+
+	t.Run("a stale secondary unit waits when status cannot be read", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		oldPIPID := publicIPAddressID("sub", "rg", PublicIPName(secondary))
+		lb.EXPECT().Get(gomock.Any(), "rg", secondary, gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(oldPIPID)},
+			}}},
+		}}, nil)
+		lb.EXPECT().Delete(gomock.Any(), "rg", secondary).Times(0)
+		pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(secondary), gomock.Any()).Return(&armnetwork.PublicIPAddress{
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("2603:1030::b")},
+		}, nil)
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv6Protocol, v1.IPv4Protocol))
+		gets := 0
+		kube.PrependReactor("get", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			gets++
+			if gets >= 3 {
+				return true, nil, errors.New("apiserver unavailable")
+			}
+			return false, nil, nil
+		})
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = f
+		track(dt, uid, secondary)
+		dt.pendingServiceOps[uid].Config.Namespace, dt.pendingServiceOps[uid].Config.Name = "default", "web"
+		dt.pendingServiceOps[secondary].Config.Namespace, dt.pendingServiceOps[secondary].Config.Name = "default", "web"
+		succeeded := true
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(secondary, "corr")
+
+		assert.False(t, succeeded)
+	})
+
+	t.Run("a stale secondary unit waits when status cannot be patched", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		oldPIPID := publicIPAddressID("sub", "rg", PublicIPName(secondary))
+		lb.EXPECT().Get(gomock.Any(), "rg", secondary, gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(oldPIPID)},
+			}}},
+		}}, nil)
+		lb.EXPECT().Delete(gomock.Any(), "rg", secondary).Times(0)
+		pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(secondary), gomock.Any()).Return(&armnetwork.PublicIPAddress{
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("2603:1030::b")},
+		}, nil)
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv6Protocol, v1.IPv4Protocol))
+		svc := get(t, kube)
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}, {IP: "2603:1030::b"}}
+		_, err := kube.CoreV1().Services("default").UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		kube.PrependReactor("patch", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, errors.New("apiserver unavailable")
+		})
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = f
+		track(dt, uid, secondary)
+		succeeded := true
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(secondary, "corr")
+
+		assert.False(t, succeeded)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}, {IP: "2603:1030::b"}}, get(t, kube).Status.LoadBalancer.Ingress)
+	})
+
+	t.Run("a stale secondary unit deletes Azure when its Public IP is already gone", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		oldPIPID := publicIPAddressID("sub", "rg", PublicIPName(secondary))
+		lb.EXPECT().Get(gomock.Any(), "rg", secondary, gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(oldPIPID)},
+			}}},
+		}}, nil)
+		lb.EXPECT().Delete(gomock.Any(), "rg", secondary).Return(nil).Times(1)
+		pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(secondary), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+		pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(secondary)).Return(nil).AnyTimes()
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv6Protocol, v1.IPv4Protocol))
+		svc := get(t, kube)
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}}
+		_, err := kube.CoreV1().Services("default").UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = f
+		track(dt, uid, secondary)
+		succeeded := false
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(secondary, "corr")
+
+		assert.True(t, succeeded)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::c"}, {IP: "20.1.2.4"}}, get(t, kube).Status.LoadBalancer.Ingress)
+	})
+
+	t.Run("a stale secondary unit deletes Azure when the Service is gone", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		oldPIPID := publicIPAddressID("sub", "rg", PublicIPName(secondary))
+		lb.EXPECT().Get(gomock.Any(), "rg", secondary, gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(oldPIPID)},
+			}}},
+		}}, nil)
+		lb.EXPECT().Delete(gomock.Any(), "rg", secondary).Return(nil).Times(1)
+		pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(secondary), gomock.Any()).Return(&armnetwork.PublicIPAddress{
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("2603:1030::b")},
+		}, nil).AnyTimes()
+		pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(secondary)).Return(nil).AnyTimes()
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = fake.NewSimpleClientset()
+		dt.networkClientFactory = f
+		track(dt, uid, secondary)
+		succeeded := false
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(secondary, "corr")
+
+		assert.True(t, succeeded)
+		assert.NotContains(t, dt.pendingServiceOps, secondary)
+	})
+
+	t.Run("a recreated primary unit removes only its own released IP", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		oldPIPID := publicIPAddressID("sub", "rg", PublicIPName(uid))
+		lb.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(&armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+			FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+				PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(oldPIPID)},
+			}}},
+		}}, nil)
+		lb.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil)
+		pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).Return(&armnetwork.PublicIPAddress{
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.1.2.3")},
+		}, nil).AnyTimes()
+		pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv6Protocol, v1.IPv4Protocol))
+		svc := get(t, kube)
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "20.1.2.3"}, {IP: "2603:1030::7"}}
+		_, err := kube.CoreV1().Services("default").UpdateStatus(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = f
+		track(dt, uid)
+		config := NewInboundServiceConfig(uid, makeInboundConfig(80))
+		config.InboundConfig.IPFamilies = []string{"IPv6"}
+		dt.pendingServiceOps[uid].Config = config
+		dt.pendingServiceOps[uid].RecreateAfterDeletion = true
+		succeeded := false
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(uid, "corr")
+
+		assert.True(t, succeeded)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2603:1030::7"}}, get(t, kube).Status.LoadBalancer.Ingress)
+		if op := dt.pendingServiceOps[uid]; assert.NotNil(t, op) {
+			assert.Equal(t, StateNotStarted, op.State)
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+			assert.False(t, op.FinalizerKeptForRecreate)
+		}
+		assert.Contains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	})
+
+	t.Run("a live recreated primary keeps both finalizers", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		kube := fake.NewSimpleClientset(newService(false, v1.IPv4Protocol))
+		svc := get(t, kube)
+		svc.Finalizers = []string{ServiceGatewayServiceCleanupFinalizer, servicehelper.LoadBalancerCleanupFinalizer}
+		_, err := kube.CoreV1().Services("default").Update(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = deletionTestFactory(ctrl)
+		track(dt, uid)
+		dt.pendingServiceOps[uid].RecreateAfterDeletion = true
+		succeeded := false
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			succeeded = ok
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(uid, "corr")
+
+		assert.True(t, succeeded)
+		got := get(t, kube)
+		assert.Contains(t, got.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		assert.Contains(t, got.Finalizers, servicehelper.LoadBalancerCleanupFinalizer)
+	})
+
+	t.Run("a secondary unit of a deleting Service keeps the finalizer", func(t *testing.T) {
+		kube := fake.NewSimpleClientset(newService(true, v1.IPv4Protocol, v1.IPv6Protocol))
+		ok, _ := run(t, kube, []string{uid, secondary}, secondary)
+
+		assert.True(t, ok)
+		assert.Contains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	})
+
+	t.Run("the primary unit waits for its secondary unit before touching Azure", func(t *testing.T) {
+		// Whatever the order the units' deletes were queued in: the secondary may not be deleting yet.
+		for name, mutate := range map[string]func(*DiffTracker){
+			"being deleted":    func(*DiffTracker) {},
+			"not deleting yet": func(dt *DiffTracker) { dt.pendingServiceOps[secondary].State = StateCreated },
+			"only registered in NRP": func(dt *DiffTracker) {
+				delete(dt.pendingServiceOps, secondary)
+				delete(dt.pendingServiceDeletions, secondary)
+			},
+			"still being created": func(dt *DiffTracker) {
+				dt.pendingServiceOps[secondary].State = StateCreationInProgress
+				dt.NRPResources.LoadBalancers.Delete(secondary)
+			},
+		} {
+			ctrl := gomock.NewController(t)
+			kube := fake.NewSimpleClientset(newService(true, v1.IPv4Protocol, v1.IPv6Protocol))
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.kubeClient = kube
+			// No Azure client may be used: the primary stays registered, so a restart still deletes both units.
+			dt.networkClientFactory = mock_azclient.NewMockClientFactory(ctrl)
+			track(dt, uid, secondary)
+			mutate(dt)
+			succeeded := true
+			deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+				succeeded = ok
+				dt.OnServiceCreationComplete(uid, ok, err)
+			}).deleteInboundService(uid, "corr")
+
+			assert.False(t, succeeded, "%s: the delete is retried while the secondary unit exists", name)
+			assert.True(t, dt.NRPResources.LoadBalancers.Has(uid), name)
+			assert.Contains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer, name)
+		}
+	})
+
+	t.Run("a primary unit recreated afterwards does not wait for its secondary unit", func(t *testing.T) {
+		for name, mutate := range map[string]func(*ServiceOperationState){
+			"recreated after its delete": func(op *ServiceOperationState) { op.RecreateAfterDeletion = true },
+			"created again":              func(op *ServiceOperationState) { op.State = StateNotStarted },
+		} {
+			ctrl := gomock.NewController(t)
+			kube := fake.NewSimpleClientset(newService(false, v1.IPv4Protocol, v1.IPv6Protocol))
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.kubeClient = kube
+			dt.networkClientFactory = deletionTestFactory(ctrl)
+			track(dt, uid, secondary)
+			mutate(dt.pendingServiceOps[secondary])
+			dt.pendingServiceOps[uid].RecreateAfterDeletion = true
+			succeeded := false
+			deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+				succeeded = ok
+				dt.OnServiceCreationComplete(uid, ok, err)
+			}).deleteInboundService(uid, "corr")
+			assert.True(t, succeeded, name)
+		}
+	})
+
+	t.Run("the primary rechecks secondary units before removing the finalizer", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		f := mock_azclient.NewMockClientFactory(ctrl)
+		sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+		lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+		pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+		f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+		f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+		f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+		var dt *DiffTracker
+		sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(context.Context, string, string, armnetwork.ServiceGatewayUpdateServicesRequest) error {
+				dt.pendingServiceOps[uid].RecreateAfterDeletion = false
+				return nil
+			}).AnyTimes()
+		lb.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+		lb.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).AnyTimes()
+		pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
+		kube := fake.NewSimpleClientset(newService(true, v1.IPv4Protocol, v1.IPv6Protocol))
+		dt = newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = f
+		track(dt, uid, secondary)
+		dt.pendingServiceOps[uid].RecreateAfterDeletion = true
+		su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			dt.OnServiceCreationComplete(uid, ok, err)
+		})
+
+		su.deleteInboundService(uid, "corr")
+		assert.Contains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		assert.Contains(t, dt.pendingServiceOps, uid, "the primary delete must be retried after the secondary finishes")
+
+		delete(dt.pendingServiceOps, secondary)
+		delete(dt.pendingServiceDeletions, secondary)
+		dt.NRPResources.LoadBalancers.Delete(secondary)
+		su.deleteInboundService(uid, "corr")
+		assert.NotContains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	})
+
+	t.Run("a canceled recreate redispatches delete to remove the finalizer", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		kube := fake.NewSimpleClientset(newService(true, v1.IPv4Protocol))
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = deletionTestFactory(ctrl)
+		track(dt, uid)
+		op := dt.pendingServiceOps[uid]
+		op.FinalizerKeptForRecreate = true
+		op.RecreateAfterDeletion = false
+
+		dt.OnServiceCreationComplete(uid, true, nil)
+		if op = dt.pendingServiceOps[uid]; assert.NotNil(t, op) {
+			assert.Equal(t, StateDeletionInProgress, op.State)
+			assert.False(t, op.FinalizerKeptForRecreate)
+		}
+		assert.Len(t, dt.serviceUpdaterTrigger, 1)
+		assert.Contains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+
+		deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			dt.OnServiceCreationComplete(uid, ok, err)
+		}).deleteInboundService(uid, "corr")
+		assert.NotContains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	})
+
+	t.Run("the primary unit removes the finalizer once no secondary unit is left", func(t *testing.T) {
+		kube := fake.NewSimpleClientset(newService(true, v1.IPv4Protocol, v1.IPv6Protocol))
+		ok, dt := run(t, kube, []string{uid}, uid)
+
+		assert.True(t, ok)
+		assert.NotContains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		assert.NotContains(t, dt.pendingServiceOps, uid)
+	})
+
+	t.Run("an untracked primary is orphan-deleted after its secondary", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		kube := fake.NewSimpleClientset(newService(true, v1.IPv4Protocol, v1.IPv6Protocol))
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = deletionTestFactory(ctrl)
+		track(dt, secondary)
+
+		assert.NoError(t, dt.DeleteInboundService(newService(true, v1.IPv4Protocol, v1.IPv6Protocol)))
+		primary := dt.pendingServiceOps[uid]
+		if assert.NotNil(t, primary, "the primary finalizer owner must be scheduled even when absent from NRP") {
+			assert.True(t, primary.IsOrphan)
+		}
+		su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+			dt.OnServiceCreationComplete(uid, ok, err)
+		})
+
+		su.deleteInboundService(secondary, "corr")
+		assert.Contains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+		su.deleteInboundService(uid, "corr")
+		assert.NotContains(t, get(t, kube).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	})
+}
+
+func TestServiceUpdaterDeleteInboundService_RecreateCanceledAfterFinalizerKept(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	kube := fake.NewSimpleClientset(deletionTestService())
+	dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
+	dt.pendingServiceOps["uid-1"].RecreateAfterDeletion = true
+	canceled := false
+	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+		if !canceled {
+			canceled = true
+			dt.DeleteService(uid, true, false)
+		}
+		dt.OnServiceCreationComplete(uid, ok, err)
+	})
+
+	su.deleteInboundService("uid-1", "corr")
+	if op := dt.pendingServiceOps["uid-1"]; assert.NotNil(t, op, "the delete must be re-dispatched") {
+		assert.Equal(t, StateDeletionInProgress, op.State)
+	}
+	su.deleteInboundService("uid-1", "corr")
+
+	svc, err := kube.CoreV1().Services("default").Get(context.Background(), "svc", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, svc.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	assert.NotContains(t, dt.pendingServiceOps, "uid-1")
+}
+
+func TestServiceUpdaterDeleteInboundService_RecreateCanceledWithBufferedPodsAfterFinalizerKept(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	kube := fake.NewSimpleClientset(deletionTestService())
+	dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
+	dt.pendingServiceOps["uid-1"].RecreateAfterDeletion = true
+	dt.pendingPods["uid-1"] = []PendingPodUpdate{{PodKey: "default/p", PodUID: "p", Location: "10.0.0.4", Address: "10.1.0.4"}}
+	canceled := false
+	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+		if !canceled {
+			canceled = true
+			dt.DeleteService(uid, true, false)
+		}
+		dt.OnServiceCreationComplete(uid, ok, err)
+	})
+
+	su.deleteInboundService("uid-1", "corr")
+	if op := dt.pendingServiceOps["uid-1"]; assert.NotNil(t, op) {
+		assert.Equal(t, StateDeletionInProgress, op.State)
+	}
+	su.deleteInboundService("uid-1", "corr")
+
+	svc, err := kube.CoreV1().Services("default").Get(context.Background(), "svc", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, svc.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+	assert.NotContains(t, dt.pendingServiceOps, "uid-1")
 }
 
 func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T) {
@@ -382,6 +1010,172 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 
 // A transient failure releasing a Public IP the controller owns fails the delete so it is retried. The load
 // balancer that pointed to the Public IP is already gone then, so the retry must still know which one to release.
+// TestServiceUpdaterDeleteInboundService_ReleasesTheChosenPublicIPOfTheUnitsFamily verifies that a unit
+// releases the Public IP its own IP family chose, never the other family's.
+func TestServiceUpdaterDeleteInboundService_ReleasesTheChosenPublicIPOfTheUnitsFamily(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/web"), consts.ClusterNameKey: ptr.To("cluster")}
+	for _, tc := range []struct {
+		name, unit string
+		families   []v1.IPFamily
+		want       []string
+	}{
+		{"primary", uid, []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, []string{"rg/mine-v4"}},
+		{"secondary", uid + "-v6", []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, []string{"rg/mine-v6"}},
+		{"secondary of a Service that became single-stack", uid + "-v6", []v1.IPFamily{v1.IPv4Protocol}, nil},
+	} {
+		unit := tc.unit
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			f := mock_azclient.NewMockClientFactory(ctrl)
+			sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+			f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+			f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+			sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			lb.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+			lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, name string, _ *string) (*armnetwork.PublicIPAddress, error) {
+				return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: owned}, nil
+			}).AnyTimes()
+			var mu sync.Mutex
+			var deleted []string
+			pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, rg, name string) error {
+				if name != PublicIPName(unit) {
+					mu.Lock()
+					deleted = append(deleted, rg+"/"+name)
+					mu.Unlock()
+				}
+				return nil
+			}).AnyTimes()
+
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: uid, DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+					Annotations: map[string]string{
+						consts.ServiceAnnotationPIPNameDualStack[false]: "mine-v4",
+						consts.ServiceAnnotationPIPNameDualStack[true]:  "mine-v6",
+					}},
+				Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, IPFamilies: tc.families,
+					Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+			}
+			if len(tc.families) == 1 {
+				svc.DeletionTimestamp = nil
+			}
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.kubeClient = fake.NewSimpleClientset(svc)
+			dt.networkClientFactory = f
+			dt.SetClusterName("cluster")
+			dt.NRPResources.LoadBalancers.Insert(unit)
+			dt.pendingServiceOps[unit] = &ServiceOperationState{ServiceUID: unit, Config: NewInboundServiceConfig(unit, nil), State: StateDeletionInProgress}
+
+			deletionTestUpdater(dt, func(string, bool, error) {}).deleteInboundService(unit, "corr")
+
+			mu.Lock()
+			defer mu.Unlock()
+			assert.Equal(t, tc.want, deleted)
+		})
+	}
+}
+
+// TestServiceUpdaterDeleteInboundService_SweepsMoveLeftoversOfTheUnitsFamily verifies that a unit's delete only
+// sweeps, in the Service's resource group, the Public IPs a move left of its own family: the units of a dual-stack
+// Service share the resource group and the ownership tags.
+func TestServiceUpdaterDeleteInboundService_SweepsMoveLeftoversOfTheUnitsFamily(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/web"), consts.ClusterNameKey: ptr.To("cluster")}
+	both := map[string]string{
+		consts.ServiceAnnotationPIPNameDualStack[false]:   "mine-v4",
+		consts.ServiceAnnotationPIPNameDualStack[true]:    "mine-v6",
+		consts.ServiceAnnotationLoadBalancerResourceGroup: "other-rg",
+	}
+	onlyV4 := map[string]string{
+		consts.ServiceAnnotationPIPNameDualStack[false]:   "mine-v4",
+		consts.ServiceAnnotationLoadBalancerResourceGroup: "other-rg",
+	}
+	for _, tc := range []struct {
+		name, unit  string
+		families    []v1.IPFamily
+		annotations map[string]string
+		want        []string
+	}{
+		{"primary", uid, []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, both, []string{"other-rg/mine-v4", "other-rg/left-v4"}},
+		{"secondary", uid + "-v6", []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, both, []string{"other-rg/mine-v6", "other-rg/left-v6"}},
+		{"secondary that does not choose its Public IP", uid + "-v6", []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, onlyV4, []string{"other-rg/left-v6"}},
+		{"secondary of a Service that became single-stack", uid + "-v6", []v1.IPFamily{v1.IPv4Protocol}, both, nil},
+		{"primary of a Service whose other family chooses by address", uid, []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, map[string]string{
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2001:db8::7",
+			consts.ServiceAnnotationLoadBalancerResourceGroup:     "other-rg"}, []string{"other-rg/left-v4"}},
+	} {
+		unit := tc.unit
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			f := mock_azclient.NewMockClientFactory(ctrl)
+			sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+			f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+			f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+			sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			lb.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+			lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, name string, _ *string) (*armnetwork.PublicIPAddress, error) {
+				return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: owned}, nil
+			}).AnyTimes()
+			listed := func(name string, version armnetwork.IPVersion, attached bool) *armnetwork.PublicIPAddress {
+				p := &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: owned, Properties: &armnetwork.PublicIPAddressPropertiesFormat{PublicIPAddressVersion: ptr.To(version)}}
+				if attached {
+					p.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("ipconfig")}
+				}
+				return p
+			}
+			pip.EXPECT().List(gomock.Any(), "other-rg").Return([]*armnetwork.PublicIPAddress{
+				listed("mine-v4", armnetwork.IPVersionIPv4, true),
+				listed("mine-v6", armnetwork.IPVersionIPv6, true),
+				listed("left-v4", armnetwork.IPVersionIPv4, false),
+				listed("left-v6", armnetwork.IPVersionIPv6, false),
+			}, nil).AnyTimes()
+			var mu sync.Mutex
+			var deleted []string
+			pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, rg, name string) error {
+				if name != PublicIPName(unit) {
+					mu.Lock()
+					deleted = append(deleted, rg+"/"+name)
+					mu.Unlock()
+				}
+				return nil
+			}).AnyTimes()
+
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: uid, DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					Finalizers: []string{ServiceGatewayServiceCleanupFinalizer}, Annotations: tc.annotations},
+				Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, IPFamilies: tc.families,
+					Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+			}
+			if len(tc.families) == 1 {
+				svc.DeletionTimestamp = nil
+			}
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.kubeClient = fake.NewSimpleClientset(svc)
+			dt.networkClientFactory = f
+			dt.SetClusterName("cluster")
+			dt.NRPResources.LoadBalancers.Insert(unit)
+			dt.pendingServiceOps[unit] = &ServiceOperationState{ServiceUID: unit, Config: NewInboundServiceConfig(unit, nil), State: StateDeletionInProgress}
+
+			deletionTestUpdater(dt, func(string, bool, error) {}).deleteInboundService(unit, "corr")
+
+			mu.Lock()
+			defer mu.Unlock()
+			assert.ElementsMatch(t, tc.want, deleted)
+		})
+	}
+}
+
 func TestServiceUpdaterDeleteInboundService_RetriesTransientPublicIPRelease(t *testing.T) {
 	const mineID = "/subscriptions/sub/resourceGroups/other-rg/providers/Microsoft.Network/publicIPAddresses/mine"
 	owned := map[string]*string{consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("cluster")}

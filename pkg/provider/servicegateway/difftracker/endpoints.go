@@ -180,7 +180,7 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldSlice, newES *discovery_v1.Endp
 // seedInboundEndpointsFromCache replays the current ready endpoints for a newly registered or
 // recreated inbound service. EndpointSlice informers only report changes, so an unchanged slice
 // cannot repopulate endpoint state after a ClusterIP-to-LoadBalancer transition or an in-flight
-// delete/recreate.
+// delete/recreate. serviceUID is a unit; only the addresses of the unit's IP family are replayed.
 func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 	if dt == nil || serviceUID == "" {
 		return
@@ -202,6 +202,7 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 		return
 	}
 
+	parentUID, _ := ParentServiceUID(serviceUID)
 	addresses := make(map[string]string)
 	dt.endpointSlicesCache.Range(func(_, value interface{}) bool {
 		es, ok := value.(*discovery_v1.EndpointSlice)
@@ -209,7 +210,7 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 			return true
 		}
 		uid, loaded := serviceUIDOfEndpointSlice(es)
-		if !loaded || !strings.EqualFold(uid, serviceUID) {
+		if !loaded || !strings.EqualFold(uid, parentUID) {
 			return true
 		}
 
@@ -218,6 +219,7 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 		}
 		return true
 	})
+	addresses = dt.unitEndpointsLocked(serviceUID, addresses)
 
 	if len(addresses) == 0 {
 		return

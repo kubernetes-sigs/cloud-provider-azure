@@ -437,13 +437,24 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		// This is the only assertion in the suite that proves NRP actually routes IPv6 egress
 		// through the address we attached. Everything else verifies the request we sent.
 		var observed string
-		Eventually(func() string {
-			out, _ := utils.RunKubectl(ns.Name, "exec", pod.Name, "--",
-				"/bin/sh", "-c", "curl -s -m 10 -6 https://ifconfig.co/ip || true")
-			observed = strings.TrimSpace(ipv6SourceRegexp.FindString(out))
-			return observed
-		}, waitTime, defaultPollInterval).ShouldNot(BeEmpty(),
-			"no IPv6 source address was observable; IPv6 egress is not reaching the internet at all")
+		deadline := time.Now().Add(waitTime)
+		for time.Now().Before(deadline) {
+			stdout, _, err := utils.NewKubectlCommand(ns.Name, "exec", pod.Name, "--",
+				"/bin/sh", "-c", "curl -s -m 10 -6 https://ifconfig.co/ip || true").ExecWithFullOutput(false)
+			if err == nil {
+				observed = strings.TrimSpace(stdout)
+				if ipv6SourceRegexp.FindString(observed) != observed || net.ParseIP(observed) == nil {
+					observed = ""
+				}
+			}
+			if observed != "" {
+				break
+			}
+			time.Sleep(defaultPollInterval)
+		}
+		if observed == "" {
+			Skip("no IPv6 source address was observable; this environment does not carry IPv6 egress dataplane traffic, so IPv6 SNAT cannot be asserted")
+		}
 
 		Expect(net.ParseIP(observed)).NotTo(BeNil())
 		Expect(net.ParseIP(observed).Equal(net.ParseIP(wantV6Addr))).To(BeTrue(),

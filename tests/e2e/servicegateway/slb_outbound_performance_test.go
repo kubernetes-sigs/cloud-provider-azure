@@ -386,7 +386,7 @@ var _ = Describe("Container Load Balancer Outbound Performance Test", Label(slbT
 		var addressCount int
 
 		Eventually(func() error {
-			if err := egressRegisteredErr(egressName, numPods); err != nil {
+			if err := egressRegisteredPodCountErr(cs, ns.Name, egressName, numPods); err != nil {
 				return err
 			}
 			sgResponse, err := queryServiceGatewayServices()

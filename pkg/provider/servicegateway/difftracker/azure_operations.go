@@ -41,10 +41,12 @@ package difftracker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -54,9 +56,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/retry"
-	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
@@ -278,9 +280,12 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 //
 // It matches on UID alone: the returned Service may no longer be of type LoadBalancer and may be
 // terminating. Only the UID-scan fallback narrows by spec.type. Callers that act on the result must
-// apply their own type and deletion checks.
+// apply their own type and deletion checks. uid may name a secondary unit; its Service is returned.
 func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
 	namespace, name, lister := dt.serviceIdentityForUID(uid)
+	if parent, secondary := ParentServiceUID(uid); secondary && !dt.isEgressIdentity(uid) {
+		uid = parent
+	}
 
 	if namespace != "" && name != "" {
 		svc, err := dt.getServiceByNamespaceName(ctx, lister, namespace, name)
@@ -315,6 +320,23 @@ func (dt *DiffTracker) serviceIdentityForUID(uid string) (namespace, name string
 	return namespace, name, dt.serviceLister
 }
 
+// latestServiceByUID is getServiceByUID read from the apiserver rather than the informer cache, for a
+// status write that must build on the latest status.
+func (dt *DiffTracker) latestServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
+	svc, err := dt.getServiceByUID(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	latest, err := dt.kubeClient.CoreV1().Services(svc.Namespace).Get(ctx, svc.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if latest.UID != svc.UID {
+		return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "services"}, uid)
+	}
+	return latest, nil
+}
+
 // getServiceByNamespaceName reads a Service by namespace/name, preferring the cached lister and
 // falling back to a direct apiserver Get when the lister is unset or reports the object missing
 // (a cold cache before the informer has synced). Lister results are deep-copied because the
@@ -339,6 +361,7 @@ func (dt *DiffTracker) serviceKeepsLoadBalancer(ctx context.Context, owner, exce
 	if dt.kubeClient == nil {
 		return false
 	}
+	exceptUID, _ = ParentServiceUID(exceptUID)
 	dt.mu.Lock()
 	lister := dt.serviceLister
 	dt.mu.Unlock()
@@ -358,6 +381,11 @@ func (dt *DiffTracker) serviceKeepsLoadBalancer(ctx context.Context, owner, exce
 		dt.mu.Lock()
 		op, tracked := dt.pendingServiceOps[string(svc.UID)]
 		deleting := tracked && (op.State == StateDeletionPending || op.State == StateDeletionInProgress)
+		for _, unit := range SecondaryUnitNames(string(svc.UID)) {
+			if op, tracked := dt.pendingServiceOps[unit]; tracked && (op.State == StateDeletionPending || op.State == StateDeletionInProgress) {
+				deleting = true
+			}
+		}
 		dt.mu.Unlock()
 		if !deleting {
 			return true
@@ -412,10 +440,23 @@ func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serv
 	}
 	newIsIPv4 := parsedIP.To4() != nil
 
+	dt.statusMu.Lock()
+	defer dt.statusMu.Unlock()
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		svc, err := dt.getServiceByUID(ctx, serviceUID)
+		svc, err := dt.latestServiceByUID(ctx, serviceUID)
 		if err != nil {
 			return fmt.Errorf("updateServiceLoadBalancerStatus: failed to get service: %w", err)
+		}
+		unitFamily, unitCurrent := currentInboundUnitFamily(svc, serviceUID)
+		if !unitCurrent {
+			dt.logger.V(4).Info("Skipped LoadBalancer IP status update for a unit the Service no longer has",
+				"namespace", svc.Namespace, "service", svc.Name, "serviceUID", serviceUID, "ip", ip)
+			return nil
+		}
+		if (unitFamily == v1.IPv4Protocol) != newIsIPv4 {
+			dt.logger.V(4).Info("Skipped LoadBalancer IP status update for a stale unit family",
+				"namespace", svc.Namespace, "service", svc.Name, "serviceUID", serviceUID, "ip", ip)
+			return nil
 		}
 
 		desired := make([]v1.LoadBalancerIngress, 0, len(svc.Status.LoadBalancer.Ingress)+1)
@@ -440,7 +481,13 @@ func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serv
 			desired = append(desired, ingress)
 		}
 		if !newPresent {
-			desired = append(desired, v1.LoadBalancerIngress{IP: ip})
+			// The primary family's IP comes first, whichever unit is created first.
+			entry := v1.LoadBalancerIngress{IP: ip}
+			if len(svc.Spec.IPFamilies) > 0 && (svc.Spec.IPFamilies[0] == v1.IPv4Protocol) == newIsIPv4 {
+				desired = append([]v1.LoadBalancerIngress{entry}, desired...)
+			} else {
+				desired = append(desired, entry)
+			}
 		}
 
 		if apiequality.Semantic.DeepEqual(svc.Status.LoadBalancer.Ingress, desired) {
@@ -448,13 +495,108 @@ func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serv
 			return nil
 		}
 
-		updated := svc.DeepCopy()
-		updated.Status.LoadBalancer.Ingress = desired
-		if _, err := servicehelper.PatchService(dt.kubeClient.CoreV1(), svc, updated); err != nil {
+		if err := dt.patchServiceIngress(ctx, svc, desired); err != nil {
 			return fmt.Errorf("updateServiceLoadBalancerStatus: failed to patch service: %w", err)
 		}
 
 		dt.logger.V(2).Info("Updated Service with LoadBalancer IP", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
+		return nil
+	})
+}
+
+// patchServiceIngress writes the Service's ingress list on condition that the Service is still at the
+// resourceVersion it was read at: another writer, such as the service controller clearing the status of a
+// Service that is no longer a LoadBalancer, makes it a conflict that is retried on a fresh read.
+func (dt *DiffTracker) patchServiceIngress(ctx context.Context, svc *v1.Service, ingress []v1.LoadBalancerIngress) error {
+	if ingress == nil {
+		ingress = []v1.LoadBalancerIngress{}
+	}
+	patch, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{"resourceVersion": svc.ResourceVersion},
+		"status":   map[string]any{"loadBalancer": map[string]any{"ingress": ingress}},
+	})
+	if err != nil {
+		return err
+	}
+	_, err = dt.kubeClient.CoreV1().Services(svc.Namespace).Patch(ctx, svc.Name, types.MergePatchType, patch, metav1.PatchOptions{}, "status")
+	return err
+}
+
+// removeServiceLoadBalancerIngressFamily removes the ingress IPs of one IP family from a Service that
+// stopped serving that family. A Service that is gone, being deleted, or serves the family is left alone.
+func (dt *DiffTracker) removeServiceLoadBalancerIngressFamily(ctx context.Context, serviceUID string, ipv6 bool) error {
+	dt.statusMu.Lock()
+	defer dt.statusMu.Unlock()
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		svc, err := dt.latestServiceByUID(ctx, serviceUID)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("removeServiceLoadBalancerIngressFamily: failed to get service: %w", err)
+		}
+		if svc.DeletionTimestamp != nil {
+			return nil
+		}
+		// A unit of the Service's current spec serves the family again (it was recreated meanwhile).
+		family := v1.IPv4Protocol
+		if ipv6 {
+			family = v1.IPv6Protocol
+		}
+		if slices.Contains(servedFamilies(svc), family) {
+			return nil
+		}
+		desired := make([]v1.LoadBalancerIngress, 0, len(svc.Status.LoadBalancer.Ingress))
+		for _, ingress := range svc.Status.LoadBalancer.Ingress {
+			if ingressIP := net.ParseIP(ingress.IP); ingressIP != nil && (ingressIP.To4() == nil) == ipv6 {
+				continue
+			}
+			desired = append(desired, ingress)
+		}
+		if len(desired) == len(svc.Status.LoadBalancer.Ingress) {
+			return nil
+		}
+		if err := dt.patchServiceIngress(ctx, svc, desired); err != nil {
+			return fmt.Errorf("removeServiceLoadBalancerIngressFamily: failed to patch service: %w", err)
+		}
+		dt.logger.V(2).Info("Removed the LoadBalancer IP of an IP family the Service no longer serves", "namespace", svc.Namespace, "service", svc.Name, "ipv6", ipv6)
+		return nil
+	})
+}
+
+// removeServiceLoadBalancerIngressIP removes exactly one ingress IP from the Service status. It is used when
+// a unit is deleted but its family is now served by a different unit.
+func (dt *DiffTracker) removeServiceLoadBalancerIngressIP(ctx context.Context, serviceUID, ip string) error {
+	if ip == "" {
+		return nil
+	}
+	dt.statusMu.Lock()
+	defer dt.statusMu.Unlock()
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		svc, err := dt.latestServiceByUID(ctx, serviceUID)
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("removeServiceLoadBalancerIngressIP: failed to get service: %w", err)
+		}
+		if svc.DeletionTimestamp != nil {
+			return nil
+		}
+		desired := make([]v1.LoadBalancerIngress, 0, len(svc.Status.LoadBalancer.Ingress))
+		for _, ingress := range svc.Status.LoadBalancer.Ingress {
+			if ingress.IP == ip {
+				continue
+			}
+			desired = append(desired, ingress)
+		}
+		if len(desired) == len(svc.Status.LoadBalancer.Ingress) {
+			return nil
+		}
+		if err := dt.patchServiceIngress(ctx, svc, desired); err != nil {
+			return fmt.Errorf("removeServiceLoadBalancerIngressIP: failed to patch service: %w", err)
+		}
+		dt.logger.V(2).Info("Removed released LoadBalancer IP from Service status", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
 		return nil
 	})
 }

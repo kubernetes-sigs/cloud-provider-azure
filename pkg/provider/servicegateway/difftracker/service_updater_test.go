@@ -318,6 +318,9 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 		"an unstarted operation must be promoted to CreationInProgress and dispatched")
 	assert.NotNil(t, dt.pendingServiceOps["not-started"].InFlightConfig,
 		"the dispatched config must be snapshotted as in-flight")
+	assert.NotNil(t, dt.pendingServiceOps["not-started"].AttemptedCreateConfig,
+		"the dispatched create config must be remembered across failed attempts")
+	assert.Equal(t, dt.pendingServiceOps["not-started"].InFlightConfig, dt.pendingServiceOps["not-started"].AttemptedCreateConfig)
 
 	// Left untouched.
 	assert.Equal(t, StateCreationInProgress, dt.pendingServiceOps["creation-in-progress"].State,
@@ -855,7 +858,13 @@ func TestServiceUpdaterUpdateInboundService_ReconcilesPublicIP(t *testing.T) {
 				return nil, nil
 			}).AnyTimes()
 
-		svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: types.UID(uid)}}
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: types.UID(uid)},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		}
+		for _, family := range cfg.IPFamilies {
+			svc.Spec.IPFamilies = append(svc.Spec.IPFamilies, v1.IPFamily(family))
+		}
 		dt := newTestDiffTracker()
 		dt.config = testConfig()
 		dt.networkClientFactory = m.factory
@@ -1100,6 +1109,9 @@ type publicIPWorld struct {
 	deleting      []string
 	pending       map[string][]string
 	neverFrontend map[string]map[string]bool
+	// families are the Service's IP families when the unit run is one of several; by default the Service has
+	// only the unit's family.
+	families []v1.IPFamily
 }
 
 const otherServiceUID = "99999999-9999-9999-9999-999999999999"
@@ -1239,7 +1251,16 @@ func (w *publicIPWorld) run(t *testing.T, uid string, update bool, config *Inbou
 			return nil
 		}).AnyTimes()
 
-	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: types.UID(uid)}}
+	parentUID, _ := ParentServiceUID(uid)
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: types.UID(parentUID)},
+		Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, IPFamilies: slices.Clone(w.families)},
+	}
+	if w.families == nil {
+		for _, family := range config.IPFamilies {
+			svc.Spec.IPFamilies = append(svc.Spec.IPFamilies, v1.IPFamily(family))
+		}
+	}
 	if w.ingress != "" {
 		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: w.ingress}}
 	}
@@ -1392,6 +1413,10 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 	otherServiceLegacyTag.Tags[consts.LegacyServiceTagKey] = ptr.To("ns/other")
 	otherServiceLB := userPIP("mine", "20.0.0.7")
 	otherServiceLB.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/" + otherServiceUID + "/frontendIPConfigurations/frontend")}
+	otherServiceSecondaryLB := userPIP("mine", "20.0.0.7")
+	otherServiceSecondaryLB.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/" + otherServiceUID + "-v6/frontendIPConfigurations/frontend")}
+	ownOtherFamilyLB := userPIP("mine", "20.0.0.7")
+	ownOtherFamilyLB.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/" + uid + "-v6/frontendIPConfigurations/frontend")}
 	other := loadBalancerService("ns", "other", otherServiceUID)
 	otherBeingDeleted := loadBalancerService("ns", "other", otherServiceUID)
 	otherBeingDeleted.DeletionTimestamp = &metav1.Time{Time: time.Now()}
@@ -1421,6 +1446,7 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 		{name: "a Public IP used by the load balancer of a Service being deleted waits", pip: otherServiceLB, config: byName, event: "PublicIPInUse", others: []*v1.Service{otherBeingDeleted}},
 		{name: "a Public IP used by the load balancer of a Service the controller is deleting waits", pip: otherServiceLB, config: byName, event: "PublicIPInUse", others: []*v1.Service{other}, deleting: []string{otherServiceUID}},
 		{name: "a Public IP used by the load balancer of a Service no longer of type LoadBalancer waits", pip: otherServiceLB, config: byName, event: "PublicIPInUse", others: []*v1.Service{otherNowClusterIP}},
+		{name: "a Public IP used by another Service's secondary unit load balancer is rejected", pip: otherServiceSecondaryLB, config: byName, event: "SharedPublicIPNotSupported", others: []*v1.Service{other}},
 		{name: "a Public IP used by a load balancer of another resource group waits", pip: otherRGServiceLB, config: byName, event: "PublicIPInUse", others: []*v1.Service{other}},
 		{name: "a Public IP still provisioning waits", pip: updating, config: byName},
 		{name: "a Standard Public IP is rejected", pip: standard, config: byName, terminal: true},
@@ -1486,9 +1512,12 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 
 	t.Run("the managed Public IP of another Service or egress identity is never taken", func(t *testing.T) {
 		otherService := PublicIPName("99999999-9999-9999-9999-999999999999")
+		otherSecondary := PublicIPName("99999999-9999-9999-9999-999999999999-v4")
 		egress := userPIP("team-egress-pip", "20.0.0.8")
 		egress.Tags = egressIdentityTags("team-egress")
-		for name, pip := range map[string]*armnetwork.PublicIPAddress{otherService: userPIP(otherService, "20.0.0.7"), "team-egress-pip": egress} {
+		for name, pip := range map[string]*armnetwork.PublicIPAddress{
+			otherService: userPIP(otherService, "20.0.0.7"), otherSecondary: userPIP(otherSecondary, "20.0.0.9"), "team-egress-pip": egress,
+		} {
 			for _, config := range []*InboundConfig{
 				withConfig(func(c *InboundConfig) { c.PIPName = name }),
 				withLoadBalancerIP(*pip.Properties.IPAddress),
@@ -1499,7 +1528,7 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 				assert.False(t, success, name)
 				assert.Empty(t, w.created, name)
 				assert.Zero(t, w.lbPuts, name)
-				if name == otherService {
+				if name == otherService || name == otherSecondary {
 					assert.False(t, isTerminalError(err), "%s: retried so it can take the Public IP once released: %v", name, err)
 					assert.True(t, w.hasEvent("SharedPublicIPNotSupported"), "%s: several Services cannot share a Public IP: %v", name, w.events)
 
@@ -1521,6 +1550,13 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 		success, _, err := w.run(t, uid, false, byName)
 		assert.True(t, success, "%v", err)
 		assert.Equal(t, pipID("rg", "mine"), w.frontend())
+	})
+
+	t.Run("a Public IP attached to this Service's other-family unit is not another Service", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/mine": ownOtherFamilyLB})
+		success, _, err := w.run(t, uid, false, byName)
+		assert.True(t, success, "%v", err)
+		assert.False(t, w.hasEvent("SharedPublicIPNotSupported"), "%v", w.events)
 	})
 
 	t.Run("an attached owned Public IP from another prefix is not recreated", func(t *testing.T) {
@@ -1590,6 +1626,58 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 		success, _, err = w.run(t, uid, false, ipv6(func(c *InboundConfig) { c.PIPName = "mine" }))
 		assert.False(t, success)
 		assert.True(t, isTerminalError(err), "an IPv4 Public IP cannot serve an IPv6 Service: %v", err)
+	})
+
+	t.Run("an unattached managed Public IP of the wrong family is recreated", func(t *testing.T) {
+		managed := ownedPIP(PublicIPName(uid), "20.0.0.7")
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/" + PublicIPName(uid): managed})
+		config := withConfig(func(c *InboundConfig) { c.IPFamilies = []string{"IPv6"} })
+
+		success, _, err := w.run(t, uid, false, config)
+
+		assert.True(t, success, "%v", err)
+		assert.Contains(t, w.deleted, "rg/"+PublicIPName(uid))
+		assert.Contains(t, w.created, "rg/"+PublicIPName(uid))
+		assert.Equal(t, armnetwork.IPVersionIPv6, *w.pips["rg/"+PublicIPName(uid)].Properties.PublicIPAddressVersion)
+	})
+
+	t.Run("a managed Public IP of the wrong family that cannot be deleted is retried", func(t *testing.T) {
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/" + PublicIPName(uid): ownedPIP(PublicIPName(uid), "20.0.0.7")})
+		w.deleteErr = errors.New("busy")
+
+		success, _, err := w.run(t, uid, false, withConfig(func(c *InboundConfig) { c.IPFamilies = []string{"IPv6"} }))
+
+		assert.False(t, success)
+		assert.False(t, isTerminalError(err), "%v", err)
+		assert.Empty(t, w.created)
+		assert.Zero(t, w.lbPuts, "no load balancer may be written on the wrong-family Public IP")
+	})
+
+	t.Run("an attached managed Public IP of the wrong family is still rejected", func(t *testing.T) {
+		attached := ownedPIP(PublicIPName(uid), "20.0.0.7")
+		attached.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/" + uid + "/frontendIPConfigurations/frontend")}
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/" + PublicIPName(uid): attached})
+		config := withConfig(func(c *InboundConfig) { c.IPFamilies = []string{"IPv6"} })
+
+		success, _, err := w.run(t, uid, false, config)
+
+		assert.False(t, success)
+		assert.True(t, isTerminalError(err), "an attached IPv4 Public IP cannot serve an IPv6 Service: %v", err)
+		assert.Empty(t, w.deleted)
+	})
+
+	t.Run("a NAT-attached managed Public IP of the wrong family is still rejected", func(t *testing.T) {
+		attached := ownedPIP(PublicIPName(uid), "20.0.0.7")
+		attached.Properties.NatGateway = &armnetwork.NatGateway{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/nat")}
+		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/" + PublicIPName(uid): attached})
+		config := withConfig(func(c *InboundConfig) { c.IPFamilies = []string{"IPv6"} })
+
+		success, _, err := w.run(t, uid, false, config)
+
+		assert.False(t, success)
+		assert.True(t, isTerminalError(err), "a NAT-attached IPv4 Public IP cannot serve an IPv6 Service: %v", err)
+		assert.Empty(t, w.deleted)
+		assert.Empty(t, w.created)
 	})
 
 	t.Run("a named Public IP created for a load balancer that could not be written is deleted", func(t *testing.T) {
@@ -1737,6 +1825,53 @@ func TestPublicIPPrefixChangeTerminalErrorParksAndRevertUnparks(t *testing.T) {
 		assert.False(t, op.CreationFailedTerminal)
 		assert.Equal(t, StateNotStarted, op.State)
 	}
+}
+
+// The secondary unit of a dual-stack Service moves its own frontend in place when its family's Public IP choice
+// changes, and releases the Public IP it moved off; the primary unit is not involved.
+func TestServiceUpdaterUpdateInboundService_MovesSecondaryUnitFrontendInPlace(t *testing.T) {
+	const uid = "77777777-7777-7777-7777-777777777777"
+	unit := SecondaryUnitName(uid, v1.IPv6Protocol)
+	managed := publicIPAddressID("sub", "rg", PublicIPName(unit))
+	ipv6 := func(pip *armnetwork.PublicIPAddress) *armnetwork.PublicIPAddress {
+		pip.Properties.PublicIPAddressVersion = ptr.To(armnetwork.IPVersionIPv6)
+		return pip
+	}
+	unitConfig := func(name string) *InboundConfig {
+		config := chosenPIPConfig()
+		config.IPFamilies = []string{string(v1.IPv6Protocol)}
+		config.PIPName = name
+		return config
+	}
+	w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{
+		"rg/" + PublicIPName(uid):  userPIP(PublicIPName(uid), "20.0.0.1"),
+		"rg/" + PublicIPName(unit): ipv6(userPIP(PublicIPName(unit), "2001:db8::1")),
+		"rg/user-v6":               ipv6(userPIP("user-v6", "2001:db8::8")),
+	})
+	w.families = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+	w.currentLB = inboundLB(managed)
+	w.ingress = "2001:db8::1"
+
+	success, svc, err := w.run(t, unit, true, unitConfig("user-v6"))
+	assert.True(t, success, "%v", err)
+	assert.Equal(t, publicIPAddressID("sub", "rg", "user-v6"), w.frontend(), "the unit's frontend moves in place")
+	assert.Equal(t, "2001:db8::8", ingressIP(svc))
+	assert.Empty(t, w.created)
+	assert.Equal(t, []string{"rg/" + PublicIPName(unit)}, w.deleted, "only the unit's own Public IP is released")
+	assert.Contains(t, w.pips, "rg/"+PublicIPName(uid), "the primary unit's Public IP is untouched")
+	assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+	assert.Equal(t, []string{"lb"}, w.ops, "the ServiceGateway registration is not touched")
+
+	w.events = nil
+	success, _, err = w.run(t, unit, true, unitConfig(""))
+	assert.True(t, success, "%v", err)
+	assert.Equal(t, managed, w.frontend(), "removing the choice moves the unit back to its own Public IP")
+	assert.Equal(t, []string{"rg/" + PublicIPName(unit)}, w.created)
+	assert.Equal(t, armnetwork.IPVersionIPv6, *w.pips["rg/"+PublicIPName(unit)].Properties.PublicIPAddressVersion)
+	assert.Equal(t, []string{"rg/" + PublicIPName(unit)}, w.deleted, "a user's Public IP is not deleted")
+	assert.Contains(t, w.pips, "rg/user-v6")
+	assert.Empty(t, w.pending[unit])
+	assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
 }
 
 func TestServiceUpdaterUpdateInboundService_MovesFrontendWhenPublicIPChoiceChanges(t *testing.T) {
@@ -2556,14 +2691,14 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 		mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 
-		dualStack := validConfig()
-		dualStack.IPFamilies = []string{"IPv4", "IPv6"}
+		unsupported := validConfig()
+		unsupported.NamedTargetPorts = []string{"http"}
 
 		dt := newTestDiffTracker()
 		dt.config = testConfig()
 		dt.networkClientFactory = m.factory
 		got := &outboundCompletion{}
-		outboundUpdater(dt, got).updateInboundService(uid, dualStack, "corr")
+		outboundUpdater(dt, got).updateInboundService(uid, unsupported, "corr")
 
 		called, success, completionErr := got.result()
 		assert.True(t, called)

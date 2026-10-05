@@ -360,8 +360,9 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 		expectedNodeToPods := make(map[string][]string)
 		for _, pod := range podListAfterReady.Items {
 			nodeIP := pod.Status.HostIP
-			podIP := pod.Status.PodIP
-			expectedNodeToPods[nodeIP] = append(expectedNodeToPods[nodeIP], podIP)
+			for podIP := range podIPSetForService(createdService, []v1.Pod{pod}) {
+				expectedNodeToPods[nodeIP] = append(expectedNodeToPods[nodeIP], podIP)
+			}
 		}
 
 		utils.Logf("Expected address locations (Node IP -> Pod IPs):")

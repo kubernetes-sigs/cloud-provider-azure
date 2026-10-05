@@ -161,19 +161,14 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 ) {
 	pipName := PublicIPName(serviceUID)
 
-	// Resolve the Public IP version from the Service's IP families. Dual-stack is not
-	// supported for PodIP backend pools, so reject it here; the create path classifies this
-	// build error as terminal (the Service is parked until its spec changes) rather than
-	// silently provisioning a single-family LB. Default to IPv4 when unspecified.
+	// Resolve the Public IP version from the unit's IP family (one per unit; a dual-stack Service has
+	// one unit per family). Default to IPv4 when unspecified.
 	pipVersion := armnetwork.IPVersionIPv4
 	if config != nil {
 		if len(config.NamedTargetPorts) > 0 {
 			return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: named targetPort(s) %v are not supported for PodIP backend pools (service %s); use a numeric targetPort", config.NamedTargetPorts, serviceUID)
 		}
-		if len(config.IPFamilies) > 1 {
-			return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: dual-stack services are not supported for PodIP backend pools (service %s, ipFamilies=%v)", serviceUID, config.IPFamilies)
-		}
-		if len(config.IPFamilies) == 1 {
+		if len(config.IPFamilies) > 0 {
 			switch {
 			case strings.EqualFold(config.IPFamilies[0], string(armnetwork.IPVersionIPv6)):
 				pipVersion = armnetwork.IPVersionIPv6
@@ -464,7 +459,19 @@ func newIgnoreCaseSetFromSlice(items []string) *utilsets.IgnoreCaseSet {
 // is an ordinary update: the LoadBalancer is rebuilt from the new config and PUT whole, so a
 // removed port's rule disappears by omission while the Public IP and ServiceGateway registration
 // are left alone.
+//
+// It returns the configuration of the primary unit; extractInboundUnitConfig builds any unit's.
 func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
+	units := InboundUnits(service)
+	if len(units) == 0 {
+		return nil
+	}
+	return extractInboundUnitConfig(service, units[0])
+}
+
+// extractInboundUnitConfig builds the configuration of one unit of the Service: the Service's ports and
+// shared settings, plus the IP family and the Public IP choice of that unit.
+func extractInboundUnitConfig(service *v1.Service, unit InboundUnit) *InboundConfig {
 	if service == nil || len(service.Spec.Ports) == 0 {
 		return nil
 	}
@@ -514,14 +521,10 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 		})
 	}
 
-	// Capture the Service's IP families so the LB Public IP is created with the correct
-	// version (single-stack) and dual-stack can be rejected at build time. Stored as the
-	// raw v1.IPFamily strings ("IPv4"/"IPv6").
+	// The unit's IP family selects the Public IP version, stored as the raw v1.IPFamily string. A
+	// Service without ipFamilies keeps none, which builds an IPv4 Public IP.
 	if len(service.Spec.IPFamilies) > 0 {
-		config.IPFamilies = make([]string, 0, len(service.Spec.IPFamilies))
-		for _, fam := range service.Spec.IPFamilies {
-			config.IPFamilies = append(config.IPFamilies, string(fam))
-		}
+		config.IPFamilies = []string{string(unit.Family)}
 	}
 
 	// buildInboundServiceResources programs IdleTimeoutInMinutes from this field and falls back to
@@ -558,9 +561,9 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 	if label, found := service.Annotations[consts.ServiceAnnotationDNSLabelName]; found {
 		config.DNSLabel = to.Ptr(strings.TrimSpace(label))
 	}
-	config.PIPPrefixID = publicIPPrefixID(service)
-	config.PIPName = selectedPublicIPName(service)
-	config.LoadBalancerIP = selectedLoadBalancerIP(service)
+	config.PIPPrefixID = publicIPPrefixID(service, unit.Family)
+	config.PIPName = selectedPublicIPName(service, unit.Family)
+	config.LoadBalancerIP = selectedLoadBalancerIP(service, unit.Family)
 	if config.PIPName != "" || config.LoadBalancerIP != "" {
 		config.PIPResourceGroup = strings.TrimSpace(service.Annotations[consts.ServiceAnnotationLoadBalancerResourceGroup])
 	}
@@ -668,37 +671,46 @@ func invalidKeyValueAnnotationPairs(value string) []string {
 	return invalid
 }
 
-// publicIPPrefixID returns the prefix annotation for the Service's family, the way the Azure provider
-// picks it: an IPv6 Service prefers the -ipv6 annotation and falls back to the plain one.
-func publicIPPrefixID(service *v1.Service) string {
-	if isIPv6Service(service) {
-		if id := strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[true]]); id != "" {
-			return id
+// familyAnnotation returns the annotation of a family pair (plain = IPv4, suffixed = IPv6) that applies
+// to family, the way the Azure provider picks it: a dual-stack Service reads each family's own
+// annotation, a single-stack IPv6 Service prefers the suffixed one and falls back to the plain one.
+func familyAnnotation(service *v1.Service, keys map[bool]string, family v1.IPFamily) string {
+	ipv6 := family == v1.IPv6Protocol
+	if len(service.Spec.IPFamilies) > 1 {
+		return strings.TrimSpace(service.Annotations[keys[ipv6]])
+	}
+	if ipv6 {
+		if value := strings.TrimSpace(service.Annotations[keys[true]]); value != "" {
+			return value
 		}
 	}
-	return strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[false]])
+	return strings.TrimSpace(service.Annotations[keys[false]])
 }
 
-func isIPv6Service(service *v1.Service) bool {
-	return len(service.Spec.IPFamilies) > 0 && service.Spec.IPFamilies[0] == v1.IPv6Protocol
+// publicIPPrefixID returns the Public IP prefix annotation that applies to family.
+func publicIPPrefixID(service *v1.Service, family v1.IPFamily) string {
+	return familyAnnotation(service, consts.ServiceAnnotationPIPPrefixIDDualStack, family)
 }
 
-// selectedPublicIPName returns the Public IP name annotation for the Service's family, picked like the prefix.
-func selectedPublicIPName(service *v1.Service) string {
-	if isIPv6Service(service) {
-		if name := strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]]); name != "" {
-			return name
-		}
-	}
-	return strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPNameDualStack[false]])
+// selectedPublicIPName returns the Public IP name annotation that applies to family.
+func selectedPublicIPName(service *v1.Service, family v1.IPFamily) string {
+	return familyAnnotation(service, consts.ServiceAnnotationPIPNameDualStack, family)
 }
 
-// selectedLoadBalancerIP returns the address annotation of the Service's family, else spec.loadBalancerIP,
-// in the canonical form Azure reports addresses in. An unparsable value is kept for validation to reject.
-func selectedLoadBalancerIP(service *v1.Service) string {
-	ip := strings.TrimSpace(service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6Service(service)]])
+// selectedLoadBalancerIP returns the address annotation of family, else spec.loadBalancerIP, in the
+// canonical form Azure reports addresses in. A dual-stack Service uses spec.loadBalancerIP for the
+// family it belongs to; an unparsable value is kept (for the primary family of a dual-stack Service)
+// so that validation rejects it.
+func selectedLoadBalancerIP(service *v1.Service, family v1.IPFamily) string {
+	ip := strings.TrimSpace(service.Annotations[consts.ServiceAnnotationLoadBalancerIPDualStack[family == v1.IPv6Protocol]])
 	if ip == "" {
 		ip = strings.TrimSpace(service.Spec.LoadBalancerIP)
+		if ip != "" && len(service.Spec.IPFamilies) > 1 {
+			parsed := net.ParseIP(ip)
+			if (parsed == nil && family != service.Spec.IPFamilies[0]) || (parsed != nil && (parsed.To4() == nil) != (family == v1.IPv6Protocol)) {
+				ip = ""
+			}
+		}
 	}
 	if parsed := net.ParseIP(ip); parsed != nil {
 		return parsed.String()
@@ -706,18 +718,61 @@ func selectedLoadBalancerIP(service *v1.Service) string {
 	return ip
 }
 
+// conflictingLoadBalancerIPSettings rejects only settings that both select the same family differently.
+// On a dual-stack Service, spec.loadBalancerIP applies to the family of the address; the other family
+// may still be selected by its annotation.
 func conflictingLoadBalancerIPSettings(service *v1.Service) (string, bool) {
-	key := consts.ServiceAnnotationLoadBalancerIPDualStack[isIPv6Service(service)]
-	annotation := strings.TrimSpace(service.Annotations[key])
 	spec := strings.TrimSpace(service.Spec.LoadBalancerIP)
-	if annotation == "" || spec == "" {
+	if spec == "" {
 		return "", false
 	}
-	annotationIP, specIP := net.ParseIP(annotation), net.ParseIP(spec)
-	if annotationIP != nil && specIP != nil && annotationIP.Equal(specIP) {
-		return "", false
+	specIP := net.ParseIP(spec)
+	for _, family := range servedFamilies(service) {
+		ipv6 := family == v1.IPv6Protocol
+		key := consts.ServiceAnnotationLoadBalancerIPDualStack[ipv6]
+		annotation := strings.TrimSpace(service.Annotations[key])
+		if annotation == "" {
+			continue
+		}
+		annotationIP := net.ParseIP(annotation)
+		if annotationIP != nil && specIP != nil && annotationIP.Equal(specIP) {
+			continue
+		}
+		if len(service.Spec.IPFamilies) > 1 && specIP != nil && (specIP.To4() == nil) != ipv6 {
+			continue
+		}
+		return fmt.Sprintf("%s and spec.loadBalancerIP are both set and do not select the same address; set only one for the %s family", key, family), true
 	}
-	return fmt.Sprintf("%s and spec.loadBalancerIP are both set and do not select the same address; set only one", key), true
+	return "", false
+}
+
+// servedFamilies returns the IP families a Service is provisioned for.
+func servedFamilies(service *v1.Service) []v1.IPFamily {
+	families := make([]v1.IPFamily, 0, 2)
+	for _, unit := range InboundUnits(service) {
+		families = append(families, unit.Family)
+	}
+	return families
+}
+
+// choosesPublicIP reports whether any family of the Service chooses its Public IP by name or address.
+func choosesPublicIP(service *v1.Service) bool {
+	for _, family := range servedFamilies(service) {
+		if selectedPublicIPName(service, family) != "" || selectedLoadBalancerIP(service, family) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// choosesPublicIPName reports whether any family of the Service chooses its Public IP by name.
+func choosesPublicIPName(service *v1.Service) bool {
+	for _, family := range servedFamilies(service) {
+		if selectedPublicIPName(service, family) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // clusterOwnershipTag returns the cluster the Public IP's ownership tag names, or "".
@@ -826,7 +881,7 @@ var sourceRestrictionAnnotations = []string{
 
 // sourceRestriction returns the setting that stops some sources from reaching the Service, judged the
 // way the Azure provider applies it: ranges are parsed strictly, a present but empty annotation is an
-// invalid range, and only a /0 of the Service's own family allows every source.
+// invalid range, and only the /0 of every family the Service serves allows every source.
 func sourceRestriction(service *v1.Service) (string, bool) {
 	if strings.TrimSpace(service.Annotations[consts.ServiceAnnotationAllowedServiceTags]) != "" {
 		return consts.ServiceAnnotationAllowedServiceTags, true
@@ -834,8 +889,8 @@ func sourceRestriction(service *v1.Service) (string, bool) {
 	if strings.EqualFold(service.Annotations[consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges], "true") {
 		return consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges, true
 	}
-	ipv6 := len(service.Spec.IPFamilies) > 0 && service.Spec.IPFamilies[0] == v1.IPv6Protocol
-	if len(service.Spec.LoadBalancerSourceRanges) > 0 && !allowsAllSources(service.Spec.LoadBalancerSourceRanges, ipv6) {
+	families := servedFamilies(service)
+	if len(service.Spec.LoadBalancerSourceRanges) > 0 && !allowsAllSources(service.Spec.LoadBalancerSourceRanges, families) {
 		return "spec.loadBalancerSourceRanges", true
 	}
 	var keys, ranges []string
@@ -845,7 +900,7 @@ func sourceRestriction(service *v1.Service) (string, bool) {
 			ranges = append(ranges, strings.Split(value, ",")...)
 		}
 	}
-	if len(keys) > 0 && !allowsAllSources(ranges, ipv6) {
+	if len(keys) > 0 && !allowsAllSources(ranges, families) {
 		return strings.Join(keys, " and "), true
 	}
 	for _, port := range service.Spec.Ports {
@@ -856,36 +911,48 @@ func sourceRestriction(service *v1.Service) (string, bool) {
 	return "", false
 }
 
-// allowsAllSources reports whether every range is valid and one of them is the /0 of the family.
-func allowsAllSources(ranges []string, ipv6 bool) bool {
-	allowsAll := false
+// allowsAllSources reports whether every range is valid and the ranges include the /0 of every family.
+func allowsAllSources(ranges []string, families []v1.IPFamily) bool {
+	allowed := map[v1.IPFamily]bool{}
 	for _, r := range ranges {
 		prefix, err := iputil.ParsePrefix(strings.TrimSpace(r))
 		if err != nil {
 			return false
 		}
-		if prefix.Bits() == 0 && prefix.Addr().Is6() == ipv6 {
-			allowsAll = true
+		if prefix.Bits() == 0 {
+			family := v1.IPv4Protocol
+			if prefix.Addr().Is6() {
+				family = v1.IPv6Protocol
+			}
+			allowed[family] = true
 		}
 	}
-	return allowsAll
+	for _, family := range families {
+		if !allowed[family] {
+			return false
+		}
+	}
+	return true
 }
 
 // unusedPublicIPAnnotation reports a Public IP annotation that does not apply to this Service: one for the
 // other IP family, or a resource group without a Public IP to look up there.
 func unusedPublicIPAnnotation(service *v1.Service, key string) bool {
-	ipv6 := isIPv6Service(service)
+	serves := map[bool]bool{}
+	for _, family := range servedFamilies(service) {
+		serves[family == v1.IPv6Protocol] = true
+	}
 	switch key {
-	case consts.ServiceAnnotationLoadBalancerIPDualStack[!ipv6]:
-		return true
+	case consts.ServiceAnnotationLoadBalancerIPDualStack[false], consts.ServiceAnnotationLoadBalancerIPDualStack[true]:
+		return !serves[key == consts.ServiceAnnotationLoadBalancerIPDualStack[true]]
 	case consts.ServiceAnnotationPIPNameDualStack[false]:
-		return ipv6 && strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]]) != ""
+		return !serves[false] && strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPNameDualStack[true]]) != ""
 	case consts.ServiceAnnotationPIPPrefixIDDualStack[false]:
-		return ipv6 && strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[true]]) != ""
+		return !serves[false] && strings.TrimSpace(service.Annotations[consts.ServiceAnnotationPIPPrefixIDDualStack[true]]) != ""
 	case consts.ServiceAnnotationPIPNameDualStack[true], consts.ServiceAnnotationPIPPrefixIDDualStack[true]:
-		return !ipv6
+		return !serves[true]
 	case consts.ServiceAnnotationLoadBalancerResourceGroup:
-		return selectedPublicIPName(service) == "" && selectedLoadBalancerIP(service) == ""
+		return !choosesPublicIP(service)
 	}
 	return false
 }
@@ -969,10 +1036,10 @@ const (
 	inboundIdleTimeoutMaxMinutes = 30
 )
 
-// AdmitInboundService is the single decision point for whether this controller may provision a
-// LoadBalancer Service, and with what desired config. It returns the extracted config on success,
-// (nil, nil) when there is nothing to provision, and an *InboundConfigValidationError when the
-// Service must be rejected.
+// AdmitInboundServiceUnits is the single decision point for whether this controller may provision a
+// LoadBalancer Service, and with what desired config. It returns the config of each unit (one per IP
+// family) on success, nil when there is nothing to provision, and an *InboundConfigValidationError
+// when the Service must be rejected. Every family is validated before any is provisioned.
 //
 // Both the runtime path (ReconcileInboundService) and the startup path (reconcileServices) must
 // call this. A Service admitted by only one of them is provisioned inconsistently across a CCM
@@ -981,7 +1048,7 @@ const (
 // The internal-LB annotation is matched case-insensitively through the shared consts helper, as
 // every other Azure annotation in this provider is. An exact string comparison would treat "True"
 // as absent and let the request through.
-func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
+func AdmitInboundServiceUnits(service *v1.Service) ([]InboundUnitConfig, error) {
 	if service == nil {
 		return nil, fmt.Errorf("cannot admit a nil Service")
 	}
@@ -1025,14 +1092,6 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 		}
 	}
 
-	// Dual-stack is reported first: its -ipv6 Public IP annotations would otherwise be reported as without effect.
-	if len(service.Spec.IPFamilies) > 1 {
-		return nil, &InboundConfigValidationError{
-			Reason:  "UnsupportedDualStack",
-			Message: fmt.Sprintf("dual-stack Services are not supported when ServiceGateway is enabled (ipFamilies=%v); use a single-stack Service", service.Spec.IPFamilies),
-		}
-	}
-
 	// A setting that would have no effect is rejected rather than ignored, so the Service never runs
 	// differently from what its spec asks for.
 	if probes := HealthProbeServiceAnnotations(service); len(probes) > 0 {
@@ -1072,14 +1131,34 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 		}
 	}
 
-	inboundConfig := ExtractInboundConfigFromService(service)
-	if inboundConfig == nil {
-		return nil, nil
+	var units []InboundUnitConfig
+	for _, unit := range InboundUnits(service) {
+		config := extractInboundUnitConfig(service, unit)
+		if config == nil {
+			return nil, nil
+		}
+		if err := ValidateInboundConfig(config); err != nil {
+			return nil, err
+		}
+		units = append(units, InboundUnitConfig{Unit: unit, Config: config})
 	}
-	if err := ValidateInboundConfig(inboundConfig); err != nil {
+	if len(units) == 2 && units[0].Config.PIPName != "" && strings.EqualFold(units[0].Config.PIPName, units[1].Config.PIPName) {
+		return nil, &InboundConfigValidationError{
+			Reason:  "ConflictingPublicIPSettings",
+			Message: fmt.Sprintf("the Public IP %q is chosen for both IP families; a dual-stack Service needs a Public IP of each family (%q and %q)", units[0].Config.PIPName, consts.ServiceAnnotationPIPNameDualStack[false], consts.ServiceAnnotationPIPNameDualStack[true]),
+		}
+	}
+	return units, nil
+}
+
+// AdmitInboundService admits the Service like AdmitInboundServiceUnits and returns the configuration of
+// its primary unit.
+func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
+	units, err := AdmitInboundServiceUnits(service)
+	if err != nil || len(units) == 0 {
 		return nil, err
 	}
-	return inboundConfig, nil
+	return units[0].Config, nil
 }
 
 // ValidateInboundConfig rejects inbound Service specs the PodIP backend pool cannot support,
@@ -1103,14 +1182,6 @@ func ValidateInboundConfig(config *InboundConfig) error {
 				Reason:  "ConflictingPublicIPSettings",
 				Message: fmt.Sprintf("the %q annotation cannot be combined with a Public IP prefix; a Public IP allocated from a prefix takes the prefix's IP tags", consts.ServiceAnnotationIPTagsForPublicIP),
 			}
-		}
-	}
-
-	// ipFamilies has at most two entries (two == dual-stack); PodIP backends are single-stack.
-	if len(config.IPFamilies) > 1 {
-		return &InboundConfigValidationError{
-			Reason:  "UnsupportedDualStack",
-			Message: fmt.Sprintf("dual-stack Services are not supported when ServiceGateway is enabled (ipFamilies=%v); use a single-stack Service", config.IPFamilies),
 		}
 	}
 

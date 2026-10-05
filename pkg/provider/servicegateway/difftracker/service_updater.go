@@ -323,6 +323,7 @@ func (s *ServiceUpdater) processBatch() {
 			opState.OperationStartedAt = time.Now()
 			configSnapshot := opState.Config
 			opState.InFlightConfig = &configSnapshot
+			opState.AttemptedCreateConfig = &configSnapshot
 			workToDo = append(workToDo, workItem{serviceUID, configSnapshot, StateCreationInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 
 		case StateCreationInProgress:
@@ -702,6 +703,27 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 	s.logger.V(2).Info("Updated inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 }
 
+func (s *ServiceUpdater) frontendPublicIPAddress(ctx context.Context, publicIPID string) (string, error) {
+	if publicIPID == "" {
+		return "", nil
+	}
+	id, err := arm.ParseResourceID(publicIPID)
+	if err != nil {
+		return "", nil
+	}
+	pip, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, id.ResourceGroupName, id.Name, nil)
+	if isNotFoundError(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to read Public IP %s: %w", publicIPID, err)
+	}
+	if pip == nil || pip.Properties == nil {
+		return "", nil
+	}
+	return derefString(pip.Properties.IPAddress), nil
+}
+
 // inboundPublicIP is the Public IP a Service uses. owned means the controller manages and deletes it;
 // otherwise it belongs to the user and is only referenced.
 type inboundPublicIP struct {
@@ -878,6 +900,27 @@ func (s *ServiceUpdater) recreateOwnedPublicIPForPrefixChange(ctx context.Contex
 	return nil
 }
 
+func (s *ServiceUpdater) recreateManagedPublicIPForVersionChange(ctx context.Context, serviceUID string, target *inboundPublicIP, version *armnetwork.IPVersion) error {
+	if target == nil || target.existing == nil || version == nil ||
+		!s.isManagedPublicIPName(serviceUID, target.resourceGroup, target.name) {
+		return nil
+	}
+	pip := target.existing
+	if pip.Properties == nil || pip.Properties.PublicIPAddressVersion == nil || *pip.Properties.PublicIPAddressVersion == *version {
+		return nil
+	}
+	if pip.Properties.IPConfiguration != nil || pip.Properties.NatGateway != nil {
+		return nil
+	}
+	if err := s.diffTracker.deletePublicIP(ctx, target.resourceGroup, target.name); err != nil {
+		return fmt.Errorf("failed to delete Public IP %s before recreating it for %s: %w", target.name, *version, err)
+	}
+	s.logger.V(2).Info("Deleted managed Public IP so it can be recreated in the requested IP family", "serviceUID", serviceUID, "publicIP", target.name, "version", *version)
+	target.existing = nil
+	target.owned = true
+	return nil
+}
+
 func isNotFoundError(err error) bool {
 	var respErr *azcore.ResponseError
 	return errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound
@@ -968,6 +1011,7 @@ func (s *ServiceUpdater) resolveInboundPublicIP(ctx context.Context, serviceUID 
 // owns is only referenced, so settings that would change it are rejected, and it must be free.
 func (s *ServiceUpdater) checkExistingPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, target *inboundPublicIP, version *armnetwork.IPVersion) error {
 	pip := target.existing
+	serviceParentUID, _ := ParentServiceUID(serviceUID)
 	if pip.SKU != nil && pip.SKU.Name != nil && *pip.SKU.Name != armnetwork.PublicIPAddressSKUNameStandardV2 {
 		return newTerminalError(fmt.Errorf("public IP %s has SKU %s; ServiceGateway needs a StandardV2 Public IP", target.name, *pip.SKU.Name))
 	}
@@ -987,10 +1031,13 @@ func (s *ServiceUpdater) checkExistingPublicIP(ctx context.Context, serviceUID s
 		id := derefString(pip.Properties.IPConfiguration.ID)
 		rest, inClusterRG := strings.CutPrefix(strings.ToLower(id), lbFrontends)
 		lbName, _, isFrontend := strings.Cut(rest, "/frontendipconfigurations/")
-		if !inClusterRG || !isFrontend || !strings.EqualFold(lbName, serviceUID) {
+		lbParentUID, _ := ParentServiceUID(lbName)
+		lbInboundUnit := IsInboundUnitName(lbName)
+		sameServiceUnit := inClusterRG && isFrontend && lbInboundUnit && strings.EqualFold(lbParentUID, serviceParentUID)
+		if !sameServiceUnit && (!inClusterRG || !isFrontend || !strings.EqualFold(lbName, serviceUID)) {
 			usedBy = id
-			if inClusterRG && isFrontend && isValidServiceUUID(lbName) {
-				owner = lbName
+			if inClusterRG && isFrontend && lbInboundUnit {
+				owner = lbParentUID
 			}
 		}
 	}
@@ -999,11 +1046,16 @@ func (s *ServiceUpdater) checkExistingPublicIP(ctx context.Context, serviceUID s
 	}
 	// The managed Public IP of another Service or egress identity is never taken over, even while unattached:
 	// its own delete removes it by name.
-	if identity, ok := identityFromPublicIPName(target.name); ok && usedBy == "" && !strings.EqualFold(identity, serviceUID) &&
-		strings.EqualFold(target.resourceGroup, s.diffTracker.config.ResourceGroup) && (isValidServiceUUID(identity) || taggedForEgressIdentity(pip, identity)) {
-		usedBy = identity
-		if isValidServiceUUID(identity) {
-			owner = identity
+	if identity, ok := identityFromPublicIPName(target.name); ok && usedBy == "" &&
+		strings.EqualFold(target.resourceGroup, s.diffTracker.config.ResourceGroup) {
+		identityParentUID, _ := ParentServiceUID(identity)
+		inboundUnit := IsInboundUnitName(identity)
+		switch {
+		case inboundUnit && !strings.EqualFold(identityParentUID, serviceParentUID):
+			usedBy = identity
+			owner = identityParentUID
+		case taggedForEgressIdentity(pip, identity) && !strings.EqualFold(identity, serviceUID):
+			usedBy = identity
 		}
 	}
 	// So is one the controller created for another Service of this cluster: that Service's delete releases it.
@@ -1118,6 +1170,12 @@ func (s *ServiceUpdater) updateInboundPublicIP(ctx context.Context, _ string, co
 // address; a user's one is checked and left unchanged.
 func (s *ServiceUpdater) ensureInboundPublicIP(ctx context.Context, serviceUID string, config *InboundConfig, pip *armnetwork.PublicIPAddress, target *inboundPublicIP, forceIfNotReady bool) (*armnetwork.PublicIPAddress, error) {
 	if existing := target.existing; existing != nil {
+		if err := s.recreateManagedPublicIPForVersionChange(ctx, serviceUID, target, pip.Properties.PublicIPAddressVersion); err != nil {
+			return nil, err
+		}
+		if target.existing == nil {
+			return s.diffTracker.createOrUpdatePIPWithResponse(ctx, target.resourceGroup, pip)
+		}
 		if err := s.checkExistingPublicIP(ctx, serviceUID, config, target, pip.Properties.PublicIPAddressVersion); err != nil {
 			return nil, err
 		}
@@ -1324,7 +1382,7 @@ func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID
 	var lastErr error
 	if svc != nil {
 		serviceName = svc.Namespace + "/" + svc.Name
-		if config := ExtractInboundConfigFromService(svc); config != nil {
+		if config := inboundUnitConfig(svc, serviceUID); config != nil {
 			if config.PIPName != "" {
 				resourceGroup := s.diffTracker.config.ResourceGroup
 				if config.PIPResourceGroup != "" {
@@ -1333,11 +1391,12 @@ func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID
 				ids = append(ids, s.inboundPublicIPID(&inboundPublicIP{resourceGroup: resourceGroup, name: config.PIPName}))
 			}
 			// The startup sweep only covers the cluster resource group, so a Public IP a move left behind in the
-			// Service's own resource group, while the controller restarted, is found here by its tags.
-			if config.PIPResourceGroup != "" && !strings.EqualFold(config.PIPResourceGroup, s.diffTracker.config.ResourceGroup) {
-				leftovers, err := s.taggedUnattachedPublicIPs(ctx, config.PIPResourceGroup, serviceName)
+			// Service's own resource group, while the controller restarted, is found here by its tags. The units
+			// share that resource group, so a unit that does not choose its Public IP still sweeps it.
+			if resourceGroup := chosenPublicIPResourceGroup(svc); resourceGroup != "" && !strings.EqualFold(resourceGroup, s.diffTracker.config.ResourceGroup) {
+				leftovers, err := s.taggedUnattachedPublicIPs(ctx, resourceGroup, serviceName, unitPublicIPVersion(config))
 				if err != nil {
-					s.logger.Error(err, "Could not list the Public IPs the Service may have left", "serviceUID", serviceUID, "resourceGroup", config.PIPResourceGroup)
+					s.logger.Error(err, "Could not list the Public IPs the Service may have left", "serviceUID", serviceUID, "resourceGroup", resourceGroup)
 					if isTransientAzureError(err) {
 						lastErr = err
 					}
@@ -1384,16 +1443,19 @@ func (s *ServiceUpdater) releaseInboundPublicIPs(ctx context.Context, serviceUID
 	return fmt.Errorf("failed to delete Public IP %s: %w", retry[0], lastErr)
 }
 
-// taggedUnattachedPublicIPs returns the unattached Public IPs in the resource group whose ownership tags name
-// the Service and a cluster; releasePublicIP decides whether that cluster is this one.
-func (s *ServiceUpdater) taggedUnattachedPublicIPs(ctx context.Context, resourceGroup, serviceName string) ([]string, error) {
+// taggedUnattachedPublicIPs returns the unattached Public IPs of version in the resource group whose ownership
+// tags name the Service and a cluster; releasePublicIP decides whether that cluster is this one. The units of a
+// dual-stack Service share the resource group and the tags, so a unit only takes Public IPs of its own family: an
+// unattached one of the other family may be the other unit's, created but not yet on its load balancer.
+func (s *ServiceUpdater) taggedUnattachedPublicIPs(ctx context.Context, resourceGroup, serviceName string, version armnetwork.IPVersion) ([]string, error) {
 	pips, err := s.diffTracker.networkClientFactory.GetPublicIPAddressClient().List(ctx, resourceGroup)
 	if err != nil {
 		return nil, err
 	}
 	var ids []string
 	for _, pip := range pips {
-		if pip == nil || pip.Name == nil || publicIPAttached(pip) || clusterOwnershipTag(pip) == "" || !ownsPublicIPByTags(pip, serviceName, clusterOwnershipTag(pip)) {
+		if pip == nil || pip.Name == nil || publicIPAttached(pip) || publicIPVersion(pip) != version ||
+			clusterOwnershipTag(pip) == "" || !ownsPublicIPByTags(pip, serviceName, clusterOwnershipTag(pip)) {
 			continue
 		}
 		ids = append(ids, s.inboundPublicIPID(&inboundPublicIP{resourceGroup: resourceGroup, name: *pip.Name}))
@@ -1403,6 +1465,31 @@ func (s *ServiceUpdater) taggedUnattachedPublicIPs(ctx context.Context, resource
 
 func publicIPAttached(pip *armnetwork.PublicIPAddress) bool {
 	return pip.Properties != nil && (pip.Properties.IPConfiguration != nil || pip.Properties.NatGateway != nil)
+}
+
+// publicIPVersion returns the version of a Public IP; Azure creates IPv4 when none is given.
+func publicIPVersion(pip *armnetwork.PublicIPAddress) armnetwork.IPVersion {
+	if pip.Properties != nil && pip.Properties.PublicIPAddressVersion != nil {
+		return *pip.Properties.PublicIPAddressVersion
+	}
+	return armnetwork.IPVersionIPv4
+}
+
+// chosenPublicIPResourceGroup returns the resource group of the Public IPs the Service chooses, by name or address,
+// for any of its units; "" when it chooses none.
+func chosenPublicIPResourceGroup(svc *v1.Service) string {
+	if !choosesPublicIP(svc) {
+		return ""
+	}
+	return strings.TrimSpace(svc.Annotations[consts.ServiceAnnotationLoadBalancerResourceGroup])
+}
+
+// unitPublicIPVersion returns the Public IP version of the unit a configuration belongs to.
+func unitPublicIPVersion(config *InboundConfig) armnetwork.IPVersion {
+	if config != nil && len(config.IPFamilies) > 0 && strings.EqualFold(config.IPFamilies[0], string(armnetwork.IPVersionIPv6)) {
+		return armnetwork.IPVersionIPv6
+	}
+	return armnetwork.IPVersionIPv4
 }
 
 // rememberPendingRelease records a Public IP for the Service's next successful update or delete to release.
@@ -1559,6 +1646,26 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 	defer cancel()
 	var lastErr error
 
+	// A secondary unit of a Service that stopped serving its family first takes the family's ingress IP
+	// out of the Service's status, so the address is never advertised after it is released. A Service
+	// being deleted or gone is left alone.
+	parentUID, secondary := ParentServiceUID(serviceUID)
+	if secondary || s.diffTracker.inboundRecreateAfterDeletion(serviceUID) {
+		if err := s.diffTracker.removeServiceLoadBalancerIngressFamily(ctx, parentUID, strings.HasSuffix(strings.ToLower(serviceUID), secondaryUnitSuffixIPv6)); err != nil {
+			s.onComplete(serviceUID, false, err)
+			return
+		}
+	}
+	// The finalizer keeps the Service until every unit is gone, so the primary waits, before touching
+	// Azure, while a secondary unit still exists: a restart meanwhile still finds the primary registered
+	// and deletes both.
+	if !secondary {
+		if name, left := s.diffTracker.secondaryUnitLeft(serviceUID); left {
+			s.onComplete(serviceUID, false, fmt.Errorf("waiting for unit %s to be deleted before deleting the Service's primary unit", name))
+			return
+		}
+	}
+
 	// Step 1: Remove backend pool references from ServiceGateway
 	// This should be done before deleting the LoadBalancer to properly clean up references
 	removeBackendPoolDTO := RemoveBackendPoolReferenceFromServicesDTO(
@@ -1591,6 +1698,17 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 		lastErr = fmt.Errorf("failed to read LoadBalancer: %w", err)
 	case err == nil && current != nil:
 		frontendID = frontendPublicIPID(current)
+		if secondary || s.diffTracker.inboundRecreateAfterDeletion(serviceUID) {
+			frontendIP, err := s.frontendPublicIPAddress(ctx, frontendID)
+			if err != nil {
+				s.onComplete(serviceUID, false, err)
+				return
+			}
+			if err := s.diffTracker.removeServiceLoadBalancerIngressIP(ctx, parentUID, frontendIP); err != nil {
+				s.onComplete(serviceUID, false, err)
+				return
+			}
+		}
 		fallthrough
 	default:
 		if err := s.diffTracker.deleteLB(ctx, serviceUID); err != nil {
@@ -1652,6 +1770,19 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		})
 
+		// A secondary unit does not own the Service finalizer; a Service being deleted is finalized by its primary.
+		if secondary {
+			s.onComplete(serviceUID, true, nil)
+			return
+		}
+		if s.diffTracker.markFinalizerKeptForRecreate(serviceUID) {
+			s.onComplete(serviceUID, true, nil)
+			return
+		}
+		if name, left := s.diffTracker.secondaryUnitLeft(serviceUID); left {
+			s.onComplete(serviceUID, false, fmt.Errorf("waiting for unit %s to be deleted before deleting the Service's primary unit", name))
+			return
+		}
 		// Step 6: Remove finalizer from K8s service to allow deletion.
 		// The finalizer is the contract that keeps the Service object alive until our
 		// Azure cleanup is done. We must NOT report overall success until the finalizer

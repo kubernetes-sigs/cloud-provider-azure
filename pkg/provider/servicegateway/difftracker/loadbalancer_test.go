@@ -408,3 +408,27 @@ func TestLoadBalancerEnsureDeletedRejectsUnusableService(t *testing.T) {
 	assert.Error(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", noUID),
 		"a Service without a UID cannot be identified and must not report success")
 }
+
+// TestLoadBalancerGetReportsAServiceWithOnlyItsSecondaryUnitTracked keeps deletion engine-driven while a
+// dual-stack Service still has a secondary unit, even after its primary unit is gone.
+func TestLoadBalancerGetReportsAServiceWithOnlyItsSecondaryUnitTracked(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	svc := newInboundService("11111111-2222-3333-4444-555555555555")
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	_, exists, err := lb.GetLoadBalancer(context.Background(), "cluster", svc)
+	assert.NoError(t, err)
+	assert.False(t, exists)
+
+	tracker.mu.Lock()
+	tracker.NRPResources.LoadBalancers.Insert(ServiceUID(svc) + "-v6")
+	tracker.mu.Unlock()
+
+	_, exists, err = lb.GetLoadBalancer(context.Background(), "cluster", svc)
+	assert.NoError(t, err)
+	assert.True(t, exists)
+}

@@ -25,6 +25,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -38,10 +40,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	k8stesting "k8s.io/client-go/testing"
+	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -690,22 +694,259 @@ func TestConvertServiceDTOsToServiceRequests_MapsServiceType(t *testing.T) {
 }
 
 func TestServiceKeepsLoadBalancer(t *testing.T) {
+	const (
+		uidA    = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+		uidB    = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+		uidSelf = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	)
 	dt := newTestDiffTracker()
 	dt.kubeClient = fake.NewSimpleClientset(
-		loadBalancerService("ns", "a", "uid-a"),
-		loadBalancerService("ns", "b", "uid-b"),
+		loadBalancerService("ns", "a", uidA),
+		loadBalancerService("ns", "b", uidB),
 	)
 	ctx := context.Background()
-	assert.True(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-self"))
-	assert.True(t, dt.serviceKeepsLoadBalancer(ctx, "ns/gone, ns/b", "uid-self"), "any listed Service that keeps its load balancer counts")
-	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-a"), "the Service itself is not another Service")
-	dt.pendingServiceOps["uid-a"] = &ServiceOperationState{ServiceUID: "uid-a", State: StateDeletionInProgress}
-	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-self"), "a Service being deleted does not keep its load balancer")
-	delete(dt.pendingServiceOps, "uid-a")
-	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/gone", "uid-self"))
-	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "uid-gone", "uid-self"))
-	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "", "uid-self"))
+	assert.True(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", uidSelf))
+	assert.True(t, dt.serviceKeepsLoadBalancer(ctx, "ns/gone, ns/b", uidSelf), "any listed Service that keeps its load balancer counts")
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", uidA), "the Service itself is not another Service")
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, uidA+"-v6", uidA), "the Service's secondary unit is not another Service")
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, uidA, uidA+"-v6"), "a secondary unit's primary Service is not another Service")
+	dt.pendingServiceOps[uidA] = &ServiceOperationState{ServiceUID: uidA, State: StateDeletionInProgress}
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", uidSelf), "a Service being deleted does not keep its load balancer")
+	delete(dt.pendingServiceOps, uidA)
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/gone", uidSelf))
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "uid-gone", uidSelf))
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "", uidSelf))
 
 	dt.kubeClient = nil
-	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-self"), "without a client the owner cannot be confirmed, so the caller retries")
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", uidSelf), "without a client the owner cannot be confirmed, so the caller retries")
+}
+
+func TestServiceLoadBalancerStatus_DualStackUnits(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	newService := func(families []v1.IPFamily, ingress ...string) *v1.Service {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns", UID: uid},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, IPFamilies: families},
+		}
+		for _, ip := range ingress {
+			svc.Status.LoadBalancer.Ingress = append(svc.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{IP: ip})
+		}
+		return svc
+	}
+	ingressIPs := func(t *testing.T, kubeClient *fake.Clientset) []string {
+		got, err := kubeClient.CoreV1().Services("ns").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		var ips []string
+		for _, ingress := range got.Status.LoadBalancer.Ingress {
+			ips = append(ips, ingress.IP)
+		}
+		return ips
+	}
+
+	t.Run("the secondary unit resolves to its Service and the primary IP comes first", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}))
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid+"-v6", "2603:1030::7"))
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid, "20.1.2.3"))
+
+		assert.Equal(t, []string{"20.1.2.3", "2603:1030::7"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("an IPv6 primary is listed first", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}))
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid+"-v4", "20.1.2.3"))
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid, "2603:1030::7"))
+
+		assert.Equal(t, []string{"2603:1030::7", "20.1.2.3"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("a stale secondary unit cannot replace the current primary IP", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset(newService(
+			[]v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol},
+			"2603:1030::9", "20.1.2.3"))
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid+"-v6", "2603:1030::7"))
+
+		assert.Equal(t, []string{"2603:1030::9", "20.1.2.3"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("a stale IPv4 secondary unit cannot write to an IPv6-only Service", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv6Protocol}, "2603:1030::9"))
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid+"-v4", "20.1.2.3"))
+
+		assert.Equal(t, []string{"2603:1030::9"}, ingressIPs(t, kubeClient))
+
+		kubeClient = fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv4Protocol}, "20.1.2.9"))
+		dt = &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid+"-v4", "20.1.2.3"))
+
+		assert.Equal(t, []string{"20.1.2.9"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("each unit builds on the other unit's write, not on a stale cache", func(t *testing.T) {
+		svc := newService([]v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol})
+		indexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{})
+		assert.NoError(t, indexer.Add(svc.DeepCopy()))
+		kubeClient := fake.NewSimpleClientset(svc)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kubeClient
+		dt.serviceLister = corelisters.NewServiceLister(indexer)
+		for _, unit := range []string{uid, uid + "-v6"} {
+			config := NewInboundServiceConfig(unit, nil)
+			config.Namespace, config.Name = "ns", "web"
+			dt.pendingServiceOps[unit] = &ServiceOperationState{ServiceUID: unit, Config: config}
+		}
+
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid, "20.1.2.3"))
+		assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), uid+"-v6", "2603:1030::7"))
+
+		assert.Equal(t, []string{"20.1.2.3", "2603:1030::7"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("status writes are serialized", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}))
+		dt := &DiffTracker{kubeClient: kubeClient}
+		var patches int32
+		kubeClient.PrependReactor("patch", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			atomic.AddInt32(&patches, 1)
+			if dt.statusMu.TryLock() {
+				dt.statusMu.Unlock()
+				t.Error("the status was written without holding statusMu")
+			}
+			return false, nil, nil
+		})
+
+		var wg sync.WaitGroup
+		for unit, ip := range map[string]string{uid: "20.1.2.3", uid + "-v6": "2603:1030::7"} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				assert.NoError(t, dt.updateServiceLoadBalancerStatus(context.Background(), unit, ip))
+			}()
+		}
+		wg.Wait()
+		svc, err := kubeClient.CoreV1().Services("ns").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+		_, err = kubeClient.CoreV1().Services("ns").Update(context.Background(), svc, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid, true))
+
+		assert.Equal(t, int32(3), atomic.LoadInt32(&patches))
+		assert.Equal(t, []string{"20.1.2.3"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("a write is conditional on the version it read and re-reads after a conflict", func(t *testing.T) {
+		svc := newService([]v1.IPFamily{v1.IPv4Protocol}, "20.1.2.3", "2603:1030::7")
+		svc.ResourceVersion = "7"
+		kubeClient := fake.NewSimpleClientset(svc)
+		var patches []string
+		kubeClient.PrependReactor("patch", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			patches = append(patches, string(action.(k8stesting.PatchAction).GetPatch()))
+			if len(patches) > 1 {
+				return false, nil, nil
+			}
+			// The service controller clears the status between our read and our write.
+			cleared := svc.DeepCopy()
+			cleared.Status.LoadBalancer.Ingress = nil
+			cleared.ResourceVersion = "8"
+			assert.NoError(t, kubeClient.Tracker().Update(v1.SchemeGroupVersion.WithResource("services"), cleared, "ns"))
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "services"}, "web", errors.New("stale"))
+		})
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid, true))
+
+		if assert.Len(t, patches, 1, "the fresh read finds nothing left to remove") {
+			assert.Contains(t, patches[0], `"resourceVersion":"7"`)
+		}
+		assert.Empty(t, ingressIPs(t, kubeClient), "the cleared status must not be written back")
+	})
+
+	t.Run("removing a family builds on the live status, not on a stale cache", func(t *testing.T) {
+		cached := newService([]v1.IPFamily{v1.IPv4Protocol}, "20.1.2.3", "2603:1030::7")
+		indexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{})
+		assert.NoError(t, indexer.Add(cached))
+		kubeClient := fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv4Protocol}))
+		dt := newTestDiffTracker()
+		dt.kubeClient = kubeClient
+		dt.serviceLister = corelisters.NewServiceLister(indexer)
+		config := NewInboundServiceConfig(uid+"-v6", nil)
+		config.Namespace, config.Name = "ns", "web"
+		dt.pendingServiceOps[uid+"-v6"] = &ServiceOperationState{ServiceUID: uid + "-v6", Config: config}
+
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid+"-v6", true))
+
+		assert.Empty(t, ingressIPs(t, kubeClient), "an IP already cleared must not be written back")
+	})
+
+	t.Run("a Service recreated under the same name is not written", func(t *testing.T) {
+		old := newService([]v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol})
+		indexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{})
+		assert.NoError(t, indexer.Add(old))
+		recreated := newService([]v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, "20.9.9.9", "2603:1030::9")
+		recreated.UID = "99999999-2222-3333-4444-555555555555"
+		kubeClient := fake.NewSimpleClientset(recreated)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kubeClient
+		dt.serviceLister = corelisters.NewServiceLister(indexer)
+		config := NewInboundServiceConfig(uid+"-v6", nil)
+		config.Namespace, config.Name = "ns", "web"
+		dt.pendingServiceOps[uid+"-v6"] = &ServiceOperationState{ServiceUID: uid + "-v6", Config: config}
+
+		assert.True(t, apierrors.IsNotFound(errors.Unwrap(dt.updateServiceLoadBalancerStatus(context.Background(), uid+"-v6", "2603:1030::7"))))
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid+"-v6", true))
+		assert.Equal(t, []string{"20.9.9.9", "2603:1030::9"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("removing a family keeps the other", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv4Protocol}, "20.1.2.3", "2603:1030::7"))
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid, true))
+
+		assert.Equal(t, []string{"20.1.2.3"}, ingressIPs(t, kubeClient))
+	})
+
+	t.Run("a family the Service serves again keeps its IP", func(t *testing.T) {
+		kubeClient := fake.NewSimpleClientset(newService([]v1.IPFamily{v1.IPv6Protocol, v1.IPv4Protocol}, "2603:1030::9", "20.1.2.3"))
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid, true))
+
+		assert.Equal(t, []string{"2603:1030::9", "20.1.2.3"}, ingressIPs(t, kubeClient), "a stale IPv6 unit's delete must not remove the new IPv6 primary's IP")
+	})
+
+	t.Run("a Service being deleted or gone is left alone", func(t *testing.T) {
+		deleting := newService([]v1.IPFamily{v1.IPv4Protocol}, "20.1.2.3", "2603:1030::7")
+		deleting.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		deleting.Finalizers = []string{"test"}
+		kubeClient := fake.NewSimpleClientset(deleting)
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid, true))
+		assert.Equal(t, []string{"20.1.2.3", "2603:1030::7"}, ingressIPs(t, kubeClient))
+
+		dt = &DiffTracker{kubeClient: fake.NewSimpleClientset()}
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressFamily(context.Background(), uid, true))
+	})
+
+	t.Run("removing one IP leaves a terminating Service alone", func(t *testing.T) {
+		deleting := newService([]v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}, "20.1.2.3", "2603:1030::7")
+		deleting.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		deleting.Finalizers = []string{"test"}
+		kubeClient := fake.NewSimpleClientset(deleting)
+		dt := &DiffTracker{kubeClient: kubeClient}
+
+		assert.NoError(t, dt.removeServiceLoadBalancerIngressIP(context.Background(), uid, "2603:1030::7"))
+
+		assert.Equal(t, []string{"20.1.2.3", "2603:1030::7"}, ingressIPs(t, kubeClient))
+	})
 }

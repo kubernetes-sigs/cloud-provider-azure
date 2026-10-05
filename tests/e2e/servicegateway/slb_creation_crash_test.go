@@ -400,7 +400,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 
 		By(fmt.Sprintf("Waiting for CCM to complete NAT Gateway provisioning (%v)", recoveryTimeout))
 		Eventually(func() error {
-			if err := egressRegisteredErr(egressName, podCount); err != nil {
+			if err := egressRegisteredPodCountErr(cs, ns.Name, egressName, podCount); err != nil {
 				return err
 			}
 			podsWithFinalizer := 0
@@ -665,7 +665,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 					return fmt.Errorf("service %s: %w", serviceName, err)
 				}
 			}
-			if err := egressRegisteredErr(egressName, egressPodCount); err != nil {
+			if err := egressRegisteredPodCountErr(cs, ns.Name, egressName, egressPodCount); err != nil {
 				return err
 			}
 			return nil

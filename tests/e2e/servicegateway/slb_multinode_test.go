@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
+	utilnet "k8s.io/utils/net"
 
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
@@ -176,19 +177,21 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 
 			nodeName := pod.Spec.NodeName
 			hostIP := pod.Status.HostIP
-			podIP := pod.Status.PodIP
+			podIPSet := podIPSetForService(createdService, []v1.Pod{*pod})
+			Expect(podIPSet).NotTo(BeEmpty(), "pod %s should have an IP in the service family", pod.Name)
 
 			if podIPs[nodeName] == nil {
 				podIPs[nodeName] = make([]string, 0)
 			}
-			podIPs[nodeName] = append(podIPs[nodeName], podIP)
-
 			if podHostIPs[hostIP] == nil {
 				podHostIPs[hostIP] = make([]string, 0)
 			}
-			podHostIPs[hostIP] = append(podHostIPs[hostIP], podIP)
 
-			utils.Logf("Pod %s: Node=%s, HostIP=%s, PodIP=%s", podName, nodeName, hostIP, podIP)
+			for podIP := range podIPSet {
+				podIPs[nodeName] = append(podIPs[nodeName], podIP)
+				podHostIPs[hostIP] = append(podHostIPs[hostIP], podIP)
+				utils.Logf("Pod %s: Node=%s, HostIP=%s, PodIP=%s", podName, nodeName, hostIP, podIP)
+			}
 		}
 
 		By("Waiting for Azure LoadBalancer provisioning")
@@ -287,20 +290,20 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		Expect(len(nodes.Items)).To(BeNumerically(">=", 2), "Need at least 2 nodes for multi-node test")
 
 		nodeNames := make([]string, 0)
-		nodeIPs := make(map[string]string)
+		nodeIPs := make(map[string]map[bool]string)
 		for _, node := range nodes.Items {
 			nodeNames = append(nodeNames, node.Name)
+			nodeIPs[node.Name] = make(map[bool]string)
 			for _, addr := range node.Status.Addresses {
 				if addr.Type == v1.NodeInternalIP {
-					nodeIPs[node.Name] = addr.Address
-					break
+					nodeIPs[node.Name][utilnet.IsIPv6String(addr.Address)] = addr.Address
 				}
 			}
 		}
 		utils.Logf("Found %d nodes: %v", len(nodeNames), nodeNames)
 
 		By(fmt.Sprintf("Creating %d egress pods per node, spread across %d nodes", podsPerNode, len(nodeNames)))
-		podHostIPs := make(map[string][]string) // hostIP -> list of pod IPs
+		podLocationIPs := make(map[string][]string)
 		createdPods := make([]string, 0)
 
 		for i, nodeName := range nodeNames {
@@ -339,25 +342,28 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		err = utils.WaitPodsToBeReady(cs, ns.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		By("Collecting pod IPs per host")
+		By("Collecting pod IPs per family-matched node location")
+		readyPods := make([]v1.Pod, 0, len(createdPods))
 		for _, podName := range createdPods {
 			pod, err := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
+			readyPods = append(readyPods, *pod)
 
-			hostIP := pod.Status.HostIP
-			podIP := pod.Status.PodIP
-
-			if podHostIPs[hostIP] == nil {
-				podHostIPs[hostIP] = make([]string, 0)
+			for _, podIP := range pod.Status.PodIPs {
+				if podIP.IP == "" {
+					continue
+				}
+				location, exists := nodeIPs[pod.Spec.NodeName][utilnet.IsIPv6String(podIP.IP)]
+				Expect(exists).To(BeTrue(), "node %s should have a family-matched InternalIP for pod IP %s", pod.Spec.NodeName, podIP.IP)
+				podLocationIPs[location] = append(podLocationIPs[location], podIP.IP)
+				utils.Logf("Pod %s: Node=%s, Location=%s, PodIP=%s", podName, pod.Spec.NodeName, location, podIP.IP)
 			}
-			podHostIPs[hostIP] = append(podHostIPs[hostIP], podIP)
-
-			utils.Logf("Pod %s: HostIP=%s, PodIP=%s", podName, hostIP, podIP)
 		}
+		expectedAddressCount := len(podIPSet(readyPods))
 
 		By("Waiting for Azure NAT Gateway provisioning")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, len(createdPods))
+			return egressRegisteredPodCountErr(cs, ns.Name, egressName, len(createdPods))
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"egress service should be reconciled with NAT Gateway and registered pods")
 
@@ -416,26 +422,43 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		}
 
 		utils.Logf("\n=== Egress Address Location Verification ===")
-		utils.Logf("Expected (from pods): %v", podHostIPs)
+		utils.Logf("Expected (from pods): %v", podLocationIPs)
 		utils.Logf("Actual (from Service Gateway for egress %s): %v", egressName, sgAddressLocations)
 
 		// The point of this spec is that each pod's address is filed under ITS OWN node's
 		// location. Downgrading a missing location to a log and moving on (and only asserting a
 		// >= on the global total) would let a CCM that filed every address under one node pass.
-		utils.Logf("Nodes with pods: %d, Nodes in Service Gateway: %d", len(podHostIPs), len(sgAddressLocations))
+		utils.Logf("Nodes with pods: %d, Nodes in Service Gateway: %d", len(podLocationIPs), len(sgAddressLocations))
+
+		locationAddresses := func(location string) ([]string, bool) {
+			for actualLocation, actualPodIPs := range sgAddressLocations {
+				if ipEqual(actualLocation, location) {
+					return actualPodIPs, true
+				}
+			}
+			return nil, false
+		}
+		containsIP := func(ips []string, want string) bool {
+			for _, ip := range ips {
+				if ipEqual(ip, want) {
+					return true
+				}
+			}
+			return false
+		}
 
 		totalExpectedAddresses := 0
-		for hostIP, expectedPodIPs := range podHostIPs {
+		for location, expectedPodIPs := range podLocationIPs {
 			totalExpectedAddresses += len(expectedPodIPs)
 
-			actualPodIPs, exists := sgAddressLocations[hostIP]
+			actualPodIPs, exists := locationAddresses(location)
 			Expect(exists).To(BeTrue(),
-				"host %s runs egress pods, so it must have an address location in the Service Gateway", hostIP)
+				"location %s runs egress pod families, so it must have an address location in the Service Gateway", location)
 			for _, expectedIP := range expectedPodIPs {
-				Expect(actualPodIPs).To(ContainElement(expectedIP),
-					"pod IP %s must be registered under its own node location %s", expectedIP, hostIP)
+				Expect(containsIP(actualPodIPs, expectedIP)).To(BeTrue(),
+					"pod IP %s must be registered under its own node location %s", expectedIP, location)
 			}
-			utils.Logf("Host %s: all %d pod IPs registered under their own node location", hostIP, len(expectedPodIPs))
+			utils.Logf("Location %s: all %d pod IPs registered under their own node location", location, len(expectedPodIPs))
 		}
 
 		totalActualAddresses := 0
@@ -449,7 +472,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		utils.Logf("  - Expected addresses: %d", totalExpectedAddresses)
 		utils.Logf("  - Registered addresses: %d", totalActualAddresses)
 
-		Expect(totalActualAddresses).To(Equal(totalExpectedAddresses),
+		Expect(totalActualAddresses).To(Equal(expectedAddressCount),
 			"the egress must register exactly its pods' addresses, with no extras left behind")
 	})
 
@@ -555,17 +578,13 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		// correct outcome from the inverse failure - node 1's pods deregistered while node 0's
 		// leaked - because both leave the same total.
 		podIPsFor := func(names []string) map[string]struct{} {
-			set := make(map[string]struct{})
+			pods := make([]v1.Pod, 0, len(names))
 			for _, podName := range names {
 				pod, getErr := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
 				Expect(getErr).NotTo(HaveOccurred())
-				for _, ip := range pod.Status.PodIPs {
-					if ip.IP != "" {
-						set[ip.IP] = struct{}{}
-					}
-				}
+				pods = append(pods, *pod)
 			}
-			return set
+			return podIPSetForService(createdService, pods)
 		}
 		node0IPs := podIPsFor(podsOnNode0)
 		node1IPs := podIPsFor(podsOnNode1)
@@ -665,8 +684,11 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		Expect(err).NotTo(HaveOccurred())
 		survivorPod, err := cs.CoreV1().Pods(ns.Name).Get(ctx, "survivor-pod", metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		victimPodIP, victimNodeIP := victimPod.Status.PodIP, victimPod.Status.HostIP
-		survivorPodIP := survivorPod.Status.PodIP
+		victimPodIPs := podIPSetForService(createdSvc, []v1.Pod{*victimPod})
+		survivorPodIPs := podIPSetForService(createdSvc, []v1.Pod{*survivorPod})
+		Expect(victimPodIPs).NotTo(BeEmpty())
+		Expect(survivorPodIPs).NotTo(BeEmpty())
+		victimNodeIP := victimPod.Status.HostIP
 
 		By("Waiting for provisioning and verifying the victim pod registers under its node's location")
 		Eventually(func() error {
@@ -686,8 +708,13 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 			return "", false
 		}
 		Eventually(func() bool {
-			loc, ok := registeredUnder(victimPodIP)
-			return ok && ipEqual(loc, victimNodeIP)
+			for victimPodIP := range victimPodIPs {
+				loc, ok := registeredUnder(victimPodIP)
+				if !ok || !ipEqual(loc, victimNodeIP) {
+					return false
+				}
+			}
+			return true
 		}, 60*time.Second, 5*time.Second).Should(BeTrue(),
 			"victim pod must register under its own node InternalIP")
 
@@ -696,11 +723,15 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 
 		By("Verifying the victim node's address drains while the survivor's remains")
 		Eventually(func() error {
-			if _, ok := registeredUnder(victimPodIP); ok {
-				return fmt.Errorf("victim pod IP %s still registered after its node was deleted", victimPodIP)
+			for victimPodIP := range victimPodIPs {
+				if _, ok := registeredUnder(victimPodIP); ok {
+					return fmt.Errorf("victim pod IP %s still registered after its node was deleted", victimPodIP)
+				}
 			}
-			if _, ok := registeredUnder(survivorPodIP); !ok {
-				return fmt.Errorf("survivor pod IP %s must remain registered", survivorPodIP)
+			for survivorPodIP := range survivorPodIPs {
+				if _, ok := registeredUnder(survivorPodIP); !ok {
+					return fmt.Errorf("survivor pod IP %s must remain registered", survivorPodIP)
+				}
 			}
 			return nil
 		}, 30*time.Second, 1*time.Second).Should(Succeed(),

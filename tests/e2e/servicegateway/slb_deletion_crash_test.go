@@ -622,7 +622,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 					return err
 				}
 			}
-			if err := egressRegisteredErr(egressName, egressPodCount); err != nil {
+			if err := egressRegisteredPodCountErr(cs, ns.Name, egressName, egressPodCount); err != nil {
 				return err
 			}
 			return nil

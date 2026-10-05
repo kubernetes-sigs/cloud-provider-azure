@@ -77,7 +77,7 @@ func (lb *LoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string,
 		return nil, false, err
 	}
 	tracker.SetClusterName(clusterName)
-	if !tracker.IsServiceTracked(ServiceUID(service)) {
+	if !tracker.IsInboundServiceTracked(ServiceUID(service)) {
 		return nil, false, nil
 	}
 
