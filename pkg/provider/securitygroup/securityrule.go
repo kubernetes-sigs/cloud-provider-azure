@@ -38,7 +38,8 @@ func IsManagedSecurityRule(r *armnetwork.SecurityRule) bool {
 		return false
 	}
 	priority := *r.Properties.Priority
-	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) && consts.LoadBalancerMinimumPriority <= priority && priority <= consts.LoadBalancerMaximumPriority
+	// The range matches nextRulePriority: [LoadBalancerMinimumPriority, LoadBalancerMaximumPriority).
+	return strings.HasPrefix(*r.Name, SecurityRuleNamePrefix) && consts.LoadBalancerMinimumPriority <= priority && priority < consts.LoadBalancerMaximumPriority
 }
 
 // GenerateAllowSecurityRuleName returns the AllowInbound rule name based on the given rule properties.
