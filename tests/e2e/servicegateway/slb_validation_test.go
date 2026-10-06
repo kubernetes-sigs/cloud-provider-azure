@@ -276,7 +276,7 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		utils.Logf("✓ Internal service was rejected with a warning event and no Azure resources")
 	})
 
-	It("should reject services that restrict access or select their Public IP inconsistently", func() {
+	It("should reject services that restrict access, select their Public IP inconsistently or carry settings without effect", func() {
 		cases := []struct {
 			name   string
 			reason string
@@ -302,6 +302,46 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 					"service.beta.kubernetes.io/azure-pip-name":           "customer-pip",
 					"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113.10",
 				}
+			}},
+			{"deny-all", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges": "true"}
+			}},
+			{"floating-ip", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip": "true"}
+			}},
+			{"no-probe-rule", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_80_no_probe_rule": "true"}
+			}},
+			{"additional-public-ips", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-additional-public-ips": "203.0.113.20"}
+			}},
+			{"lb-mode", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-mode": "auto"}
+			}},
+			{"health-probe", "UnsupportedHealthProbe", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path": "/healthz"}
+			}},
+			{"reserved-pip-tag", "InvalidPIPTags", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-tags": "team=a,k8s-azure-service=spoof"}
+			}},
+			{"malformed-pip-tags", "InvalidPIPTags", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-tags": "team:a"}
+			}},
+			{"malformed-ip-tags", "InvalidIPTags", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-ip-tags": "FirstPartyUsage=/Unprivileged=x"}
+			}},
+			{"conflicting-load-balancer-ip", "ConflictingPublicIPSettings", func(s *v1.Service) {
+				s.Spec.LoadBalancerIP = "203.0.113.10"
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113.20"}
+			}},
+			{"resource-group-without-public-ip", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-resource-group": "rg"}
+			}},
+			{"ipv6-pip-name-on-ipv4-service", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-name-ipv6": "x"}
+			}},
+			{"no-lb-rule-for-non-service-port", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_8080_no_lb_rule": "true"}
 			}},
 		}
 
@@ -351,20 +391,16 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		utils.Logf("✓ Services with unsupported access or inconsistent Public IP settings were rejected")
 	})
 
-	It("should provision an allow-all service and warn about ignored and health-probe annotations", func() {
+	It("should provision a service whose source ranges allow every address", func() {
 		const serviceName = "allow-all-service"
 		labels := map[string]string{"app": serviceName}
 
-		By("Creating a service whose source ranges allow every address and that carries ignored and health-probe annotations")
+		By("Creating a service whose source ranges allow every address")
 		service := &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      serviceName,
-				Namespace: ns.Name,
-				Annotations: map[string]string{
-					"service.beta.kubernetes.io/azure-load-balancer-mode":                      "auto",
-					"service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path": "/healthz",
-					"service.beta.kubernetes.io/port_80_no_probe_rule":                         "true",
-				},
+				Name:        serviceName,
+				Namespace:   ns.Name,
+				Annotations: map[string]string{"service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges": "false"},
 			},
 			Spec: v1.ServiceSpec{
 				Type:                     v1.ServiceTypeLoadBalancer,
@@ -379,10 +415,6 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 		By("Verifying the service is provisioned")
 		eventuallyServiceReconciled(string(created.UID), -1, 3*time.Minute)
 
-		By("Verifying warning events list the ignored and the health-probe annotations")
-		expectServiceWarningEvent(serviceName, "ServiceGatewayIgnoredAnnotations")
-		expectServiceWarningEvent(serviceName, "ServiceGatewayHealthProbeNotSupported")
-
-		utils.Logf("✓ Allow-all service was provisioned and the ignored and health-probe annotations were reported")
+		utils.Logf("✓ Allow-all service was provisioned")
 	})
 })

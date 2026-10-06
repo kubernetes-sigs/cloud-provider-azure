@@ -366,6 +366,12 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 			return fmt.Errorf("InitializeCloudFromConfig: ServiceGatewayEnabled and MultipleStandardLoadBalancerConfigurations are mutually exclusive and cannot both be set")
 		}
 
+		// ServiceGateway creates one load balancer per Service; a user-provided load balancer is not supported.
+		if config.LoadBalancerName != "" || config.LoadBalancerResourceGroup != "" || config.PreConfiguredBackendPoolLoadBalancerTypes != "" {
+			return fmt.Errorf("InitializeCloudFromConfig: loadBalancerName, loadBalancerResourceGroup and preConfiguredBackendPoolLoadBalancerTypes select a user-provided load balancer, which is not supported when ServiceGatewayEnabled is true (actual: loadBalancerName=%q, loadBalancerResourceGroup=%q, preConfiguredBackendPoolLoadBalancerTypes=%q)",
+				config.LoadBalancerName, config.LoadBalancerResourceGroup, config.PreConfiguredBackendPoolLoadBalancerTypes)
+		}
+
 		// EnableMigrateToIPBasedBackendPoolAPI has no meaning when ServiceGateway is enabled.
 		if config.EnableMigrateToIPBasedBackendPoolAPI {
 			return fmt.Errorf("InitializeCloudFromConfig: EnableMigrateToIPBasedBackendPoolAPI cannot be used when ServiceGatewayEnabled is true — ContainerLB already uses PodIP-based backend pools")

@@ -79,3 +79,9 @@ func TestInboundConfigEquals_ComparesEveryField(t *testing.T) {
 
 	assert.True(t, base().Equals(base()), "control: identical configs must compare equal")
 }
+
+func TestInboundConfigEquals_DistinguishesAbsentAndEmptyIPTags(t *testing.T) {
+	absent := &InboundConfig{IPTags: nil}
+	empty := &InboundConfig{IPTags: map[string]string{}}
+	assert.False(t, absent.Equals(empty), "absent IP tags preserve the current PIP, while present-empty clears them")
+}

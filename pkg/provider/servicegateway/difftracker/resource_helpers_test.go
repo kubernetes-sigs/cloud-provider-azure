@@ -433,9 +433,14 @@ func TestExtractInboundConfigFromService_PublicIPSettings(t *testing.T) {
 
 	svc.Annotations = map[string]string{consts.ServiceAnnotationIPTagsForPublicIP: ""}
 	config = ExtractInboundConfigFromService(svc)
-	assert.Nil(t, config.IPTags, "an empty annotation sets no IP tags")
+	assert.NotNil(t, config.IPTags, "a present empty annotation asks to clear IP tags")
+	assert.Empty(t, config.IPTags)
 	assert.Nil(t, config.DNSLabel)
 	assert.Nil(t, config.PIPTags)
+
+	svc.Annotations = nil
+	config = ExtractInboundConfigFromService(svc)
+	assert.Nil(t, config.IPTags, "an absent annotation leaves IP tags unchanged")
 }
 
 func TestBuildInboundServiceResources_NilConfig(t *testing.T) {
@@ -1037,6 +1042,126 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 				consts.ServiceAnnotationIPTagsForPublicIP:           "RoutingPreference=Internet",
 			}
 		}, "ConflictingPublicIPSettings"},
+		{"PIP prefix with empty IP tags annotation", func(s *v1.Service) {
+			s.Annotations = map[string]string{
+				consts.ServiceAnnotationPIPPrefixIDDualStack[false]: testPrefixID,
+				consts.ServiceAnnotationIPTagsForPublicIP:           "",
+			}
+		}, "ConflictingPublicIPSettings"},
+		{"deny all except the source ranges", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "True"}
+		}, "UnsupportedAccessRestriction"},
+		{"deny all with allow-all source ranges", func(s *v1.Service) {
+			s.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0", "::/0"}
+			s.Annotations = map[string]string{consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true"}
+		}, "UnsupportedAccessRestriction"},
+		{"dual-stack with an IPv6 Public IP name", func(s *v1.Service) {
+			s.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol}
+			s.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "my-pip-v6"}
+		}, "UnsupportedDualStack"},
+		{"Private Link Service creation with a value that does not disable it", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationPLSCreation: "no"}
+		}, "UnsupportedAnnotations"},
+		{"internal load balancer with a value that has no effect", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerInternal: "yes"}
+		}, "UnsupportedAnnotations"},
+		{"deny all with an empty value", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: ""}
+		}, "UnsupportedAnnotations"},
+		{"Private Link Service settings without creation", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationPLSCreation: "false", consts.ServiceAnnotationPLSName: "pls"}
+		}, "UnsupportedAnnotations"},
+		{"floating IP disabled", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}
+		}, "UnsupportedAnnotations"},
+		{"floating IP enabled", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "false"}
+		}, "UnsupportedAnnotations"},
+		{"port without a health probe", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule): "true"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule for a non-service port", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.BuildAnnotationKeyForPort(8080, consts.PortAnnotationNoLBRule): "true"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule with a value that does not disable it", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule): "1"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule with a padded value", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule): " true"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule for a zero-padded port", func(s *v1.Service) {
+			s.Annotations = map[string]string{"service.beta.kubernetes.io/port_080_no_lb_rule": "true"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule for a named port", func(s *v1.Service) {
+			s.Annotations = map[string]string{"service.beta.kubernetes.io/port_http_no_lb_rule": "true"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule kept for a non-service port", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.BuildAnnotationKeyForPort(8080, consts.PortAnnotationNoLBRule): "false"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule kept for a zero-padded port", func(s *v1.Service) {
+			s.Annotations = map[string]string{"service.beta.kubernetes.io/port_080_no_lb_rule": "false"}
+		}, "UnsupportedAnnotations"},
+		{"no load-balancing rule kept for a named port", func(s *v1.Service) {
+			s.Annotations = map[string]string{"service.beta.kubernetes.io/port_http_no_lb_rule": "false"}
+		}, "UnsupportedAnnotations"},
+		{"additional Public IPs", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationAdditionalPublicIPs: "203.0.113.20"}
+		}, "UnsupportedAnnotations"},
+		{"TCP reset disabled", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationDisableTCPReset: "true"}
+		}, "UnsupportedAnnotations"},
+		{"load balancer mode", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerMode: "auto"}
+		}, "UnsupportedAnnotations"},
+		{"resource group without a chosen Public IP", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerResourceGroup: "rg"}
+		}, "UnsupportedAnnotations"},
+		{"IPv6 Public IP name on an IPv4 Service", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "my-pip-v6"}
+		}, "UnsupportedAnnotations"},
+		{"health probe request path", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath: "/healthz"}
+		}, "UnsupportedHealthProbe"},
+		{"per-port health probe protocol", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol): "http"}
+		}, "UnsupportedHealthProbe"},
+		{"reserved Public IP tag key", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "team=a,K8S-Azure-Service=spoof"}
+		}, "InvalidPIPTags"},
+		{"malformed Public IP tag", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "team:a"}
+		}, "InvalidPIPTags"},
+		{"malformed Public IP tag with empty key", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "=value"}
+		}, "InvalidPIPTags"},
+		{"malformed Public IP IP tag", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage:/Unprivileged"}
+		}, "InvalidIPTags"},
+		{"malformed Public IP IP tag with empty key", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationIPTagsForPublicIP: "=/Unprivileged"}
+		}, "InvalidIPTags"},
+		{"malformed Public IP IP tag with extra separator", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged=extra"}
+		}, "InvalidIPTags"},
+		{"repeated Public IP tag", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "team=a,Team=b"}
+		}, "InvalidPIPTags"},
+		{"repeated Public IP IP tag type", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/a,FirstPartyUsage=/b"}
+		}, "InvalidIPTags"},
+		{"load balancer IP annotation with an invalid spec.loadBalancerIP", func(s *v1.Service) {
+			s.Spec.LoadBalancerIP = "garbage"
+			s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.20"}
+		}, "ConflictingPublicIPSettings"},
+		{"conflicting load balancer IP annotation and spec", func(s *v1.Service) {
+			s.Spec.LoadBalancerIP = "203.0.113.10"
+			s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.20"}
+		}, "ConflictingPublicIPSettings"},
+		{"conflicting IPv6 load balancer IP annotation and spec", func(s *v1.Service) {
+			s.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+			s.Spec.LoadBalancerIP = "2001:db8::10"
+			s.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2001:db8::20"}
+		}, "ConflictingPublicIPSettings"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc := base()
@@ -1049,6 +1174,64 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("IPv6-specific Public IP name makes the plain name unsupported", func(t *testing.T) {
+		svc := base()
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		svc.Annotations = map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]: "plain-pip",
+			consts.ServiceAnnotationPIPNameDualStack[true]:  "ipv6-pip",
+		}
+		config, err := AdmitInboundService(svc)
+		assert.Nil(t, config)
+		var validationErr *InboundConfigValidationError
+		if assert.ErrorAs(t, err, &validationErr) {
+			assert.Equal(t, "UnsupportedAnnotations", validationErr.Reason)
+			assert.Contains(t, validationErr.Message, consts.ServiceAnnotationPIPNameDualStack[false])
+		}
+	})
+
+	t.Run("IPv6-specific Public IP prefix makes the plain prefix unsupported", func(t *testing.T) {
+		svc := base()
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		svc.Annotations = map[string]string{
+			consts.ServiceAnnotationPIPPrefixIDDualStack[false]: testPrefixID,
+			consts.ServiceAnnotationPIPPrefixIDDualStack[true]:  strings.Replace(testPrefixID, "prefix", "prefix-v6", 1),
+		}
+		config, err := AdmitInboundService(svc)
+		assert.Nil(t, config)
+		var validationErr *InboundConfigValidationError
+		if assert.ErrorAs(t, err, &validationErr) {
+			assert.Equal(t, "UnsupportedAnnotations", validationErr.Reason)
+			assert.Contains(t, validationErr.Message, consts.ServiceAnnotationPIPPrefixIDDualStack[false])
+		}
+
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+		assert.Equal(t, []string{consts.ServiceAnnotationPIPPrefixIDDualStack[true]}, UnsupportedServiceAnnotations(svc),
+			"an IPv4 Service uses the plain prefix; only the IPv6 one has no effect")
+	})
+
+	t.Run("IPv6 Services can fall back to the plain Public IP name", func(t *testing.T) {
+		svc := base()
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		svc.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "plain-pip"}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.Equal(t, "plain-pip", config.PIPName)
+		}
+	})
+
+	t.Run("IPv6 Services can fall back to the plain Public IP prefix", func(t *testing.T) {
+		svc := base()
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		svc.Annotations = map[string]string{consts.ServiceAnnotationPIPPrefixIDDualStack[false]: testPrefixID}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.Equal(t, testPrefixID, config.PIPPrefixID)
+		}
+	})
 
 	t.Run("defaults are still admitted", func(t *testing.T) {
 		svc := base()
@@ -1063,14 +1246,73 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 		svc := base()
 		svc.Spec.LoadBalancerSourceRanges = []string{"0.0.0.0/0", "::/0"}
 		svc.Annotations = map[string]string{
-			consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges:       "true",
+			consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges:       "false",
+			consts.ServiceAnnotationPLSCreation:                                 "False",
+			consts.ServiceAnnotationLoadBalancerInternal:                        "FALSE",
 			consts.ServiceAnnotationPIPNameDualStack[false]:                     "",
-			consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule): "false",
-			consts.ServiceAnnotationPLSCreation:                                 "false",
+			consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule): "False",
 		}
 		config, err := AdmitInboundService(svc)
 		assert.NoError(t, err)
 		assert.NotNil(t, config)
+	})
+
+	t.Run("blank IP tags annotation is admitted as remove", func(t *testing.T) {
+		svc := base()
+		svc.Annotations = map[string]string{consts.ServiceAnnotationIPTagsForPublicIP: "  "}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.NotNil(t, config.IPTags)
+			assert.Empty(t, config.IPTags)
+		}
+	})
+
+	t.Run("valid IP tags annotation is admitted", func(t *testing.T) {
+		svc := base()
+		svc.Annotations = map[string]string{consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged"}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.Equal(t, map[string]string{"FirstPartyUsage": "/Unprivileged"}, config.IPTags)
+		}
+	})
+
+	t.Run("trailing blank tag pairs are admitted", func(t *testing.T) {
+		svc := base()
+		svc.Annotations = map[string]string{
+			consts.ServiceAnnotationAzurePIPTags:      "team=a,",
+			consts.ServiceAnnotationIPTagsForPublicIP: "FirstPartyUsage=/Unprivileged,",
+		}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.Equal(t, map[string]string{"team": "a"}, config.PIPTags)
+			assert.Equal(t, map[string]string{"FirstPartyUsage": "/Unprivileged"}, config.IPTags)
+		}
+	})
+
+	t.Run("equal load balancer IP annotation and spec are admitted", func(t *testing.T) {
+		svc := base()
+		svc.Spec.LoadBalancerIP = "203.0.113.10"
+		svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.10"}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.Equal(t, "203.0.113.10", config.LoadBalancerIP)
+		}
+	})
+
+	t.Run("equal IPv6 load balancer IP annotation and spec are admitted", func(t *testing.T) {
+		svc := base()
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		svc.Spec.LoadBalancerIP = "2001:DB8::10"
+		svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2001:db8:0::10"}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.Equal(t, "2001:db8::10", config.LoadBalancerIP)
+		}
 	})
 
 	t.Run("allow-all annotations are admitted", func(t *testing.T) {
@@ -1117,35 +1359,29 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 				consts.ServiceAnnotationPIPNameDualStack[false]:   " my-pip ",
 				consts.ServiceAnnotationLoadBalancerResourceGroup: "other-rg",
 			}, wantName: "my-pip", wantRG: "other-rg"},
-			{name: "IPv6 name preferred", ipv6: true, annotations: map[string]string{
-				consts.ServiceAnnotationPIPNameDualStack[false]: "my-pip",
-				consts.ServiceAnnotationPIPNameDualStack[true]:  "my-pip-v6",
+			{name: "IPv6 name annotation", ipv6: true, annotations: map[string]string{
+				consts.ServiceAnnotationPIPNameDualStack[true]: "my-pip-v6",
 			}, wantName: "my-pip-v6"},
 			{name: "IPv6 falls back to the plain name", ipv6: true, annotations: map[string]string{
 				consts.ServiceAnnotationPIPNameDualStack[false]: "my-pip",
 			}, wantName: "my-pip"},
 			{name: "IPv4 address annotation", annotations: map[string]string{
 				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.10",
-				consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "2001:db8::1",
 			}, wantIP: "203.0.113.10"},
 			{name: "IPv6 address annotation", ipv6: true, annotations: map[string]string{
-				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.10",
-				consts.ServiceAnnotationLoadBalancerIPDualStack[true]:  "2001:db8::1",
+				consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2001:db8::1",
 			}, wantIP: "2001:db8::1"},
 			{name: "spec.loadBalancerIP", loadBalancerIP: "203.0.113.10", wantIP: "203.0.113.10"},
 			{name: "address with resource group", annotations: map[string]string{
 				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.10",
 				consts.ServiceAnnotationLoadBalancerResourceGroup:      "other-rg",
 			}, wantIP: "203.0.113.10", wantRG: "other-rg"},
-			{name: "the address annotation wins over spec.loadBalancerIP", loadBalancerIP: "203.0.113.10", annotations: map[string]string{
-				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.20",
-			}, wantIP: "203.0.113.20"},
+			{name: "the address annotation can match spec.loadBalancerIP", loadBalancerIP: "203.0.113.10", annotations: map[string]string{
+				consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "203.0.113.10",
+			}, wantIP: "203.0.113.10"},
 			{name: "IPv6 address in another form", ipv6: true, annotations: map[string]string{
 				consts.ServiceAnnotationLoadBalancerIPDualStack[true]: " 2001:DB8:0:0::10 ",
 			}, wantIP: "2001:db8::10"},
-			{name: "resource group alone selects nothing", annotations: map[string]string{
-				consts.ServiceAnnotationLoadBalancerResourceGroup: "other-rg",
-			}},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				svc := base()
@@ -1165,16 +1401,27 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 		}
 	})
 
-	t.Run("a PIP prefix with an empty IP tags annotation is admitted", func(t *testing.T) {
+	t.Run("a PIP prefix without IP tags is admitted", func(t *testing.T) {
+		svc := base()
+		svc.Annotations = map[string]string{consts.ServiceAnnotationPIPPrefixIDDualStack[false]: testPrefixID}
+		config, err := AdmitInboundService(svc)
+		assert.NoError(t, err)
+		if assert.NotNil(t, config) {
+			assert.Nil(t, config.IPTags)
+			assert.Equal(t, testPrefixID, config.PIPPrefixID)
+		}
+	})
+
+	t.Run("a PIP prefix with an empty IP tags annotation is rejected", func(t *testing.T) {
 		svc := base()
 		svc.Annotations = map[string]string{
 			consts.ServiceAnnotationPIPPrefixIDDualStack[false]: testPrefixID,
 			consts.ServiceAnnotationIPTagsForPublicIP:           "",
 		}
-		config, err := AdmitInboundService(svc)
-		assert.NoError(t, err)
-		if assert.NotNil(t, config) {
-			assert.Nil(t, config.IPTags)
+		_, err := AdmitInboundService(svc)
+		var validation *InboundConfigValidationError
+		if assert.ErrorAs(t, err, &validation) {
+			assert.Equal(t, "ConflictingPublicIPSettings", validation.Reason)
 		}
 	})
 
@@ -1188,8 +1435,8 @@ func TestAdmitInboundService_RejectsUnimplementedSpecFields(t *testing.T) {
 	})
 }
 
-func TestIgnoredServiceAnnotations(t *testing.T) {
-	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+func TestUnsupportedServiceAnnotations(t *testing.T) {
+	svc := &v1.Service{Spec: v1.ServiceSpec{Ports: []v1.ServicePort{{Port: 80}}}, ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
 		consts.ServiceAnnotationLoadBalancerResourceGroup:                                 "rg",
 		consts.ServiceAnnotationDNSLabelName:                                              "app",
 		consts.ServiceAnnotationAzurePIPTags:                                              "a=b",
@@ -1199,23 +1446,28 @@ func TestIgnoredServiceAnnotations(t *testing.T) {
 		consts.ServiceAnnotationAllowedIPRanges:                                           "0.0.0.0/0",
 		consts.ServiceAnnotationPIPNameDualStack[false]:                                   "",
 		v1.AnnotationLoadBalancerSourceRangesKey:                                          "0.0.0.0/0",
+		consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges:                     "false",
 		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoLBRule):               "false",
 		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule):      "true",
+		consts.ServiceAnnotationDisableLoadBalancerFloatingIP:                             "true",
 		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath:                        "/healthz",
 		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol): "http",
 		"example.com/unrelated":                                                           "x",
 	}}}
 
-	assert.Equal(t, []string{consts.ServiceAnnotationLoadBalancerResourceGroup}, IgnoredServiceAnnotations(svc),
-		"health-probe annotations are reported separately and no_probe_rule is already the behaviour")
+	assert.Equal(t, []string{
+		consts.ServiceAnnotationDisableLoadBalancerFloatingIP,
+		consts.ServiceAnnotationLoadBalancerResourceGroup,
+		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule),
+	}, UnsupportedServiceAnnotations(svc), "health-probe annotations and source restrictions are reported separately")
 	assert.Equal(t, []string{
 		consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath,
 		consts.BuildHealthProbeAnnotationKeyForPort(80, consts.HealthProbeParamsProtocol),
 	}, HealthProbeServiceAnnotations(svc))
 	assert.Empty(t, HealthProbeServiceAnnotations(&v1.Service{}))
 	assert.Empty(t, HealthProbeServiceAnnotations(nil))
-	assert.Empty(t, IgnoredServiceAnnotations(&v1.Service{}))
-	assert.Empty(t, IgnoredServiceAnnotations(nil))
+	assert.Empty(t, UnsupportedServiceAnnotations(&v1.Service{}))
+	assert.Empty(t, UnsupportedServiceAnnotations(nil))
 
 	for _, key := range []string{
 		consts.ServiceAnnotationLoadBalancerHealthProbeProtocol,
@@ -1250,17 +1502,17 @@ func TestIgnoredServiceAnnotations(t *testing.T) {
 			consts.ServiceAnnotationLoadBalancerIPDualStack[true],
 			consts.ServiceAnnotationPIPNameDualStack[true],
 			consts.ServiceAnnotationPIPPrefixIDDualStack[true],
-		}, IgnoredServiceAnnotations(svc), "IPv6-only annotations do not apply to an IPv4 Service")
+		}, UnsupportedServiceAnnotations(svc), "IPv6-only annotations do not apply to an IPv4 Service")
 
 		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
-		assert.Equal(t, []string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]}, IgnoredServiceAnnotations(svc),
+		assert.Equal(t, []string{consts.ServiceAnnotationLoadBalancerIPDualStack[false], consts.ServiceAnnotationPIPNameDualStack[false]}, UnsupportedServiceAnnotations(svc),
 			"the IPv4 address does not apply to an IPv6 Service")
 
 		rgOnly := &v1.Service{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerResourceGroup: "other-rg"}}}
-		assert.Equal(t, []string{consts.ServiceAnnotationLoadBalancerResourceGroup}, IgnoredServiceAnnotations(rgOnly),
+		assert.Equal(t, []string{consts.ServiceAnnotationLoadBalancerResourceGroup}, UnsupportedServiceAnnotations(rgOnly),
 			"a resource group without a chosen Public IP has nothing to look up")
 		rgOnly.Spec.LoadBalancerIP = "203.0.113.10"
-		assert.Empty(t, IgnoredServiceAnnotations(rgOnly), "the resource group applies to an address chosen in the spec")
+		assert.Empty(t, UnsupportedServiceAnnotations(rgOnly), "the resource group applies to an address chosen in the spec")
 	})
 }
 

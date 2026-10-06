@@ -192,7 +192,7 @@ func (c *InboundConfig) Equals(other *InboundConfig) bool {
 	if c.ServiceName != other.ServiceName || c.ClusterName != other.ClusterName {
 		return false
 	}
-	if !maps.Equal(c.PIPTags, other.PIPTags) || !maps.Equal(c.IPTags, other.IPTags) {
+	if !maps.Equal(c.PIPTags, other.PIPTags) || (c.IPTags == nil) != (other.IPTags == nil) || !maps.Equal(c.IPTags, other.IPTags) {
 		return false
 	}
 	return strPtrEqual(c.DNSLabel, other.DNSLabel) && strings.EqualFold(c.PIPPrefixID, other.PIPPrefixID) &&

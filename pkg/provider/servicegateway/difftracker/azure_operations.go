@@ -332,6 +332,40 @@ func (dt *DiffTracker) getServiceByNamespaceName(ctx context.Context, lister cor
 	return dt.kubeClient.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
+// serviceKeepsLoadBalancer reports whether another Service, given by UID or by namespace/name (a comma-separated
+// list as in the ownership tag), exists, is not being deleted and is still of type LoadBalancer. A failed lookup
+// reports false, so the caller waits and retries instead of rejecting.
+func (dt *DiffTracker) serviceKeepsLoadBalancer(ctx context.Context, owner, exceptUID string) bool {
+	if dt.kubeClient == nil {
+		return false
+	}
+	dt.mu.Lock()
+	lister := dt.serviceLister
+	dt.mu.Unlock()
+	for _, ref := range strings.Split(owner, ",") {
+		ref = strings.TrimSpace(ref)
+		var svc *v1.Service
+		var err error
+		if namespace, name, ok := strings.Cut(ref, "/"); ok {
+			svc, err = dt.getServiceByNamespaceName(ctx, lister, namespace, name)
+		} else if ref != "" {
+			svc, err = dt.getServiceByUID(ctx, ref)
+		}
+		if err != nil || svc == nil || strings.EqualFold(string(svc.UID), exceptUID) ||
+			svc.DeletionTimestamp != nil || svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+			continue
+		}
+		dt.mu.Lock()
+		op, tracked := dt.pendingServiceOps[string(svc.UID)]
+		deleting := tracked && (op.State == StateDeletionPending || op.State == StateDeletionInProgress)
+		dt.mu.Unlock()
+		if !deleting {
+			return true
+		}
+	}
+	return false
+}
+
 // getServiceByUIDViaList scans all Services for a UID match. Used only when a Service's
 // namespace/name are not known to the engine.
 //

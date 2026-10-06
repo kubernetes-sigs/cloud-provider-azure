@@ -71,6 +71,10 @@ type AzurePublicIP struct {
 	IPConfiguration *struct {
 		ID string `json:"id"`
 	} `json:"ipConfiguration"`
+	IPTags []struct {
+		IPTagType string `json:"ipTagType"`
+		Tag       string `json:"tag"`
+	} `json:"ipTags"`
 }
 
 // AzureLoadBalancer represents a Load Balancer resource in Azure

@@ -157,6 +157,27 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 			},
 			reason: "InvalidLoadBalancerIP",
 		},
+		{
+			name: "annotation without effect",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}
+			},
+			reason: "UnsupportedAnnotations",
+		},
+		{
+			name: "health probe annotation",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath: "/healthz"}
+			},
+			reason: "UnsupportedHealthProbe",
+		},
+		{
+			name: "reserved Public IP tag key",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "k8s-azure-cluster-name=spoof,team=a"}
+			},
+			reason: "InvalidPIPTags",
+		},
 	}
 
 	for _, tt := range tests {
@@ -187,13 +208,14 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 	}
 }
 
-func TestLoadBalancerWarnsAboutIgnoredAnnotations(t *testing.T) {
+func TestLoadBalancerRejectsAnnotationsWithoutEffect(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	svc := newInboundService("service-uid")
 	svc.Annotations = map[string]string{
-		consts.ServiceAnnotationLoadBalancerResourceGroup:     "rg",
-		consts.ServiceAnnotationLoadBalancerIdleTimeout:       "10",
-		consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "false",
+		consts.ServiceAnnotationLoadBalancerResourceGroup:                            "rg",
+		consts.ServiceAnnotationLoadBalancerIdleTimeout:                              "10",
+		consts.ServiceAnnotationDisableLoadBalancerFloatingIP:                        "false",
+		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule): "true",
 	}
 	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
 	recorder := record.NewFakeRecorder(10)
@@ -202,23 +224,25 @@ func TestLoadBalancerWarnsAboutIgnoredAnnotations(t *testing.T) {
 	assert.NoError(t, lb.SetTracker(tracker))
 
 	_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
-	assert.NoError(t, err)
-	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)), "an ignored annotation must not block provisioning")
+	assert.Error(t, err)
+	assert.False(t, tracker.IsServiceTracked(ServiceUID(svc)), "an annotation without effect must block provisioning")
 
 	select {
 	case event := <-recorder.Events:
 		assert.Contains(t, event, v1.EventTypeWarning)
-		assert.Contains(t, event, "ServiceGatewayIgnoredAnnotations")
+		assert.Contains(t, event, "UnsupportedAnnotations")
 		assert.Contains(t, event, consts.ServiceAnnotationLoadBalancerResourceGroup)
+		assert.Contains(t, event, consts.ServiceAnnotationDisableLoadBalancerFloatingIP)
+		assert.Contains(t, event, string(consts.PortAnnotationNoHealthProbeRule))
 		assert.NotContains(t, event, consts.ServiceAnnotationLoadBalancerIdleTimeout)
-		assert.NotContains(t, event, consts.ServiceAnnotationDisableLoadBalancerFloatingIP)
 	default:
-		t.Fatal("expected a warning event listing the ignored annotation")
+		t.Fatal("expected a warning event listing the unsupported annotations")
 	}
 
-	delete(svc.Annotations, consts.ServiceAnnotationLoadBalancerResourceGroup)
+	svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "10"}
 	_, err = lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
 	assert.NoError(t, err)
+	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)), "removing them admits the Service")
 	select {
 	case event := <-recorder.Events:
 		t.Fatalf("unexpected event for supported annotations only: %s", event)
@@ -226,33 +250,30 @@ func TestLoadBalancerWarnsAboutIgnoredAnnotations(t *testing.T) {
 	}
 
 	svc.Annotations[consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath] = "/healthz"
-	svc.Annotations[consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule)] = "true"
 	_, err = lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
-	assert.NoError(t, err)
+	assert.Error(t, err)
+	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)), "a provisioned Service that gains one keeps its load balancer")
 	select {
 	case event := <-recorder.Events:
 		assert.Contains(t, event, v1.EventTypeWarning)
-		assert.Contains(t, event, "ServiceGatewayHealthProbeNotSupported")
+		assert.Contains(t, event, "UnsupportedHealthProbe")
 		assert.Contains(t, event, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath)
 		assert.Contains(t, event, "readinessProbe")
-		assert.NotContains(t, event, string(consts.PortAnnotationNoHealthProbeRule))
 	default:
 		t.Fatal("expected a warning event about the health-probe annotation")
 	}
 	select {
 	case event := <-recorder.Events:
-		t.Fatalf("health-probe annotations must not also be reported as ignored: %s", event)
+		t.Fatalf("health-probe annotations must not also be reported as unsupported: %s", event)
 	default:
 	}
 }
 
-func TestLoadBalancerRecordsClusterNameAndReservedPIPTagKeys(t *testing.T) {
+func TestLoadBalancerRecordsClusterName(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	svc := newInboundService("service-uid")
-	svc.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "k8s-azure-cluster-name=spoof,team=a"}
+	svc.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "team=a"}
 	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
-	recorder := record.NewFakeRecorder(10)
-	tracker.SetEventRecorder(recorder)
 	lb := NewLoadBalancer(nil)
 	assert.NoError(t, lb.SetTracker(tracker))
 
@@ -264,14 +285,6 @@ func TestLoadBalancerRecordsClusterNameAndReservedPIPTagKeys(t *testing.T) {
 	tracker.mu.Unlock()
 	assert.Equal(t, "my-cluster", config.ClusterName)
 	assert.Equal(t, map[string]string{"team": "a"}, config.PIPTags)
-
-	select {
-	case event := <-recorder.Events:
-		assert.Contains(t, event, "IgnoredPIPTagKeys")
-		assert.Contains(t, event, consts.ClusterNameKey)
-	default:
-		t.Fatal("expected an IgnoredPIPTagKeys warning event")
-	}
 }
 
 // TestLoadBalancerRecordsClusterNameFromEveryCall pins that any load balancer call teaches the tracker the
