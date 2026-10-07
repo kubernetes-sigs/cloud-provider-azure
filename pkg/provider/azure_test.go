@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
@@ -3042,8 +3044,9 @@ func TestClientFactoryIdentity(t *testing.T) {
 	assert.Equal(t, noAzureCredentials{}, gotCred)
 
 	subscriptionID, gotCred = clientFactoryIdentity("", cred)
-	assert.Equal(t, "", subscriptionID, "with credentials a missing subscription must fail when the factory is created")
-	assert.Equal(t, cred, gotCred)
+	assert.Equal(t, credentialFreeSubscriptionID, subscriptionID,
+		"with credentials but no subscription, IMDS-only callers must still start")
+	assert.Equal(t, cred, gotCred, "clients for an explicit subscription must keep the credentials")
 
 	subscriptionID, gotCred = clientFactoryIdentity("sub", cred)
 	assert.Equal(t, "sub", subscriptionID)
@@ -3067,5 +3070,59 @@ func TestNewCloudWithoutCredentialsFailsARMCallsCleanly(t *testing.T) {
 	assert.NotPanics(t, func() {
 		_, err = cloud.(*Cloud).NetworkClientFactory.GetSecurityGroupClient().Get(context.Background(), "rg", "nsg")
 	})
+	assert.ErrorContains(t, err, errNoAzureCredentials.Error())
+}
+
+func TestBlockCredentialFreeSubscription(t *testing.T) {
+	options := &arm.ClientOptions{}
+	blockCredentialFreeSubscription(options)
+	sent := 0
+	pipeline := runtime.NewPipeline("test", "v0", runtime.PipelineOptions{}, &policy.ClientOptions{
+		PerCallPolicies: options.PerCallPolicies,
+		Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+			sent++
+			return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
+		}),
+	})
+
+	req, err := runtime.NewRequest(context.Background(), http.MethodGet,
+		"https://management.azure.com/subscriptions/"+credentialFreeSubscriptionID+"/resourceGroups/rg")
+	assert.NoError(t, err)
+	_, err = pipeline.Do(req)
+	assert.ErrorIs(t, err, errNoAzureCredentials)
+	assert.Zero(t, sent, "no request may reach the placeholder subscription")
+
+	req, err = runtime.NewRequest(context.Background(), http.MethodGet,
+		"https://management.azure.com/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg")
+	assert.NoError(t, err)
+	_, err = pipeline.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, sent, "requests to an explicit subscription must be sent")
+}
+
+type transportFunc func(*http.Request) (*http.Response, error)
+
+func (f transportFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
+
+// TestNewCloudWithWorkloadIdentityEnvAndNoSubscriptionStarts starts the provider the way
+// cloud-node-manager's IMDS mode does, with workload identity variables in the environment but no
+// subscription ID. azclient builds a credential from those variables alone, and the SDK rejects an empty
+// subscription ID, so startup must not depend on that credential.
+func TestNewCloudWithWorkloadIdentityEnvAndNoSubscriptionStarts(t *testing.T) {
+	tokenFile := filepath.Join(t.TempDir(), "token")
+	assert.NoError(t, os.WriteFile(tokenFile, []byte("token"), 0o600))
+	t.Setenv("AZURE_FEDERATED_TOKEN_FILE", tokenFile)
+	t.Setenv("AZURE_CLIENT_ID", "11111111-1111-1111-1111-111111111111")
+	t.Setenv("AZURE_TENANT_ID", "22222222-2222-2222-2222-222222222222")
+	t.Setenv("AZURE_CLIENT_SECRET", "")
+
+	cloud, err := NewCloud(context.Background(), nil, &providerconfig.Config{UseInstanceMetadata: true, VMType: consts.VMTypeVMSS}, false)
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	_, err = cloud.(*Cloud).NetworkClientFactory.GetSecurityGroupClient().Get(context.Background(), "rg", "nsg")
+	assert.ErrorContains(t, err, errNoAzureCredentials.Error())
+	_, err = cloud.(*Cloud).ComputeClientFactory.GetDiskClient().Get(context.Background(), "rg", "disk")
 	assert.ErrorContains(t, err, errNoAzureCredentials.Error())
 }
