@@ -18,17 +18,12 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -259,13 +254,6 @@ func NewCloudFromSecret(ctx context.Context, clientBuilder cloudprovider.Control
 	return az, nil
 }
 
-var (
-	// newARMClientFactory is a function that returns a new ARM client factory.
-	// It is used to mock the ARM client factory for testing.
-	// TODO: use fake options for testing
-	newARMClientFactory = azclient.NewClientFactory
-)
-
 // InitializeCloudFromConfig initializes the Cloud from config.
 func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azureconfig.Config, _, callFromCCM bool) error {
 	logger := log.FromContextOrBackground(ctx).WithName("InitializeCloudFromConfig")
@@ -446,23 +434,21 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	}
 
 	if az.ComputeClientFactory == nil && az.AuthProvider != nil {
-		networkSubscriptionID, networkCred := clientFactoryIdentity(
+		var networkSubscriptionID, computeSubscriptionID string
+		az.NetworkClientFactory, networkSubscriptionID, err = newCompatibleARMClientFactory(
 			az.getNetworkResourceSubscriptionID(),  // It would also fallback to compute subscription ID if network subscription ID is not set
 			az.AuthProvider.GetNetworkAzIdentity(), // It would fallback to compute credential if network credential is not set
+			&az.ARMClientConfig, clientOps.Cloud,
 		)
-		az.NetworkClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
-			SubscriptionID: networkSubscriptionID,
-		}, &az.ARMClientConfig, clientOps.Cloud, networkCred, blockCredentialFreeSubscription)
 		if err != nil {
 			return err
 		}
 		logger.Info("Setting up ARM client factory for network resources", "subscriptionID", networkSubscriptionID)
 
-		computeSubscriptionID, computeCred := clientFactoryIdentity(az.SubscriptionID, az.AuthProvider.GetAzIdentity())
-		az.ComputeClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
-			SubscriptionID: computeSubscriptionID,
-		}, &az.ARMClientConfig, clientOps.Cloud, computeCred,
-			append([]func(*arm.ClientOptions){blockCredentialFreeSubscription}, az.AuthProvider.AdditionalComputeClientOptions...)...)
+		az.ComputeClientFactory, computeSubscriptionID, err = newCompatibleARMClientFactory(
+			az.SubscriptionID, az.AuthProvider.GetAzIdentity(),
+			&az.ARMClientConfig, clientOps.Cloud, az.AuthProvider.AdditionalComputeClientOptions...,
+		)
 		if err != nil {
 			return err
 		}
@@ -1100,55 +1086,4 @@ func (az *Cloud) GetNodeVMSet(ctx context.Context, nodeName types.NodeName, crt 
 
 	// 5. Node is managed by vmss
 	return ss, nil
-}
-
-// credentialFreeSubscriptionID is the subscription ID given to ARM client factories when no subscription
-// ID is configured, as in cloud-node-manager's default IMDS mode. The SDK rejects an empty subscription
-// ID when it creates a client.
-const credentialFreeSubscriptionID = "00000000-0000-0000-0000-000000000000"
-
-// errNoAzureCredentials is returned for every ARM request made without Azure credentials or a subscription ID.
-var errNoAzureCredentials = errors.New("no Azure credentials or subscription ID are configured, so ARM requests cannot be made")
-
-// noAzureCredentials is the TokenCredential given to ARM client factories when there are no Azure
-// credentials. Every token request fails, so an ARM call returns errNoAzureCredentials before any
-// request is sent. Without it the factory would fall back to a zero-value DefaultAzureCredential,
-// which panics when asked for a token.
-type noAzureCredentials struct{}
-
-func (noAzureCredentials) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
-	return azcore.AccessToken{}, errNoAzureCredentials
-}
-
-// clientFactoryIdentity returns the subscription ID and credential to build an ARM client factory with.
-// IMDS-only callers must start without a subscription ID, even when credentials are found in the
-// environment (for example workload identity variables), as they did before the SDK rejected an empty
-// subscription ID, so an empty subscription ID becomes credentialFreeSubscriptionID. Credentials are
-// kept, because clients created for an explicit subscription (Get*ClientForSub) still use them;
-// blockCredentialFreeSubscription stops requests to the placeholder. Without credentials the
-// credential is noAzureCredentials.
-func clientFactoryIdentity(subscriptionID string, cred azcore.TokenCredential) (string, azcore.TokenCredential) {
-	if subscriptionID == "" {
-		subscriptionID = credentialFreeSubscriptionID
-	}
-	if cred == nil {
-		cred = noAzureCredentials{}
-	}
-	return subscriptionID, cred
-}
-
-// blockCredentialFreeSubscription makes every ARM request to credentialFreeSubscriptionID fail with
-// errNoAzureCredentials. It runs per call, before a token is requested, so no request reaches the
-// placeholder subscription.
-func blockCredentialFreeSubscription(option *arm.ClientOptions) {
-	option.PerCallPolicies = append(option.PerCallPolicies, credentialFreeSubscriptionPolicy{})
-}
-
-type credentialFreeSubscriptionPolicy struct{}
-
-func (credentialFreeSubscriptionPolicy) Do(req *policy.Request) (*http.Response, error) {
-	if strings.Contains(strings.ToLower(req.Raw().URL.Path), "/subscriptions/"+credentialFreeSubscriptionID+"/") {
-		return nil, errNoAzureCredentials
-	}
-	return req.Next()
 }

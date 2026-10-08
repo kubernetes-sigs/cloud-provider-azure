@@ -134,6 +134,13 @@ const (
 	ProvisioningStateUnknown = "Unknown"
 )
 
+// ARM client factory
+const (
+	// PlaceholderSubscriptionID is the subscription ID ARM client factories are created with when no
+	// subscription ID is configured, as in cloud-node-manager's default IMDS mode.
+	PlaceholderSubscriptionID = "00000000-0000-0000-0000-000000000000"
+)
+
 // cache
 const (
 	// VMSSNameSeparator is the separator of the vmss names

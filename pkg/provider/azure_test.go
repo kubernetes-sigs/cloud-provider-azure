@@ -23,16 +23,15 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
@@ -2878,7 +2877,96 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("should build the network client factory before the compute one, with their own credentials and options", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		az := GetTestCloud(ctrl)
+		az.zoneRepo.(*zone.MockRepository).EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1"}}, nil).AnyTimes()
+		az.ComputeClientFactory = nil
+		az.NetworkClientFactory = nil
+		az.AuthProvider = &azclient.AuthProvider{
+			ComputeCredential: staticTokenCredential("compute"),
+			NetworkCredential: staticTokenCredential("network"),
+			AdditionalComputeClientOptions: []func(*arm.ClientOptions){func(option *arm.ClientOptions) {
+				option.PerCallPolicies = append(option.PerCallPolicies, extraPolicy{})
+			}},
+		}
+
+		var (
+			creds      []azcore.TokenCredential
+			armConfigs []*azclient.ARMClientConfig
+			clouds     []cloud.Configuration
+			options    [][]func(option *arm.ClientOptions)
+		)
+		newARMClientFactory = func(
+			config *azclient.ClientFactoryConfig,
+			armConfig *azclient.ARMClientConfig,
+			cloudConfig cloud.Configuration,
+			cred azcore.TokenCredential,
+			clientOptionsMutFn ...func(option *arm.ClientOptions),
+		) (azclient.ClientFactory, error) {
+			creds = append(creds, cred)
+			armConfigs = append(armConfigs, armConfig)
+			clouds = append(clouds, cloudConfig)
+			options = append(options, clientOptionsMutFn)
+			return azclient.NewClientFactory(config, armConfig, cloudConfig, cred, clientOptionsMutFn...)
+		}
+		defer func() { newARMClientFactory = azclient.NewClientFactory }()
+
+		err := az.InitializeCloudFromConfig(context.Background(), &providerconfig.Config{}, false, true)
+		if !assert.NoError(t, err) || !assert.Len(t, creds, 2) {
+			return
+		}
+		assert.Equal(t, staticTokenCredential("network"), creds[0])
+		assert.Equal(t, staticTokenCredential("compute"), creds[1])
+		for i := range creds {
+			assert.Same(t, &az.ARMClientConfig, armConfigs[i], "factory %d", i)
+			assert.Equal(t, cloud.AzurePublic.ActiveDirectoryAuthorityHost, clouds[i].ActiveDirectoryAuthorityHost, "factory %d", i)
+			applied := &arm.ClientOptions{}
+			for _, fn := range options[i] {
+				fn(applied)
+			}
+			assert.Equal(t, i == 1, slices.Contains(applied.PerCallPolicies, policy.Policy(extraPolicy{})),
+				"only the compute factory gets the auth provider's extra client options (factory %d)", i)
+		}
+	})
+
+	for failingCall, name := range []string{"network", "compute"} {
+		t.Run("should return the error when the "+name+" client factory cannot be built", func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			az := GetTestCloud(ctrl)
+			az.ComputeClientFactory = nil
+			az.NetworkClientFactory = nil
+			az.AuthProvider = &azclient.AuthProvider{ComputeCredential: staticTokenCredential("compute")}
+
+			errFactory := errors.New("factory error")
+			calls := 0
+			newARMClientFactory = func(
+				config *azclient.ClientFactoryConfig,
+				armConfig *azclient.ARMClientConfig,
+				cloudConfig cloud.Configuration,
+				cred azcore.TokenCredential,
+				clientOptionsMutFn ...func(option *arm.ClientOptions),
+			) (azclient.ClientFactory, error) {
+				defer func() { calls++ }()
+				if calls == failingCall {
+					return nil, errFactory
+				}
+				return azclient.NewClientFactory(config, armConfig, cloudConfig, cred, clientOptionsMutFn...)
+			}
+			defer func() { newARMClientFactory = azclient.NewClientFactory }()
+
+			err := az.InitializeCloudFromConfig(context.Background(), &providerconfig.Config{}, false, true)
+			assert.ErrorIs(t, err, errFactory)
+			assert.Equal(t, failingCall+1, calls, "no client factory is built after a failure")
+		})
+	}
 }
+
+type extraPolicy struct{}
+
+func (extraPolicy) Do(req *policy.Request) (*http.Response, error) { return req.Next() }
 
 func TestSetLBDefaults(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -3024,35 +3112,6 @@ func TestIsNodeReady(t *testing.T) {
 	}
 }
 
-// staticTokenCredential is a TokenCredential that is never asked for a token.
-type staticTokenCredential struct{}
-
-func (staticTokenCredential) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
-	return azcore.AccessToken{}, nil
-}
-
-func TestClientFactoryIdentity(t *testing.T) {
-	var cred azcore.TokenCredential = staticTokenCredential{}
-
-	subscriptionID, gotCred := clientFactoryIdentity("", nil)
-	assert.Equal(t, credentialFreeSubscriptionID, subscriptionID,
-		"without credentials an empty subscription must not stop IMDS-only callers from starting")
-	assert.Equal(t, noAzureCredentials{}, gotCred, "without credentials ARM calls must fail with an error, not panic")
-
-	subscriptionID, gotCred = clientFactoryIdentity("sub", nil)
-	assert.Equal(t, "sub", subscriptionID)
-	assert.Equal(t, noAzureCredentials{}, gotCred)
-
-	subscriptionID, gotCred = clientFactoryIdentity("", cred)
-	assert.Equal(t, credentialFreeSubscriptionID, subscriptionID,
-		"with credentials but no subscription, IMDS-only callers must still start")
-	assert.Equal(t, cred, gotCred, "clients for an explicit subscription must keep the credentials")
-
-	subscriptionID, gotCred = clientFactoryIdentity("sub", cred)
-	assert.Equal(t, "sub", subscriptionID)
-	assert.Equal(t, cred, gotCred)
-}
-
 // TestNewCloudWithoutCredentialsFailsARMCallsCleanly starts the provider the way cloud-node-manager's
 // IMDS mode does (no credentials, no subscription) and checks that an ARM call returns an error. The
 // azclient factory would otherwise fall back to a zero-value DefaultAzureCredential, which panics.
@@ -3072,37 +3131,6 @@ func TestNewCloudWithoutCredentialsFailsARMCallsCleanly(t *testing.T) {
 	})
 	assert.ErrorContains(t, err, errNoAzureCredentials.Error())
 }
-
-func TestBlockCredentialFreeSubscription(t *testing.T) {
-	options := &arm.ClientOptions{}
-	blockCredentialFreeSubscription(options)
-	sent := 0
-	pipeline := runtime.NewPipeline("test", "v0", runtime.PipelineOptions{}, &policy.ClientOptions{
-		PerCallPolicies: options.PerCallPolicies,
-		Transport: transportFunc(func(*http.Request) (*http.Response, error) {
-			sent++
-			return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody}, nil
-		}),
-	})
-
-	req, err := runtime.NewRequest(context.Background(), http.MethodGet,
-		"https://management.azure.com/subscriptions/"+credentialFreeSubscriptionID+"/resourceGroups/rg")
-	assert.NoError(t, err)
-	_, err = pipeline.Do(req)
-	assert.ErrorIs(t, err, errNoAzureCredentials)
-	assert.Zero(t, sent, "no request may reach the placeholder subscription")
-
-	req, err = runtime.NewRequest(context.Background(), http.MethodGet,
-		"https://management.azure.com/subscriptions/33333333-3333-3333-3333-333333333333/resourceGroups/rg")
-	assert.NoError(t, err)
-	_, err = pipeline.Do(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, sent, "requests to an explicit subscription must be sent")
-}
-
-type transportFunc func(*http.Request) (*http.Response, error)
-
-func (f transportFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
 
 // TestNewCloudWithWorkloadIdentityEnvAndNoSubscriptionStarts starts the provider the way
 // cloud-node-manager's IMDS mode does, with workload identity variables in the environment but no
