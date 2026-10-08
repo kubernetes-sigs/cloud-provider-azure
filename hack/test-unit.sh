@@ -23,3 +23,9 @@ for DIR in $DIR_LIST
 do
   go test -v -race "$DIR"
 done
+
+(
+  cd health-probe-proxy
+  # health-probe-proxy is not vendored, so ignore any inherited -mod=vendor.
+  go test -mod=readonly -v -race ./...
+)

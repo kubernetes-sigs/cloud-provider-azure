@@ -31,9 +31,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func init() {
-	// Azure Load Balancer health probes do not include a PROXY header.
-	proxyproto.DefaultPolicy = proxyproto.USE
+func newProxyListener(listener net.Listener) *proxyproto.Listener {
+	return &proxyproto.Listener{
+		Listener: listener,
+		ConnPolicy: func(proxyproto.ConnPolicyOptions) (proxyproto.Policy, error) {
+			// Azure Load Balancer health probes do not include a PROXY header.
+			return proxyproto.USE, nil
+		},
+	}
 }
 
 func main() {
@@ -61,7 +66,7 @@ func main() {
 	}
 	logger.Info("listening on port", "port", healthCheckPort)
 
-	proxyListener := &proxyproto.Listener{Listener: listener}
+	proxyListener := newProxyListener(listener)
 	defer func(proxyListener *proxyproto.Listener) {
 		err := proxyListener.Close()
 		if err != nil {

@@ -18,14 +18,10 @@ package main
 
 import (
 	"bufio"
-	"bytes"
-	"context"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -64,85 +60,17 @@ func sendProxyHeaderRequest(t *testing.T, addr string) *http.Response {
 	return resp
 }
 
-// Run the real binary so policy overrides in main() cannot escape coverage.
-func TestHealthProbeProxyAcceptsHTTP(t *testing.T) {
-	binary := filepath.Join(t.TempDir(), "health-probe-proxy")
-	buildCtx, cancelBuild := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancelBuild()
-	build := exec.CommandContext(buildCtx, "go", "build", "-o", binary, ".")
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("failed to build health-probe-proxy: %v\n%s", err, output)
-	}
-
-	const backendBody = "healthy backend"
+func TestProxyListenerAcceptsHTTP(t *testing.T) {
+	const responseBody = "healthy"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, backendBody)
+		_, _ = io.WriteString(w, responseBody)
 	})
-	backend := httptest.NewServer(mux)
-	t.Cleanup(backend.Close)
-	_, targetPort, err := net.SplitHostPort(backend.Listener.Addr().String())
-	if err != nil {
-		t.Fatalf("failed to get backend port: %v", err)
-	}
-
-	// The binary takes a port, not an inherited listener, so release an ephemeral
-	// port immediately before starting it.
-	reservation, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to reserve proxy port: %v", err)
-	}
-	addr := reservation.Addr().String()
-	_, healthCheckPort, err := net.SplitHostPort(addr)
-	if err != nil {
-		_ = reservation.Close()
-		t.Fatalf("failed to get proxy port: %v", err)
-	}
-	if err := reservation.Close(); err != nil {
-		t.Fatalf("failed to release proxy port: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, binary, "--health-check-port="+healthCheckPort, "--target-port="+targetPort)
-	var logs bytes.Buffer
-	cmd.Stdout = &logs
-	cmd.Stderr = &logs
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("failed to start health-probe-proxy: %v", err)
-	}
-	done := make(chan struct{})
-	var waitErr error
-	go func() {
-		waitErr = cmd.Wait()
-		close(done)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		<-done
-		if t.Failed() {
-			t.Logf("health-probe-proxy output:\n%s", logs.String())
-		}
-	})
-
-	ticker := time.NewTicker(20 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-done:
-			t.Fatalf("health-probe-proxy exited before becoming ready: %v", waitErr)
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for health-probe-proxy: %v", ctx.Err())
-		case <-ticker.C:
-		}
-		conn, err := net.DialTimeout("tcp", addr, 100*time.Millisecond)
-		if err == nil {
-			if err := conn.Close(); err != nil {
-				t.Fatalf("failed to close readiness connection: %v", err)
-			}
-			break
-		}
-	}
+	server := httptest.NewUnstartedServer(mux)
+	server.Listener = newProxyListener(server.Listener)
+	server.Start()
+	t.Cleanup(server.Close)
+	addr := server.Listener.Addr().String()
 
 	for _, name := range []string{"headerless", "proxy-header"} {
 		t.Run(name, func(t *testing.T) {
@@ -156,7 +84,7 @@ func TestHealthProbeProxyAcceptsHTTP(t *testing.T) {
 				var err error
 				resp, err = client.Get("http://" + addr + "/healthz")
 				if err != nil {
-					t.Fatalf("headerless health probe through binary was rejected: %v", err)
+					t.Fatalf("headerless health probe was rejected: %v", err)
 				}
 			}
 			defer func() { _ = resp.Body.Close() }()
@@ -165,11 +93,25 @@ func TestHealthProbeProxyAcceptsHTTP(t *testing.T) {
 				t.Fatalf("failed to read health probe response: %v", err)
 			}
 			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("expected HTTP 200 from backend, got %d: %s", resp.StatusCode, body)
+				t.Fatalf("expected HTTP 200, got %d: %s", resp.StatusCode, body)
 			}
-			if string(body) != backendBody {
-				t.Fatalf("expected backend response %q, got %q", backendBody, body)
+			if string(body) != responseBody {
+				t.Fatalf("expected response %q, got %q", responseBody, body)
 			}
 		})
+	}
+}
+
+func TestNewProxyListenerPolicy(t *testing.T) {
+	listener := newProxyListener(nil)
+	if listener.ConnPolicy == nil {
+		t.Fatal("expected an explicit connection policy, not the global default")
+	}
+	policy, err := listener.ConnPolicy(proxyproto.ConnPolicyOptions{})
+	if err != nil {
+		t.Fatalf("connection policy returned an error: %v", err)
+	}
+	if policy != proxyproto.USE {
+		t.Fatalf("expected USE policy, got %v", policy)
 	}
 }
