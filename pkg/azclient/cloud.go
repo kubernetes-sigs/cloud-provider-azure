@@ -104,7 +104,8 @@ func OverrideAzureCloudConfigAndEnvConfigFromMetadataService(endpoint, cloudName
 }
 
 func OverrideAzureCloudConfigFromEnv(cloudName string, config *cloud.Configuration, env *Environment) error {
-	if !strings.EqualFold(cloudName, utils.AzureStackCloudName) {
+	if !strings.EqualFold(cloudName, utils.AzureStackCloudName) &&
+		!strings.EqualFold(cloudName, utils.AzureUSSecCloudName) {
 		return nil
 	}
 	envFilePath, ok := os.LookupEnv(EnvironmentFilepathName)
@@ -205,6 +206,7 @@ var EnvironmentMapping = map[string]*Environment{
 	"AZUREPUBLICCLOUD":       PublicCloud,
 	"AZUREUSGOVERNMENT":      USGovernmentCloud,
 	"AZUREUSGOVERNMENTCLOUD": USGovernmentCloud, //TODO: deprecate
+	"AZUREUSSECCLOUD":        USSecCloud,
 }
 
 const NotAvailable = "N/A" // NotAvailable is used for endpoints and resource IDs that are not available for a given cloud.
@@ -355,6 +357,11 @@ var (
 			ManagedHSM:          NotAvailable,
 			MicrosoftGraph:      "https://microsoftgraph.chinacloudapi.cn",
 		},
+	}
+
+	// USSecCloud is the Secret (IL6) cloud environment for the US Government
+	USSecCloud = &Environment{
+		Name: "AzureUSSecCloud",
 	}
 )
 
