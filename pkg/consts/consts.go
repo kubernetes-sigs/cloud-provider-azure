@@ -203,6 +203,7 @@ const (
 )
 
 var IPVersionIPv6StringLower = strings.ToLower(IPVersionIPv6String)
+var IPVersionIPv4StringLower = strings.ToLower(IPVersionIPv4String)
 
 // LB variables for dual-stack
 var (
