@@ -22,6 +22,8 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 func TestSetDestinationPortRanges(t *testing.T) {
@@ -161,6 +163,65 @@ func TestSetAsteriskDestinationPortRanges(t *testing.T) {
 			for _, assertion := range tt.Assertions {
 				assertion(t, tt.Rule)
 			}
+		})
+	}
+}
+
+func TestIsManagedSecurityRule(t *testing.T) {
+	t.Parallel()
+
+	makeSecurityRule := func(name string, priority *int32) *armnetwork.SecurityRule {
+		return &armnetwork.SecurityRule{
+			Name: to.Ptr(name),
+			Properties: &armnetwork.SecurityRulePropertiesFormat{
+				Priority: priority,
+			},
+		}
+	}
+	managedName := SecurityRuleNamePrefix + "_allow_IPv4_test"
+
+	tests := []struct {
+		Name     string
+		Rule     *armnetwork.SecurityRule
+		Expected bool
+	}{
+		{
+			Name:     "minimum priority",
+			Rule:     makeSecurityRule(managedName, to.Ptr(int32(consts.LoadBalancerMinimumPriority))),
+			Expected: true,
+		},
+		{
+			Name:     "highest allocatable priority",
+			Rule:     makeSecurityRule(managedName, to.Ptr(int32(consts.LoadBalancerMaximumPriority-1))),
+			Expected: true,
+		},
+		{
+			Name:     "maximum priority is not allocated",
+			Rule:     makeSecurityRule(managedName, to.Ptr(int32(consts.LoadBalancerMaximumPriority))),
+			Expected: false,
+		},
+		{
+			Name:     "below minimum priority",
+			Rule:     makeSecurityRule(managedName, to.Ptr(int32(consts.LoadBalancerMinimumPriority-1))),
+			Expected: false,
+		},
+		{
+			Name:     "name without managed prefix",
+			Rule:     makeSecurityRule("custom_allow_IPv4_test", to.Ptr(int32(consts.LoadBalancerMinimumPriority))),
+			Expected: false,
+		},
+		{
+			Name:     "nil priority",
+			Rule:     makeSecurityRule(managedName, nil),
+			Expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.Expected, IsManagedSecurityRule(tt.Rule))
 		})
 	}
 }

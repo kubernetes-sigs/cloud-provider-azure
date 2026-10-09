@@ -157,7 +157,7 @@ func (f *AzureFixture) DenyAllSecurityRule(ipFamily iputil.Family) *AzureDenyAll
 				SourcePortRange:      ptr.To("*"),
 				SourceAddressPrefix:  ptr.To("*"),
 				DestinationPortRange: ptr.To("*"),
-				Priority:             ptr.To(int32(consts.LoadBalancerMaximumPriority)),
+				Priority:             ptr.To(int32(consts.LoadBalancerMaximumPriority - 1)),
 			},
 		},
 	}
