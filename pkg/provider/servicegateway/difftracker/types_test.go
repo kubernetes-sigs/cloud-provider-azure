@@ -34,6 +34,15 @@ func TestInboundConfigEquals_ComparesEveryField(t *testing.T) {
 			IdleTimeoutMinutes: ptr.To[int32](10),
 			IPFamilies:         []string{"IPv4"},
 			NamedTargetPorts:   []string{"http"},
+			ServiceName:        "ns/svc",
+			ClusterName:        "cluster",
+			PIPTags:            map[string]string{"team": "a"},
+			IPTags:             map[string]string{"RoutingPreference": "Internet"},
+			DNSLabel:           ptr.To("app"),
+			PIPPrefixID:        "prefix-a",
+			PIPName:            "pip-a",
+			LoadBalancerIP:     "20.0.0.1",
+			PIPResourceGroup:   "rg-a",
 		}
 	}
 
@@ -47,6 +56,17 @@ func TestInboundConfigEquals_ComparesEveryField(t *testing.T) {
 		{"NamedTargetPorts", func(c *InboundConfig) { c.NamedTargetPorts = []string{"metrics"} }},
 		{"FrontendPorts", func(c *InboundConfig) { c.FrontendPorts = []PortMapping{{Port: 443, Protocol: "TCP"}} }},
 		{"BackendPorts", func(c *InboundConfig) { c.BackendPorts = []PortMapping{{Port: 9090, Protocol: "TCP"}} }},
+		{"ServiceName", func(c *InboundConfig) { c.ServiceName = "ns/other" }},
+		{"ClusterName", func(c *InboundConfig) { c.ClusterName = "" }},
+		{"PIPTags", func(c *InboundConfig) { c.PIPTags = map[string]string{"team": "b"} }},
+		{"IPTags", func(c *InboundConfig) { c.IPTags = map[string]string{"RoutingPreference": "MicrosoftNetwork"} }},
+		{"IPTags cleared", func(c *InboundConfig) { c.IPTags = nil }},
+		{"DNSLabel", func(c *InboundConfig) { c.DNSLabel = ptr.To("other") }},
+		{"DNSLabel cleared", func(c *InboundConfig) { c.DNSLabel = nil }},
+		{"PIPPrefixID", func(c *InboundConfig) { c.PIPPrefixID = "prefix-b" }},
+		{"PIPName", func(c *InboundConfig) { c.PIPName = "pip-b" }},
+		{"LoadBalancerIP", func(c *InboundConfig) { c.LoadBalancerIP = "20.0.0.2" }},
+		{"PIPResourceGroup", func(c *InboundConfig) { c.PIPResourceGroup = "rg-b" }},
 	}
 
 	for _, tc := range cases {
@@ -58,4 +78,10 @@ func TestInboundConfigEquals_ComparesEveryField(t *testing.T) {
 	}
 
 	assert.True(t, base().Equals(base()), "control: identical configs must compare equal")
+}
+
+func TestInboundConfigEquals_DistinguishesAbsentAndEmptyIPTags(t *testing.T) {
+	absent := &InboundConfig{IPTags: nil}
+	empty := &InboundConfig{IPTags: map[string]string{}}
+	assert.False(t, absent.Equals(empty), "absent IP tags preserve the current PIP, while present-empty clears them")
 }

@@ -537,9 +537,6 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      serviceName,
 						Namespace: ns.Name,
-						Annotations: map[string]string{
-							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
-						},
 					},
 					Spec: v1.ServiceSpec{
 						Type:     v1.ServiceTypeLoadBalancer,
@@ -635,9 +632,6 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      serviceName,
 					Namespace: ns.Name,
-					Annotations: map[string]string{
-						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
-					},
 				},
 				Spec: v1.ServiceSpec{
 					Type:     v1.ServiceTypeLoadBalancer,
@@ -808,7 +802,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 		// reconciled with NAT Gateways and their pods are registered.
 		Eventually(func() error {
 			for _, egressName := range egressGateways {
-				if err := egressRegisteredErr(egressName, podsPerGateway); err != nil {
+				if err := egressRegisteredPodCountErr(cs, ns.Name, egressName, podsPerGateway); err != nil {
 					return err
 				}
 			}
@@ -999,9 +993,6 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      serviceName,
 					Namespace: ns.Name,
-					Annotations: map[string]string{
-						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
-					},
 				},
 				Spec: v1.ServiceSpec{
 					Type:     v1.ServiceTypeLoadBalancer,
@@ -1098,9 +1089,6 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      svcName,
 						Namespace: ns.Name,
-						Annotations: map[string]string{
-							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
-						},
 					},
 					Spec: v1.ServiceSpec{
 						Type:     v1.ServiceTypeLoadBalancer,
@@ -1262,7 +1250,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 
 			// Both new egress gateways must exist with their pods registered.
 			for _, egressName := range newEgressGateways {
-				if err := egressRegisteredErr(egressName, newEgressPods); err != nil {
+				if err := egressRegisteredPodCountErr(cs, ns.Name, egressName, newEgressPods); err != nil {
 					return err
 				}
 			}
@@ -1346,9 +1334,6 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      serviceName,
 						Namespace: ns.Name,
-						Annotations: map[string]string{
-							"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
-						},
 					},
 					Spec: v1.ServiceSpec{
 						Type:     v1.ServiceTypeLoadBalancer,

@@ -212,10 +212,13 @@ func TestGuardDefaultNATGatewayPIPSurvivesOrphanSweep(t *testing.T) {
 		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 	const managedOrphan = "33333333-3333-3333-3333-333333333333-pip"
+	// Tagged as an egress address, so only the reserved name keeps it.
+	defaultPIP := detached(PublicIPName(DefaultOutboundNATGatewayName))
+	defaultPIP.Tags = egressIdentityTags(DefaultOutboundNATGatewayName)
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
-		detached(PublicIPName(DefaultOutboundNATGatewayName)),
+		defaultPIP,
 		detached(managedOrphan),
-	}))
+	}, nil, nil))
 
 	assert.NotContains(t, deleted, PublicIPName(DefaultOutboundNATGatewayName),
 		"BUG CASE: the cluster's default egress Public IP was deleted by the orphan sweeper")
@@ -365,8 +368,10 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 	dt.config = testConfig()
 	dt.networkClientFactory = mockFactory
 
+	// The addresses carry the egress identity tag the controller creates them with.
 	pip := func(name string) *armnetwork.PublicIPAddress {
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		identity, _ := identityFromPublicIPName(name)
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 
 	const egress = "team-egress"
@@ -382,7 +387,7 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 		pip(PublicIPName(desired)),
 		pip(PublicIPName(DefaultOutboundNATGatewayName)),
 		attached,
-	}))
+	}, nil, nil))
 
 	assert.Contains(t, deleted, PublicIPName(egress),
 		"BUG CASE: the egress IPv4 Public IP leaked because its name is not a UUID")

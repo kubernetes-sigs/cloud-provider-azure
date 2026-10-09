@@ -69,6 +69,9 @@ func NewRuntime(config providerconfig.Config, networkClientFactory azclient.Clie
 	}
 	if runtime.enabled {
 		runtime.loadBalancer = difftracker.NewLoadBalancer(nil)
+		if config.Tags != "" || len(config.TagsMap) > 0 {
+			log.Background().WithName("NewRuntime").Info("Cloud-config tags are not applied to ServiceGateway resources")
+		}
 	}
 	return runtime
 }

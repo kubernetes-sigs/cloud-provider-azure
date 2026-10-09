@@ -778,10 +778,10 @@ var _ = Describe("Container Load Balancer Update", Label(slbTestLabel), func() {
 		By("Capturing the surviving pods' IPs before forcing a locations sync")
 		doomed, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), fmt.Sprintf("%s-pod-0", serviceName), metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		doomedIPs := podIPSet([]v1.Pod{*doomed})
+		doomedIPs := podIPSetForService(created, []v1.Pod{*doomed})
 		allPods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		survivorIPs := podIPSet(allPods.Items)
+		survivorIPs := podIPSetForService(created, allPods.Items)
 		for ip := range doomedIPs {
 			delete(survivorIPs, ip)
 		}

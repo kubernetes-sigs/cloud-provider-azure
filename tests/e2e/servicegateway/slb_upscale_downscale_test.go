@@ -143,7 +143,7 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			if err := verifyAzureResources(serviceUID); err != nil {
 				return err
 			}
-			want, err := livePodIPs(cs, ns.Name, serviceLabels)
+			want, err := livePodIPs(cs, ns.Name, serviceLabels, createdService)
 			if err != nil {
 				return err
 			}
@@ -184,7 +184,7 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 
 		By("Waiting for Service Gateway to register exactly the upscaled pod set")
 		Eventually(func() error {
-			want, err := livePodIPs(cs, ns.Name, serviceLabels)
+			want, err := livePodIPs(cs, ns.Name, serviceLabels, createdService)
 			if err != nil {
 				return err
 			}
@@ -270,7 +270,7 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			if err := verifyAzureResources(serviceUID); err != nil {
 				return err
 			}
-			want, err := livePodIPs(cs, ns.Name, serviceLabels)
+			want, err := livePodIPs(cs, ns.Name, serviceLabels, createdService)
 			if err != nil {
 				return err
 			}
@@ -284,16 +284,13 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 		By("Capturing the survivors' pod IPs before the downscale")
 		// A bare count cannot see the failure that matters here: a stale IP left behind paired
 		// with a survivor wrongly dropped also yields exactly finalPods.
-		survivorIPs := make(map[string]struct{})
+		survivorPods := make([]v1.Pod, 0, finalPods)
 		for i := 0; i < finalPods; i++ {
 			pod, getErr := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), fmt.Sprintf("%s-pod-%d", serviceName, i), metav1.GetOptions{})
 			Expect(getErr).NotTo(HaveOccurred())
-			for _, ip := range pod.Status.PodIPs {
-				if ip.IP != "" {
-					survivorIPs[ip.IP] = struct{}{}
-				}
-			}
+			survivorPods = append(survivorPods, *pod)
 		}
+		survivorIPs := podIPSetForService(createdService, survivorPods)
 		Expect(survivorIPs).NotTo(BeEmpty())
 
 		By(fmt.Sprintf("Downscaling: Deleting %d pods (keeping %d)", initialPods-finalPods, finalPods))
@@ -411,7 +408,7 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 				if listErr != nil {
 					return 0, listErr
 				}
-				wantAddrs = podIPSet(livePods.Items)
+				wantAddrs = podIPSetForService(createdService, livePods.Items)
 				return len(wantAddrs), nil
 			}, 3*time.Minute, 5*time.Second).Should(Equal(targetPods),
 				"scale step %d: expected %d live pod IPs to compare against", stepIdx+1, targetPods)
@@ -433,7 +430,7 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 // matching selector. Specs assert against this set rather than a count: on a scale-down the two are
 // different claims, and only the set can detect that a surviving pod's IP was drained while a
 // deleted pod's IP was left registered.
-func livePodIPs(cs clientset.Interface, namespace string, selector map[string]string) (map[string]struct{}, error) {
+func livePodIPs(cs clientset.Interface, namespace string, selector map[string]string, service *v1.Service) (map[string]struct{}, error) {
 	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: labels.SelectorFromSet(selector).String(),
 	})
@@ -449,5 +446,5 @@ func livePodIPs(cs clientset.Interface, namespace string, selector map[string]st
 			readyPods = append(readyPods, pods.Items[i])
 		}
 	}
-	return podIPSet(readyPods), nil
+	return podIPSetForService(service, readyPods), nil
 }

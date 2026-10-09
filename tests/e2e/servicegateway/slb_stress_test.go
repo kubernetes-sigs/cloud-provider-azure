@@ -326,7 +326,7 @@ var _ = Describe("Container Load Balancer Stress Tests", Label(slbTestLabel), fu
 			// satisfied even if the pods were never registered, so the deregistration path
 			// would not be exercised at all.
 			Eventually(func() error {
-				return egressRegisteredErr(egressName, podsPerCycle)
+				return egressRegisteredPodCountErr(cs, ns.Name, egressName, podsPerCycle)
 			}, waitTime, 10*time.Second).Should(Succeed(),
 				"NAT Gateway for '%s' should exist with all %d pods registered", egressName, podsPerCycle)
 

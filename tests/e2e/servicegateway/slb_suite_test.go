@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/exec"
 	"sort"
@@ -60,11 +61,21 @@ var (
 
 // AzurePublicIP represents a Public IP resource in Azure
 type AzurePublicIP struct {
-	Name      string            `json:"name"`
-	IPAddress string            `json:"ipAddress"`
-	Tags      map[string]string `json:"tags"`
-	ID        string            `json:"id"`
-	Location  string            `json:"location"`
+	Name        string            `json:"name"`
+	IPAddress   string            `json:"ipAddress"`
+	Tags        map[string]string `json:"tags"`
+	ID          string            `json:"id"`
+	Location    string            `json:"location"`
+	DNSSettings *struct {
+		DomainNameLabel string `json:"domainNameLabel"`
+	} `json:"dnsSettings"`
+	IPConfiguration *struct {
+		ID string `json:"id"`
+	} `json:"ipConfiguration"`
+	IPTags []struct {
+		IPTagType string `json:"ipTagType"`
+		Tag       string `json:"tag"`
+	} `json:"ipTags"`
 }
 
 // AzureLoadBalancer represents a Load Balancer resource in Azure
@@ -445,6 +456,22 @@ func azurePublicIPAbsentErr(serviceUID string) error {
 	return azurePublicIPNamedAbsentErr(fmt.Sprintf("%s-pip", serviceUID))
 }
 
+// getAzurePublicIP reads the exactly-named Public IP from Azure.
+func getAzurePublicIP(publicIPName string) (*AzurePublicIP, error) {
+	output, err := runAz("network", "public-ip", "show",
+		"--resource-group", resourceGroupName,
+		"--name", publicIPName,
+		"--output", "json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query Azure for Public IP %s: %w", publicIPName, err)
+	}
+	var publicIP AzurePublicIP
+	if err := json.Unmarshal(output, &publicIP); err != nil {
+		return nil, fmt.Errorf("failed to parse Public IP %s: %w", publicIPName, err)
+	}
+	return &publicIP, nil
+}
+
 // azurePublicIPNamedAbsentErr returns nil once the exactly-named Public IP is gone from Azure.
 func azurePublicIPNamedAbsentErr(publicIPName string) error {
 	pipOutput, err := runAz("network", "public-ip", "list",
@@ -530,6 +557,73 @@ func azureEgressResourcesAbsentErr(egressName string) error {
 	// the same create and removed by the same delete, so a teardown that misses it leaks a second
 	// billable address per egress identity.
 	return azurePublicIPNamedAbsentErr(fmt.Sprintf("%s-pip-v6", egressName))
+}
+
+// publicIPID returns the ID of a Public IP in the cluster resource group.
+func publicIPID(name string) string {
+	return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", subscriptionID, resourceGroupName, name)
+}
+
+// createUserPublicIP creates a static IPv4 Public IP outside the controller, as a user would, waits for
+// its address and deletes it after the spec.
+func createUserPublicIP(name, sku string) (id, address string) {
+	return createUserPublicIPOfVersion(name, sku, "IPv4")
+}
+
+// createUserPublicIPOfVersion is createUserPublicIP for a Public IP of the given version (IPv4 or IPv6).
+func createUserPublicIPOfVersion(name, sku, version string) (id, address string) {
+	location, err := runAz("group", "show", "--name", resourceGroupName, "--query", "location", "--output", "tsv")
+	Expect(err).NotTo(HaveOccurred())
+	id = publicIPID(name)
+	url := "https://management.azure.com" + id + "?api-version=2025-05-01"
+	body := fmt.Sprintf(`{"location":%q,"sku":{"name":%q},"properties":{"publicIPAllocationMethod":"Static","publicIPAddressVersion":%q}}`,
+		strings.TrimSpace(string(location)), sku, version)
+	_, err = runAz("rest", "--method", "put", "--url", url, "--body", body)
+	Expect(err).NotTo(HaveOccurred())
+	DeferCleanup(func() {
+		Eventually(func() error {
+			_, err := runAz("rest", "--method", "delete", "--url", url)
+			return err
+		}, 5*time.Minute, 15*time.Second).Should(Succeed(), "the test Public IP %s must be deleted", name)
+	})
+	Eventually(func() error {
+		pip, err := getAzurePublicIP(name)
+		if err != nil {
+			return err
+		}
+		if pip.IPAddress == "" {
+			return fmt.Errorf("public IP %s has no address yet", name)
+		}
+		address = pip.IPAddress
+		return nil
+	}, 3*time.Minute, 10*time.Second).Should(Succeed())
+	return id, address
+}
+
+// serviceUsesPublicIPErr reports whether the Service's load balancer frontend uses the Public IP and the
+// Service is registered with the Service Gateway.
+func serviceUsesPublicIPErr(serviceUID, publicIPID string) error {
+	output, err := runAz("network", "lb", "show", "--resource-group", resourceGroupName, "--name", serviceUID, "--output", "json")
+	if err != nil {
+		return fmt.Errorf("failed to query Azure for Load Balancer: %w", err)
+	}
+	var lb AzureLoadBalancer
+	if err := json.Unmarshal(output, &lb); err != nil {
+		return fmt.Errorf("failed to parse Load Balancer JSON: %w", err)
+	}
+	if len(lb.FrontendIPConfigurations) == 0 || !strings.EqualFold(lb.FrontendIPConfigurations[0].PublicIPAddress.ID, publicIPID) {
+		return fmt.Errorf("load balancer %s frontends %+v, want Public IP %s", serviceUID, lb.FrontendIPConfigurations, publicIPID)
+	}
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("failed to query Service Gateway services: %w", err)
+	}
+	for _, sgSvc := range sgResponse.Value {
+		if sgSvc.Name == serviceUID {
+			return nil
+		}
+	}
+	return fmt.Errorf("service %s not found in Service Gateway", serviceUID)
 }
 
 // verifyAzureResources verifies Public IP, Load Balancer, and Service Gateway for a given service
@@ -712,21 +806,56 @@ func registeredAddressesMatchErr(serviceID string, want map[string]struct{}) err
 	return nil
 }
 
-// podIPSet collects every IP of the given pods, which is the address set they should register.
 // podIPSet collects the pod IPs of the given pods, skipping any pod that is already terminating.
 // A pod keeps its IP in a List response until it is fully gone, so counting it after a scale-down
 // yields one address more than the workload actually has and makes an exact-set comparison against
 // the Service Gateway fail against a set the data path has correctly stopped using.
 func podIPSet(pods []v1.Pod) map[string]struct{} {
+	return podIPSetForFamilies(pods, nil)
+}
+
+func podIPSetForService(service *v1.Service, pods []v1.Pod) map[string]struct{} {
+	var families []v1.IPFamily
+	if service != nil {
+		families = service.Spec.IPFamilies
+		if families == nil {
+			families = []v1.IPFamily{}
+		}
+	}
+	return podIPSetForFamilies(pods, families)
+}
+
+func podIPSetForFamilies(pods []v1.Pod, families []v1.IPFamily) map[string]struct{} {
+	wanted := map[v1.IPFamily]bool{}
+	for _, family := range families {
+		wanted[family] = true
+	}
+	if families != nil && len(wanted) == 0 {
+		wanted[v1.IPv4Protocol] = true
+	}
 	set := make(map[string]struct{})
 	for i := range pods {
 		if pods[i].DeletionTimestamp != nil {
 			continue
 		}
 		for _, ip := range pods[i].Status.PodIPs {
-			if ip.IP != "" {
-				set[ip.IP] = struct{}{}
+			if ip.IP == "" {
+				continue
 			}
+			if len(wanted) > 0 {
+				addr, err := netip.ParseAddr(ip.IP)
+				if err != nil {
+					continue
+				}
+				family := v1.IPv4Protocol
+				if addr.Unmap().Is6() {
+					family = v1.IPv6Protocol
+				}
+				if !wanted[family] {
+					continue
+				}
+			}
+			set[ip.IP] = struct{}{}
 		}
 	}
 	return set
@@ -804,9 +933,9 @@ func serviceDeletedErr(serviceUID string) error {
 }
 
 // egressRegisteredErr returns nil once the named egress (outbound) service exists in
-// the Service Gateway with a NAT Gateway and, when wantPods >= 0, exactly wantPods pod
-// IPs registered for it. Pass a negative wantPods to skip the pod-count assertion.
-func egressRegisteredErr(egressName string, wantPods int) error {
+// the Service Gateway with a NAT Gateway and, when wantAddresses >= 0, exactly that
+// many pod IP addresses registered for it. Pass a negative value to skip the count assertion.
+func egressRegisteredErr(egressName string, wantAddresses int) error {
 	sgResponse, err := queryServiceGatewayServices()
 	if err != nil {
 		return fmt.Errorf("query Service Gateway services: %w", err)
@@ -824,15 +953,15 @@ func egressRegisteredErr(egressName string, wantPods int) error {
 	if !found {
 		return fmt.Errorf("egress %s not registered in Service Gateway yet", egressName)
 	}
-	if wantPods < 0 {
+	if wantAddresses < 0 {
 		return nil
 	}
 	got, err := countRegisteredEndpoints(egressName)
 	if err != nil {
 		return err
 	}
-	if got != wantPods {
-		return fmt.Errorf("egress %s has %d registered pod(s), want %d", egressName, got, wantPods)
+	if got != wantAddresses {
+		return fmt.Errorf("egress %s has %d registered pod IP(s), want %d", egressName, got, wantAddresses)
 	}
 	return nil
 }
@@ -856,12 +985,12 @@ func eventuallyServiceDeleted(serviceUID string, timeout time.Duration) {
 }
 
 // eventuallyEgressRegistered polls until the egress service is reconciled with its NAT
-// Gateway and registered pods. Pass a negative wantPods to skip the count check.
-func eventuallyEgressRegistered(egressName string, wantPods int, timeout time.Duration) {
+// Gateway and registered pod IP addresses. Pass a negative wantAddresses to skip the count check.
+func eventuallyEgressRegistered(egressName string, wantAddresses int, timeout time.Duration) {
 	Eventually(func() error {
-		return egressRegisteredErr(egressName, wantPods)
+		return egressRegisteredErr(egressName, wantAddresses)
 	}, timeout, defaultPollInterval).Should(Succeed(),
-		"egress %s should be registered with %d pod(s) in the Service Gateway", egressName, wantPods)
+		"egress %s should be registered with %d pod IP(s) in the Service Gateway", egressName, wantAddresses)
 }
 
 // eventuallyAzureCleanup polls until the Service Gateway and its address locations are
@@ -882,11 +1011,12 @@ func eventuallyAzureCleanup(timeout time.Duration) {
 
 // egressIPv6PublicIPsCleanedUpErr returns nil once no IPv6 egress Public IP remains in Azure.
 //
-// The "-pip-v6" suffix is created only by this controller, for a dual-stack egress NAT Gateway, so
-// any survivor is a leak. This is a global check like serviceGatewayCleanupErr: the other cleanup
-// assertions only read the ServiceGateway registration, which says nothing about ARM, so without
-// this a CCM that deregisters an egress identity but never deletes its IPv6 address passes every
-// egress spec while leaking a billable Public IP per identity.
+// Apart from the RP-owned default outbound address, the "-pip-v6" suffix is created only by this
+// controller, for a dual-stack egress NAT Gateway, so any survivor is a leak. This is a global
+// check like serviceGatewayCleanupErr: the other cleanup assertions only read the ServiceGateway
+// registration, which says nothing about ARM, so without this a CCM that deregisters an egress
+// identity but never deletes its IPv6 address passes every egress spec while leaking a billable
+// Public IP per identity.
 func egressIPv6PublicIPsCleanedUpErr() error {
 	pipOutput, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
@@ -901,7 +1031,7 @@ func egressIPv6PublicIPsCleanedUpErr() error {
 	}
 	leaked := []string{}
 	for i := range publicIPs {
-		if strings.HasSuffix(publicIPs[i].Name, "-pip-v6") {
+		if strings.HasSuffix(publicIPs[i].Name, "-pip-v6") && !strings.EqualFold(publicIPs[i].Name, "default-natgw-pip-v6") {
 			leaked = append(leaked, publicIPs[i].Name)
 		}
 	}

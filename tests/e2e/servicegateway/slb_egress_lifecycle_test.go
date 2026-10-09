@@ -115,7 +115,7 @@ var _ = Describe("SLB - Egress Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for the NAT gateway to be provisioned and pods registered")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressRegisteredPodCount(cs, ns.Name, egressName, numPods, waitTime)
 
 		By("Deleting all egress pods")
 		Expect(cs.CoreV1().Pods(ns.Name).DeleteCollection(context.TODO(), metav1.DeleteOptions{},
@@ -163,7 +163,7 @@ var _ = Describe("SLB - Egress Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Verifying the NAT gateway is rebuilt and pods re-registered")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressRegisteredPodCount(cs, ns.Name, egressName, numPods, waitTime)
 
 		utils.Logf("\n✓ Egress NAT gateway drained to zero and rebuilt")
 	})

@@ -208,7 +208,7 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 				// service's pods being registered under another service's name - a plausible
 				// outcome of a race in concurrent reconciliation, and one that leaves every count
 				// correct while routing traffic to the wrong workload.
-				want, err := livePodIPsForSelector(cs, ns.Name, service.Spec.Selector)
+				want, err := livePodIPsForSelector(cs, ns.Name, service)
 				if err != nil {
 					return err
 				}
@@ -422,9 +422,9 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 // livePodIPsForSelector returns the address set the pods matching a Service's own selector should
 // have registered. Deriving the selector from the Service avoids relying on creation order, which
 // is not preserved when results are collected from a channel.
-func livePodIPsForSelector(cs clientset.Interface, namespace string, selector map[string]string) (map[string]struct{}, error) {
+func livePodIPsForSelector(cs clientset.Interface, namespace string, service *v1.Service) (map[string]struct{}, error) {
 	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(selector).String(),
+		LabelSelector: labels.SelectorFromSet(service.Spec.Selector).String(),
 	})
 	if err != nil {
 		return nil, err
@@ -438,5 +438,5 @@ func livePodIPsForSelector(cs clientset.Interface, namespace string, selector ma
 			readyPods = append(readyPods, pods.Items[i])
 		}
 	}
-	return podIPSet(readyPods), nil
+	return podIPSetForService(service, readyPods), nil
 }

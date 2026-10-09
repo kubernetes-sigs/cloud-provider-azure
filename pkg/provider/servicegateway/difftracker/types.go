@@ -18,11 +18,14 @@ package difftracker
 
 import (
 	"errors"
+	"maps"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -107,9 +110,8 @@ type InboundConfig struct {
 	IdleTimeoutMinutes *int32             // nullable
 	SessionPersistence *string            // nullable
 	HealthProbe        *HealthProbeConfig // nullable
-	// IPFamilies mirrors Service.Spec.IPFamilies ("IPv4"/"IPv6"). A single entry selects the
-	// Public IP version; more than one (dual-stack) is unsupported for PodIP backend pools and
-	// is rejected as a terminal error in buildInboundServiceResources.
+	// IPFamilies holds the IP family ("IPv4"/"IPv6") of the unit, which selects the Public IP version.
+	// A dual-stack Service has one unit, and so one config, per family.
 	IPFamilies []string
 	// InvalidIdleTimeout holds the raw idle-timeout annotation value when it could not be parsed
 	// or fell outside the supported range. Recorded rather than dropped so ValidateInboundConfig
@@ -119,6 +121,24 @@ type InboundConfig struct {
 	// cannot be resolved to a PodIP backend port here, so their presence is rejected as a
 	// terminal error in buildInboundServiceResources rather than silently mis-routing traffic.
 	NamedTargetPorts []string
+	// ServiceName ("namespace/name") and ClusterName fill the Public IP ownership tags.
+	ServiceName string
+	ClusterName string
+	// PIPTags are the azure-pip-tags annotation tags, without the reserved ownership keys.
+	PIPTags map[string]string
+	// IPTags are the azure-pip-ip-tags annotation tags; nil when none are set.
+	IPTags map[string]string
+	// DNSLabel is the azure-dns-label-name annotation; nil when absent, "" removes the label.
+	DNSLabel *string
+	// PIPPrefixID is the Public IP prefix the Public IP is allocated from.
+	PIPPrefixID string
+	// PIPName is the azure-pip-name annotation: the Public IP to use, created with that name if missing.
+	PIPName string
+	// LoadBalancerIP is the address of an existing Public IP to use, from the azure-load-balancer-ipv4/ipv6
+	// annotation or spec.loadBalancerIP.
+	LoadBalancerIP string
+	// PIPResourceGroup is where PIPName or LoadBalancerIP is looked up; empty means the cluster resource group.
+	PIPResourceGroup string
 }
 
 // OutboundConfig contains NAT Gateway configuration for outbound services
@@ -133,7 +153,7 @@ type OutboundConfig struct {
 	IPFamilies []string
 }
 
-// Equals returns true if two InboundConfigs describe the same desired LB shape.
+// Equals returns true if two InboundConfigs describe the same desired LB shape and Public IP settings.
 // Used by UpdateService to short-circuit no-op reconciles.
 // Comparison is order-sensitive for FrontendPorts/BackendPorts because the
 // position of a port determines its pairing with a backend port in
@@ -169,7 +189,15 @@ func (c *InboundConfig) Equals(other *InboundConfig) bool {
 	if !stringSlicesEqual(c.NamedTargetPorts, other.NamedTargetPorts) {
 		return false
 	}
-	return true
+	if c.ServiceName != other.ServiceName || c.ClusterName != other.ClusterName {
+		return false
+	}
+	if !maps.Equal(c.PIPTags, other.PIPTags) || (c.IPTags == nil) != (other.IPTags == nil) || !maps.Equal(c.IPTags, other.IPTags) {
+		return false
+	}
+	return strPtrEqual(c.DNSLabel, other.DNSLabel) && strings.EqualFold(c.PIPPrefixID, other.PIPPrefixID) &&
+		strings.EqualFold(c.PIPName, other.PIPName) && c.LoadBalancerIP == other.LoadBalancerIP &&
+		strings.EqualFold(c.PIPResourceGroup, other.PIPResourceGroup)
 }
 
 func stringSlicesEqual(a, b []string) bool {
@@ -354,6 +382,11 @@ type ServiceOperationState struct {
 	// (a) populate LastAppliedConfig on success and (b) detect whether a newer
 	// Config arrived during the in-flight operation so we can reschedule.
 	InFlightConfig *ServiceConfig
+	// AttemptedCreateConfig is the most recent create snapshot dispatched for a
+	// service that has not yet been successfully applied. It survives failed create
+	// attempts so a primary-family flip can delete any old-family resources the
+	// failed attempt may have partially created.
+	AttemptedCreateConfig *ServiceConfig
 	// LastAppliedConfig is the configuration last successfully applied to Azure.
 	// Used by UpdateService to short-circuit no-op updates.
 	LastAppliedConfig *ServiceConfig
@@ -400,6 +433,9 @@ type ServiceOperationState struct {
 	// RecreateAfterDeletion is set when an UpdateService re-create arrives while the
 	// service is being deleted; the deletion-success path replays it as a fresh create.
 	RecreateAfterDeletion bool
+	// FinalizerKeptForRecreate is set when the delete worker skipped Service finalizer removal
+	// because RecreateAfterDeletion was true when the worker reached finalization.
+	FinalizerKeptForRecreate bool
 }
 
 // PendingEndpointUpdate represents endpoints waiting for their service to be created
@@ -419,6 +455,9 @@ type PendingServiceDeletion struct {
 // DiffTracker is the main struct that contains the state of the K8s and NRP services
 type DiffTracker struct {
 	mu sync.Mutex // Protects concurrent access to DiffTracker
+	// statusMu serializes Service status writes: the units of a dual-stack Service write the same
+	// ingress list, and a write must build on the other unit's.
+	statusMu sync.Mutex
 
 	K8sResources K8sState
 	NRPResources NRPState
@@ -447,6 +486,8 @@ type DiffTracker struct {
 
 	// eventRecorder emits Service Gateway pod events; set post-init before the egress informer starts.
 	eventRecorder record.EventRecorder
+	// clusterName is the cluster name the cloud-provider passes to EnsureLoadBalancer.
+	clusterName string
 	// endpointSlicesCache is owned by difftracker and stores snapshots from forwarded informer
 	// events. It is replayed when a service is registered and by ReconcileNodeIPChange.
 	endpointSlicesCache sync.Map
@@ -457,6 +498,12 @@ type DiffTracker struct {
 	pendingPods             map[string][]PendingPodUpdate
 	pendingServiceDeletions map[string]*PendingServiceDeletion
 	pendingPodDeletions     map[string]*PendingPodDeletion // key = "namespace/name"
+	// inboundFamilies holds the IP families, primary first, of each admitted inbound Service, keyed by
+	// Service UID. Endpoint addresses go to the unit of their family; other families are dropped.
+	inboundFamilies map[string][]v1.IPFamily
+	// provisionedFamilies holds, for units provisioned before the controller started, the IP family of their
+	// own Public IP, until the unit is next applied.
+	provisionedFamilies map[string]string
 
 	// recoveredServiceFinalizers holds the UIDs of Services whose stuck finalizer startup left to
 	// the diff. An entry is cleared when that finalizer is actually removed, which is what closes

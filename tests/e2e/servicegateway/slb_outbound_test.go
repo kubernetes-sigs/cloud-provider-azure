@@ -118,12 +118,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure to provision NAT Gateway and PIP")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != numPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", numPods, len(want))
+			if gotPods != numPods {
+				return fmt.Errorf("expected %d live egress pod(s), got %d", numPods, gotPods)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -212,7 +212,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("Registered %d pod IPs for egress gateway '%s'", registeredPods, egressName)
-		Expect(registeredPods).To(Equal(numPods), fmt.Sprintf("Expected %d pod IPs, got %d", numPods, registeredPods))
+		wantIPs, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(registeredPods).To(Equal(len(wantIPs)), fmt.Sprintf("Expected %d pod IPs, got %d", len(wantIPs), registeredPods))
 
 		utils.Logf("\n✓ Outbound NAT Gateway test passed: %d pods", numPods)
 	})
@@ -263,12 +265,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		By("Waiting for Azure to provision all NAT Gateways")
 		Eventually(func() error {
 			for _, egressName := range egressGateways {
-				want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+				want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 				if err != nil {
 					return err
 				}
-				if len(want) != podsPerGateway {
-					return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, podsPerGateway, len(want))
+				if gotPods != podsPerGateway {
+					return fmt.Errorf("egress %s: expected %d live pod(s), got %d", egressName, podsPerGateway, gotPods)
 				}
 				if err := egressRegisteredMatchErr(egressName, want); err != nil {
 					return err
@@ -316,8 +318,10 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		for _, gateway := range egressGateways {
 			count := gatewayPodCounts[gateway]
+			want, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, gateway)
+			Expect(err).NotTo(HaveOccurred())
 			utils.Logf("Egress gateway '%s': %d pod IPs registered", gateway, count)
-			Expect(count).To(Equal(podsPerGateway), fmt.Sprintf("Gateway '%s' should have %d pods, got %d", gateway, podsPerGateway, count))
+			Expect(count).To(Equal(len(want)), fmt.Sprintf("Gateway '%s' should have %d pod IPs, got %d", gateway, len(want), count))
 		}
 
 		utils.Logf("\n✓ Multiple egress gateways test passed: %d gateways, %d total pods", len(egressGateways), totalPods)
@@ -364,12 +368,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for NAT Gateway provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != initialPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", initialPods, len(want))
+			if gotPods != initialPods {
+				return fmt.Errorf("expected %d live egress pod(s), got %d", initialPods, gotPods)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -391,7 +395,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("Initial state: %d pod IPs registered", initialRegistered)
-		Expect(initialRegistered).To(Equal(initialPods))
+		wantInitial, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(initialRegistered).To(Equal(len(wantInitial)))
 
 		By(fmt.Sprintf("Scaling up: creating %d additional pods", finalPods-initialPods))
 
@@ -425,12 +431,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Address Locations update")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != finalPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", finalPods, len(want))
+			if gotPods != finalPods {
+				return fmt.Errorf("expected %d live egress pod(s), got %d", finalPods, gotPods)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -452,7 +458,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("After scaling: %d pod IPs registered", finalRegistered)
-		Expect(finalRegistered).To(Equal(finalPods), fmt.Sprintf("Expected %d pod IPs, got %d", finalPods, finalRegistered))
+		wantFinal, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(finalRegistered).To(Equal(len(wantFinal)), fmt.Sprintf("Expected %d pod IPs, got %d", len(wantFinal), finalRegistered))
 
 		utils.Logf("\n✓ Egress scaling test passed: %d → %d pods", initialPods, finalPods)
 	})
@@ -498,12 +506,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for NAT Gateway provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != initialPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", initialPods, len(want))
+			if gotPods != initialPods {
+				return fmt.Errorf("expected %d live egress pod(s), got %d", initialPods, gotPods)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -525,7 +533,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("Initial state: %d pod IPs registered", initialRegistered)
-		Expect(initialRegistered).To(Equal(initialPods))
+		wantInitial, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(initialRegistered).To(Equal(len(wantInitial)))
 
 		By(fmt.Sprintf("Deleting %d pods (keeping %d)", initialPods-remainPods, remainPods))
 
@@ -543,12 +553,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		// draining the survivors and leaving the deleted pods registered yields the same number
 		// while blackholing every live pod's egress traffic.
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != remainPods {
-				return fmt.Errorf("expected %d surviving egress pod IPs, got %d", remainPods, len(want))
+			if gotPods != remainPods {
+				return fmt.Errorf("expected %d surviving egress pod(s), got %d", remainPods, gotPods)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -570,7 +580,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("After deletion: %d pod IPs registered", finalRegistered)
-		Expect(finalRegistered).To(Equal(remainPods), fmt.Sprintf("Expected %d pod IPs after cleanup, got %d", remainPods, finalRegistered))
+		wantRemaining, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(finalRegistered).To(Equal(len(wantRemaining)), fmt.Sprintf("Expected %d pod IPs after cleanup, got %d", len(wantRemaining), finalRegistered))
 
 		utils.Logf("\n✓ Egress deletion test passed: %d → %d pods", initialPods, remainPods)
 	})
@@ -668,12 +680,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != egressPods {
-				return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, egressPods, len(want))
+			if gotPods != egressPods {
+				return fmt.Errorf("egress %s: expected %d live pod(s), got %d", egressName, egressPods, gotPods)
 			}
 			if err := egressRegisteredMatchErr(egressName, want); err != nil {
 				return err
@@ -729,7 +741,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		utils.Logf("Egress pods: %d registered", egressCount)
 		utils.Logf("Inbound pods: %d registered", inboundCount)
 
-		Expect(egressCount).To(Equal(egressPods), fmt.Sprintf("Expected %d egress pods, got %d", egressPods, egressCount))
+		wantEgress, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(egressCount).To(Equal(len(wantEgress)), fmt.Sprintf("Expected %d egress pod IPs, got %d", len(wantEgress), egressCount))
 		Expect(inboundCount).To(Equal(inboundPods), fmt.Sprintf("Expected %d inbound pods, got %d", inboundPods, inboundCount))
 
 		utils.Logf("\n✓ Mixed inbound+outbound test passed: %d egress + %d inbound = %d total pods", egressPods, inboundPods, egressPods+inboundPods)
@@ -809,12 +823,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != dualPods {
-				return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, dualPods, len(want))
+			if gotPods != dualPods {
+				return fmt.Errorf("egress %s: expected %d live pod(s), got %d", egressName, dualPods, gotPods)
 			}
 			if err := egressRegisteredMatchErr(egressName, want); err != nil {
 				return err
@@ -874,13 +888,20 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		// Counting registrations cannot distinguish a correct registration from a stale or foreign
 		// address: two wrong pod IPs satisfy a count of two just as well as the two right ones.
 		// The dual-traffic pods carry both labels, so the same live IP set must appear under the
-		// inbound service and the egress gateway.
-		wantIPs, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+		// egress gateway; the inbound Service registers only the Service's own IP family.
+		wantIPs, gotPods, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(wantIPs).To(HaveLen(dualPods), "expected %d live dual-traffic pod IPs", dualPods)
+		Expect(gotPods).To(Equal(dualPods), "expected %d live dual-traffic pods", dualPods)
+		liveDualPods, err := livePodsWithLabel(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		wantInboundIPs := podIPSetForService(createdService, liveDualPods)
 		wantList := make([]string, 0, len(wantIPs))
 		for ip := range wantIPs {
 			wantList = append(wantList, ip)
+		}
+		wantInboundList := make([]string, 0, len(wantInboundIPs))
+		for ip := range wantInboundIPs {
+			wantInboundList = append(wantInboundList, ip)
 		}
 		egressList := make([]string, 0, len(egressPodIPs))
 		for ip := range egressPodIPs {
@@ -892,8 +913,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 		Expect(egressList).To(ConsistOf(wantList),
 			"the outbound service must register exactly the live dual-traffic pod IPs")
-		Expect(inboundList).To(ConsistOf(wantList),
-			"the inbound service must register exactly the live dual-traffic pod IPs")
+		Expect(inboundList).To(ConsistOf(wantInboundList),
+			"the inbound service must register exactly the live dual-traffic pod IPs of its family")
 
 		By("Verifying the SAME pod IPs are in both services")
 		dualRegisteredCount := 0
@@ -904,7 +925,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			}
 		}
 
-		Expect(dualRegisteredCount).To(Equal(dualPods), fmt.Sprintf("Expected %d pods in both services, got %d", dualPods, dualRegisteredCount))
+		Expect(dualRegisteredCount).To(Equal(len(wantInboundIPs)), fmt.Sprintf("Expected %d pod IPs in both services, got %d", len(wantInboundIPs), dualRegisteredCount))
 
 		By("Deleting half of the dual-traffic pods")
 		podsToDelete := dualPods / 2
@@ -948,14 +969,23 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 				}
 			}
 
-			if remainingEgress != expectedRemaining {
-				return fmt.Errorf("got %d pods in outbound after deletion, want %d", remainingEgress, expectedRemaining)
+			livePods, err := livePodsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
 			}
-			if remainingInbound != expectedRemaining {
-				return fmt.Errorf("got %d pods in inbound after deletion, want %d", remainingInbound, expectedRemaining)
+			if len(livePods) != expectedRemaining {
+				return fmt.Errorf("got %d live dual-traffic pod(s), want %d", len(livePods), expectedRemaining)
 			}
-			if remainingDual != expectedRemaining {
-				return fmt.Errorf("got %d pods in both services after deletion, want %d", remainingDual, expectedRemaining)
+			wantEgress := podIPSet(livePods)
+			wantInbound := podIPSetForService(createdService, livePods)
+			if remainingEgress != len(wantEgress) {
+				return fmt.Errorf("got %d pod IPs in outbound after deletion, want %d", remainingEgress, len(wantEgress))
+			}
+			if remainingInbound != len(wantInbound) {
+				return fmt.Errorf("got %d pod IPs in inbound after deletion, want %d", remainingInbound, len(wantInbound))
+			}
+			if remainingDual != len(wantInbound) {
+				return fmt.Errorf("got %d pod IPs in both services after deletion, want %d", remainingDual, len(wantInbound))
 			}
 			return nil
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -994,9 +1024,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		utils.Logf("After deletion: %d pods in outbound, %d pods in inbound, %d in both", remainingEgress, remainingInbound, remainingDual)
 
-		Expect(remainingEgress).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in outbound after deletion, got %d", expectedRemaining, remainingEgress))
-		Expect(remainingInbound).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in inbound after deletion, got %d", expectedRemaining, remainingInbound))
-		Expect(remainingDual).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in both services after deletion, got %d", expectedRemaining, remainingDual))
+		liveRemaining, err := livePodsWithLabel(cs, ns.Name, egressLabel, egressName)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(liveRemaining).To(HaveLen(expectedRemaining))
+		wantRemainingEgress := podIPSet(liveRemaining)
+		wantRemainingInbound := podIPSetForService(createdService, liveRemaining)
+		Expect(remainingEgress).To(Equal(len(wantRemainingEgress)), fmt.Sprintf("Expected %d pod IPs in outbound after deletion, got %d", len(wantRemainingEgress), remainingEgress))
+		Expect(remainingInbound).To(Equal(len(wantRemainingInbound)), fmt.Sprintf("Expected %d pod IPs in inbound after deletion, got %d", len(wantRemainingInbound), remainingInbound))
+		Expect(remainingDual).To(Equal(len(wantRemainingInbound)), fmt.Sprintf("Expected %d pod IPs in both services after deletion, got %d", len(wantRemainingInbound), remainingDual))
 
 		utils.Logf("\n✓ Dual inbound+outbound pod test passed: %d pods with both LB and NAT Gateway", dualPods)
 	})
@@ -1006,6 +1041,19 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 // registered. Egress specs compare against this set rather than a count: after a partial deletion
 // only the set can distinguish the surviving pods from the deleted ones.
 func livePodIPsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue string) (map[string]struct{}, error) {
+	ips, _, err := livePodIPsWithLabelAndCount(cs, namespace, labelKey, labelValue)
+	return ips, err
+}
+
+func livePodIPsWithLabelAndCount(cs clientset.Interface, namespace, labelKey, labelValue string) (map[string]struct{}, int, error) {
+	ready, err := livePodsWithLabel(cs, namespace, labelKey, labelValue)
+	if err != nil {
+		return nil, 0, err
+	}
+	return podIPSet(ready), len(ready), nil
+}
+
+func livePodsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue string) ([]v1.Pod, error) {
 	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{labelKey: labelValue}).String(),
 	})
@@ -1018,5 +1066,23 @@ func livePodIPsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue
 			ready = append(ready, pods.Items[i])
 		}
 	}
-	return podIPSet(ready), nil
+	return ready, nil
+}
+
+func egressRegisteredPodCountErr(cs clientset.Interface, namespace, egressName string, wantPods int) error {
+	want, gotPods, err := livePodIPsWithLabelAndCount(cs, namespace, egressLabel, egressName)
+	if err != nil {
+		return err
+	}
+	if gotPods != wantPods {
+		return fmt.Errorf("egress %s has %d live pod(s), want %d", egressName, gotPods, wantPods)
+	}
+	return egressRegisteredMatchErr(egressName, want)
+}
+
+func eventuallyEgressRegisteredPodCount(cs clientset.Interface, namespace, egressName string, wantPods int, timeout time.Duration) {
+	Eventually(func() error {
+		return egressRegisteredPodCountErr(cs, namespace, egressName, wantPods)
+	}, timeout, defaultPollInterval).Should(Succeed(),
+		"egress %s should be registered with %d live pod(s) in the Service Gateway", egressName, wantPods)
 }

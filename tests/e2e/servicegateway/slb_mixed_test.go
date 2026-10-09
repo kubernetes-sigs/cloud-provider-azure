@@ -546,6 +546,10 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 // compare against this set rather than a per-service count, which cannot detect one service's pods
 // being registered under another service's name.
 func livePodIPsFor(cs clientset.Interface, namespace, serviceName string) (map[string]struct{}, error) {
+	service, err := cs.CoreV1().Services(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
 	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{"app": serviceName}).String(),
 	})
@@ -561,5 +565,5 @@ func livePodIPsFor(cs clientset.Interface, namespace, serviceName string) (map[s
 			readyPods = append(readyPods, pods.Items[i])
 		}
 	}
-	return podIPSet(readyPods), nil
+	return podIPSetForService(service, readyPods), nil
 }

@@ -383,10 +383,8 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 				if !strings.Contains(pod.Name, "-healthy-") {
 					continue
 				}
-				for _, ip := range pod.Status.PodIPs {
-					if ip.IP != "" {
-						want[ip.IP] = struct{}{}
-					}
+				for ip := range podIPSetForService(createdService, []v1.Pod{*pod}) {
+					want[ip] = struct{}{}
 				}
 			}
 			if len(want) != totalPods-crashPods {
@@ -521,7 +519,7 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		wantAddrs := podIPSet(v2Pods.Items)
+		wantAddrs := podIPSetForService(createdService, v2Pods.Items)
 		Expect(wantAddrs).NotTo(BeEmpty(), "the v2 pods must have IPs to compare against")
 
 		Eventually(func() error {
@@ -530,7 +528,7 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 			"the Service Gateway must register exactly the v2 pod IPs and drop every v1 pod IP")
 
 		utils.Logf("After selector update: exactly the %d v2 pod IPs are registered (%d v1 pods deregistered)",
-			len(wantAddrs), len(podIPSet(v1Pods.Items)))
+			len(wantAddrs), len(podIPSetForService(createdService, v1Pods.Items)))
 
 		utils.Logf("\n✓ Service selector update test passed: v1 → v2")
 	})

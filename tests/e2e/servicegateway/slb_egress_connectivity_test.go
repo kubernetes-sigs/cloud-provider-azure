@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -114,7 +115,7 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for the NAT gateway to be provisioned and pods registered")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressRegisteredPodCount(cs, ns.Name, egressName, numPods, waitTime)
 
 		By("Resolving the NAT gateway public IP(s) from Azure")
 		natGatewayID := ""
@@ -134,9 +135,9 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		utils.Logf("NAT gateway %s public IP(s): %v", natGatewayID, natGatewayPIPs)
 
 		By("Confirming all egress pod IPs are registered as Service Gateway address locations")
-		registered, err := countRegisteredEndpoints(egressName)
+		want, _, err := livePodIPsWithLabelAndCount(cs, ns.Name, egressLabel, egressName)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(registered).To(Equal(numPods),
+		Expect(registeredAddressesMatchErr(egressName, want)).To(Succeed(),
 			"all egress pod IPs should be registered for the outbound service")
 
 		// Best-effort dataplane observation only. The actual SNAT through the NAT gateway is
@@ -153,9 +154,15 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		for _, ip := range natGatewayPIPs {
 			pipSet[ip] = true
 		}
-		out, _ := utils.RunKubectl(ns.Name, "exec", "egress-snat-pod-0", "--",
-			"/bin/sh", "-c", "curl -s -m 10 ifconfig.me/ip || true")
-		observedIP := ipv4Regexp.FindString(out)
+		stdout, _, err := utils.NewKubectlCommand(ns.Name, "exec", "egress-snat-pod-0", "--",
+			"/bin/sh", "-c", "curl -s -m 10 ifconfig.me/ip || true").ExecWithFullOutput(false)
+		observedIP := ""
+		if err == nil {
+			observedIP = strings.TrimSpace(stdout)
+		}
+		if net.ParseIP(observedIP) == nil {
+			observedIP = ""
+		}
 		if observedIP == "" {
 			Skip("egress pod produced no outbound IP; this environment does not carry egress dataplane " +
 				"traffic, so SNAT through the NAT gateway cannot be asserted")
@@ -165,7 +172,7 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 				"bypassing the NAT gateway, so SNAT is not actually in effect", observedIP, natGatewayPIPs)
 		utils.Logf("  egress SNAT verified: pod egresses as NAT gateway public IP %s", observedIP)
 
-		utils.Logf("\n✓ Egress NAT gateway contract verified: NAT gateway %s with public IP(s) %v, %d egress pod IP(s) registered", natGatewayID, natGatewayPIPs, registered)
+		utils.Logf("\n✓ Egress NAT gateway contract verified: NAT gateway %s with public IP(s) %v, %d egress pod IP(s) registered", natGatewayID, natGatewayPIPs, len(want))
 	})
 
 	It("provisions a dual-stack egress pod under a NAT gateway with family-pure locations and observes SNAT per family", func() {
@@ -226,10 +233,10 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		// observable it MUST be a NAT gateway public IP, otherwise SNAT is genuinely bypassed.
 		observedAnyFamily := false
 		observe := func(family, curlArg, endpoint string, pattern *regexp.Regexp) {
-			out, _ := utils.RunKubectl(ns.Name, "exec", podName, "--",
-				"/bin/sh", "-c", fmt.Sprintf("curl -s -m 10 %s %s || true", curlArg, endpoint))
-			observed := pattern.FindString(out)
-			if observed == "" {
+			stdout, _, err := utils.NewKubectlCommand(ns.Name, "exec", podName, "--",
+				"/bin/sh", "-c", fmt.Sprintf("curl -s -m 10 %s %s || true", curlArg, endpoint)).ExecWithFullOutput(false)
+			observed := strings.TrimSpace(stdout)
+			if err != nil || pattern.FindString(observed) != observed || net.ParseIP(observed) == nil {
 				utils.Logf("  %s egress produced no observable source (this environment does not route that family's SGW egress)", family)
 				return
 			}
@@ -304,7 +311,7 @@ func getNatGatewayPublicIPs(natGatewayID string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolve public IP %s: %v, output: %s", pip.ID, err, string(ipOut))
 		}
-		if ip := ipv4Regexp.FindString(string(ipOut)); ip != "" {
+		if ip := strings.TrimSpace(string(ipOut)); net.ParseIP(ip) != nil {
 			ips = append(ips, ip)
 		}
 	}

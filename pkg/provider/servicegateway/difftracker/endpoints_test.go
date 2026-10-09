@@ -504,3 +504,36 @@ func TestSeedInboundEndpointsFromCache_DoesNotOvertakeRemoval(t *testing.T) {
 			"the replay must still seed endpoints for a newly registered service")
 	})
 }
+
+// TestSeedInboundEndpointsFromCache_DualStackUnit verifies that a unit created after its endpoints arrived is
+// seeded with the addresses of its own IP family only, from the slices of its Service.
+func TestSeedInboundEndpointsFromCache_DualStackUnit(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	dt := newTestDiffTracker()
+	setTestNodeLister(t, dt, &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+		Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+			{Type: v1.NodeInternalIP, Address: "10.0.0.4"}, {Type: v1.NodeInternalIP, Address: "fd00::4"},
+		}},
+	})
+	for _, family := range []string{"v4", "v6"} {
+		address := map[string]string{"v4": "10.1.0.11", "v6": "fd01::11"}[family]
+		dt.updateEndpointSliceCache(nil, &discovery_v1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{Name: "web-" + family, Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: "web", UID: uid}}},
+			Endpoints: []discovery_v1.Endpoint{{Addresses: []string{address}, NodeName: ptr.To("node-1")}},
+		})
+	}
+	dt.inboundFamilies = map[string][]v1.IPFamily{uid: {v1.IPv4Protocol, v1.IPv6Protocol}}
+	dt.NRPResources.LoadBalancers.Insert(uid, uid+"-v6")
+
+	dt.seedInboundEndpointsFromCache(uid + "-v6")
+
+	assert.True(t, dt.K8sResources.Nodes["fd00::4"].Pods["fd01::11"].InboundIdentities.Has(uid+"-v6"))
+	assert.NotContains(t, dt.K8sResources.Nodes, "10.0.0.4", "the IPv4 address is not seeded into the IPv6 unit")
+
+	dt.seedInboundEndpointsFromCache(uid)
+
+	assert.True(t, dt.K8sResources.Nodes["10.0.0.4"].Pods["10.1.0.11"].InboundIdentities.Has(uid))
+	assert.False(t, dt.K8sResources.Nodes["fd00::4"].Pods["fd01::11"].InboundIdentities.Has(uid))
+}

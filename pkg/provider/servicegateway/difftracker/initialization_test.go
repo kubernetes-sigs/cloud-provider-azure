@@ -359,7 +359,7 @@ func TestProcessK8sEndpoints_SkipsNotReadyEndpoints(t *testing.T) {
 	})
 	kube := fake.NewSimpleClientset(eps)
 
-	_, err := processK8sEndpoints(context.Background(), kube, &k8s, nodeNameToIPMap)
+	_, err := processK8sEndpoints(context.Background(), kube, &k8s, nodeNameToIPMap, nil)
 	assert.NoError(t, err)
 
 	assert.True(t, podIPTracked(&k8s, readyIP),
@@ -541,6 +541,38 @@ func TestRecoverStuckFinalizers_RemovesFinalizerWhenNoAzureResource(t *testing.T
 	assert.NoError(t, err)
 	assert.False(t, hasServiceGatewayFinalizer(got),
 		"finalizer with no Azure resource must be removed since there is nothing to clean up")
+}
+
+// A Service that chose a Public IP by name may have had it created without a load balancer (a crash, or a
+// failed rollback). Startup keeps its finalizer and returns it for a delete, which releases the Public IP when
+// it is ours, the same as at runtime.
+func TestRecoverStuckFinalizers_DeletesServiceThatChoseAPublicIPName(t *testing.T) {
+	delTime := metav1.Now()
+	service := func(uid, name string, annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default", UID: types.UID(uid), Annotations: annotations,
+				DeletionTimestamp: &delTime, Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		}
+	}
+	named := service("uid-named", "named", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "web-pip"})
+	plain := service("uid-plain", "plain", nil)
+	kube := fake.NewSimpleClientset(named, plain)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+
+	deletions := recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*named, *plain}},
+		nil, nil, utilsets.NewString(), utilsets.NewString(), utilsets.NewString())
+
+	assert.Equal(t, []string{"uid-named"}, deletions)
+	got, err := kube.CoreV1().Services("default").Get(context.Background(), "named", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasServiceGatewayFinalizer(got), "the delete, not startup, decides whether the named Public IP is ours")
+	got, err = kube.CoreV1().Services("default").Get(context.Background(), "plain", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasServiceGatewayFinalizer(got), "a Service without a chosen Public IP name is still released directly")
 }
 
 // TestRecoverStuckFinalizers_SeedsAllDualStackAddresses verifies that a Terminating dual-stack egress
@@ -916,7 +948,7 @@ func TestProcessK8sEndpoints_SkipsMalformedAddresses(t *testing.T) {
 	})
 	kube := fake.NewSimpleClientset(eps)
 
-	_, err := processK8sEndpoints(context.Background(), kube, &k8s, nodeNameToIPMap)
+	_, err := processK8sEndpoints(context.Background(), kube, &k8s, nodeNameToIPMap, nil)
 	assert.NoError(t, err)
 
 	assert.True(t, podIPTracked(&k8s, goodIP), "a valid endpoint address must be imported")
@@ -981,6 +1013,39 @@ func TestReconcileServices_AppliesRuntimeAdmissionOnStartup(t *testing.T) {
 		"a supported Service must still be provisioned on restart")
 }
 
+// recoveryFactory serves the load balancers and Public IPs startup recovery reads: frontends maps a Service
+// UID to the Public IP ID its load balancer uses (others have no load balancer), and addresses maps a Public
+// IP "rg/name" to its address.
+func recoveryFactory(t *testing.T, frontends, addresses map[string]string) *mock_azclient.MockClientFactory {
+	ctrl := gomock.NewController(t)
+	f := mock_azclient.NewMockClientFactory(ctrl)
+	lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+	pip := mock_publicipaddressclient.NewMockInterface(ctrl)
+	f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
+	lb.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, uid string, _ *string) (*armnetwork.LoadBalancer, error) {
+			id, ok := frontends[uid]
+			if !ok {
+				return nil, notFoundError()
+			}
+			return &armnetwork.LoadBalancer{Properties: &armnetwork.LoadBalancerPropertiesFormat{
+				FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{{Properties: &armnetwork.FrontendIPConfigurationPropertiesFormat{
+					PublicIPAddress: &armnetwork.PublicIPAddress{ID: ptr.To(id)},
+				}}},
+			}}, nil
+		}).AnyTimes()
+	pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, rg, name string, _ *string) (*armnetwork.PublicIPAddress, error) {
+			address, ok := addresses[rg+"/"+name]
+			if !ok {
+				return nil, notFoundError()
+			}
+			return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To(address)}}, nil
+		}).AnyTimes()
+	return f
+}
+
 // TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock pins that the NRP LoadBalancer set is
 // read under dt.mu.
 //
@@ -993,6 +1058,7 @@ func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.config = testConfig()
 	dt.kubeClient = fake.NewSimpleClientset()
+	dt.networkClientFactory = recoveryFactory(t, nil, nil)
 
 	serviceUIDToService := make(map[string]*v1.Service)
 	for i := 0; i < 50; i++ {
@@ -1082,11 +1148,14 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 		}
 	}
 
+	// Tagged the way the controller creates it, so only the Kubernetes check keeps it.
+	egress := detached(PublicIPName(egressUID))
+	egress.Tags = egressIdentityTags(egressUID)
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
 		detached(PublicIPName(desiredUID)),
-		detached(PublicIPName(egressUID)),
+		egress,
 		detached(PublicIPName(orphanUID)),
-	}))
+	}, nil, nil))
 
 	assert.NotContains(t, deleted, PublicIPName(desiredUID),
 		"the Public IP of a Service Kubernetes still wants must not be deleted as an orphan")
@@ -1097,12 +1166,12 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 }
 
 // TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress pins what the sweeper may and may
-// not delete. The resource group is the cluster's managed node resource group, so every "*-pip" in
-// it belongs to this controller and an unused one is a leak, whether it is named from a Service UUID
-// or from an egress pod label. What still has to survive is an address that is attached, reserved
-// for the default gateway, or wanted by a Kubernetes object.
+// not delete. An unused address this controller created is a leak, whether it is named from a Service
+// UUID or tagged for an egress identity. What still has to survive is an address that is attached,
+// reserved for the default gateway, wanted by a Kubernetes object, chosen by a Service by name or
+// address, or not provably created by this controller (a user's "*-pip").
 func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) {
-	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress) []string {
+	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress, chosen ...string) []string {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -1124,7 +1193,7 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		dt := newTestDiffTracker()
 		dt.config = testConfig()
 		dt.networkClientFactory = mockFactory
-		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), pips))
+		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), pips, utilsets.NewString(chosen...), nil))
 		return deleted
 	}
 
@@ -1137,12 +1206,22 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 
 	const managedOrphan = "22222222-2222-2222-2222-222222222222-pip"
 
+	egress := func(name string) *armnetwork.PublicIPAddress {
+		pip := detached(name)
+		identity, _ := identityFromPublicIPName(name)
+		pip.Tags = egressIdentityTags(identity)
+		return pip
+	}
+	otherIdentity := detached("team-b-pip")
+	otherIdentity.Tags = egressIdentityTags("someone-else")
 	deleted := run(t, []*armnetwork.PublicIPAddress{
-		detached("team-egress-pip"),
-		detached("team-egress-pip-v6"),
+		egress("team-egress-pip"),
+		otherIdentity,
+		egress("team-egress-pip-v6"),
 		detached(managedOrphan),
-		detached(PublicIPName(DefaultOutboundNATGatewayName)),
+		egress(PublicIPName(DefaultOutboundNATGatewayName)),
 		detached("not-one-of-ours"),
+		detached("users-pip"),
 	})
 
 	assert.Contains(t, deleted, managedOrphan,
@@ -1155,6 +1234,231 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		"the cluster's default egress address is RP-owned and must never be deleted")
 	assert.NotContains(t, deleted, "not-one-of-ours",
 		"a name that does not follow the controller's convention must be left alone")
+	assert.NotContains(t, deleted, "users-pip",
+		"an unused \"*-pip\" this controller cannot prove it created may be a user's and must be left alone")
+	assert.NotContains(t, deleted, "team-b-pip", "an address tagged for another egress identity is not this name's")
+
+	// The sweep runs at startup, before the cluster name is known: a cluster tag in the cluster resource
+	// group is taken as this cluster's.
+	named := detached("chosen-name-pip")
+	named.Tags = map[string]*string{consts.ServiceTagKey: ptr.To("ns/web"), consts.ClusterNameKey: ptr.To("cluster")}
+	assert.Equal(t, []string{"chosen-name-pip"}, run(t, []*armnetwork.PublicIPAddress{named}),
+		"a Public IP created for a Service under a chosen name is swept once nothing uses it")
+	clusterOnly := detached("cluster-only-pip")
+	clusterOnly.Tags = map[string]*string{consts.ClusterNameKey: ptr.To("cluster")}
+	assert.Empty(t, run(t, []*armnetwork.PublicIPAddress{clusterOnly}), "a cluster tag without a Service tag is not an ownership tag")
+
+	// Tagged as egress addresses so that only the choice keeps the chosen ones.
+	byName := egress("web-pip")
+	byAddress := egress("reserved-pip")
+	byAddress.Properties.IPAddress = ptr.To("20.0.0.7")
+	unused := detached("unused-pip")
+	unused.Tags = egressIdentityTags("unused")
+	deleted = run(t, []*armnetwork.PublicIPAddress{byName, byAddress, unused}, "Web-Pip", "20.0.0.7")
+	assert.Equal(t, []string{"unused-pip"}, deleted,
+		"a Public IP a Service chooses by name or address is the user's and must never be swept")
+
+	assert.Equal(t, []string{managedOrphan}, run(t, []*armnetwork.PublicIPAddress{detached(managedOrphan)}, managedOrphan),
+		"a Public IP named after a Service UID can never be another Service's, so a choice does not keep it")
+}
+
+// A restart between a move's load balancer write and its release loses the record of the Public IP the Service
+// moved off. The startup sweep finds it by name or ownership tags and releases it when it is unattached and the
+// Service now chooses another; a user's, an attached, or a still chosen Public IP is never released.
+func TestCleanupOrphanedPIPs_ReleasesPublicIPsAMoveLeftDuringRestart(t *testing.T) {
+	const (
+		movedUID   = "aaaaaaaa-0000-0000-0000-000000000001"
+		defaultUID = "aaaaaaaa-0000-0000-0000-000000000002"
+		addressUID = "aaaaaaaa-0000-0000-0000-000000000003"
+		namedUID   = "aaaaaaaa-0000-0000-0000-000000000004"
+		backUID    = "aaaaaaaa-0000-0000-0000-000000000005"
+		otherUID   = "aaaaaaaa-0000-0000-0000-000000000006"
+		selfUID    = "aaaaaaaa-0000-0000-0000-000000000007"
+		crossUID   = "aaaaaaaa-0000-0000-0000-000000000008"
+		addrUID    = "aaaaaaaa-0000-0000-0000-000000000009"
+	)
+	service := func(name, uid, loadBalancerIP string, annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", UID: types.UID(uid), Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Type:           v1.ServiceTypeLoadBalancer,
+				LoadBalancerIP: loadBalancerIP,
+				Ports:          []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+	}
+	byName := func(name string) map[string]string {
+		return map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: name}
+	}
+	services := map[string]*v1.Service{
+		movedUID:   service("moved", movedUID, "", byName("user-y")),
+		defaultUID: service("default", defaultUID, "", nil),
+		addressUID: service("address", addressUID, "20.0.0.30", nil),
+		namedUID:   service("named", namedUID, "", byName("owned-named")),
+		backUID:    service("back", backUID, "", nil),
+		otherUID:   service("other", otherUID, "", byName("chosen-by-other")),
+		selfUID:    service("self", selfUID, "", byName(PublicIPName(selfUID))),
+		addrUID:    service("addr-moved", addrUID, "20.0.0.40", nil),
+		crossUID: service("cross", crossUID, "", map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]:   "cross-named",
+			consts.ServiceAnnotationLoadBalancerResourceGroup: "other-rg",
+		}),
+	}
+	pip := func(name, service string, attached bool) *armnetwork.PublicIPAddress {
+		p := &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.0.0.99")}}
+		if service != "" {
+			p.Tags = map[string]*string{consts.ServiceTagKey: ptr.To(service), consts.ClusterNameKey: ptr.To("cluster")}
+		}
+		if attached {
+			p.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/fe")}
+		}
+		return p
+	}
+	ownAddress := pip(PublicIPName(addressUID), "ns/address", false)
+	ownAddress.Properties.IPAddress = ptr.To("20.0.0.30")
+	noCluster := pip("no-cluster-tag", "", false)
+	noCluster.Tags = map[string]*string{consts.ServiceTagKey: ptr.To("ns/moved")}
+	pips := []*armnetwork.PublicIPAddress{
+		pip(PublicIPName(movedUID), "ns/moved", false),
+		pip("moved-named", "ns/moved", false),
+		pip("moved-attached", "ns/moved", true),
+		pip("user-y", "", true),
+		pip("user-x", "", false),
+		noCluster,
+		pip(PublicIPName(defaultUID), "ns/default", false),
+		ownAddress,
+		pip("owned-named", "ns/named", false),
+		pip("back-named", "ns/back", false),
+		pip("chosen-by-other", "ns/moved", false),
+		pip(PublicIPName(selfUID), "ns/self", false),
+		pip("cross-named", "ns/cross", false),
+		pip(PublicIPName(addrUID), "ns/addr-moved", false),
+		pip("addr-moved-named", "ns/addr-moved", false),
+	}
+
+	ctrl := gomock.NewController(t)
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	var deletedMu sync.Mutex
+	var deleted []string
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", gomock.Any()).DoAndReturn(func(_ context.Context, _, name string) error {
+		deletedMu.Lock()
+		defer deletedMu.Unlock()
+		deleted = append(deleted, name)
+		return nil
+	}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = mockFactory
+	for uid := range services {
+		dt.K8sResources.Services.Insert(uid)
+		dt.NRPResources.LoadBalancers.Insert(uid)
+	}
+	cleanupOrphanedPIPs(context.Background(), dt, pips, chosenPublicIPs(services, "rg"), services)
+
+	assert.ElementsMatch(t, []string{PublicIPName(movedUID), "moved-named", "back-named", "cross-named", PublicIPName(addrUID), "addr-moved-named"}, deleted,
+		"only unattached Public IPs the controller created for a Service that now chooses another are released")
+}
+
+// The startup sweep releases what a move left behind per unit: each family of a dual-stack Service has its own
+// Public IP choice, and a unit's own "<unit>-pip" is left over only when that unit now chooses another.
+func TestCleanupOrphanedPIPs_ReleasesPublicIPsAMoveLeftForEachUnit(t *testing.T) {
+	const (
+		webUID = "bbbbbbbb-0000-0000-0000-000000000001"
+		apiUID = "bbbbbbbb-0000-0000-0000-000000000002"
+	)
+	service := func(name, uid string, annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", UID: types.UID(uid), Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Type:       v1.ServiceTypeLoadBalancer,
+				IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+				Ports:      []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+	}
+	// web: the IPv4 unit moved to a user's Public IP, the IPv6 unit moved back to its own.
+	web := service("web", webUID, map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "user-v4"})
+	// api: the IPv6 unit moved to a Public IP the controller created by name, the IPv4 unit kept its own.
+	api := service("api", apiUID, map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "api-v6-named"})
+	services := map[string]*v1.Service{}
+	for _, svc := range []*v1.Service{web, api} {
+		for _, unit := range InboundUnits(svc) {
+			services[unit.Name] = svc
+		}
+	}
+	pip := func(name, service string, attached bool) *armnetwork.PublicIPAddress {
+		p := &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.0.0.99")}}
+		if service != "" {
+			p.Tags = map[string]*string{consts.ServiceTagKey: ptr.To(service), consts.ClusterNameKey: ptr.To("cluster")}
+		}
+		if attached {
+			p.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/fe")}
+		}
+		return p
+	}
+	pips := []*armnetwork.PublicIPAddress{
+		pip(PublicIPName(webUID), "ns/web", false),
+		pip(PublicIPName(webUID+"-v6"), "ns/web", false),
+		pip("user-v4", "", true),
+		pip("web-v6-named", "ns/web", false),
+		pip(PublicIPName(apiUID), "ns/api", false),
+		pip(PublicIPName(apiUID+"-v6"), "ns/api", false),
+		pip("api-v6-named", "ns/api", false),
+	}
+
+	ctrl := gomock.NewController(t)
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	var deletedMu sync.Mutex
+	var deleted []string
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", gomock.Any()).DoAndReturn(func(_ context.Context, _, name string) error {
+		deletedMu.Lock()
+		defer deletedMu.Unlock()
+		deleted = append(deleted, name)
+		return nil
+	}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = mockFactory
+	for unit := range services {
+		dt.K8sResources.Services.Insert(unit)
+		dt.NRPResources.LoadBalancers.Insert(unit)
+	}
+	cleanupOrphanedPIPs(context.Background(), dt, pips, chosenPublicIPs(services, "rg"), services)
+
+	assert.ElementsMatch(t, []string{PublicIPName(webUID), "web-v6-named", PublicIPName(apiUID + "-v6")}, deleted,
+		"a unit's own Public IP is released only when that unit chooses another, and a named one only when no unit chooses it")
+}
+
+func TestChosenPublicIPs(t *testing.T) {
+	service := func(ipFamily v1.IPFamily, loadBalancerIP string, annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Type:           v1.ServiceTypeLoadBalancer,
+				IPFamilies:     []v1.IPFamily{ipFamily},
+				LoadBalancerIP: loadBalancerIP,
+				Ports:          []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+	}
+	clusterIP := service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "cluster-ip"})
+	clusterIP.Spec.Type = v1.ServiceTypeClusterIP
+	chosen := chosenPublicIPs(map[string]*v1.Service{
+		"by-name":        service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "mine"}),
+		"by-v6-name":     service(v1.IPv6Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "mine-v6"}),
+		"by-address":     service(v1.IPv4Protocol, "20.0.0.7", nil),
+		"same-rg":        service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "same", consts.ServiceAnnotationLoadBalancerResourceGroup: "RG"}),
+		"other-rg":       service(v1.IPv4Protocol, "", map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "elsewhere", consts.ServiceAnnotationLoadBalancerResourceGroup: "other"}),
+		"not-a-balancer": clusterIP,
+		"none":           nil,
+	}, "rg")
+	assert.ElementsMatch(t, []string{"mine", "mine-v6", "20.0.0.7", "same"}, chosen.UnsortedList())
 }
 
 // TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling pins that startup recovery
@@ -1409,7 +1713,9 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 	})
 
 	dt := newTestDiffTracker()
+	dt.config = testConfig()
 	dt.kubeClient = kube
+	dt.networkClientFactory = recoveryFactory(t, nil, nil)
 	dt.NRPResources.LoadBalancers.Insert(uid)
 
 	recoverServiceExternalIPs(context.Background(), dt,
@@ -1422,6 +1728,55 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 	assert.NoError(t, err)
 	if assert.Len(t, got.Status.LoadBalancer.Ingress, 1, "the External IP must be recovered") {
 		assert.Equal(t, "20.30.40.50", got.Status.LoadBalancer.Ingress[0].IP)
+	}
+}
+
+func TestRecoverServiceExternalIPs_UsesThePublicIPOfTheLoadBalancer(t *testing.T) {
+	const uid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+	pipID := func(rg, name string) string { return publicIPAddressID("sub", rg, name) }
+	for _, tc := range []struct {
+		name     string
+		frontend string
+		want     string
+	}{
+		{name: "the Public IP named after the Service", frontend: pipID("rg", PublicIPName(uid)), want: "20.0.0.1"},
+		{name: "a chosen Public IP in the cluster resource group", frontend: pipID("RG", "Mine"), want: "20.0.0.7"},
+		{name: "a chosen Public IP in another resource group", frontend: pipID("other", "theirs"), want: "20.0.0.9"},
+		{name: "no load balancer", want: "20.0.0.1"},
+		{name: "a Public IP that cannot be read", frontend: pipID("other", "gone")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid),
+					// A choice the load balancer does not use must not decide the address.
+					Annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "other-choice"}},
+				Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, LoadBalancerIP: "20.0.0.99",
+					Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}}},
+			}
+			kube := fake.NewSimpleClientset(svc)
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.kubeClient = kube
+			frontends := map[string]string{}
+			if tc.frontend != "" {
+				frontends[uid] = tc.frontend
+			}
+			dt.networkClientFactory = recoveryFactory(t, frontends, map[string]string{"other/theirs": "20.0.0.9"})
+			dt.NRPResources.LoadBalancers.Insert(uid)
+
+			recoverServiceExternalIPs(context.Background(), dt, map[string]*v1.Service{uid: svc},
+				map[string]string{strings.ToLower(PublicIPName(uid)): "20.0.0.1", "mine": "20.0.0.7", "other-choice": "20.0.0.8"})
+
+			got, err := kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+			assert.NoError(t, err)
+			if tc.want == "" {
+				assert.Empty(t, got.Status.LoadBalancer.Ingress)
+				return
+			}
+			if assert.Len(t, got.Status.LoadBalancer.Ingress, 1) {
+				assert.Equal(t, tc.want, got.Status.LoadBalancer.Ingress[0].IP)
+			}
+		})
 	}
 }
 
@@ -1720,4 +2075,407 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 	v4Families := v4Only.outboundIPFamiliesLocked()
 	v4Only.mu.Unlock()
 	assert.Equal(t, []string{"IPv4"}, v4Families)
+}
+
+// TestStartup_DualStackUnits pins how a restart sees a dual-stack Service: both units are desired, each
+// endpoint address belongs to the unit of its family, and a unit is recognised (not an unknown resource)
+// in the orphan scans and the Public IP sweep.
+func TestStartup_DualStackUnits(t *testing.T) {
+	const uid = "11111111-2222-3333-4444-555555555555"
+	secondary := uid + "-v6"
+	dualStack := func() *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid)},
+			Spec: v1.ServiceSpec{
+				Type:       v1.ServiceTypeLoadBalancer,
+				IPFamilies: []v1.IPFamily{v1.IPv4Protocol, v1.IPv6Protocol},
+				Ports:      []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP, TargetPort: intstr.FromInt(8080)}},
+			},
+		}
+	}
+
+	t.Run("both units are desired and endpoints go to the unit of their family", func(t *testing.T) {
+		svc := dualStack()
+		slice := &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{Name: "web-abc", Namespace: "default", Labels: map[string]string{discoveryv1.LabelServiceName: "web"},
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: "web", UID: types.UID(uid)}}},
+			Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"10.1.0.11", "fd01::11"}, NodeName: ptr.To("node-1")}},
+		}
+		kube := fake.NewSimpleClientset(svc, slice)
+		k8s := K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}}
+
+		_, services, err := processK8sServices(context.Background(), kube, &k8s)
+		assert.NoError(t, err)
+		assert.ElementsMatch(t, []string{uid, secondary}, k8s.Services.UnsortedList())
+		assert.Same(t, services[uid], services[secondary])
+
+		_, err = processK8sEndpoints(context.Background(), kube, &k8s, map[string][]string{"node-1": {"10.0.0.4", "fd00::4"}}, services)
+		assert.NoError(t, err)
+		assert.True(t, k8s.Nodes["10.0.0.4"].Pods["10.1.0.11"].InboundIdentities.Has(uid))
+		assert.False(t, k8s.Nodes["10.0.0.4"].Pods["10.1.0.11"].InboundIdentities.Has(secondary))
+		assert.True(t, k8s.Nodes["fd00::4"].Pods["fd01::11"].InboundIdentities.Has(secondary))
+		assert.False(t, k8s.Nodes["fd00::4"].Pods["fd01::11"].InboundIdentities.Has(uid))
+	})
+
+	t.Run("an endpoint of a family the Service does not serve is not imported", func(t *testing.T) {
+		svc := dualStack()
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv4Protocol}
+		slice := &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{Name: "web-abc", Namespace: "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: "web", UID: types.UID(uid)}}},
+			Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"10.1.0.11", "fd01::11"}, NodeName: ptr.To("node-1")}},
+		}
+		kube := fake.NewSimpleClientset(svc, slice)
+		k8s := K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}}
+		_, services, err := processK8sServices(context.Background(), kube, &k8s)
+		assert.NoError(t, err)
+
+		_, err = processK8sEndpoints(context.Background(), kube, &k8s, map[string][]string{"node-1": {"10.0.0.4", "fd00::4"}}, services)
+		assert.NoError(t, err)
+		assert.True(t, k8s.Nodes["10.0.0.4"].Pods["10.1.0.11"].InboundIdentities.Has(uid))
+		assert.NotContains(t, k8s.Nodes, "fd00::4")
+	})
+
+	t.Run("a secondary unit is an orphan only when its Service no longer wants it", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.K8sResources.Services.Insert(uid)
+		scheduleOrphanedResourceDeletions(dt, utilsets.NewString(uid, secondary), utilsets.NewString(),
+			utilsets.NewString(PublicIPName(uid), PublicIPName(secondary)))
+		assert.Contains(t, dt.pendingServiceOps, secondary, "the secondary unit of a now single-stack Service is deleted")
+		assert.NotContains(t, dt.pendingServiceOps, uid)
+
+		dt = newTestDiffTracker()
+		dt.K8sResources.Services.Insert(uid, secondary)
+		scheduleOrphanedResourceDeletions(dt, utilsets.NewString(uid, secondary), utilsets.NewString(), utilsets.NewString())
+		assert.Empty(t, dt.pendingServiceOps, "a desired secondary unit is not an orphan")
+
+		dt = newTestDiffTracker()
+		scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), utilsets.NewString(), utilsets.NewString(PublicIPName(secondary)))
+		assert.Contains(t, dt.pendingServiceOps, secondary, "a Public IP left by a secondary unit is cleaned up")
+	})
+
+	t.Run("the Public IP sweep recognises a secondary unit's Public IP", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+		var deleted []string
+		var mu sync.Mutex
+		mockPIP.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _, name string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			deleted = append(deleted, name)
+			return nil
+		}).AnyTimes()
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.networkClientFactory = mockFactory
+		dt.K8sResources.Services.Insert("22222222-2222-3333-4444-555555555555-v4")
+		detached := func(name string) *armnetwork.PublicIPAddress {
+			return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		}
+
+		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
+			detached(PublicIPName(secondary)),
+			detached(PublicIPName("22222222-2222-3333-4444-555555555555-v4")),
+			detached("web-v6-pip"),
+		}, utilsets.NewString(PublicIPName(secondary)), nil))
+
+		assert.Equal(t, []string{PublicIPName(secondary)}, deleted,
+			"an orphaned unit's Public IP is swept even when chosen; a desired unit's and a user's are kept")
+	})
+
+	t.Run("a deleting Service with only its secondary unit left is deleted, not released", func(t *testing.T) {
+		svc := dualStack()
+		svc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		svc.Finalizers = []string{ServiceGatewayServiceCleanupFinalizer}
+		kube := fake.NewSimpleClientset(svc)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+
+		deletions := recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*svc}},
+			nil, nil, utilsets.NewString(secondary), utilsets.NewString(), utilsets.NewString())
+
+		assert.Equal(t, []string{uid}, deletions)
+		got, err := kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.True(t, hasServiceGatewayFinalizer(got), "the finalizer stays until the secondary unit is gone")
+
+		deletions = recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*svc}},
+			nil, nil, utilsets.NewString(), utilsets.NewString(), utilsets.NewString(PublicIPName(secondary)))
+		assert.Equal(t, []string{uid}, deletions, "only the secondary unit's Public IP is left")
+
+		dt.NRPResources.LoadBalancers.Insert(secondary)
+		deletions = recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*svc}},
+			nil, nil, nil, utilsets.NewString(), nil)
+		assert.Equal(t, []string{uid}, deletions, "the secondary unit is registered with the ServiceGateway")
+		got, err = kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.True(t, hasServiceGatewayFinalizer(got))
+	})
+
+	t.Run("a deleting Service releases the Public IP its secondary family chose", func(t *testing.T) {
+		svc := dualStack()
+		svc.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		svc.Finalizers = []string{ServiceGatewayServiceCleanupFinalizer}
+		svc.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "mine-v6"}
+		dt := newTestDiffTracker()
+		dt.kubeClient = fake.NewSimpleClientset(svc)
+
+		deletions := recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*svc}},
+			nil, nil, utilsets.NewString(), utilsets.NewString(), utilsets.NewString())
+		assert.Equal(t, []string{secondary, uid}, deletions, "the secondary unit is deleted first")
+
+		deletions = recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*svc}},
+			nil, nil, utilsets.NewString(uid), utilsets.NewString(), utilsets.NewString())
+		assert.Equal(t, []string{secondary}, deletions, "the diff deletes the primary unit, which has a load balancer")
+
+		deletions = recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*svc}},
+			nil, nil, utilsets.NewString(uid, secondary), utilsets.NewString(), utilsets.NewString())
+		assert.Empty(t, deletions, "a secondary unit with a load balancer is deleted by the diff")
+
+		dt.NRPResources.LoadBalancers.Insert(secondary)
+		deletions = recoverStuckFinalizers(context.Background(), dt, &v1.ServiceList{Items: []v1.Service{*svc}},
+			nil, nil, utilsets.NewString(uid), utilsets.NewString(), utilsets.NewString())
+		assert.Empty(t, deletions, "a secondary unit registered with the ServiceGateway is deleted by the diff")
+	})
+
+	t.Run("a unit's chosen Public IP is released even after its Service is gone", func(t *testing.T) {
+		svc := dualStack()
+		svc.Annotations = map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]:   "mine-v4",
+			consts.ServiceAnnotationPIPNameDualStack[true]:    "mine-v6",
+			consts.ServiceAnnotationLoadBalancerResourceGroup: "user-rg",
+		}
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.serviceUpdater = &ServiceUpdater{diffTracker: dt}
+
+		dt.deleteChosenPublicIPs(&v1.ServiceList{Items: []v1.Service{*svc}}, []string{secondary, uid})
+
+		assert.Equal(t, []string{publicIPAddressID("sub", "user-rg", "mine-v6")}, dt.serviceUpdater.pendingReleases[secondary])
+		assert.Equal(t, []string{publicIPAddressID("sub", "user-rg", "mine-v4")}, dt.serviceUpdater.pendingReleases[uid])
+		for _, unit := range []string{secondary, uid} {
+			if assert.Contains(t, dt.pendingServiceOps, unit) {
+				assert.Contains(t, []ResourceState{StateDeletionPending, StateDeletionInProgress}, dt.pendingServiceOps[unit].State, unit)
+			}
+		}
+	})
+
+	t.Run("each family's Public IP choice is protected", func(t *testing.T) {
+		svc := dualStack()
+		svc.Annotations = map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]:       "pip-v4",
+			consts.ServiceAnnotationLoadBalancerIPDualStack[true]: "2603:1030::7",
+		}
+		chosen := chosenPublicIPs(map[string]*v1.Service{uid: svc, secondary: svc}, "rg")
+		assert.ElementsMatch(t, []string{"pip-v4", "2603:1030::7"}, chosen.UnsortedList())
+	})
+
+	t.Run("each unit is provisioned with its own family's configuration", func(t *testing.T) {
+		svc := dualStack()
+		svc.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[true]: "pip-v6"}
+		dt := newTestDiffTracker()
+		dispatched := dt.reconcileServices(&SyncDiffTrackerReturnType{
+			LoadBalancerUpdates: SyncServicesReturnType{Additions: utilsets.NewString(uid, secondary), Removals: utilsets.NewString()},
+			NATGatewayUpdates:   SyncServicesReturnType{Additions: utilsets.NewString(), Removals: utilsets.NewString()},
+		}, map[string]*v1.Service{uid: svc, secondary: svc})
+		assert.Equal(t, 2, dispatched, "each unit's creation is dispatched and counted")
+
+		for unit, want := range map[string]struct{ family, pip string }{uid: {"IPv4", ""}, secondary: {"IPv6", "pip-v6"}} {
+			if op := dt.pendingServiceOps[unit]; assert.NotNil(t, op, unit) && assert.NotNil(t, op.Config.InboundConfig, unit) {
+				assert.Equal(t, []string{want.family}, op.Config.InboundConfig.IPFamilies, unit)
+				assert.Equal(t, want.pip, op.Config.InboundConfig.PIPName, unit)
+			}
+		}
+	})
+
+	t.Run("startup records the family of each provisioned unit's own Public IP", func(t *testing.T) {
+		pip := func(name string, version armnetwork.IPVersion) *armnetwork.PublicIPAddress {
+			return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{PublicIPAddressVersion: ptr.To(version)}}
+		}
+		dt := newTestDiffTracker()
+		dt.NRPResources.LoadBalancers.Insert(uid, secondary, "33333333-2222-3333-4444-555555555555")
+		dt.recordProvisionedFamilies([]*armnetwork.PublicIPAddress{
+			pip(PublicIPName(uid), armnetwork.IPVersionIPv4),
+			pip(PublicIPName(secondary), armnetwork.IPVersionIPv6),
+			pip("44444444-2222-3333-4444-555555555555-pip", armnetwork.IPVersionIPv4),
+			pip("team-egress-pip", armnetwork.IPVersionIPv4),
+			{Name: ptr.To("no-properties-pip")},
+		})
+		assert.Equal(t, map[string]string{uid: "IPv4", secondary: "IPv6"}, dt.provisionedFamilies,
+			"only Public IPs named after a provisioned unit are recorded")
+	})
+
+	t.Run("startup recreates primary unit whose provisioned family changed while down", func(t *testing.T) {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid)},
+			Spec: v1.ServiceSpec{
+				Type:       v1.ServiceTypeLoadBalancer,
+				IPFamilies: []v1.IPFamily{v1.IPv6Protocol},
+				Ports:      []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP, TargetPort: intstr.FromInt(8080)}},
+			},
+			Status: v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}}},
+		}
+		node := &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
+			Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+				{Type: v1.NodeInternalIP, Address: "10.0.0.4"},
+				{Type: v1.NodeInternalIP, Address: "fd00::4"},
+			}},
+		}
+		slice := &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{Name: "web-abc", Namespace: "default", Labels: map[string]string{discoveryv1.LabelServiceName: "web"},
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: "web", UID: types.UID(uid)}}},
+			Endpoints: []discoveryv1.Endpoint{{Addresses: []string{"fd01::11"}, NodeName: ptr.To("node-1")}},
+		}
+		kube := fake.NewSimpleClientset(svc, node, slice)
+		k8s := K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}}
+
+		_, services, err := processK8sServices(context.Background(), kube, &k8s)
+		assert.NoError(t, err)
+		endpointSlices, err := processK8sEndpoints(context.Background(), kube, &k8s, map[string][]string{"node-1": {"10.0.0.4", "fd00::4"}}, services)
+		assert.NoError(t, err)
+		assert.True(t, k8s.Nodes["fd00::4"].Pods["fd01::11"].InboundIdentities.Has(uid),
+			"the uncorrected startup import would assign the new-family endpoint to the old primary unit")
+
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.K8sResources = k8s
+		dt.NRPResources.LoadBalancers.Insert(uid)
+		dt.initializeEndpointSlicesCache(endpointSlices)
+		setTestNodeLister(t, dt, node)
+		dt.recordProvisionedFamilies([]*armnetwork.PublicIPAddress{
+			{Name: ptr.To(PublicIPName(uid)), Properties: &armnetwork.PublicIPAddressPropertiesFormat{PublicIPAddressVersion: ptr.To(armnetwork.IPVersionIPv4)}},
+		})
+
+		assert.NoError(t, dt.recreateMismatchedPrimaryUnits(context.Background(), services))
+		assert.NotContains(t, dt.provisionedFamilies, uid, "startup recreate must consume the stale provisioned family")
+
+		locationData := dt.GetSyncLocationsAddresses()
+		for _, loc := range locationData.Locations {
+			if addr, ok := loc.Addresses["fd01::11"]; ok {
+				assert.False(t, addr.ServiceRef.Has(uid),
+					"startup must not sync the IPv6 endpoint into the old IPv4 primary unit")
+			}
+		}
+		op := dt.pendingServiceOps[uid]
+		if assert.NotNil(t, op) {
+			assert.True(t, op.RecreateAfterDeletion, "the primary unit should be recreated after deleting the old-family unit")
+			assert.Equal(t, []string{"IPv6"}, op.Config.InboundConfig.IPFamilies)
+		}
+		if assert.Len(t, dt.pendingEndpoints[uid], 1, "current endpoints should be replayed after the recreate") {
+			assert.Contains(t, dt.pendingEndpoints[uid][0].PodIPToNodeIP, "fd01::11")
+		}
+	})
+
+	t.Run("startup leaves a healthy dual-stack Service's units alone", func(t *testing.T) {
+		const uid = "33333333-2222-3333-4444-555555555555"
+		for name, families := range map[string][]v1.IPFamily{
+			"IPv4 primary": {v1.IPv4Protocol, v1.IPv6Protocol},
+			"IPv6 primary": {v1.IPv6Protocol, v1.IPv4Protocol},
+		} {
+			t.Run(name, func(t *testing.T) {
+				svc := &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid)},
+					Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, IPFamilies: families,
+						Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt(8080), Protocol: v1.ProtocolTCP}}},
+				}
+				units, err := AdmitInboundServiceUnits(svc)
+				assert.NoError(t, err)
+				assert.Len(t, units, 2)
+				secondary := uid + "-v6"
+				primaryVersion, secondaryVersion := armnetwork.IPVersionIPv4, armnetwork.IPVersionIPv6
+				if families[0] == v1.IPv6Protocol {
+					secondary = uid + "-v4"
+					primaryVersion, secondaryVersion = armnetwork.IPVersionIPv6, armnetwork.IPVersionIPv4
+				}
+				dt := newTestDiffTracker()
+				dt.kubeClient = fake.NewSimpleClientset(svc)
+				dt.NRPResources.LoadBalancers.Insert(uid, secondary)
+				dt.recordProvisionedFamilies([]*armnetwork.PublicIPAddress{
+					{Name: ptr.To(PublicIPName(uid)), Properties: &armnetwork.PublicIPAddressPropertiesFormat{PublicIPAddressVersion: ptr.To(primaryVersion)}},
+					{Name: ptr.To(PublicIPName(secondary)), Properties: &armnetwork.PublicIPAddressPropertiesFormat{PublicIPAddressVersion: ptr.To(secondaryVersion)}},
+				})
+
+				assert.NoError(t, dt.recreateMismatchedPrimaryUnits(context.Background(), map[string]*v1.Service{uid: svc, secondary: svc}))
+				assert.Empty(t, dt.pendingServiceOps, "a restart must not recreate a healthy dual-stack Service's units")
+			})
+		}
+	})
+
+	t.Run("startup does not provision an egress identity whose name a Service's unit uses", func(t *testing.T) {
+		for name, register := range map[string]func(*DiffTracker){
+			"desired unit":     func(dt *DiffTracker) { dt.K8sResources.Services.Insert(secondary) },
+			"provisioned unit": func(dt *DiffTracker) { dt.NRPResources.LoadBalancers.Insert(secondary) },
+		} {
+			dt := newTestDiffTracker()
+			register(dt)
+			dispatched := dt.reconcileServices(&SyncDiffTrackerReturnType{
+				LoadBalancerUpdates: SyncServicesReturnType{Additions: utilsets.NewString(), Removals: utilsets.NewString()},
+				NATGatewayUpdates:   SyncServicesReturnType{Additions: utilsets.NewString(secondary, "team-egress"), Removals: utilsets.NewString()},
+			}, map[string]*v1.Service{})
+
+			assert.Equal(t, 1, dispatched, "a skipped egress identity is not counted as dispatched: %s", name)
+			assert.NotContains(t, dt.pendingServiceOps, secondary, name)
+			assert.Contains(t, dt.pendingServiceOps, "team-egress", name)
+		}
+	})
+
+	t.Run("startup does not provision a secondary unit whose name an egress identity uses", func(t *testing.T) {
+		svc := dualStack()
+		for name, register := range map[string]func(*DiffTracker){
+			"egress pods":        func(dt *DiffTracker) { dt.K8sResources.Egresses.Insert(secondary) },
+			"NAT gateway in NRP": func(dt *DiffTracker) { dt.NRPResources.NATGateways.Insert(secondary) },
+		} {
+			dt := newTestDiffTracker()
+			register(dt)
+			dispatched := dt.reconcileServices(&SyncDiffTrackerReturnType{
+				LoadBalancerUpdates: SyncServicesReturnType{Additions: utilsets.NewString(uid, secondary), Removals: utilsets.NewString()},
+				NATGatewayUpdates:   SyncServicesReturnType{Additions: utilsets.NewString(), Removals: utilsets.NewString()},
+			}, map[string]*v1.Service{uid: svc, secondary: svc})
+
+			assert.Equal(t, 1, dispatched, "a skipped secondary unit is not counted as dispatched: %s", name)
+			assert.Contains(t, dt.pendingServiceOps, uid, name)
+			assert.NotContains(t, dt.pendingServiceOps, secondary, name)
+		}
+	})
+
+	t.Run("an External IP of another family than the unit is not recovered", func(t *testing.T) {
+		svc := dualStack()
+		svc.Spec.IPFamilies = []v1.IPFamily{v1.IPv6Protocol}
+		kube := fake.NewSimpleClientset(svc)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = recoveryFactory(t, nil, nil)
+		dt.NRPResources.LoadBalancers.Insert(uid)
+
+		// The primary family changed to IPv6 while the controller was down; its Public IP is still IPv4.
+		recoverServiceExternalIPs(context.Background(), dt, map[string]*v1.Service{uid: svc},
+			map[string]string{strings.ToLower(PublicIPName(uid)): "20.1.2.3"})
+
+		got, err := kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Empty(t, got.Status.LoadBalancer.Ingress)
+	})
+
+	t.Run("each unit's External IP is recovered", func(t *testing.T) {
+		svc := dualStack()
+		svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}
+		kube := fake.NewSimpleClientset(svc)
+		dt := newTestDiffTracker()
+		dt.config = testConfig()
+		dt.kubeClient = kube
+		dt.networkClientFactory = recoveryFactory(t, nil, nil)
+		dt.NRPResources.LoadBalancers.Insert(uid, secondary)
+
+		recoverServiceExternalIPs(context.Background(), dt, map[string]*v1.Service{uid: svc, secondary: svc},
+			map[string]string{strings.ToLower(PublicIPName(uid)): "20.1.2.3", strings.ToLower(PublicIPName(secondary)): "2603:1030::7"})
+
+		got, err := kube.CoreV1().Services("default").Get(context.Background(), "web", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "20.1.2.3"}, {IP: "2603:1030::7"}}, got.Status.LoadBalancer.Ingress)
+	})
 }

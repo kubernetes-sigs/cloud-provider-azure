@@ -19,6 +19,7 @@ package difftracker
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -107,22 +108,165 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 
 	dt.logger.V(2).Info("Reconciling inbound Service", "serviceUID", serviceUID)
 
-	inboundConfig, err := AdmitInboundService(service)
+	units, err := AdmitInboundServiceUnits(service)
 	if err != nil {
 		return err
 	}
-	if inboundConfig == nil {
+	// An egress identity may carry the name a secondary unit needs; the two are never mixed.
+	for _, unit := range units[min(1, len(units)):] {
+		if dt.isEgressIdentity(unit.Unit.Name) {
+			return &InboundConfigValidationError{
+				Reason:  "ServiceGatewayNameConflict",
+				Message: fmt.Sprintf("the %s family of the Service needs the ServiceGateway name %q, which an egress identity uses; rename that egress identity", unit.Unit.Family, unit.Unit.Name),
+			}
+		}
+	}
+	if len(units) == 0 {
 		return nil
 	}
+	dt.mu.Lock()
+	appliedFamilies := dt.appliedPrimaryFamiliesLocked(serviceUID)
+	queuedFamilies := dt.queuedPrimaryFamiliesForFlipLocked(serviceUID)
+	recreateAlreadyQueued := dt.primaryRecreateAlreadyQueuedLocked(serviceUID, units[0].Config.IPFamilies)
+	dt.mu.Unlock()
+	if len(appliedFamilies) > 0 && !slices.Equal(appliedFamilies, units[0].Config.IPFamilies) {
+		if !recreateAlreadyQueued {
+			if err := dt.deletePrimaryUnitOfOldFamily(context.Background(), serviceUID, appliedFamilies[0]); err != nil {
+				return err
+			}
+		}
+	} else if len(appliedFamilies) == 0 && len(queuedFamilies) > 0 && !slices.Equal(queuedFamilies, units[0].Config.IPFamilies) {
+		if err := dt.deletePrimaryUnitOfOldFamily(context.Background(), serviceUID, queuedFamilies[0]); err != nil {
+			return err
+		}
+	}
+	// The families are recorded after any flip delete succeeds and before any unit is queued: queuing
+	// a unit replays its endpoints, which are picked by IP family.
+	dt.mu.Lock()
+	dt.setInboundFamiliesLocked(service)
+	dt.mu.Unlock()
 
-	config := NewInboundServiceConfig(serviceUID, inboundConfig)
-	config.Namespace = service.Namespace
-	config.Name = service.Name
+	clusterName := dt.getClusterName()
+	for _, unit := range units {
+		unit.Config.ClusterName = clusterName
+		config := NewInboundServiceConfig(unit.Unit.Name, unit.Config)
+		config.Namespace = service.Namespace
+		config.Name = service.Name
 
-	// UpdateService resolves tracked vs untracked under its own lock and delegates to AddService
-	// when untracked, so the decision is not made on a stale read here.
-	dt.UpdateService(config)
+		// UpdateService resolves tracked vs untracked under its own lock and delegates to AddService
+		// when untracked, so the decision is not made on a stale read here.
+		dt.UpdateService(config)
+	}
+	dt.deleteUnwantedSecondaryUnits(serviceUID, units)
 	return nil
+}
+
+func inboundConfigFamilies(config *ServiceConfig) ([]string, bool) {
+	if config == nil || !config.IsInbound || config.InboundConfig == nil || len(config.InboundConfig.IPFamilies) == 0 {
+		return nil, false
+	}
+	return config.InboundConfig.IPFamilies, true
+}
+
+func (dt *DiffTracker) appliedPrimaryFamiliesLocked(serviceUID string) []string {
+	if op := dt.pendingServiceOps[serviceUID]; op != nil {
+		if families, ok := inboundConfigFamilies(op.LastAppliedConfig); ok {
+			return families
+		}
+		if families, ok := inboundConfigFamilies(op.InFlightConfig); ok {
+			return families
+		}
+	}
+	if family, known := dt.provisionedFamilies[serviceUID]; known {
+		return []string{family}
+	}
+	return nil
+}
+
+func (dt *DiffTracker) queuedPrimaryFamiliesForFlipLocked(serviceUID string) []string {
+	op := dt.pendingServiceOps[serviceUID]
+	if op == nil || op.State == StateDeletionPending || op.State == StateDeletionInProgress {
+		return nil
+	}
+	if op.LastAppliedConfig != nil || op.InFlightConfig != nil {
+		return nil
+	}
+	if op.State == StateNotStarted {
+		if op.CreationFailedTerminal && dt.NRPResources.LoadBalancers.Has(serviceUID) {
+			if families, ok := inboundConfigFamilies(&op.Config); ok {
+				return families
+			}
+		}
+		if families, ok := inboundConfigFamilies(op.AttemptedCreateConfig); ok {
+			return families
+		}
+		return nil
+	}
+	if families, ok := inboundConfigFamilies(&op.Config); ok {
+		return families
+	}
+	return nil
+}
+
+func (dt *DiffTracker) primaryRecreateAlreadyQueuedLocked(serviceUID string, desiredFamilies []string) bool {
+	op := dt.pendingServiceOps[serviceUID]
+	if op == nil {
+		return false
+	}
+	switch op.State {
+	case StateDeletionPending, StateDeletionInProgress:
+	case StateNotStarted:
+		if op.LastAppliedConfig != nil || op.InFlightConfig != nil {
+			return false
+		}
+	default:
+		return false
+	}
+	families, ok := inboundConfigFamilies(&op.Config)
+	return ok && slices.Equal(families, desiredFamilies)
+}
+
+func (dt *DiffTracker) inboundRecreateAfterDeletion(serviceUID string) bool {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	op := dt.pendingServiceOps[serviceUID]
+	return op != nil && op.Config.IsInbound && op.RecreateAfterDeletion
+}
+
+func (dt *DiffTracker) markFinalizerKeptForRecreate(serviceUID string) bool {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	op := dt.pendingServiceOps[serviceUID]
+	if op == nil || !op.Config.IsInbound || !op.RecreateAfterDeletion {
+		return false
+	}
+	op.FinalizerKeptForRecreate = true
+	return true
+}
+
+// deletePrimaryUnitOfOldFamily deletes the primary unit of a Service whose primary IP family changed without a
+// delete being seen (through ExternalName), so that queuing the unit again recreates it in the new family, as
+// when the Service is deleted and created again. The old family's IP leaves the status first, unless the
+// Service still serves that family.
+func (dt *DiffTracker) deletePrimaryUnitOfOldFamily(ctx context.Context, serviceUID, oldFamily string) error {
+	dt.logger.V(2).Info("Recreating the primary unit in the Service's new primary IP family", "serviceUID", serviceUID, "oldFamily", oldFamily)
+	if err := dt.removeServiceLoadBalancerIngressFamily(ctx, serviceUID, strings.EqualFold(oldFamily, string(v1.IPv6Protocol))); err != nil {
+		return err
+	}
+	dt.DeleteService(serviceUID, true, false)
+	return nil
+}
+
+// deleteUnwantedSecondaryUnits deletes a secondary unit the Service no longer has: the Service became
+// single-stack. The primary unit and its IP are not touched.
+func (dt *DiffTracker) deleteUnwantedSecondaryUnits(serviceUID string, units []InboundUnitConfig) {
+	for _, name := range SecondaryUnitNames(serviceUID) {
+		wanted := slices.ContainsFunc(units, func(unit InboundUnitConfig) bool { return strings.EqualFold(unit.Unit.Name, name) })
+		if !wanted && dt.inboundUnitTracked(name) {
+			dt.logger.V(2).Info("Deleting the unit of an IP family the Service no longer serves", "serviceUID", serviceUID, "unit", name)
+			dt.DeleteService(name, true, false)
+		}
+	}
 }
 
 // DeleteInboundService translates a Kubernetes LoadBalancer Service deletion into the inbound
@@ -138,6 +282,22 @@ func (dt *DiffTracker) DeleteInboundService(service *v1.Service) error {
 	}
 
 	dt.logger.V(2).Info("Deleting inbound Service", "serviceUID", serviceUID)
+	dt.mu.Lock()
+	dt.forgetInboundFamiliesLocked(serviceUID)
+	dt.mu.Unlock()
+	// Secondary units first: the primary's delete removes the Service finalizer only once no
+	// secondary unit is left.
+	secondaryDeleted := false
+	for _, name := range SecondaryUnitNames(serviceUID) {
+		if dt.inboundUnitTracked(name) {
+			dt.DeleteService(name, true, false)
+			secondaryDeleted = true
+		}
+	}
+	if secondaryDeleted && !dt.IsServiceTracked(serviceUID) {
+		dt.DeleteService(serviceUID, true, true)
+		return nil
+	}
 	dt.DeleteService(serviceUID, true, false)
 	return nil
 }
@@ -215,11 +375,15 @@ func (dt *DiffTracker) AddService(config ServiceConfig) {
 // If the service is already created in NRP, endpoints are immediately updated.
 // If the service is being created, endpoints are buffered until creation completes.
 // If the service doesn't exist, this shouldn't happen (AddService should be called first).
+//
+// serviceUID is the Kubernetes Service; each address goes to the unit serving its IP family.
 func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newPodIPToNodeIP map[string]string) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	dt.updateEndpointsLocked(serviceUID, oldPodIPToNodeIP, newPodIPToNodeIP)
+	for unit, delta := range dt.endpointDeltasByUnitLocked(serviceUID, oldPodIPToNodeIP, newPodIPToNodeIP) {
+		dt.updateEndpointsLocked(unit, delta.oldAddresses, delta.newAddresses)
+	}
 }
 
 // updateEndpointsLocked is UpdateEndpoints without the lock, for callers that must apply an
@@ -854,6 +1018,9 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				applied := *opState.InFlightConfig
 				opState.LastAppliedConfig = &applied
 			}
+			if opState.Config.IsInbound {
+				delete(dt.provisionedFamilies, serviceUID)
+			}
 			opState.RetryCount = 0
 
 			// If the desired Config drifted while the update was in flight, reschedule.
@@ -926,6 +1093,9 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				// time), so a failed cleanup does not over-report orphaned_resources_cleaned_total.
 				recordOrphanedResourceCleaned()
 			}
+			if opState.Config.IsInbound {
+				delete(dt.provisionedFamilies, serviceUID)
+			}
 
 			// RemoveLastPodFinalizers performs API calls without holding dt.mu. A pod delete
 			// can therefore add a last-pod record after that worker has taken its snapshot
@@ -948,6 +1118,21 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				return
 			}
 
+			if opState.FinalizerKeptForRecreate && !opState.RecreateAfterDeletion {
+				dt.logger.V(5).Info("Re-dispatching service deletion after recreate was canceled before finalizer removal", "service", serviceUID)
+				opState.State = StateDeletionInProgress
+				opState.RetryCount = 0
+				opState.CreationFailedTerminal = false
+				opState.RetriesExhausted = false
+				opState.NextRetryAt = time.Time{}
+				opState.FinalizerKeptForRecreate = false
+				opState.LastAttempt = time.Now().Format(time.RFC3339)
+				delete(dt.pendingEndpoints, serviceUID)
+				delete(dt.pendingPods, serviceUID)
+				dt.triggerServiceUpdater()
+				return
+			}
+
 			// If pods arrived while the deletion was in flight (buffered by the
 			// StateDeletionInProgress branch of AddPod), or a re-create was requested
 			// during deletion, the service must be re-created rather than torn down —
@@ -965,7 +1150,9 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				opState.NextRetryAt = time.Time{}
 				opState.InFlightConfig = nil
 				opState.LastAppliedConfig = nil
+				opState.AttemptedCreateConfig = nil
 				opState.RecreateAfterDeletion = false
+				opState.FinalizerKeptForRecreate = false
 				opState.LastAttempt = time.Now().Format(time.RFC3339)
 				delete(dt.pendingServiceDeletions, serviceUID)
 				dt.triggerServiceUpdater()
@@ -1046,6 +1233,10 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				appliedCopy := opState.Config
 				opState.LastAppliedConfig = &appliedCopy
 			}
+			opState.AttemptedCreateConfig = nil
+			if opState.Config.IsInbound {
+				delete(dt.provisionedFamilies, serviceUID)
+			}
 
 			// If a config update arrived while creation was in flight, schedule an update now.
 			if opState.InFlightConfig != nil && !configsEqualForUpdate(opState.InFlightConfig, &opState.Config) {
@@ -1071,7 +1262,19 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 			// delete-completion preempt), so the terminal branch can detect a desired-spec drift that
 			// landed while this attempt was in flight.
 			attempted := opState.InFlightConfig
+			if opState.AttemptedCreateConfig == nil && attempted != nil {
+				attemptedCopy := *attempted
+				opState.AttemptedCreateConfig = &attemptedCopy
+			}
 			opState.InFlightConfig = nil
+
+			// A load balancer that is already live, e.g. attached before a park or left by an earlier
+			// attempt, receives endpoint events directly once the Service leaves CreationInProgress. Replay
+			// the buffer now so it is served, and so a later successful create does not replay it stale.
+			if dt.NRPResources.LoadBalancers.Has(serviceUID) {
+				dt.promotePendingEndpointsLocked(serviceUID)
+				dt.triggerLocationsUpdater()
+			}
 
 			if isTerminalError(err) {
 				recordServiceOperation("create", opState.Config.IsInbound, startTime, err, "ValidationError", opState.IsOrphan)
@@ -1169,11 +1372,11 @@ func (dt *DiffTracker) AddPodWithUID(serviceUID, podKey, podUID, location, addre
 // pendingServiceOps is keyed by a bare string shared by both kinds: inbound by Service UID,
 // outbound by the egress pod label value, which is user-controlled. A pod labelled with an existing
 // Service's UID resolves to that Service's operation, where acting on it would publish the pod with
-// no NAT Gateway behind it or tear down the inbound LoadBalancer.
+// no NAT Gateway behind it or tear down the inbound LoadBalancer. A provisioned LoadBalancer with no
+// operation yet (after a restart, before its Service is reconciled) collides too.
 // Must be called with dt.mu held.
 func (dt *DiffTracker) outboundIdentityConflictsWithInboundLocked(serviceUID string) bool {
-	opState, exists := dt.pendingServiceOps[serviceUID]
-	return exists && opState.Config.IsInbound
+	return dt.inboundUnitTrackedLocked(serviceUID)
 }
 
 func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address string) {
@@ -1667,6 +1870,11 @@ func (dt *DiffTracker) DeletePodWithoutAddresses(serviceUID, namespace, name, ui
 	result := DeletePodResult{}
 	if serviceUID == "" || namespace == "" || name == "" {
 		dt.logger.V(4).Info("Could not delete no-IP pod with invalid parameters", "service", serviceUID, "namespace", namespace, "name", name)
+		return result
+	}
+	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
+		dt.logger.V(2).Info("Rejected no-IP egress pod deletion whose identity collides with an inbound service",
+			"service", serviceUID, "namespace", namespace, "name", name)
 		return result
 	}
 

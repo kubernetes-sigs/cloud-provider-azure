@@ -2874,6 +2874,31 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		}
 	})
 
+	for name, byoLB := range map[string]func(*providerconfig.Config){
+		"loadBalancerName":                          func(c *providerconfig.Config) { c.LoadBalancerName = "byo-lb" },
+		"loadBalancerResourceGroup":                 func(c *providerconfig.Config) { c.LoadBalancerResourceGroup = "byo-rg" },
+		"preConfiguredBackendPoolLoadBalancerTypes": func(c *providerconfig.Config) { c.PreConfiguredBackendPoolLoadBalancerTypes = "all" },
+	} {
+		t.Run("ServiceGateway rejects a user-provided load balancer set by "+name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			az := GetTestCloud(ctrl)
+			zoneMock := az.zoneRepo.(*zone.MockRepository)
+			zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+
+			azureconfig := providerconfig.Config{
+				ServiceGatewayEnabled:                    true,
+				LoadBalancerSKU:                          consts.LoadBalancerSKUService,
+				LoadBalancerBackendPoolConfigurationType: consts.LoadBalancerBackendPoolConfigurationTypePodIP,
+			}
+			byoLB(&azureconfig)
+			err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, false)
+			if assert.Error(t, err) {
+				assert.Contains(t, err.Error(), "user-provided load balancer, which is not supported when ServiceGatewayEnabled is true")
+				assert.Regexp(t, name+`="[^"]+"`, err.Error())
+			}
+		})
+	}
 }
 
 func TestSetLBDefaults(t *testing.T) {
