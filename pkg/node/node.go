@@ -87,6 +87,11 @@ func (np *IMDSNodeProvider) GetPlatformSubFaultDomain(ctx context.Context) (stri
 	return np.azure.GetPlatformSubFaultDomain(ctx)
 }
 
+// GetMetadataLabels returns the built-in metadata labels from IMDS.
+func (np *IMDSNodeProvider) GetMetadataLabels(ctx context.Context) (map[string]string, error) {
+	return np.azure.GetMetadataLabels(ctx)
+}
+
 // GetInterconnectGroupID returns the Interconnect Group ID from IMDS.
 func (np *IMDSNodeProvider) GetInterconnectGroupID(ctx context.Context) (string, error) {
 	return np.azure.GetInterconnectGroupID(ctx)

@@ -63,8 +63,8 @@ type NodeProvider interface {
 	GetZone(ctx context.Context, name types.NodeName) (cloudprovider.Zone, error)
 	// GetPlatformSubFaultDomain returns the PlatformSubFaultDomain from IMDS if set.
 	GetPlatformSubFaultDomain(ctx context.Context) (string, error)
-	// GetInterconnectGroupID returns the Interconnect Group ID from IMDS if set.
-	GetInterconnectGroupID(ctx context.Context) (string, error)
+	// GetMetadataLabels returns only managed built-in metadata labels, omitting empty values.
+	GetMetadataLabels(ctx context.Context) (map[string]string, error)
 }
 
 // labelReconcile holds information about a label to reconcile and how to reconcile it.
@@ -540,12 +540,17 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 		nodeModifiers = append(nodeModifiers, addCloudNodeLabel(consts.LabelPlatformSubFaultDomain, platformSubFaultDomain))
 	}
 
-	interconnectGroupID, err := cnc.getInterconnectGroupID(ctx)
+	metadataLabels, err := cnc.nodeProvider.GetMetadataLabels(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get interconnectGroupID: %w", err)
+		return nil, fmt.Errorf("get metadata labels: %w", err)
 	}
-	if interconnectGroupID != "" {
-		nodeModifiers = append(nodeModifiers, addCloudNodeLabel(consts.LabelPlatformInterconnectGroup, interconnectGroupID))
+	for key, value := range metadataLabels {
+		if _, ok := consts.ManagedMetadataLabelKeys[key]; !ok {
+			return nil, fmt.Errorf("unexpected metadata label key %q", key)
+		}
+		if value != "" {
+			nodeModifiers = append(nodeModifiers, addCloudNodeLabel(key, value))
+		}
 	}
 
 	return nodeModifiers, nil
@@ -694,14 +699,6 @@ func (cnc *CloudNodeController) getPlatformSubFaultDomain(ctx context.Context) (
 		return "", fmt.Errorf("cnc.getPlatformSubfaultDomain: %w", err)
 	}
 	return subFD, nil
-}
-
-func (cnc *CloudNodeController) getInterconnectGroupID(ctx context.Context) (string, error) {
-	ig, err := cnc.nodeProvider.GetInterconnectGroupID(ctx)
-	if err != nil {
-		return "", fmt.Errorf("cnc.getInterconnectGroupID: %w", err)
-	}
-	return ig, nil
 }
 
 func (cnc *CloudNodeController) updateNetworkingCondition(node *v1.Node, networkReady bool) error {
