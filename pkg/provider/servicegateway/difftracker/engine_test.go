@@ -59,6 +59,68 @@ func newTestDiffTracker() *DiffTracker {
 	}
 }
 
+func TestPodCleanupNRPOnlyWakeups(t *testing.T) {
+	const service = "egress-a-natgw"
+	const other = "egress-b-natgw"
+	dt := newTestDiffTracker()
+	dt.NRPResources.NATGateways.Insert(service, other)
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString(service, other)},
+		"10.244.0.8": {Services: utilsets.NewString(service)},
+	}}
+	woken := func() bool {
+		select {
+		case <-dt.locationsUpdaterTrigger:
+			return true
+		default:
+			return false
+		}
+	}
+	for _, step := range []struct {
+		service string
+		uid     string
+		address string
+		wake    bool
+	}{
+		{uid: "uid-p", address: "10.244.0.7", wake: true},
+		{uid: "uid-p", address: "10.244.0.7"},
+		{uid: "uid-p", address: "10.244.0.8", wake: true},
+		{uid: "uid-p", address: "10.244.0.8"},
+		{uid: "uid-replacement", address: "10.244.0.8", wake: true},
+		{address: "10.244.0.7", wake: true},
+		{service: other, uid: "uid-p", address: "10.244.0.7", wake: true},
+		{service: other, uid: "uid-p", address: "10.244.0.7"},
+	} {
+		name := service
+		if step.service != "" {
+			name = step.service
+		}
+		result := dt.DeletePod(name, "10.0.0.1", []string{step.address}, "ns", "p", step.uid)
+		assert.True(t, result.Enqueued)
+		assert.True(t, result.IsLastPod)
+		assert.Equal(t, step.wake, woken(), "uid=%s address=%s", step.uid, step.address)
+	}
+	group := dt.pendingPodDeletions["ns/p"]
+	assert.NotNil(t, group.forUID("uid-replacement"))
+	pending := group.forUID("uid-p")
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	cleanup, found := pending.cleanupFor(service)
+	assert.True(t, found)
+	assert.ElementsMatch(t, []string{"10.244.0.7", "10.244.0.8"}, cleanup.Addresses)
+	unresolved := *pending
+	unresolved.ResolutionPending = true
+	dt.pendingPodDeletions["ns/p"] = group.withUID(&unresolved)
+	dt.DeletePod(service, "10.0.0.1", []string{"10.244.0.7"}, "ns", "p", "uid-p")
+	assert.True(t, woken(), "the first resolution must still schedule discovered work")
+	for range 2 {
+		dt.DeletePod(service, "10.0.0.1", []string{"10.244.0.7"}, "ns", "legacy", "")
+		assert.True(t, woken(), "unknown UIDs retain conservative wakeup behavior")
+	}
+	assert.Empty(t, dt.podFinalizerGuards)
+}
+
 func TestReconcileInboundService(t *testing.T) {
 	newService := func(uid string, port int32) *v1.Service {
 		return &v1.Service{
@@ -437,6 +499,142 @@ func TestEngineOnServiceCreationComplete_Failure(t *testing.T) {
 }
 
 // TestEngineAddPod_ServiceCreating tests pod buffering during service creation
+func TestPodRegistrationNoOpPreservesCleanupProgress(t *testing.T) {
+	const service, location, address = "egress-a-natgw", "10.0.0.1", "10.244.0.7"
+	for _, state := range []string{
+		"ready", "updating", "recovered", "cleanup_only", "cleanup_other_UID",
+		"identity_refresh", "gateway_revival", "unresolved", "unknown_verification", "other_service_wait",
+	} {
+		t.Run(state, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			dt.AddPodWithUID(service, "ns/p", "uid-old", location, address)
+			dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+			uid, wantWake := "uid-old", false
+			switch state {
+			case "updating":
+				dt.pendingServiceOps[service].State = StateUpdateInProgress
+			case "recovered":
+				delete(dt.pendingServiceOps, service)
+			case "cleanup_only":
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: uid, ServiceName: service, Addresses: []string{address},
+				}
+				wantWake = true
+			case "cleanup_other_UID":
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: "uid-departed", ServiceName: "earlier-natgw", IsLastPod: true,
+					OtherUIDs: map[string]*PendingPodDeletion{
+						uid: {Namespace: "ns", Name: "p", UID: uid, ServiceName: service, Addresses: []string{address}},
+					},
+				}
+				wantWake = true
+			case "identity_refresh":
+				uid, wantWake = "uid-new", true
+			case "gateway_revival":
+				dt.DeletePod(service, location, []string{address}, "ns", "p", uid)
+				assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[service].State)
+				wantWake = true
+			case "unresolved":
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: uid, ResolutionPending: true, ResolutionAddresses: []string{address},
+				}
+			case "unknown_verification":
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: uid, VerifyUnknownEgressDrain: true,
+				}
+			case "other_service_wait":
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: uid,
+					ServiceCleanup: map[string]podCleanupState{"earlier-natgw": {WaitForServiceDeletion: true}},
+				}
+			}
+			select {
+			case <-dt.locationsUpdaterTrigger:
+			default:
+			}
+			dt.AddPodWithUID(service, "ns/p", uid, location, address)
+			woke := false
+			select {
+			case <-dt.locationsUpdaterTrigger:
+				woke = true
+			default:
+			}
+			assert.Equal(t, wantWake, woke)
+			assert.Equal(t, uid, dt.K8sResources.Nodes[location].Pods[address].OutboundPodUID)
+			switch state {
+			case "cleanup_only", "gateway_revival":
+				assert.NotContains(t, dt.pendingPodDeletions, "ns/p")
+			case "cleanup_other_UID":
+				assert.Nil(t, dt.pendingPodDeletions["ns/p"].forUID(uid))
+				assert.True(t, dt.pendingPodDeletions["ns/p"].waitsForService("earlier-natgw"))
+			case "unresolved":
+				assert.True(t, dt.pendingPodDeletions["ns/p"].ResolutionPending)
+			case "unknown_verification":
+				assert.True(t, dt.pendingPodDeletions["ns/p"].VerifyUnknownEgressDrain)
+			case "other_service_wait":
+				assert.True(t, dt.pendingPodDeletions["ns/p"].waitsForService("earlier-natgw"))
+			}
+			for range 8 {
+				dt.AddPodWithUID(service, "ns/p", uid, location, address)
+				select {
+				case <-dt.locationsUpdaterTrigger:
+					t.Fatal("unchanged registration must not schedule another location pass")
+				default:
+				}
+			}
+			count, _ := dt.outboundIdentityPodRefCount.Load(service)
+			assert.Equal(t, 1, count)
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestPodRegistrationBufferIsIdempotent(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, state := range []string{"new", "not_started", "creating", "deleting", "failed_delete"} {
+		t.Run(state, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			if state != "new" {
+				op := &ServiceOperationState{
+					ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateNotStarted,
+				}
+				switch state {
+				case "creating":
+					op.State = StateCreationInProgress
+				case "deleting":
+					op.State = StateDeletionInProgress
+				case "failed_delete":
+					op.State, op.RetryCount = StateDeletionPending, 1
+				}
+				dt.pendingServiceOps[service] = op
+			}
+			for range 32 {
+				dt.AddPodWithUID(service, "ns/p", "uid-old", "10.0.0.1", "10.244.0.7")
+				dt.AddPodWithUID(service, "ns/p", "uid-old", "fd00::1", "fd00::7")
+			}
+			assert.Len(t, dt.pendingPods[service], 2)
+			dt.AddPodWithUID(service, "ns/p", "uid-new", "10.0.0.1", "10.244.0.7")
+			dt.AddPodWithUID(service, "ns/p", "uid-old", "10.0.0.2", "10.244.0.7")
+			dt.AddPodWithUID(service, "ns/p", "uid-old", "10.0.0.1", "10.244.0.8")
+			dt.AddPod(service, "ns/legacy-p", "10.0.0.1", "10.244.0.9")
+			dt.AddPod(service, "ns/legacy-q", "10.0.0.1", "10.244.0.9")
+			assert.Len(t, dt.pendingPods[service], 7, "distinct UID, location, address or legacy Pod key must remain separate")
+			dt.DeletePodForReplacement(service, "10.0.0.1", []string{"10.244.0.7"}, "ns", "p", "uid-old")
+			assert.Len(t, dt.pendingPods[service], 6)
+			foundReplacement := false
+			for _, pending := range dt.pendingPods[service] {
+				foundReplacement = foundReplacement || pending.PodKey == "ns/p" && pending.PodUID == "uid-new"
+			}
+			assert.True(t, foundReplacement)
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
 func TestEngineAddPod_ServiceCreating(t *testing.T) {
 	dt := newTestDiffTracker()
 	egressName := "egress-2"
@@ -1229,6 +1427,93 @@ func TestEngineOnServiceCreationComplete_LateLastPodFinalizerRedispatches(t *tes
 			}
 		})
 	}
+}
+
+func TestPodCleanupRevivalAcrossUIDs(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-current", "10.244.0.7")
+	pod.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert(a, b)
+	dt.pendingServiceOps[a] = &ServiceOperationState{
+		ServiceName: a, Config: NewOutboundServiceConfig(a, nil), State: StateDeletionPending,
+	}
+	dt.pendingServiceOps[b] = &ServiceOperationState{
+		ServiceName: b, Config: NewOutboundServiceConfig(b, nil), State: StateDeletionInProgress,
+	}
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-old", ServiceName: b, IsLastPod: true,
+		OtherUIDs: map[string]*PendingPodDeletion{
+			"uid-current": {
+				Namespace: "ns", Name: "p", UID: "uid-current",
+				ServiceName: a, Addresses: []string{"10.244.0.7"}, IsLastPod: true,
+			},
+		},
+	}
+	dt.AddPodWithUID(a, "ns/other", "other-uid", "10.0.0.1", "10.244.0.9")
+	pending := dt.pendingPodDeletions["ns/p"]
+	assert.False(t, pending.forUID("uid-current").waitsForService(a), "revival must demote every matching UID's service wait")
+	assert.True(t, pending.forUID("uid-old").waitsForService(b))
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[a].State)
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[b].State)
+	assert.Equal(t, a, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.9"].PublicOutboundIdentity)
+}
+
+func TestMultiIdentityCleanupRevivalAndBYORetention(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert(a, b)
+	dt.setBYONATGatewayID(a, byoNATGatewayARMID("external-a"))
+	dt.setBYONATGatewayID(b, byoNATGatewayARMID("external-b"))
+	for _, service := range []string{a, b} {
+		dt.pendingServiceOps[service] = &ServiceOperationState{
+			ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateDeletionInProgress,
+		}
+	}
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-p",
+		ServiceCleanup: map[string]podCleanupState{
+			a: {Addresses: []string{"10.244.0.7"}, WaitForServiceDeletion: true},
+			b: {Addresses: []string{"10.244.0.7"}, WaitForServiceDeletion: true},
+		},
+	}
+	dt.OnServiceCreationComplete(a, true, nil)
+	assert.Equal(t, byoNATGatewayARMID("external-a"), dt.byoNATGatewayID(a), "late A work retains A's full target")
+	if !assert.Contains(t, dt.pendingServiceOps, a) {
+		return
+	}
+	dt.pendingServiceOps[a].State = StateDeletionPending
+	dt.AddPodWithUID(a, "ns/other", "other-uid", "10.0.0.1", "10.244.0.9")
+	pending := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.False(t, pending.waitsForService(a), "reviving A demotes only A")
+	assert.True(t, pending.waitsForService(b))
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(got))
+	completeEgressCleanup(t, dt, b)
+	dt.OnServiceCreationComplete(b, true, nil)
+	assert.Empty(t, dt.byoNATGatewayID(b))
+	assert.Equal(t, byoNATGatewayARMID("external-a"), dt.byoNATGatewayID(a), "B's completion cannot retire revived A")
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+	assert.Equal(t, a, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.9"].PublicOutboundIdentity)
 }
 
 // TestEngineDeletePod_StaleDuplicateRemovalIsNoOp verifies that a delete event for a pod that

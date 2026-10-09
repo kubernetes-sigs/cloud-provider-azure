@@ -32,10 +32,13 @@ import (
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/pager"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
@@ -178,6 +181,9 @@ func InitializeFromCluster(
 	// This must happen BEFORE informers start to avoid race conditions
 	// Reuse lists from buildK8sState (avoids duplicate API calls)
 	recoverStuckFinalizers(ctx, diffTracker, serviceList, egressPodList, endpointSliceList, currentLoadBalancersInNRP, pipNamesInAzure)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// Counter already initialized from K8s state during buildK8sState
 	// After initialization sync completes, NRP will match K8s, so counter reflects final state
@@ -194,12 +200,16 @@ func InitializeFromCluster(
 	logSyncOperations(syncOperations)
 
 	// Setup initialization mode and start updaters
-	if err := startInitialization(ctx, diffTracker); err != nil {
+	deferredLocationsTrigger, deferredServiceTrigger, err := startInitialization(ctx, diffTracker)
+	if err != nil {
 		return nil, err
 	}
 
 	// Reconcile services (create/delete LBs and NAT Gateways in Azure)
 	diffTracker.reconcileServices(syncOperations, serviceNameToService)
+	if deferredServiceTrigger {
+		diffTracker.triggerServiceUpdater()
+	}
 
 	// Schedule deletion of orphaned Azure resources via ServiceUpdater.
 	// Orphaned resources are LBs/NATs/PIPs that exist in Azure but NOT in ServiceGateway.
@@ -231,7 +241,7 @@ func InitializeFromCluster(
 	hasExistingNRPServices := diffTracker.NRPResources.LoadBalancers.Len() > 0 || diffTracker.NRPResources.NATGateways.Len() > 0
 	diffTracker.mu.Unlock()
 
-	if shouldTriggerInitialLocationSync(hasDeletions, hasOnlyExistingServices, hasRecoveredItems, hasExistingNRPServices) {
+	if deferredLocationsTrigger || shouldTriggerInitialLocationSync(hasDeletions, hasOnlyExistingServices, hasRecoveredItems, hasExistingNRPServices) {
 		logger.V(2).Info("Triggered initial location sync", "deletions", hasDeletions, "onlyExisting", hasOnlyExistingServices, "recoveredItems", hasRecoveredItems, "existingNRPServices", hasExistingNRPServices)
 		diffTracker.triggerLocationsUpdater()
 	}
@@ -495,7 +505,7 @@ func (dt *DiffTracker) outboundIPFamilies() []string {
 //     Just log for visibility; no explicit pendingServiceDeletions needed as GetSyncOperations will handle it
 //   - For Pods with valid addresses: Track in pendingPodDeletions (don't call DeletePod - counters are clean)
 //   - For Pods with missing addresses: Track a service-level NRP verification before removal
-//   - For malformed resources (no egress label): Directly remove finalizer
+//   - For Pods with an absent or empty egress label: Drain-gated by recoverUnlabelledPodFinalizers
 //
 // NOTE: EndpointSlices do not use finalizers - their deletion is handled directly by the informer.
 //
@@ -609,16 +619,6 @@ func recoverStuckFinalizers(
 				continue
 			}
 			if egressLabel == "" {
-				// No egress label = nothing to track, just remove finalizer directly
-				logger.V(4).Info("Removed pod finalizer with missing egress label", "namespace", pod.Namespace, "pod", pod.Name)
-				if err := dt.removePodFinalizer(ctx, pod); err != nil {
-					RecordPodFinalizerRemoveFailed()
-					logger.Error(err, "Pod is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart",
-						"namespace", pod.Namespace, "pod", pod.Name)
-				} else {
-					podsDirectCleaned++
-					recordFinalizerRecovered()
-				}
 				continue
 			}
 
@@ -685,24 +685,85 @@ func recoverStuckFinalizers(
 		dt.mu.Lock()
 		for key, val := range pendingPods {
 			if existing := dt.pendingPodDeletions[key]; existing != nil {
-				if existing.UID == val.UID {
-					existing.RecoveredAtStartup = true
+				record := existing.forUID(val.UID)
+				if record == nil || record.UID != val.UID {
+					continue
 				}
-				continue
 			}
-			dt.pendingPodDeletions[key] = val
+			dt.mergePodDeletionLocked(key, val)
 		}
 		dt.mu.Unlock()
 	}
 
-	// NOTE: We do NOT trigger LocationsUpdater here because it's not started yet.
-	// The pending items will be picked up when the existing location sync trigger
-	// fires after startInitialization() completes.
+	unlabelledRecovered, unlabelledDirectCleaned := recoverUnlabelledPodFinalizers(ctx, dt)
+	podsRecovered += unlabelledRecovered
+	podsDirectCleaned += unlabelledDirectCleaned
+
+	// NOTE: The pending items are picked up by the location sync triggered after
+	// startInitialization(); any trigger buffered earlier is deferred until then.
 
 	if servicesRecovered > 0 || servicesDirectCleaned > 0 || podsRecovered > 0 || podsDirectCleaned > 0 {
 		logger.V(2).Info("Recovered stuck finalizers", "services", servicesRecovered, "directCleanedServices", servicesDirectCleaned, "pods", podsRecovered, "directCleanedPods", podsDirectCleaned)
 	} else {
 		logger.V(2).Info("Found no stuck finalizers")
+	}
+}
+
+// An incomplete list cannot establish recovery coverage. Retry it until success or cancellation;
+// individual Pod lookup failures have their own pending records and updater retries.
+func recoverUnlabelledPodFinalizers(ctx context.Context, dt *DiffTracker) (recovered, directCleaned int) {
+	logger := log.FromContextOrBackground(ctx)
+	podPager := pager.New(func(ctx context.Context, opts metav1.ListOptions) (runtime.Object, error) {
+		return dt.kubeClient.CoreV1().Pods(v1.NamespaceAll).List(ctx, opts)
+	})
+
+	for attempt := 1; ; attempt++ {
+		err := podPager.EachListItem(ctx, metav1.ListOptions{Limit: 500}, func(obj runtime.Object) error {
+			pod, ok := obj.(*v1.Pod)
+			if !ok || !hasPodFinalizer(pod) || podEgressGatewayName(pod) != "" {
+				return nil
+			}
+			key := pod.Namespace + "/" + pod.Name
+			dt.mu.Lock()
+			prior := dt.pendingPodDeletions[key].forUID(string(pod.UID))
+			alreadyRecovering := prior != nil && prior.RecoveredAtStartup
+			dt.mu.Unlock()
+			pending, released := dt.releaseUnlabelledPodFinalizer(ctx, pod, true)
+			if current, err := dt.getPodByNamespaceName(ctx, pod.Namespace, pod.Name); err == nil {
+				if current.UID == pod.UID && podEgressGatewayName(current) != "" {
+					if current.DeletionTimestamp != nil {
+						dt.enqueuePodResolution(ctx, current)
+					} else if unlock, err := dt.lockPodFinalizer(ctx, key); err == nil {
+						dt.podInformerRegisterPodGuarded(ctx, current)
+						dt.mu.Lock()
+						pending = dt.pendingPodDeletions[key].forUID(string(pod.UID)) != nil
+						dt.mu.Unlock()
+						unlock()
+					}
+				}
+			} else if pending && !apierrors.IsNotFound(err) {
+				dt.enqueuePodResolution(ctx, pod)
+			}
+			if !alreadyRecovering {
+				if pending {
+					recovered++
+				} else if released {
+					directCleaned++
+				}
+			}
+			return ctx.Err()
+		})
+		if err == nil || ctx.Err() != nil {
+			return recovered, directCleaned
+		}
+		logger.Error(err, "Incomplete unlabelled pod finalizer scan; retrying", "attempt", attempt)
+		timer := time.NewTimer(computeRetryBackoff(attempt))
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return recovered, directCleaned
+		case <-timer.C:
+		}
 	}
 }
 
@@ -1192,11 +1253,10 @@ func logSyncOperations(syncOps *SyncDiffTrackerReturnType) {
 }
 
 // startInitialization sets up initialization mode and starts updaters
-func startInitialization(ctx context.Context, diffTracker *DiffTracker) error {
+func startInitialization(ctx context.Context, diffTracker *DiffTracker) (deferredLocationsTrigger, deferredServiceTrigger bool, err error) {
 	logger := log.FromContextOrBackground(ctx)
 	diffTracker.mu.Lock()
-	atomic.StoreInt32(&diffTracker.isInitializing, 1)
-	diffTracker.initCompletionChecker = make(chan struct{})
+	deferredLocationsTrigger, deferredServiceTrigger = diffTracker.beginInitializationLocked()
 	diffTracker.mu.Unlock()
 
 	logger.V(2).Info("Started ServiceUpdater and LocationsUpdater")
@@ -1207,7 +1267,27 @@ func startInitialization(ctx context.Context, diffTracker *DiffTracker) error {
 
 	// Give updaters time to start their event loops
 	time.Sleep(50 * time.Millisecond)
-	return nil
+	return deferredLocationsTrigger, deferredServiceTrigger, nil
+}
+
+// beginInitializationLocked enters initialization mode. Startup recovery runs before the updaters
+// start and may already have buffered untracked trigger tokens. They are drained here and reported so
+// the caller re-sends them after the startup reconciliation is queued; consuming them earlier could
+// signal completion before that work exists. Requires dt.mu.
+func (dt *DiffTracker) beginInitializationLocked() (deferredLocationsTrigger, deferredServiceTrigger bool) {
+	select {
+	case <-dt.locationsUpdaterTrigger:
+		deferredLocationsTrigger = true
+	default:
+	}
+	select {
+	case <-dt.serviceUpdaterTrigger:
+		deferredServiceTrigger = true
+	default:
+	}
+	atomic.StoreInt32(&dt.isInitializing, 1)
+	dt.initCompletionChecker = make(chan struct{})
+	return deferredLocationsTrigger, deferredServiceTrigger
 }
 
 // cleanupOnError cleans up initialization state on failure

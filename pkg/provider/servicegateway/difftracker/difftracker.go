@@ -96,6 +96,7 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		pendingPods:             make(map[string][]PendingPodUpdate),
 		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
 		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
+		podFinalizerGuards:      make(map[string]*podFinalizerGuard),
 
 		recoveredServiceFinalizers: make(map[string]struct{}),
 		byoNATGateways:             make(map[string]string),

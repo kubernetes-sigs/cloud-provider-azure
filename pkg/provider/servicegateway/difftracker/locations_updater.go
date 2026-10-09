@@ -279,7 +279,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			// not be left Terminating because another Service contributed a malformed entry to the
 			// shared batch.
 			lu.diffTracker.CheckPendingServiceDeletions()
-			readyRemovalPending := lu.diffTracker.CheckPendingPodDeletions(ctx)
+			readyRemovalPending := lu.diffTracker.checkPendingPodDeletions(ctx, false)
 			// Those checks only advance work whose addresses already left NRP. The batch was
 			// abandoned unapplied, so anything still waiting has no future trigger: keep retrying
 			// instead of taking the terminal shortcut.
@@ -309,7 +309,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	// to NRP and reflected in NRPResources above, so any non-last pod whose address has now
 	// left NRP gets its finalizer removed here. Last-pod entries are skipped (their finalizers
 	// are removed after NAT Gateway deletion by RemoveLastPodFinalizers).
-	readyRemovalPending := lu.diffTracker.CheckPendingPodDeletions(ctx)
+	readyRemovalPending := lu.diffTracker.checkPendingPodDeletions(ctx, false)
 	if lu.initPodFinalizersStillPending() || readyRemovalPending {
 		// Retry instead of reporting success: during init this keeps WaitForInitialSync blocked
 		// until finalizers clear; post-init it reschedules a backoff retry for a ready non-last

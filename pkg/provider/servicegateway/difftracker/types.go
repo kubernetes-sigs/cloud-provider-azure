@@ -464,6 +464,7 @@ type DiffTracker struct {
 	pendingPods             map[string][]PendingPodUpdate
 	pendingServiceDeletions map[string]*PendingServiceDeletion
 	pendingPodDeletions     map[string]*PendingPodDeletion // key = "namespace/name"
+	podFinalizerGuards      map[string]*podFinalizerGuard
 
 	// recoveredServiceFinalizers holds the UIDs of Services whose stuck finalizer startup left to
 	// the diff. An entry is cleared when that finalizer is actually removed, which is what closes

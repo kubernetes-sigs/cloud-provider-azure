@@ -863,16 +863,748 @@ func TestRecoverStuckFinalizers_PreservesExistingOutboundDrain(t *testing.T) {
 				assert.Equal(t, string(pod.UID), pending.UID)
 				assert.True(t, pending.RecoveredAtStartup)
 				if existing {
-					assert.Same(t, prior, pending)
-					assert.Equal(t, outboundServiceName("previous-egress"), pending.ServiceName)
-					assert.True(t, pending.IsLastPod)
-					assert.Equal(t, []string{"10.244.0.5"}, pending.Addresses)
+					cleanup, found := pending.cleanupFor(outboundServiceName("previous-egress"))
+					assert.True(t, found)
+					assert.True(t, cleanup.WaitForServiceDeletion)
+					assert.Equal(t, []string{"10.244.0.5"}, cleanup.Addresses)
 				} else {
 					assert.True(t, pending.VerifyServiceDrain)
 				}
 			}
-			assert.Empty(t, kube.Actions(), "a genuine drain must not release the finalizer")
+			for _, action := range kube.Actions() {
+				assert.NotEqual(t, "update", action.GetVerb(), "a genuine drain must not release the finalizer")
+			}
 			assert.Empty(t, dt.locationsUpdaterTrigger, "recovery must not trigger before initialization accounting starts")
+		})
+	}
+}
+
+func TestRecoverStuckFinalizers_UnfilteredUnlabelledPodSweep(t *testing.T) {
+	ctx := context.Background()
+	now := metav1.Now()
+	empty := ""
+
+	tests := []struct {
+		name      string
+		label     *string
+		deleting  bool
+		nrpHolds  bool
+		wantDrain bool
+	}{
+		{name: "c1 label removed live", deleting: false, nrpHolds: true, wantDrain: true},
+		{name: "c2 label empty live", label: &empty, deleting: false, nrpHolds: true, wantDrain: true},
+		{name: "c3 deleting then label removed", deleting: true, nrpHolds: true, wantDrain: true},
+		{name: "c4 deleting then label empty", label: &empty, deleting: true, nrpHolds: true, wantDrain: true},
+		{name: "removed label without NRP", deleting: false},
+		{name: "empty label without NRP", label: &empty, deleting: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := unlabelledFinalizerPod(tt.label, "uid-p", "10.244.0.7")
+			if tt.deleting {
+				pod.DeletionTimestamp = &now
+			}
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			if tt.nrpHolds {
+				dt.NRPResources.NATGateways.Insert("egress-a-natgw")
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+					Addresses: map[string]NRPAddress{
+						"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+					},
+				}
+			}
+
+			RegisterMetrics()
+			read := func() (recovered, scheduled float64) {
+				r, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+				assert.NoError(t, err)
+				s, err := testutil.GetCounterMetricValue(finalizersRecoveryScheduledTotal)
+				assert.NoError(t, err)
+				return r, s
+			}
+			r0, s0 := read()
+
+			var egressPods *v1.PodList
+			if tt.label != nil {
+				egressPods = &v1.PodList{Items: []v1.Pod{*pod.DeepCopy()}}
+			}
+			recoverStuckFinalizers(ctx, dt, nil, egressPods, nil, utilsets.NewString(), nil)
+
+			r1, s1 := read()
+			if tt.wantDrain {
+				assert.Equal(t, 1.0, s1-s0, "a drain handed to tracking is scheduled")
+				assert.Zero(t, r1-r0, "a drain handed to tracking is not yet recovered")
+			} else {
+				assert.Equal(t, 1.0, r1-r0, "a direct release is recovered")
+				assert.Zero(t, s1-s0, "a direct release is not scheduled")
+			}
+
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			if tt.wantDrain {
+				assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+					"startup recovery must drain unlabelled pod addresses before release")
+				if assert.Contains(t, dt.pendingPodDeletions, "ns/p") {
+					assert.True(t, dt.pendingPodDeletions["ns/p"].RecoveredAtStartup,
+						"a startup-scheduled drain must close the recovery gap once released")
+				}
+				dt.podInformerAddPod(pod)
+				if assert.Contains(t, dt.pendingPodDeletions, "ns/p") {
+					assert.True(t, dt.pendingPodDeletions["ns/p"].RecoveredAtStartup,
+						"the informer's initial Add must keep the startup recovery mark")
+				}
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{}}
+				dt.CheckPendingPodDeletions(ctx)
+				completeEgressCleanup(t, dt, "egress-a-natgw")
+				r2, _ := read()
+				assert.Equal(t, 1.0, r2-r1, "the drained release closes the recovery gap")
+				got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+			}
+			assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+			assert.Contains(t, got.Finalizers, "example.com/keep",
+				"only this controller's finalizer should be removed")
+		})
+	}
+}
+
+func TestBeginInitialization_DefersTriggersBufferedByStartupRecovery(t *testing.T) {
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	failed := false
+	kube.PrependReactor("update", "pods", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+		if !failed {
+			failed = true
+			return true, nil, apierrors.NewServiceUnavailable("apiserver busy")
+		}
+		return false, nil, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+
+	recoverStuckFinalizers(ctx, dt, nil, nil, nil, utilsets.NewString(), nil)
+	dt.triggerServiceUpdater()
+	assert.Len(t, dt.locationsUpdaterTrigger, 1, "the retry queued by startup recovery nudges the updater")
+
+	dt.mu.Lock()
+	deferredLocations, deferredService := dt.beginInitializationLocked()
+	dt.mu.Unlock()
+
+	assert.True(t, deferredLocations)
+	assert.True(t, deferredService)
+	assert.Empty(t, dt.locationsUpdaterTrigger, "updaters must not see a recovery trigger before startup reconciliation is queued")
+	assert.Empty(t, dt.serviceUpdaterTrigger)
+	assert.Zero(t, atomic.LoadInt32(&dt.pendingUpdaterTriggers))
+
+	dt.triggerLocationsUpdater()
+	assert.Equal(t, int32(1), atomic.LoadInt32(&dt.pendingUpdaterTriggers), "a re-sent trigger is tracked")
+	<-dt.locationsUpdaterTrigger
+	assert.True(t, dt.CheckPendingPodDeletions(ctx), "the first acknowledged pass reaches the injected API failure")
+	atomic.AddInt32(&dt.pendingUpdaterTriggers, -1)
+	dt.checkInitializationComplete()
+	select {
+	case <-dt.initCompletionChecker:
+		t.Fatal("initialization completed before the queued finalizer retry succeeded")
+	default:
+	}
+	dt.triggerLocationsUpdater()
+	<-dt.locationsUpdaterTrigger
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	atomic.AddInt32(&dt.pendingUpdaterTriggers, -1)
+	dt.checkInitializationComplete()
+	select {
+	case <-dt.initCompletionChecker:
+	default:
+		t.Fatal("initialization must complete once the re-sent trigger is processed")
+	}
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+}
+
+func TestRecoverStuckFinalizers_UnlabelledPodSweepPaginates(t *testing.T) {
+	ctx := context.Background()
+	labelled := unlabelledFinalizerPod(nil, "uid-l", "10.244.0.6")
+	labelled.Name = "labelled"
+	labelled.Labels = map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"}
+	unlabelled := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+	unrelated := unlabelledFinalizerPod(nil, "uid-u", "10.244.0.8")
+	unrelated.Name = "unrelated"
+	unrelated.Finalizers = nil
+	kube := fake.NewSimpleClientset(labelled, unlabelled, unrelated)
+	var calls []metav1.ListOptions
+	kube.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		opts := action.(k8stesting.ListActionImpl).GetListOptions()
+		calls = append(calls, opts)
+		if opts.Continue == "" {
+			return true, &v1.PodList{ListMeta: metav1.ListMeta{Continue: "t1"}, Items: []v1.Pod{*labelled, *unrelated}}, nil
+		}
+		return true, &v1.PodList{Items: []v1.Pod{*unlabelled}}, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert("egress-a-natgw")
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+	}}
+
+	RegisterMetrics()
+	recovered0, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	scheduled0, err := testutil.GetCounterMetricValue(finalizersRecoveryScheduledTotal)
+	assert.NoError(t, err)
+
+	recoverStuckFinalizers(ctx, dt, nil, nil, nil, utilsets.NewString(), nil)
+
+	recovered1, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	scheduled1, err := testutil.GetCounterMetricValue(finalizersRecoveryScheduledTotal)
+	assert.NoError(t, err)
+	assert.Equal(t, 1.0, scheduled1-scheduled0, "only the unlabelled pod with our finalizer is recovered")
+	assert.Zero(t, recovered1-recovered0, "labelled pods and pods without our finalizer are not counted")
+
+	if assert.Len(t, calls, 2) {
+		assert.Equal(t, int64(500), calls[0].Limit)
+		assert.Equal(t, "t1", calls[1].Continue)
+	}
+	if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending, "a pod on a later page must be recovered") {
+		assert.True(t, pending.RecoveredAtStartup)
+	}
+	assert.NotContains(t, dt.pendingPodDeletions, "ns/labelled", "labelled pods are left to the egress recovery path")
+}
+
+func TestRecoverUnlabelledPodsRetriesIncompleteLists(t *testing.T) {
+	for _, laterPage := range []bool{false, true} {
+		t.Run(fmt.Sprintf("later_page=%t", laterPage), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			pod := unlabelledFinalizerPod(nil, "uid-p")
+			kube := fake.NewSimpleClientset(pod)
+			var options []metav1.ListOptions
+			kube.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				opts := action.(k8stesting.ListActionImpl).GetListOptions()
+				options = append(options, opts)
+				if len(options) == 1 && laterPage {
+					return true, &v1.PodList{ListMeta: metav1.ListMeta{Continue: "next"}}, nil
+				}
+				if len(options) == 1 || laterPage && len(options) == 2 {
+					return true, nil, apierrors.NewServiceUnavailable("transient list failure")
+				}
+				return false, nil, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			pending, direct := recoverUnlabelledPodFinalizers(ctx, dt)
+			assert.NoError(t, ctx.Err())
+			assert.Equal(t, 1, pending)
+			assert.Zero(t, direct)
+			if laterPage {
+				assert.Len(t, options, 3)
+				assert.Equal(t, "next", options[1].Continue)
+			} else {
+				assert.Len(t, options, 2)
+			}
+			assert.Empty(t, options[len(options)-1].Continue, "an incomplete scan restarts from the first page")
+			for _, opts := range options {
+				assert.Equal(t, int64(500), opts.Limit)
+				assert.Empty(t, opts.LabelSelector)
+			}
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "an unknown no-IP observation awaits a serialized location pass")
+			assert.False(t, dt.CheckPendingPodDeletions(ctx))
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsKeepsListedAddresses(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, tt := range []struct {
+		name        string
+		clearIPs    bool
+		mapped      bool
+		replacement bool
+		wantHeld    bool
+	}{
+		{name: "lost IPs", clearIPs: true, mapped: true, wantHeld: true},
+		{name: "stable status", mapped: true, wantHeld: true},
+		{name: "no mapping", clearIPs: true},
+		{name: "replacement", clearIPs: true, mapped: true, replacement: true, wantHeld: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			listed := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			listed.DeletionTimestamp = ptr.To(metav1.Now())
+			current := listed.DeepCopy()
+			if tt.clearIPs {
+				current.Status.PodIP, current.Status.PodIPs = "", nil
+			}
+			if tt.replacement {
+				current.UID = "uid-new"
+			}
+			kube := fake.NewSimpleClientset(current)
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*listed.DeepCopy()}}, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			if tt.mapped {
+				dt.NRPResources.NATGateways.Insert(service)
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: utilsets.NewString(service)},
+				}}
+			}
+			recoverUnlabelledPodFinalizers(ctx, dt)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Equal(t, tt.wantHeld, hasPodFinalizer(got))
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			if tt.mapped && !tt.replacement {
+				pending := dt.pendingPodDeletions["ns/p"]
+				if assert.NotNil(t, pending) {
+					assert.Contains(t, pending.Addresses, "10.244.0.7")
+					assert.True(t, pending.waitsForService(service))
+				}
+			}
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsStopsOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	calls := 0
+	kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		calls++
+		cancel()
+		return true, nil, apierrors.NewServiceUnavailable("list unavailable")
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	pending, direct := recoverUnlabelledPodFinalizers(ctx, dt)
+	assert.Zero(t, pending+direct)
+	assert.Equal(t, 1, calls)
+	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Empty(t, dt.podFinalizerGuards)
+}
+
+func TestRecoverUnlabelledPodsDoesNotPublishAfterCancellation(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, cancelAt := range []int{0, 2, 3} {
+		t.Run(fmt.Sprintf("cancel_at_GET=%d", cancelAt), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			listed := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			current := listed.DeepCopy()
+			current.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			kube := fake.NewSimpleClientset(current)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.K8sResources.Egresses.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*listed.DeepCopy()}}, nil
+			})
+			gets := 0
+			kube.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				gets++
+				if gets == 1 {
+					return true, nil, apierrors.NewServiceUnavailable("read unavailable")
+				}
+				if cancelAt != 0 && gets == cancelAt {
+					cancel()
+				}
+				return true, current.DeepCopy(), nil
+			})
+			recovered, released := recoverUnlabelledPodFinalizers(ctx, dt)
+			assert.Equal(t, 1, recovered)
+			assert.Zero(t, released)
+			if cancelAt != 0 {
+				cancel()
+				assert.True(t, dt.CheckPendingPodDeletions(ctx), "cancellation must leave the unresolved work owned")
+				assert.Empty(t, dt.K8sResources.Nodes)
+				assert.Empty(t, dt.pendingPods)
+			} else {
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+				assert.Equal(t, service, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity)
+			}
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsCancellationReleasesGuardWait(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, tt := range []struct {
+		name           string
+		cancelFollowup bool
+		deleting       bool
+	}{
+		{name: "live control"},
+		{name: "live cancellation", cancelFollowup: true},
+		{name: "deleting control", deleting: true},
+		{name: "deleting cancellation", cancelFollowup: true, deleting: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			listed := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			current := listed.DeepCopy()
+			current.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			if tt.deleting {
+				current.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			kube := fake.NewSimpleClientset(current)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.K8sResources.Egresses.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*listed.DeepCopy()}}, nil
+			})
+			var gets atomic.Int32
+			var recovering atomic.Bool
+			recovering.Store(true)
+			guardHeld := make(chan func(), 1)
+			kube.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				n := gets.Add(1)
+				if n == 1 {
+					return true, nil, apierrors.NewServiceUnavailable("read unavailable")
+				}
+				if n == 2 && recovering.Load() {
+					unlock, err := dt.lockPodFinalizer(context.Background(), "ns/p")
+					if err != nil {
+						return true, nil, err
+					}
+					guardHeld <- unlock
+				}
+				return true, current.DeepCopy(), nil
+			})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				defer recovering.Store(false)
+				recoverUnlabelledPodFinalizers(ctx, dt)
+			}()
+			var unlock func()
+			var once sync.Once
+			release := func() {
+				if unlock != nil {
+					once.Do(unlock)
+				}
+			}
+			defer func() {
+				cancel()
+				release()
+				select {
+				case <-done:
+				case <-time.After(3 * time.Second):
+					t.Error("recovery did not stop after releasing the held guard")
+				}
+			}()
+			select {
+			case unlock = <-guardHeld:
+				if !assert.Eventually(t, func() bool {
+					dt.mu.Lock()
+					defer dt.mu.Unlock()
+					guard := dt.podFinalizerGuards["ns/p"]
+					return guard != nil && guard.users >= 2
+				}, 3*time.Second, time.Millisecond, "follow-up never reached its guard wait") {
+					return
+				}
+				if tt.cancelFollowup {
+					cancel()
+					select {
+					case <-done:
+					case <-time.After(time.Second):
+						t.Error("cancelled recovery must not wait for an unrelated holder to release its Pod guard")
+					}
+				}
+				release()
+			case <-done:
+				// Deferring the failed lookup to its existing retry owner needs no follow-up wait.
+			case <-time.After(3 * time.Second):
+				t.Fatal("recovery neither returned nor attempted its follow-up")
+			}
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				t.Fatal("recovery did not finish")
+			}
+			if tt.cancelFollowup {
+				cancel()
+			} else {
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+				if tt.deleting {
+					pending := dt.pendingPodDeletions["ns/p"]
+					if assert.NotNil(t, pending) {
+						assert.True(t, pending.waitsForService(service))
+					}
+					assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[service].State)
+				} else {
+					assert.Equal(t, service, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity)
+				}
+			}
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsWaitsForUnknownDrain(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, state := range []string{
+		"unbacked outbound", "no NRP mapping", "desired same location", "buffered same location",
+		"desired different location", "buffered different location", "inbound mapping",
+		"reserved mapping", "unregistered outbound", "unowned address",
+	} {
+		t.Run(state, func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p")
+			pod.DeletionTimestamp = ptr.To(metav1.Now())
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			mappedService := service
+			switch state {
+			case "inbound mapping":
+				mappedService = "inbound-uid-lb"
+				dt.NRPResources.LoadBalancers.Insert(mappedService)
+			case "reserved mapping":
+				mappedService = "default-natgw"
+				dt.NRPResources.NATGateways.Insert(mappedService)
+			case "unregistered outbound":
+				dt.NRPResources.NATGateways.Delete(service)
+			}
+			if state != "no NRP mapping" {
+				services := utilsets.NewString(mappedService)
+				if state == "unowned address" {
+					services = nil
+				}
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: services},
+				}}
+			}
+			location := "10.0.0.1"
+			if strings.Contains(state, "different location") {
+				location = "10.0.0.2"
+			}
+			if strings.HasPrefix(state, "desired") {
+				dt.K8sResources.Egresses.Insert(service)
+				dt.K8sResources.Nodes[location] = Node{Pods: map[string]Pod{
+					"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: service, OutboundPodKey: "ns/q", OutboundPodUID: "uid-q"},
+				}}
+				dt.outboundIdentityPodRefCount.Store(service, 1)
+			}
+			if strings.HasPrefix(state, "buffered") {
+				dt.pendingPods[service] = []PendingPodUpdate{
+					{PodKey: "ns/q", PodUID: "uid-q", Location: location, Address: "10.244.0.7"},
+				}
+			}
+			wantHeld := state == "unbacked outbound" || strings.Contains(state, "different location")
+			recovered, released := recoverUnlabelledPodFinalizers(ctx, dt)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.True(t, hasPodFinalizer(got), "cached absence alone cannot exclude an outstanding publication")
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			assert.Equal(t, StateCreated, dt.pendingServiceOps[service].State, "unknown ownership must not guess a gateway deletion target")
+			assert.Equal(t, 1, recovered)
+			assert.Zero(t, released)
+			assert.True(t, dt.checkPendingPodDeletions(ctx, false), "a failed location pass is not an acknowledgment")
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got))
+			assert.Equal(t, wantHeld, dt.CheckPendingPodDeletions(ctx))
+			if wantHeld {
+				dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+				assert.Equal(t, StateCreated, dt.pendingServiceOps[service].State)
+			}
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+			assert.Empty(t, dt.pendingPodDeletions)
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsKeepsChangedIntentEvidence(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, state := range []string{
+		"live B without IPs", "unlabelled", "finalizer removed", "gone", "replacement", "restored A", "restored A before sync",
+	} {
+		t.Run(state, func(t *testing.T) {
+			ctx := context.Background()
+			observed := unlabelledFinalizerPod(nil, "uid-old", "10.244.0.7")
+			current := observed.DeepCopy()
+			switch state {
+			case "live B without IPs", "replacement":
+				current.Labels[consts.PodLabelServiceEgressGateway] = "egress-b"
+				current.Status.HostIP, current.Status.PodIP, current.Status.PodIPs = "", "", nil
+				if state == "replacement" {
+					current.UID = "uid-new"
+				}
+			case "finalizer removed":
+				current.Finalizers = []string{"example.com/keep"}
+			case "restored A", "restored A before sync":
+				current.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			}
+			kube := fake.NewSimpleClientset()
+			if state != "gone" {
+				_, err := kube.CoreV1().Pods("ns").Create(ctx, current, metav1.CreateOptions{})
+				if !assert.NoError(t, err) {
+					return
+				}
+			}
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*observed.DeepCopy()}}, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(a, b)
+			dt.K8sResources.Egresses.Insert(a, b)
+			for _, service := range []string{a, b} {
+				dt.pendingServiceOps[service] = &ServiceOperationState{
+					ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+				}
+			}
+			dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+				"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: a, OutboundPodKey: "ns/p", OutboundPodUID: "uid-old"},
+			}}
+			dt.outboundIdentityPodRefCount.Store(a, 1)
+			if state != "restored A before sync" {
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: utilsets.NewString(a)},
+				}}
+			}
+			recovered, directCleaned := recoverUnlabelledPodFinalizers(ctx, dt)
+			if state != "gone" {
+				dt.podInformerAddPod(current)
+				dt.reconcileEgressPodUpdate(current, current)
+				got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, current.UID, got.UID)
+				assert.Equal(t, state != "finalizer removed", hasPodFinalizer(got))
+				assert.Contains(t, got.Finalizers, "example.com/keep")
+			}
+			desired := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity == a
+			if state == "restored A" || state == "restored A before sync" {
+				assert.True(t, desired)
+				assert.Equal(t, StateCreated, dt.pendingServiceOps[a].State)
+				assert.Zero(t, recovered)
+				assert.Zero(t, directCleaned, "a retained live finalizer was not removed")
+				assert.Empty(t, dt.pendingPodDeletions)
+			} else {
+				assert.False(t, desired)
+				assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[a].State)
+			}
+		})
+	}
+}
+
+func TestRecoverStuckFinalizersMergesMatchingUIDRecord(t *testing.T) {
+	const service = "egress-a-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-current")
+	pod.DeletionTimestamp = ptr.To(metav1.Now())
+	old := pod.DeepCopy()
+	old.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+	old.Status.HostIP = ""
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.setBYONATGatewayID(service, byoNATGatewayARMID("external-a"))
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-old", ServiceName: "old-natgw", IsLastPod: true,
+		OtherUIDs: map[string]*PendingPodDeletion{
+			"uid-current": {Namespace: "ns", Name: "p", UID: "uid-current", ResolutionPending: true},
+		},
+	}
+	recoverStuckFinalizers(ctx, dt, nil, &v1.PodList{Items: []v1.Pod{*old}}, nil, nil, nil)
+	pending := dt.pendingPodDeletions["ns/p"].forUID("uid-current")
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.True(t, pending.waitsForService(service))
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(got))
+	assert.Equal(t, byoNATGatewayARMID("external-a"), dt.byoNATGatewayID(service))
+	completeEgressCleanup(t, dt, service)
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+}
+
+func TestRecoverStuckFinalizersMergesLabelRemovalBetweenLists(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, unregisteredBYO := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unregistered_BYO=%t", unregisteredBYO), func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			pod.DeletionTimestamp = ptr.To(metav1.Now())
+			old := pod.DeepCopy()
+			old.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(b)
+			services := utilsets.NewString(b)
+			if unregisteredBYO {
+				dt.setBYONATGatewayID(a, byoNATGatewayARMID("external-a"))
+				old.Status.HostIP, old.Status.PodIP, old.Status.PodIPs = "", "", nil
+			} else {
+				dt.NRPResources.NATGateways.Insert(a)
+				services.Insert(a)
+			}
+			dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+				"10.244.0.7": {Services: services},
+			}}
+			recoverStuckFinalizers(ctx, dt, nil, &v1.PodList{Items: []v1.Pod{*old}}, nil, nil, nil)
+			pending := dt.pendingPodDeletions["ns/p"]
+			if !assert.NotNil(t, pending) {
+				return
+			}
+			assert.True(t, pending.waitsForService(a))
+			assert.True(t, pending.waitsForService(b))
+			if unregisteredBYO {
+				assert.True(t, pending.ServiceCleanup[a].VerifyServiceDrain)
+				assert.Equal(t, byoNATGatewayARMID("external-a"), dt.byoNATGatewayID(a))
+			}
+			completeEgressCleanup(t, dt, a)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "the older filtered snapshot cannot erase B's work")
+			dt.NRPResources.Locations = make(map[string]NRPLocation)
+			completeEgressCleanup(t, dt, b)
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
 		})
 	}
 }
@@ -2152,6 +2884,55 @@ func TestSeedClusterAddressFamilies_OnlyIPv6NodeAddressesCount(t *testing.T) {
 	assert.False(t, seeded(nil))
 }
 
+func TestInitializeFromCluster_RecoveryRetryDoesNotSkipInitialSync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	failed := false
+	kube.PrependReactor("update", "pods", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+		if !failed {
+			failed = true
+			return true, nil, apierrors.NewServiceUnavailable("apiserver busy")
+		}
+		return false, nil, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+	assert.NoError(t, err)
+	if dt == nil {
+		t.Fatal("InitializeFromCluster returned no tracker")
+	}
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"the retried release completes during the initial sync")
+	assert.Contains(t, got.Finalizers, "example.com/keep")
+	assert.Zero(t, atomic.LoadInt32(&dt.pendingUpdaterTriggers))
+	dt.mu.Lock()
+	assert.Empty(t, dt.pendingPodDeletions)
+	dt.mu.Unlock()
+}
+
 // TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes pins the production wiring: the
 // Node lister is published only after InitializeFromCluster returns, so initialization must take
 // the cluster's address families from the Node list it fetches itself. Without this the startup
@@ -2496,6 +3277,8 @@ func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
 		failUnlinkOnce bool
 		recoveryErr    error
 		noProperties   bool
+		unlabelled     bool
+		emptyLabel     bool
 	}{
 		{name: "successful link before failed registration"},
 		{name: "addresses already cleared", noAddresses: true},
@@ -2503,6 +3286,8 @@ func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
 		{name: "dual-stack member", dualStack: true},
 		{name: "transient unlink is retried before release", failUnlinkOnce: true},
 		{name: "registered restart control", registered: true},
+		{name: "registered live label removed", registered: true, unlabelled: true},
+		{name: "registered deleting empty label dual-stack", registered: true, unlabelled: true, emptyLabel: true, dualStack: true, failUnlinkOnce: true},
 		{name: "failed discovery keeps the finalizer", recoveryErr: errors.New("discovery unavailable")},
 		{name: "unknown link state keeps the finalizer", noProperties: true},
 		{name: "permission refusal permits manual repair", recoveryErr: &azcore.ResponseError{StatusCode: http.StatusForbidden}},
@@ -2535,7 +3320,25 @@ func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
 			lb.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 			m.nat.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 			m.pip.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
-			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			var locations []*armnetwork.ServiceGatewayAddressLocationResponse
+			if tc.unlabelled {
+				locations = []*armnetwork.ServiceGatewayAddressLocationResponse{{
+					AddressLocation: ptr.To("10.0.0.1"),
+					Addresses: []*armnetwork.ServiceGatewayAddress{{
+						Address: ptr.To("10.244.0.9"), Services: []*string{ptr.To(identity)},
+					}},
+				}}
+				if tc.dualStack {
+					locations = append(locations, &armnetwork.ServiceGatewayAddressLocationResponse{
+						AddressLocation: ptr.To("fd00::1"),
+						Addresses: []*armnetwork.ServiceGatewayAddress{{
+							Address: ptr.To("fd01::9"), Services: []*string{ptr.To(identity)},
+						}},
+					})
+				}
+				m.sgw.EXPECT().UpdateAddressLocations(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+			}
+			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(locations, nil).AnyTimes()
 			m.nat.EXPECT().Get(gomock.Any(), "rg", identity, nil).Return(nil, notFoundError()).AnyTimes()
 			for _, name := range OutboundPublicIPNames(identity) {
 				m.pip.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(nil, notFoundError()).AnyTimes()
@@ -2566,7 +3369,7 @@ func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
 					defer mu.Unlock()
 					if natGatewayServiceGatewayID(&value) == "" {
 						unlinkAttempts++
-						if !tc.registered {
+						if !tc.registered || tc.unlabelled {
 							current, err := kube.CoreV1().Pods("ns").Get(ctx, "pod", metav1.GetOptions{})
 							assert.NoError(t, err)
 							if current != nil {
@@ -2630,6 +3433,14 @@ func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
 			if tc.noAddresses {
 				pod.Status.HostIP, pod.Status.PodIP = "", ""
 				pod.Status.HostIPs, pod.Status.PodIPs = nil, nil
+			}
+			if tc.unlabelled {
+				if tc.emptyLabel {
+					pod.Labels[consts.PodLabelServiceEgressGateway] = ""
+				} else {
+					delete(pod.Labels, consts.PodLabelServiceEgressGateway)
+					pod.DeletionTimestamp = nil
+				}
 			}
 			if _, err := kube.CoreV1().Pods("ns").Update(ctx, pod, metav1.UpdateOptions{}); !assert.NoError(t, err) {
 				return
