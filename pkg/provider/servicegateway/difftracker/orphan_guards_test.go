@@ -218,7 +218,7 @@ func TestGuardDefaultNATGatewayPIPSurvivesOrphanSweep(t *testing.T) {
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
 		defaultPIP,
 		detached(managedOrphan),
-	}, nil))
+	}, nil, nil))
 
 	assert.NotContains(t, deleted, PublicIPName(DefaultOutboundNATGatewayName),
 		"BUG CASE: the cluster's default egress Public IP was deleted by the orphan sweeper")
@@ -387,7 +387,7 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 		pip(PublicIPName(desired)),
 		pip(PublicIPName(DefaultOutboundNATGatewayName)),
 		attached,
-	}, nil))
+	}, nil, nil))
 
 	assert.Contains(t, deleted, PublicIPName(egress),
 		"BUG CASE: the egress IPv4 Public IP leaked because its name is not a UUID")

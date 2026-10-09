@@ -36,9 +36,9 @@ import (
 )
 
 // Edge cases around the inbound service and its Public IP: many ports, shared pod selection, Public IP
-// tags, DNS label and prefix, and Public IPs chosen by name or address. They assert the Azure and Service
-// Gateway state; specs that also probe traffic skip, after those checks, when the environment dataplane
-// does not carry it.
+// tags, DNS label and prefix, and Public IPs chosen by name or address, also when an existing service
+// moves to another one. They assert the Azure and Service Gateway state; specs that also probe traffic
+// skip, after those checks, when the environment dataplane does not carry it.
 var _ = Describe("SLB - Service Config Edge Cases", Label(slbTestLabel), func() {
 	basename := "slb-service-config-test"
 
@@ -558,101 +558,81 @@ var _ = Describe("SLB - Service Config Edge Cases", Label(slbTestLabel), func() 
 		skipIfNoTraffic(trafficErr)
 	})
 
-	It("should reject a Public IP change on an existing service and keep its current Public IP", func() {
-		const serviceName = "byo-reject-change"
-		userPIPName := "sgwe2e-user-" + rand.String(6)
-		otherName := "sgwe2e-other-" + rand.String(6)
-		_, userIP := createUserPublicIP(userPIPName, "StandardV2")
-		createUserPublicIP(otherName, "StandardV2")
+	It("should move an existing service to another Public IP in place, keeping the user's and deleting the one it created", func() {
+		const serviceName = "byo-move"
+		pipXName := "sgwe2e-user-x-" + rand.String(6)
+		pipYName := "sgwe2e-user-y-" + rand.String(6)
+		_, pipXIP := createUserPublicIP(pipXName, "StandardV2")
+		_, pipYIP := createUserPublicIP(pipYName, "StandardV2")
 
 		_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), makeNetexecPod(serviceName+"-pod", map[string]string{"app": serviceName}, 8080), metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
-		By("Creating a service that chooses the user's Public IP by address")
-		serviceUID := createService(serviceName, map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": userIP})
-		Expect(expectServiceOnPublicIP(serviceName, serviceUID, userPIPName)).To(Equal(userIP))
+		By("Creating a service on the Public IP the controller creates")
+		serviceUID := createService(serviceName, nil)
+		managedPIPName := serviceUID + "-pip"
+		managedIP := expectServiceOnPublicIP(serviceName, serviceUID, managedPIPName)
 
-		By("Probing traffic to the user's Public IP as the baseline")
-		baselineErr := probeTraffic(serviceUID, userIP, serviceName+"-pod", 80)
+		By("Probing traffic to the created Public IP as the baseline")
+		trafficErr := probeTraffic(serviceUID, managedIP, serviceName+"-pod", 80)
+		// Once the baseline shows the environment carries traffic, a moved address that does not serve is a failure.
+		expectTrafficAfterMove := func(address string) {
+			if trafficErr == nil {
+				Expect(probeTraffic(serviceUID, address, serviceName+"-pod", 80)).To(Succeed(), "traffic must be served on the new Public IP %s", address)
+			}
+		}
 
-		By("Choosing another user's Public IP by name")
+		By("Choosing user Public IP X by name")
+		updateAnnotations(serviceName, func(a map[string]string) {
+			a["service.beta.kubernetes.io/azure-pip-name"] = pipXName
+		})
+		Expect(expectServiceOnPublicIP(serviceName, serviceUID, pipXName)).To(Equal(pipXIP))
+		expectServiceEvent(serviceName, "PublicIPChanged")
+		Eventually(func() error { return azurePublicIPNamedAbsentErr(managedPIPName) }, 3*time.Minute, 10*time.Second).Should(Succeed(),
+			"the Public IP the controller created is deleted once the service moves off it")
+		expectTrafficAfterMove(pipXIP)
+
+		By("Choosing user Public IP Y by address")
+		updateAnnotations(serviceName, func(a map[string]string) {
+			delete(a, "service.beta.kubernetes.io/azure-pip-name")
+			a["service.beta.kubernetes.io/azure-load-balancer-ipv4"] = pipYIP
+		})
+		Expect(expectServiceOnPublicIP(serviceName, serviceUID, pipYName)).To(Equal(pipYIP))
+		expectUserPublicIPUntouched(pipXName)
+		expectTrafficAfterMove(pipYIP)
+
+		By("Removing the choice to return to a Public IP the controller creates")
 		updateAnnotations(serviceName, func(a map[string]string) {
 			delete(a, "service.beta.kubernetes.io/azure-load-balancer-ipv4")
-			a["service.beta.kubernetes.io/azure-pip-name"] = otherName
 		})
-		expectServiceEvent(serviceName, "ServiceGatewayConfigurationRejected")
-		Consistently(func() error {
-			if err := serviceUsesPublicIPErr(serviceUID, publicIPID(userPIPName)); err != nil {
-				return err
-			}
-			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-			if len(svc.Status.LoadBalancer.Ingress) != 1 || svc.Status.LoadBalancer.Ingress[0].IP != userIP {
-				return fmt.Errorf("service ingress %+v, want %s", svc.Status.LoadBalancer.Ingress, userIP)
-			}
-			n, err := countRegisteredEndpoints(serviceUID)
-			if err != nil {
-				return err
-			}
-			if n != 1 {
-				return fmt.Errorf("registered endpoints = %d, want 1", n)
-			}
-			return nil
-		}, 60*time.Second, 10*time.Second).Should(Succeed(), "the rejected change must keep the live load balancer on its current Public IP")
-		expectUserPublicIPUntouched(otherName)
-		if baselineErr == nil {
-			baselineErr = probeTraffic(serviceUID, userIP, serviceName+"-pod", 80)
-		}
-
-		By("Reverting to the original Public IP")
-		eventsBefore, err := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
+		managedIP = expectServiceOnPublicIP(serviceName, serviceUID, managedPIPName)
+		managed, err := getAzurePublicIP(managedPIPName)
 		Expect(err).NotTo(HaveOccurred())
-		rejectionsBefore := 0
-		for _, e := range eventsBefore.Items {
+		Expect(managed.Tags).To(HaveKeyWithValue("k8s-azure-service", ns.Name+"/"+serviceName))
+		expectUserPublicIPUntouched(pipYName)
+		expectTrafficAfterMove(managedIP)
+
+		By("Verifying no change was rejected")
+		events, err := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		for _, e := range events.Items {
 			if e.InvolvedObject.Kind == "Service" && string(e.InvolvedObject.UID) == serviceUID && e.Reason == "ServiceGatewayConfigurationRejected" {
-				rejectionsBefore += int(e.Count)
+				Fail(fmt.Sprintf("unexpected rejection on %s: %s", serviceName, e.Message))
 			}
 		}
-		Eventually(func() error {
-			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-			delete(svc.Annotations, "service.beta.kubernetes.io/azure-pip-name")
-			svc.Annotations["service.beta.kubernetes.io/azure-load-balancer-ipv4"] = userIP
-			svc.Spec.Ports[0].Port = 81
-			_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc, metav1.UpdateOptions{})
-			return err
-		}, 30*time.Second, 2*time.Second).Should(Succeed())
-		Eventually(func() error { return serviceUsesPublicIPErr(serviceUID, publicIPID(userPIPName)) }, 2*time.Minute, 10*time.Second).Should(Succeed())
-		expectOnlyLoadBalancerRule(serviceUID, "rule-tcp-81")
-		Consistently(func() (int, error) {
-			events, err := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
-			if err != nil {
-				return 0, err
-			}
-			count := 0
-			for _, e := range events.Items {
-				if e.InvolvedObject.Kind == "Service" && string(e.InvolvedObject.UID) == serviceUID && e.Reason == "ServiceGatewayConfigurationRejected" {
-					count += int(e.Count)
-				}
-			}
-			return count, nil
-		}, 30*time.Second, 10*time.Second).Should(Equal(rejectionsBefore), "reverting the Public IP change must not add another rejection")
 
 		By("Deleting the service")
 		Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})).To(Succeed())
 		eventuallyServiceDeleted(serviceUID, 3*time.Minute)
 
-		By("Verifying the user's Public IPs are kept and free")
-		expectUserPublicIPUntouched(userPIPName)
-		expectUserPublicIPUntouched(otherName)
+		By("Verifying the user's Public IPs are kept and free, and the created one is deleted")
+		expectUserPublicIPUntouched(pipXName)
+		expectUserPublicIPUntouched(pipYName)
+		Eventually(func() error { return azurePublicIPNamedAbsentErr(managedPIPName) }, 3*time.Minute, 10*time.Second).Should(Succeed())
 
-		utils.Logf("✓ The Public IP change was rejected and the service kept Public IP %s", userIP)
-		skipIfNoTraffic(baselineErr)
+		utils.Logf("✓ The service moved from %s to %s, %s and back to %s in place", managedPIPName, pipXIP, pipYIP, managedIP)
+		skipIfNoTraffic(trafficErr)
 	})
 
 	It("should reject a user's Public IP it cannot use without changing it", func() {

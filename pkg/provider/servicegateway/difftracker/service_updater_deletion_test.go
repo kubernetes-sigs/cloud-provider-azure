@@ -172,9 +172,12 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 		readErr     error
 		deleteErr   error
 		noCluster   bool
+		attached    []string
+		listErr     error
 		wantDeleted []string
 		wantDefer   []string
 		wantEvent   bool
+		wantRetry   bool
 	}{
 		{name: "a Public IP already gone", annotations: named, frontend: mineID},
 		{name: "a Public IP deleted meanwhile", annotations: named, frontend: mineID, pips: map[string]map[string]*string{"other-rg/mine": owned},
@@ -211,6 +214,17 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 			pips: map[string]map[string]*string{"rg/old": {consts.ServiceTagKey: ptr.To("default/svc")}}},
 		{name: "the Service is gone and the tags have only the cluster", serviceGone: true, frontend: oldID,
 			pips: map[string]map[string]*string{"rg/old": {consts.ClusterNameKey: ptr.To("cluster")}}},
+		{name: "Public IPs a move left in the Service's resource group", annotations: named, frontend: mineID, attached: []string{"other-rg/attached"},
+			pips: map[string]map[string]*string{"other-rg/mine": owned, "other-rg/left": owned, "other-rg/attached": owned, "other-rg/user": nil,
+				"other-rg/foreign":    {consts.ServiceTagKey: ptr.To("default/svc"), consts.ClusterNameKey: ptr.To("other")},
+				"other-rg/no-cluster": {consts.ServiceTagKey: ptr.To("default/svc")}},
+			wantDeleted: []string{"other-rg/mine", "other-rg/left"}},
+		{name: "Public IPs a move left in the Service's resource group wait for the cluster name", annotations: named, frontend: mineID, noCluster: true,
+			pips: map[string]map[string]*string{"other-rg/mine": owned, "other-rg/left": owned}, wantDefer: []string{"other-rg/mine", "other-rg/left"}},
+		{name: "a failed listing of the Service's resource group is retried", annotations: named, frontend: mineID, listErr: &azcore.ResponseError{StatusCode: http.StatusServiceUnavailable},
+			pips: map[string]map[string]*string{"other-rg/mine": owned}, wantDeleted: []string{"other-rg/mine"}, wantRetry: true},
+		{name: "a lasting failure to list the Service's resource group does not hold the deletion", annotations: named, frontend: mineID, listErr: &azcore.ResponseError{StatusCode: http.StatusForbidden},
+			pips: map[string]map[string]*string{"other-rg/mine": owned}, wantDeleted: []string{"other-rg/mine"}},
 		{name: "unreadable", annotations: named, frontend: mineID, readErr: &azcore.ResponseError{StatusCode: http.StatusForbidden}, wantEvent: true},
 		{name: "not deletable", annotations: named, frontend: mineID, pips: map[string]map[string]*string{"other-rg/mine": owned},
 			deleteErr: &azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "PublicIPAddressCannotBeDeleted"}, wantEvent: true},
@@ -245,6 +259,22 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 					return nil, notFoundError()
 				}
 				return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: tags}, nil
+			}).AnyTimes()
+			pip.EXPECT().List(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, rg string) ([]*armnetwork.PublicIPAddress, error) {
+				if tc.listErr != nil {
+					return nil, tc.listErr
+				}
+				var pips []*armnetwork.PublicIPAddress
+				for key, tags := range tc.pips {
+					if name, ok := strings.CutPrefix(key, rg+"/"); ok {
+						listed := &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: tags, Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+						if slices.Contains(tc.attached, key) {
+							listed.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("ipconfig")}
+						}
+						pips = append(pips, listed)
+					}
+				}
+				return pips, nil
 			}).AnyTimes()
 			var deletedMu sync.Mutex
 			var deleted []string
@@ -282,7 +312,7 @@ func TestServiceUpdaterDeleteInboundService_ReleasesOwnedPublicIPs(t *testing.T)
 			var success bool
 			su := deletionTestUpdater(dt, func(_ string, ok bool, _ error) { success = ok })
 			su.deleteInboundService("uid-1", "corr")
-			assert.True(t, success, "a Public IP that cannot be released for a lasting reason does not hold the Service's deletion")
+			assert.Equal(t, !tc.wantRetry, success, "a Public IP that cannot be released for a lasting reason does not hold the Service's deletion")
 			assert.ElementsMatch(t, tc.wantDeleted, deletedNow())
 			if tc.noCluster {
 				dt.serviceUpdater = su

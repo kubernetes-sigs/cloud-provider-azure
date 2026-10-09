@@ -739,57 +739,50 @@ func TestServiceUpdaterCreateInboundService_ChecksPublicIPPrefix(t *testing.T) {
 	})
 
 	t.Run("a retry recreates an unattached owned Public IP from the requested prefix", func(t *testing.T) {
-		for _, enabled := range []bool{false, true} {
-			t.Run(fmt.Sprintf("in-place switch %v", enabled), func(t *testing.T) {
-				old := inPlacePublicIPChangeEnabled
-				inPlacePublicIPChangeEnabled = enabled
-				t.Cleanup(func() { inPlacePublicIPChangeEnabled = old })
-				otherPrefix := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/other"
-				existing := &armnetwork.PublicIPAddress{
-					Name: ptr.To(PublicIPName(uid)),
-					Properties: &armnetwork.PublicIPAddressPropertiesFormat{
-						IPAddress:      ptr.To("20.0.0.9"),
-						PublicIPPrefix: &armnetwork.SubResource{ID: ptr.To(otherPrefix)},
-					},
-				}
-				events = nil
-				var created *armnetwork.PublicIPAddress
-				var success bool
-				var err error
-				var deleted []string
-				t.Run("run", func(t *testing.T) {
-					created, success, deleted, err = run(t, testPrefixID, prefix(armnetwork.PublicIPPrefixSKUNameStandardV2, armnetwork.IPVersionIPv4, "eastus"), nil, true, existing)
-				})
-
-				t.Run("an invalid requested prefix does not delete an unattached owned Public IP", func(t *testing.T) {
-					otherPrefix := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/other"
-					existing := &armnetwork.PublicIPAddress{
-						Name: ptr.To(PublicIPName(uid)),
-						Properties: &armnetwork.PublicIPAddressPropertiesFormat{
-							IPAddress:              ptr.To("20.0.0.9"),
-							PublicIPAddressVersion: ptr.To(armnetwork.IPVersionIPv4),
-							PublicIPPrefix:         &armnetwork.SubResource{ID: ptr.To(otherPrefix)},
-						},
-					}
-					for name, requested := range map[string]*armnetwork.PublicIPPrefix{
-						"wrong SKU":        prefix(armnetwork.PublicIPPrefixSKUNameStandard, armnetwork.IPVersionIPv4, "eastus"),
-						"wrong IP version": prefix(armnetwork.PublicIPPrefixSKUNameStandardV2, armnetwork.IPVersionIPv6, "eastus"),
-					} {
-						created, success, deleted, err := run(t, testPrefixID, requested, nil, true, existing)
-						assert.False(t, success, name)
-						assert.True(t, isTerminalError(err), "%s: %v", name, err)
-						assert.Nil(t, created, name)
-						assert.Empty(t, deleted, name)
-					}
-				})
-				assert.True(t, success, "%v", err)
-				if assert.NotNil(t, created) {
-					assert.Equal(t, testPrefixID, *created.Properties.PublicIPPrefix.ID, "the unattached owned PIP must be recreated from the requested prefix")
-				}
-				assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, deleted)
-				assert.Empty(t, events)
-			})
+		otherPrefix := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/other"
+		existing := &armnetwork.PublicIPAddress{
+			Name: ptr.To(PublicIPName(uid)),
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+				IPAddress:      ptr.To("20.0.0.9"),
+				PublicIPPrefix: &armnetwork.SubResource{ID: ptr.To(otherPrefix)},
+			},
 		}
+		events = nil
+		var created *armnetwork.PublicIPAddress
+		var success bool
+		var err error
+		var deleted []string
+		t.Run("run", func(t *testing.T) {
+			created, success, deleted, err = run(t, testPrefixID, prefix(armnetwork.PublicIPPrefixSKUNameStandardV2, armnetwork.IPVersionIPv4, "eastus"), nil, true, existing)
+		})
+
+		t.Run("an invalid requested prefix does not delete an unattached owned Public IP", func(t *testing.T) {
+			otherPrefix := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/other"
+			existing := &armnetwork.PublicIPAddress{
+				Name: ptr.To(PublicIPName(uid)),
+				Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+					IPAddress:              ptr.To("20.0.0.9"),
+					PublicIPAddressVersion: ptr.To(armnetwork.IPVersionIPv4),
+					PublicIPPrefix:         &armnetwork.SubResource{ID: ptr.To(otherPrefix)},
+				},
+			}
+			for name, requested := range map[string]*armnetwork.PublicIPPrefix{
+				"wrong SKU":        prefix(armnetwork.PublicIPPrefixSKUNameStandard, armnetwork.IPVersionIPv4, "eastus"),
+				"wrong IP version": prefix(armnetwork.PublicIPPrefixSKUNameStandardV2, armnetwork.IPVersionIPv6, "eastus"),
+			} {
+				created, success, deleted, err := run(t, testPrefixID, requested, nil, true, existing)
+				assert.False(t, success, name)
+				assert.True(t, isTerminalError(err), "%s: %v", name, err)
+				assert.Nil(t, created, name)
+				assert.Empty(t, deleted, name)
+			}
+		})
+		assert.True(t, success, "%v", err)
+		if assert.NotNil(t, created) {
+			assert.Equal(t, testPrefixID, *created.Properties.PublicIPPrefix.ID, "the unattached owned PIP must be recreated from the requested prefix")
+		}
+		assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, deleted)
+		assert.Empty(t, events)
 	})
 
 	t.Run("a retry rewrites a Public IP an earlier attempt left failed", func(t *testing.T) {
@@ -1093,16 +1086,20 @@ type publicIPWorld struct {
 	ingress   string
 	lbGetErr  error
 	lbPutErr  error
-	patchErr  error
-	listErr   error
+	// lbPutApplied makes a failed load balancer write still take effect, as when Azure applies it but the
+	// operation times out.
+	lbPutApplied bool
+	patchErr     error
+	listErr      error
 	// ops records ServiceGateway registrations ("attach"/"detach") and load balancer writes ("lb").
 	ops []string
 	// tracked reports whether the run left the load balancer tracked as live in NRP.
 	tracked bool
 	// others are further Services in the cluster; deleting are Service UIDs the engine is deleting.
-	others   []*v1.Service
-	deleting []string
-	pending  map[string][]string
+	others        []*v1.Service
+	deleting      []string
+	pending       map[string][]string
+	neverFrontend map[string]map[string]bool
 }
 
 const otherServiceUID = "99999999-9999-9999-9999-999999999999"
@@ -1220,6 +1217,9 @@ func (w *publicIPWorld) run(t *testing.T, uid string, update bool, config *Inbou
 			w.lbPuts++
 			w.ops = append(w.ops, "lb")
 			if w.lbPutErr != nil {
+				if w.lbPutApplied {
+					w.currentLB = &lb
+				}
 				return nil, w.lbPutErr
 			}
 			w.currentLB = &lb
@@ -1265,6 +1265,7 @@ func (w *publicIPWorld) run(t *testing.T, uid string, update bool, config *Inbou
 	got := &outboundCompletion{}
 	su := outboundUpdater(dt, got)
 	su.pendingReleases = maps.Clone(w.pending)
+	su.neverFrontend = maps.Clone(w.neverFrontend)
 	if update {
 		su.updateInboundService(uid, config, "corr")
 	} else {
@@ -1272,6 +1273,7 @@ func (w *publicIPWorld) run(t *testing.T, uid string, update bool, config *Inbou
 	}
 	su.mu.Lock()
 	w.pending = maps.Clone(su.pendingReleases)
+	w.neverFrontend = maps.Clone(su.neverFrontend)
 	su.mu.Unlock()
 	close(recorder.Events)
 	for event := range recorder.Events {
@@ -1552,9 +1554,6 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 	})
 
 	t.Run("a create that finds a load balancer on another Public IP moves it", func(t *testing.T) {
-		old := inPlacePublicIPChangeEnabled
-		inPlacePublicIPChangeEnabled = true
-		t.Cleanup(func() { inPlacePublicIPChangeEnabled = old })
 		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{"rg/old": ownedPIP("old", "20.0.0.5"), "rg/mine": userPIP("mine", "20.0.0.7")})
 		w.currentLB = inboundLB(pipID("rg", "old"))
 		success, svc, err := w.run(t, uid, false, byName)
@@ -1700,76 +1699,7 @@ func TestServiceUpdaterCreateInboundService_UsesChosenPublicIP(t *testing.T) {
 	})
 }
 
-func TestServiceUpdaterUpdateInboundService_RejectsPublicIPChoiceChangeWhenDisabled(t *testing.T) {
-	assert.False(t, inPlacePublicIPChangeEnabled, "in-place Public IP change must be disabled by default")
-
-	const uid = "77777777-7777-7777-7777-777777777777"
-	managed := publicIPAddressID("sub", "rg", PublicIPName(uid))
-	named := func(name string) *InboundConfig {
-		config := chosenPIPConfig()
-		config.PIPName = name
-		return config
-	}
-	world := func() *publicIPWorld {
-		w := newPublicIPWorld(map[string]*armnetwork.PublicIPAddress{
-			"rg/" + PublicIPName(uid): userPIP(PublicIPName(uid), "20.0.0.1"),
-			"rg/user":                 userPIP("user", "20.0.0.8"),
-		})
-		w.currentLB = inboundLB(managed)
-		w.ingress = "20.0.0.1"
-		return w
-	}
-
-	t.Run("default update rejects without side effects", func(t *testing.T) {
-		w := world()
-		success, svc, err := w.run(t, uid, true, named("user"))
-		assert.False(t, success)
-		assert.True(t, isTerminalError(err), "%v", err)
-		if assert.Error(t, err) {
-			assert.Contains(t, err.Error(), "the Public IP of an existing load balancer cannot be changed")
-		}
-		assert.Equal(t, managed, w.frontend())
-		assert.Equal(t, "20.0.0.1", ingressIP(svc))
-		assert.Zero(t, w.lbPuts)
-		assert.Empty(t, w.created)
-		assert.Empty(t, w.deleted)
-		assert.False(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
-	})
-
-	t.Run("default update does not create the requested named Public IP", func(t *testing.T) {
-		w := world()
-		success, _, err := w.run(t, uid, true, named("new"))
-		assert.False(t, success)
-		assert.True(t, isTerminalError(err), "%v", err)
-		assert.Equal(t, managed, w.frontend())
-		assert.Zero(t, w.lbPuts)
-		assert.Empty(t, w.created)
-		assert.Empty(t, w.deleted)
-	})
-
-	t.Run("default startup path rejects without touching the load balancer", func(t *testing.T) {
-		w := world()
-		success, svc, err := w.run(t, uid, false, named("user"))
-		assert.False(t, success)
-		assert.True(t, isTerminalError(err), "%v", err)
-		assert.Equal(t, managed, w.frontend())
-		assert.Equal(t, "20.0.0.1", ingressIP(svc))
-		assert.Zero(t, w.lbPuts)
-		assert.Empty(t, w.created)
-		assert.Empty(t, w.deleted)
-	})
-
-	t.Run("reverting the choice succeeds", func(t *testing.T) {
-		w := world()
-		success, svc, err := w.run(t, uid, true, chosenPIPConfig())
-		assert.True(t, success, "%v", err)
-		assert.Equal(t, managed, w.frontend())
-		assert.Equal(t, "20.0.0.1", ingressIP(svc))
-		assert.Equal(t, []string{"lb"}, w.ops)
-	})
-}
-
-func TestPublicIPChangeTerminalErrorParksAndRevertUnparks(t *testing.T) {
+func TestPublicIPPrefixChangeTerminalErrorParksAndRevertUnparks(t *testing.T) {
 	const uid = "88888888-8888-8888-8888-888888888888"
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: types.UID(uid)}}
 	kube := fake.NewSimpleClientset(svc)
@@ -1780,14 +1710,14 @@ func TestPublicIPChangeTerminalErrorParksAndRevertUnparks(t *testing.T) {
 	dt.SetEventRecorder(recorder)
 
 	bad := NewInboundServiceConfig(uid, chosenPIPConfig())
-	bad.InboundConfig.PIPName = "user"
+	bad.InboundConfig.PIPPrefixID = testPrefixID
 	dt.pendingServiceOps[uid] = &ServiceOperationState{
 		ServiceUID:     uid,
 		Config:         bad,
 		InFlightConfig: &bad,
 		State:          StateUpdateInProgress,
 	}
-	dt.OnServiceCreationComplete(uid, false, newTerminalError(errors.New("the Public IP of an existing load balancer cannot be changed when ServiceGateway is enabled")))
+	dt.OnServiceCreationComplete(uid, false, newTerminalError(errors.New("the Public IP prefix of an existing Service cannot be changed when ServiceGateway is enabled")))
 
 	op := dt.pendingServiceOps[uid]
 	if assert.NotNil(t, op) {
@@ -1810,10 +1740,6 @@ func TestPublicIPChangeTerminalErrorParksAndRevertUnparks(t *testing.T) {
 }
 
 func TestServiceUpdaterUpdateInboundService_MovesFrontendWhenPublicIPChoiceChanges(t *testing.T) {
-	old := inPlacePublicIPChangeEnabled
-	inPlacePublicIPChangeEnabled = true
-	t.Cleanup(func() { inPlacePublicIPChangeEnabled = old })
-
 	const uid = "66666666-6666-6666-6666-666666666666"
 	managed := publicIPAddressID("sub", "rg", PublicIPName(uid))
 	pipID := func(name string) string { return publicIPAddressID("sub", "rg", name) }
@@ -1870,6 +1796,49 @@ func TestServiceUpdaterUpdateInboundService_MovesFrontendWhenPublicIPChoiceChang
 		})
 	}
 
+	t.Run("a create retried at startup moves the frontend in place", func(t *testing.T) {
+		w := world(managed)
+		success, svc, err := w.run(t, uid, false, named("user"))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, pipID("user"), w.frontend())
+		assert.Equal(t, "20.0.0.8", ingressIP(svc))
+		assert.Empty(t, w.created)
+		assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, w.deleted)
+		assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+	})
+
+	t.Run("the default Public IP moves to a user's name, then a user's address, then back to the default", func(t *testing.T) {
+		w := world(managed)
+		w.pips["rg/other-user"] = userPIP("other-user", "20.0.0.9")
+
+		success, svc, err := w.run(t, uid, true, named("user"))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, pipID("user"), w.frontend())
+		assert.Equal(t, "20.0.0.8", ingressIP(svc))
+		assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, w.deleted, "the owned default Public IP is deleted")
+
+		w.events = nil
+		success, svc, err = w.run(t, uid, true, withLoadBalancerIP("20.0.0.9"))
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, pipID("other-user"), w.frontend())
+		assert.Equal(t, "20.0.0.9", ingressIP(svc))
+		assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, w.deleted, "a user's Public IP is not deleted")
+		assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+
+		w.events = nil
+		success, svc, err = w.run(t, uid, true, chosenPIPConfig())
+		assert.True(t, success, "%v", err)
+		assert.Equal(t, managed, w.frontend())
+		assert.Equal(t, "20.0.0.1", ingressIP(svc))
+		assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, w.created, "the default Public IP is recreated")
+		assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, w.deleted, "a user's Public IP is not deleted")
+		assert.Contains(t, w.pips, "rg/user")
+		assert.Contains(t, w.pips, "rg/other-user")
+		assert.Empty(t, w.pending[uid])
+		assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+		assert.Equal(t, []string{"lb", "lb", "lb"}, w.ops, "the ServiceGateway registration is not touched")
+	})
+
 	t.Run("a user's Public IP changes to another user's Public IP in place", func(t *testing.T) {
 		w := world(pipID("user"))
 		w.pips["rg/other-user"] = userPIP("other-user", "20.0.0.9")
@@ -1914,6 +1883,118 @@ func TestServiceUpdaterUpdateInboundService_MovesFrontendWhenPublicIPChoiceChang
 		assert.True(t, w.hasEvent("PublicIPCleanupFailed"), "%v", w.events)
 		assert.Equal(t, []string{managed}, w.pending[uid])
 	})
+
+	for _, update := range []bool{true, false} {
+		t.Run(fmt.Sprintf("a move whose load balancer write fails deletes the Public IP it created and keeps the old one (update %v)", update), func(t *testing.T) {
+			w := world(managed)
+			w.lbPutErr = errors.New("conflict")
+			success, svc, err := w.run(t, uid, update, named("new"))
+			assert.False(t, success)
+			assert.Error(t, err)
+			assert.False(t, isTerminalError(err), "%v", err)
+			assert.Equal(t, []string{"rg/new"}, w.created)
+			assert.Equal(t, []string{"rg/new"}, w.deleted)
+			assert.Equal(t, managed, w.frontend())
+			assert.Equal(t, "20.0.0.1", ingressIP(svc))
+			assert.Equal(t, []string{managed}, w.pending[uid], "the Public IP in use is recorded before the write in case Azure applies it")
+			assert.False(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+
+			w.lbPutErr = nil
+			success, svc, err = w.run(t, uid, update, chosenPIPConfig())
+			assert.True(t, success, "%v", err)
+			assert.Equal(t, managed, w.frontend())
+			assert.Equal(t, "20.0.0.1", ingressIP(svc))
+			assert.Equal(t, []string{"rg/new"}, w.deleted, "reverting must not delete the Public IP in use")
+			assert.Contains(t, w.pips, "rg/"+PublicIPName(uid))
+			assert.Empty(t, w.pending[uid])
+			assert.False(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+		})
+
+		t.Run(fmt.Sprintf("a default created for a failed move is released once the Service chooses another (update %v)", update), func(t *testing.T) {
+			w := world(pipID("user"))
+			delete(w.pips, "rg/"+PublicIPName(uid))
+			w.lbPutErr = errors.New("conflict")
+			success, _, _ := w.run(t, uid, update, chosenPIPConfig())
+			assert.False(t, success)
+			assert.Contains(t, w.created, "rg/"+PublicIPName(uid))
+			assert.Equal(t, pipID("user"), w.frontend())
+			assert.Contains(t, w.pips, "rg/"+PublicIPName(uid), "the default is kept for the retry")
+
+			w.lbPutErr = nil
+			success, _, err := w.run(t, uid, update, named("user"))
+			assert.True(t, success, "%v", err)
+			assert.Equal(t, pipID("user"), w.frontend())
+			assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, w.deleted, "the unused default is released and the user's kept")
+			assert.Empty(t, w.pending[uid])
+			assert.False(t, w.hasEvent("PublicIPChanged"), "the frontend never left the user's Public IP: %v", w.events)
+		})
+
+		t.Run(fmt.Sprintf("a default created for a failed move is kept when the retry still chooses it (update %v)", update), func(t *testing.T) {
+			w := world(pipID("user"))
+			delete(w.pips, "rg/"+PublicIPName(uid))
+			w.lbPutErr = errors.New("conflict")
+			success, _, _ := w.run(t, uid, update, chosenPIPConfig())
+			assert.False(t, success)
+
+			w.lbPutErr = nil
+			success, _, err := w.run(t, uid, update, chosenPIPConfig())
+			assert.True(t, success, "%v", err)
+			assert.Equal(t, managed, w.frontend())
+			assert.NotContains(t, w.deleted, "rg/"+PublicIPName(uid))
+			assert.Contains(t, w.pips, "rg/"+PublicIPName(uid))
+			assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+
+			w.events = nil
+			success, _, err = w.run(t, uid, update, named("user"))
+			assert.True(t, success, "%v", err)
+			assert.Equal(t, pipID("user"), w.frontend())
+			assert.True(t, w.hasEvent("PublicIPChanged"), "a later move off the default it served is reported: %v", w.events)
+		})
+
+		t.Run(fmt.Sprintf("a failed move retried later completes it (update %v)", update), func(t *testing.T) {
+			w := world(managed)
+			w.lbPutErr = errors.New("conflict")
+			success, _, _ := w.run(t, uid, update, named("user"))
+			assert.False(t, success)
+			assert.Equal(t, managed, w.frontend())
+			assert.Empty(t, w.deleted)
+
+			w.lbPutErr = nil
+			success, svc, err := w.run(t, uid, update, named("user"))
+			assert.True(t, success, "%v", err)
+			assert.Equal(t, pipID("user"), w.frontend())
+			assert.Equal(t, "20.0.0.8", ingressIP(svc))
+			assert.Equal(t, []string{"rg/" + PublicIPName(uid)}, w.deleted)
+			assert.Contains(t, w.pips, "rg/user")
+			assert.Empty(t, w.pending[uid])
+			assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+		})
+
+		t.Run(fmt.Sprintf("a load balancer write Azure applied but reported failed releases the old Public IP on the next reconcile (update %v)", update), func(t *testing.T) {
+			w := world(pipID("mine"))
+			w.lbPutErr = &azcore.ResponseError{StatusCode: http.StatusGatewayTimeout}
+			w.lbPutApplied = true
+			success, _, err := w.run(t, uid, update, named("user"))
+			assert.False(t, success)
+			assert.False(t, isTerminalError(err), "%v", err)
+			assert.Equal(t, pipID("user"), w.frontend(), "Azure applied the write")
+			assert.Empty(t, w.deleted)
+			assert.Equal(t, []string{pipID("mine")}, w.pending[uid])
+
+			w.lbPutErr, w.lbPutApplied = nil, false
+			w.events = nil
+			success, svc, err := w.run(t, uid, update, named("user"))
+			assert.True(t, success, "%v", err)
+			assert.Equal(t, pipID("user"), w.frontend())
+			assert.Equal(t, "20.0.0.8", ingressIP(svc))
+			assert.Equal(t, []string{"rg/mine"}, w.deleted, "the controller-created Public IP the load balancer moved off is released")
+			assert.Contains(t, w.pips, "rg/user")
+			assert.Empty(t, w.pending[uid])
+			if update {
+				assert.True(t, w.hasEvent("PublicIPChanged"), "%v", w.events)
+			}
+		})
+	}
 
 	t.Run("pending release cleanup keeps the newly selected Public IP", func(t *testing.T) {
 		w := world(managed)

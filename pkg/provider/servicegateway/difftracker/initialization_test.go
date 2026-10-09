@@ -1155,7 +1155,7 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 		detached(PublicIPName(desiredUID)),
 		egress,
 		detached(PublicIPName(orphanUID)),
-	}, nil))
+	}, nil, nil))
 
 	assert.NotContains(t, deleted, PublicIPName(desiredUID),
 		"the Public IP of a Service Kubernetes still wants must not be deleted as an orphan")
@@ -1193,7 +1193,7 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		dt := newTestDiffTracker()
 		dt.config = testConfig()
 		dt.networkClientFactory = mockFactory
-		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), pips, utilsets.NewString(chosen...)))
+		assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), pips, utilsets.NewString(chosen...), nil))
 		return deleted
 	}
 
@@ -1260,6 +1260,106 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 
 	assert.Equal(t, []string{managedOrphan}, run(t, []*armnetwork.PublicIPAddress{detached(managedOrphan)}, managedOrphan),
 		"a Public IP named after a Service UID can never be another Service's, so a choice does not keep it")
+}
+
+// A restart between a move's load balancer write and its release loses the record of the Public IP the Service
+// moved off. The startup sweep finds it by name or ownership tags and releases it when it is unattached and the
+// Service now chooses another; a user's, an attached, or a still chosen Public IP is never released.
+func TestCleanupOrphanedPIPs_ReleasesPublicIPsAMoveLeftDuringRestart(t *testing.T) {
+	const (
+		movedUID   = "aaaaaaaa-0000-0000-0000-000000000001"
+		defaultUID = "aaaaaaaa-0000-0000-0000-000000000002"
+		addressUID = "aaaaaaaa-0000-0000-0000-000000000003"
+		namedUID   = "aaaaaaaa-0000-0000-0000-000000000004"
+		backUID    = "aaaaaaaa-0000-0000-0000-000000000005"
+		otherUID   = "aaaaaaaa-0000-0000-0000-000000000006"
+		selfUID    = "aaaaaaaa-0000-0000-0000-000000000007"
+		crossUID   = "aaaaaaaa-0000-0000-0000-000000000008"
+		addrUID    = "aaaaaaaa-0000-0000-0000-000000000009"
+	)
+	service := func(name, uid, loadBalancerIP string, annotations map[string]string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", UID: types.UID(uid), Annotations: annotations},
+			Spec: v1.ServiceSpec{
+				Type:           v1.ServiceTypeLoadBalancer,
+				LoadBalancerIP: loadBalancerIP,
+				Ports:          []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+	}
+	byName := func(name string) map[string]string {
+		return map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: name}
+	}
+	services := map[string]*v1.Service{
+		movedUID:   service("moved", movedUID, "", byName("user-y")),
+		defaultUID: service("default", defaultUID, "", nil),
+		addressUID: service("address", addressUID, "20.0.0.30", nil),
+		namedUID:   service("named", namedUID, "", byName("owned-named")),
+		backUID:    service("back", backUID, "", nil),
+		otherUID:   service("other", otherUID, "", byName("chosen-by-other")),
+		selfUID:    service("self", selfUID, "", byName(PublicIPName(selfUID))),
+		addrUID:    service("addr-moved", addrUID, "20.0.0.40", nil),
+		crossUID: service("cross", crossUID, "", map[string]string{
+			consts.ServiceAnnotationPIPNameDualStack[false]:   "cross-named",
+			consts.ServiceAnnotationLoadBalancerResourceGroup: "other-rg",
+		}),
+	}
+	pip := func(name, service string, attached bool) *armnetwork.PublicIPAddress {
+		p := &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.0.0.99")}}
+		if service != "" {
+			p.Tags = map[string]*string{consts.ServiceTagKey: ptr.To(service), consts.ClusterNameKey: ptr.To("cluster")}
+		}
+		if attached {
+			p.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb/frontendIPConfigurations/fe")}
+		}
+		return p
+	}
+	ownAddress := pip(PublicIPName(addressUID), "ns/address", false)
+	ownAddress.Properties.IPAddress = ptr.To("20.0.0.30")
+	noCluster := pip("no-cluster-tag", "", false)
+	noCluster.Tags = map[string]*string{consts.ServiceTagKey: ptr.To("ns/moved")}
+	pips := []*armnetwork.PublicIPAddress{
+		pip(PublicIPName(movedUID), "ns/moved", false),
+		pip("moved-named", "ns/moved", false),
+		pip("moved-attached", "ns/moved", true),
+		pip("user-y", "", true),
+		pip("user-x", "", false),
+		noCluster,
+		pip(PublicIPName(defaultUID), "ns/default", false),
+		ownAddress,
+		pip("owned-named", "ns/named", false),
+		pip("back-named", "ns/back", false),
+		pip("chosen-by-other", "ns/moved", false),
+		pip(PublicIPName(selfUID), "ns/self", false),
+		pip("cross-named", "ns/cross", false),
+		pip(PublicIPName(addrUID), "ns/addr-moved", false),
+		pip("addr-moved-named", "ns/addr-moved", false),
+	}
+
+	ctrl := gomock.NewController(t)
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	var deletedMu sync.Mutex
+	var deleted []string
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", gomock.Any()).DoAndReturn(func(_ context.Context, _, name string) error {
+		deletedMu.Lock()
+		defer deletedMu.Unlock()
+		deleted = append(deleted, name)
+		return nil
+	}).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = mockFactory
+	for uid := range services {
+		dt.K8sResources.Services.Insert(uid)
+		dt.NRPResources.LoadBalancers.Insert(uid)
+	}
+	cleanupOrphanedPIPs(context.Background(), dt, pips, chosenPublicIPs(services, "rg"), services)
+
+	assert.ElementsMatch(t, []string{PublicIPName(movedUID), "moved-named", "back-named", "cross-named", PublicIPName(addrUID), "addr-moved-named"}, deleted,
+		"only unattached Public IPs the controller created for a Service that now chooses another are released")
 }
 
 func TestChosenPublicIPs(t *testing.T) {
