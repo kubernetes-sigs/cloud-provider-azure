@@ -136,6 +136,48 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 			},
 			reason: "UnsupportedInternalLoadBalancer",
 		},
+		{
+			name: "source ranges",
+			mutate: func(svc *v1.Service) {
+				svc.Spec.LoadBalancerSourceRanges = []string{"203.0.113.0/24"}
+			},
+			reason: "UnsupportedAccessRestriction",
+		},
+		{
+			name: "private link service",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationPLSCreation: consts.TrueAnnotationValue}
+			},
+			reason: "UnsupportedPrivateLinkService",
+		},
+		{
+			name: "invalid load balancer IP",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIPDualStack[false]: "not-an-ip"}
+			},
+			reason: "InvalidLoadBalancerIP",
+		},
+		{
+			name: "annotation without effect",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "true"}
+			},
+			reason: "UnsupportedAnnotations",
+		},
+		{
+			name: "health probe annotation",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath: "/healthz"}
+			},
+			reason: "UnsupportedHealthProbe",
+		},
+		{
+			name: "reserved Public IP tag key",
+			mutate: func(svc *v1.Service) {
+				svc.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "k8s-azure-cluster-name=spoof,team=a"}
+			},
+			reason: "InvalidPIPTags",
+		},
 	}
 
 	for _, tt := range tests {
@@ -164,6 +206,118 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadBalancerRejectsAnnotationsWithoutEffect(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc := newInboundService("service-uid")
+	svc.Annotations = map[string]string{
+		consts.ServiceAnnotationLoadBalancerResourceGroup:                            "rg",
+		consts.ServiceAnnotationLoadBalancerIdleTimeout:                              "10",
+		consts.ServiceAnnotationDisableLoadBalancerFloatingIP:                        "false",
+		consts.BuildAnnotationKeyForPort(80, consts.PortAnnotationNoHealthProbeRule): "true",
+	}
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+	recorder := record.NewFakeRecorder(10)
+	tracker.SetEventRecorder(recorder)
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.Error(t, err)
+	assert.False(t, tracker.IsServiceTracked(ServiceUID(svc)), "an annotation without effect must block provisioning")
+
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, v1.EventTypeWarning)
+		assert.Contains(t, event, "UnsupportedAnnotations")
+		assert.Contains(t, event, consts.ServiceAnnotationLoadBalancerResourceGroup)
+		assert.Contains(t, event, consts.ServiceAnnotationDisableLoadBalancerFloatingIP)
+		assert.Contains(t, event, string(consts.PortAnnotationNoHealthProbeRule))
+		assert.NotContains(t, event, consts.ServiceAnnotationLoadBalancerIdleTimeout)
+	default:
+		t.Fatal("expected a warning event listing the unsupported annotations")
+	}
+
+	svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerIdleTimeout: "10"}
+	_, err = lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.NoError(t, err)
+	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)), "removing them admits the Service")
+	select {
+	case event := <-recorder.Events:
+		t.Fatalf("unexpected event for supported annotations only: %s", event)
+	default:
+	}
+
+	svc.Annotations[consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath] = "/healthz"
+	_, err = lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+	assert.Error(t, err)
+	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)), "a provisioned Service that gains one keeps its load balancer")
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, v1.EventTypeWarning)
+		assert.Contains(t, event, "UnsupportedHealthProbe")
+		assert.Contains(t, event, consts.ServiceAnnotationLoadBalancerHealthProbeRequestPath)
+		assert.Contains(t, event, "readinessProbe")
+	default:
+		t.Fatal("expected a warning event about the health-probe annotation")
+	}
+	select {
+	case event := <-recorder.Events:
+		t.Fatalf("health-probe annotations must not also be reported as unsupported: %s", event)
+	default:
+	}
+}
+
+func TestLoadBalancerRecordsClusterName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc := newInboundService("service-uid")
+	svc.Annotations = map[string]string{consts.ServiceAnnotationAzurePIPTags: "team=a"}
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	_, err := lb.EnsureLoadBalancer(context.Background(), "my-cluster", svc, nil)
+	assert.NoError(t, err)
+
+	tracker.mu.Lock()
+	config := tracker.pendingServiceOps[ServiceUID(svc)].Config.InboundConfig
+	tracker.mu.Unlock()
+	assert.Equal(t, "my-cluster", config.ClusterName)
+	assert.Equal(t, map[string]string{"team": "a"}, config.PIPTags)
+}
+
+// TestLoadBalancerRecordsClusterNameFromEveryCall pins that any load balancer call teaches the tracker the
+// cluster name: after a restart it is needed to decide ownership of Public IPs, and a cluster may have no
+// Service to ensure for a long time.
+func TestLoadBalancerRecordsClusterNameFromEveryCall(t *testing.T) {
+	for name, call := range map[string]func(lb *LoadBalancer, svc *v1.Service) error{
+		"GetLoadBalancer": func(lb *LoadBalancer, svc *v1.Service) error {
+			_, _, err := lb.GetLoadBalancer(context.Background(), "my-cluster", svc)
+			return err
+		},
+		"UpdateLoadBalancer": func(lb *LoadBalancer, svc *v1.Service) error {
+			return lb.UpdateLoadBalancer(context.Background(), "my-cluster", svc, nil)
+		},
+		"EnsureLoadBalancerDeleted": func(lb *LoadBalancer, svc *v1.Service) error {
+			return lb.EnsureLoadBalancerDeleted(context.Background(), "my-cluster", svc)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc := newInboundService("service-uid")
+			tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc))
+			lb := NewLoadBalancer(nil)
+			assert.NoError(t, lb.SetTracker(tracker))
+			assert.NoError(t, call(lb, svc))
+			assert.Equal(t, "my-cluster", tracker.getClusterName())
+		})
+	}
+
+	tracker := newTestDiffTracker()
+	tracker.SetClusterName("first")
+	tracker.SetClusterName("")
+	assert.Equal(t, "first", tracker.getClusterName(), "an empty name never replaces a known one")
 }
 
 // TestLoadBalancerDoesNotEmitEventWithoutReason keeps the Event path from turning every failure

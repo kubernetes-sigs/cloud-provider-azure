@@ -275,4 +275,146 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 
 		utils.Logf("✓ Internal service was rejected with a warning event and no Azure resources")
 	})
+
+	It("should reject services that restrict access, select their Public IP inconsistently or carry settings without effect", func() {
+		cases := []struct {
+			name   string
+			reason string
+			mutate func(*v1.Service)
+		}{
+			{"source-ranges", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Spec.LoadBalancerSourceRanges = []string{"203.0.113.0/24"}
+			}},
+			{"allowed-service-tags", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-allowed-service-tags": "AzureCloud"}
+			}},
+			{"no-lb-rule", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_80_no_lb_rule": "true"}
+			}},
+			{"private-link", "UnsupportedPrivateLinkService", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pls-create": "true"}
+			}},
+			{"invalid-address", "InvalidLoadBalancerIP", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113"}
+			}},
+			{"name-and-address", "ConflictingPublicIPSettings", func(s *v1.Service) {
+				s.Annotations = map[string]string{
+					"service.beta.kubernetes.io/azure-pip-name":           "customer-pip",
+					"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113.10",
+				}
+			}},
+			{"deny-all", "UnsupportedAccessRestriction", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges": "true"}
+			}},
+			{"floating-ip", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-disable-load-balancer-floating-ip": "true"}
+			}},
+			{"no-probe-rule", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_80_no_probe_rule": "true"}
+			}},
+			{"additional-public-ips", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-additional-public-ips": "203.0.113.20"}
+			}},
+			{"lb-mode", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-mode": "auto"}
+			}},
+			{"health-probe", "UnsupportedHealthProbe", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-health-probe-request-path": "/healthz"}
+			}},
+			{"reserved-pip-tag", "InvalidPIPTags", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-tags": "team=a,k8s-azure-service=spoof"}
+			}},
+			{"malformed-pip-tags", "InvalidPIPTags", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-tags": "team:a"}
+			}},
+			{"malformed-ip-tags", "InvalidIPTags", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-ip-tags": "FirstPartyUsage=/Unprivileged=x"}
+			}},
+			{"conflicting-load-balancer-ip", "ConflictingPublicIPSettings", func(s *v1.Service) {
+				s.Spec.LoadBalancerIP = "203.0.113.10"
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-ipv4": "203.0.113.20"}
+			}},
+			{"resource-group-without-public-ip", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-load-balancer-resource-group": "rg"}
+			}},
+			{"ipv6-pip-name-on-ipv4-service", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/azure-pip-name-ipv6": "x"}
+			}},
+			{"no-lb-rule-for-non-service-port", "UnsupportedAnnotations", func(s *v1.Service) {
+				s.Annotations = map[string]string{"service.beta.kubernetes.io/port_8080_no_lb_rule": "true"}
+			}},
+		}
+
+		uids := map[string]string{}
+		for _, tc := range cases {
+			By("Creating the " + tc.name + " service")
+			service := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: tc.name, Namespace: ns.Name},
+				Spec: v1.ServiceSpec{
+					Type:     v1.ServiceTypeLoadBalancer,
+					Selector: map[string]string{"app": tc.name},
+					Ports:    []v1.ServicePort{{Name: "http", Port: 80, TargetPort: intstr.FromInt(8080), Protocol: v1.ProtocolTCP}},
+				},
+			}
+			tc.mutate(service)
+			created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			uids[tc.name] = string(created.UID)
+		}
+
+		for _, tc := range cases {
+			By("Verifying the " + tc.name + " service is rejected with " + tc.reason)
+			expectServiceWarningEvent(tc.name, tc.reason)
+		}
+
+		By("Verifying none of the services provisioned Azure or Service Gateway resources")
+		Consistently(func() error {
+			for _, tc := range cases {
+				if err := serviceDeletedErr(uids[tc.name]); err != nil {
+					return err
+				}
+				if err := azurePublicIPAbsentErr(uids[tc.name]); err != nil {
+					return err
+				}
+				svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), tc.name, metav1.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("get service %s: %w", tc.name, err)
+				}
+				if len(svc.Status.LoadBalancer.Ingress) != 0 {
+					return fmt.Errorf("service %s was assigned an ingress IP despite being rejected", tc.name)
+				}
+			}
+			return nil
+		}, 45*time.Second, defaultPollInterval).Should(Succeed(),
+			"a setting ServiceGateway cannot honour must be rejected (no PIP/LB/SGW registration)")
+
+		utils.Logf("✓ Services with unsupported access or inconsistent Public IP settings were rejected")
+	})
+
+	It("should provision a service whose source ranges allow every address", func() {
+		const serviceName = "allow-all-service"
+		labels := map[string]string{"app": serviceName}
+
+		By("Creating a service whose source ranges allow every address")
+		service := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        serviceName,
+				Namespace:   ns.Name,
+				Annotations: map[string]string{"service.beta.kubernetes.io/azure-deny-all-except-load-balancer-source-ranges": "false"},
+			},
+			Spec: v1.ServiceSpec{
+				Type:                     v1.ServiceTypeLoadBalancer,
+				Selector:                 labels,
+				LoadBalancerSourceRanges: []string{"0.0.0.0/0"},
+				Ports:                    []v1.ServicePort{{Name: "http", Port: 80, TargetPort: intstr.FromInt(8080), Protocol: v1.ProtocolTCP}},
+			},
+		}
+		created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Verifying the service is provisioned")
+		eventuallyServiceReconciled(string(created.UID), -1, 3*time.Minute)
+
+		utils.Logf("✓ Allow-all service was provisioned")
+	})
 })

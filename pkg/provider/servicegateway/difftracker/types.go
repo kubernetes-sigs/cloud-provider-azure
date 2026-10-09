@@ -18,6 +18,8 @@ package difftracker
 
 import (
 	"errors"
+	"maps"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -119,6 +121,24 @@ type InboundConfig struct {
 	// cannot be resolved to a PodIP backend port here, so their presence is rejected as a
 	// terminal error in buildInboundServiceResources rather than silently mis-routing traffic.
 	NamedTargetPorts []string
+	// ServiceName ("namespace/name") and ClusterName fill the Public IP ownership tags.
+	ServiceName string
+	ClusterName string
+	// PIPTags are the azure-pip-tags annotation tags, without the reserved ownership keys.
+	PIPTags map[string]string
+	// IPTags are the azure-pip-ip-tags annotation tags; nil when none are set.
+	IPTags map[string]string
+	// DNSLabel is the azure-dns-label-name annotation; nil when absent, "" removes the label.
+	DNSLabel *string
+	// PIPPrefixID is the Public IP prefix the Public IP is allocated from.
+	PIPPrefixID string
+	// PIPName is the azure-pip-name annotation: the Public IP to use, created with that name if missing.
+	PIPName string
+	// LoadBalancerIP is the address of an existing Public IP to use, from the azure-load-balancer-ipv4/ipv6
+	// annotation or spec.loadBalancerIP.
+	LoadBalancerIP string
+	// PIPResourceGroup is where PIPName or LoadBalancerIP is looked up; empty means the cluster resource group.
+	PIPResourceGroup string
 }
 
 // OutboundConfig contains NAT Gateway configuration for outbound services
@@ -133,7 +153,7 @@ type OutboundConfig struct {
 	IPFamilies []string
 }
 
-// Equals returns true if two InboundConfigs describe the same desired LB shape.
+// Equals returns true if two InboundConfigs describe the same desired LB shape and Public IP settings.
 // Used by UpdateService to short-circuit no-op reconciles.
 // Comparison is order-sensitive for FrontendPorts/BackendPorts because the
 // position of a port determines its pairing with a backend port in
@@ -169,7 +189,15 @@ func (c *InboundConfig) Equals(other *InboundConfig) bool {
 	if !stringSlicesEqual(c.NamedTargetPorts, other.NamedTargetPorts) {
 		return false
 	}
-	return true
+	if c.ServiceName != other.ServiceName || c.ClusterName != other.ClusterName {
+		return false
+	}
+	if !maps.Equal(c.PIPTags, other.PIPTags) || (c.IPTags == nil) != (other.IPTags == nil) || !maps.Equal(c.IPTags, other.IPTags) {
+		return false
+	}
+	return strPtrEqual(c.DNSLabel, other.DNSLabel) && strings.EqualFold(c.PIPPrefixID, other.PIPPrefixID) &&
+		strings.EqualFold(c.PIPName, other.PIPName) && c.LoadBalancerIP == other.LoadBalancerIP &&
+		strings.EqualFold(c.PIPResourceGroup, other.PIPResourceGroup)
 }
 
 func stringSlicesEqual(a, b []string) bool {
@@ -447,6 +475,8 @@ type DiffTracker struct {
 
 	// eventRecorder emits Service Gateway pod events; set post-init before the egress informer starts.
 	eventRecorder record.EventRecorder
+	// clusterName is the cluster name the cloud-provider passes to EnsureLoadBalancer.
+	clusterName string
 	// endpointSlicesCache is owned by difftracker and stores snapshots from forwarded informer
 	// events. It is replayed when a service is registered and by ReconcileNodeIPChange.
 	endpointSlicesCache sync.Map

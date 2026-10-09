@@ -27,6 +27,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/utils/ptr"
 
@@ -35,6 +38,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -637,6 +641,7 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	const orphanPIP = "leftover-pip"
 	pips := []*armnetwork.PublicIPAddress{{
 		Name:       ptr.To(orphanPIP),
+		Tags:       egressIdentityTags("leftover"),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 	}}
 	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(pips, nil).Times(1)
@@ -648,6 +653,186 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, fake.NewSimpleClientset())
 	assert.NoError(t, err)
 	assert.NotNil(t, dt)
+}
+
+// TestInitializeFromCluster_KeepsPublicIPsServicesChoose pins that startup hands the Public IPs Services
+// choose to the orphan Public IP sweep. The Services are rejected by admission, so nothing is provisioned and
+// their chosen addresses are detached, which is exactly when a sweep could mistake them for leaks.
+func TestInitializeFromCluster_CompletesWhenNoAdditionIsDispatched(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+	otherClass := "example.com/other"
+	kube := fake.NewSimpleClientset(
+		&v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "rejected", Namespace: "ns", UID: types.UID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee4")},
+			Spec: v1.ServiceSpec{
+				Type:            v1.ServiceTypeLoadBalancer,
+				SessionAffinity: v1.ServiceAffinityClientIP,
+				Ports:           []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		},
+		&v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "other-class", Namespace: "ns", UID: types.UID("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee5")},
+			Spec: v1.ServiceSpec{
+				Type:              v1.ServiceTypeLoadBalancer,
+				LoadBalancerClass: &otherClass,
+				Ports:             []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		},
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+	assert.NoError(t, err, "initialization must not wait for creations that were never dispatched")
+	assert.NotNil(t, dt)
+}
+
+func TestInitializeFromCluster_KeepsPublicIPsServicesChoose(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	// An orphaned load balancer gives initialization work to complete.
+	const orphanLB = "ffffffff-ffff-ffff-ffff-ffffffffffff"
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.LoadBalancer{{Name: ptr.To(orphanLB)}}, nil).AnyTimes()
+	mockLB.EXPECT().Get(gomock.Any(), "rg", orphanLB, gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+	mockLB.EXPECT().Delete(gomock.Any(), "rg", orphanLB).Return(nil).AnyTimes()
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(orphanLB)).Return(nil).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+	const byName, byAddress, orphan = "web-pip", "reserved-pip", "leftover-pip"
+	const movedUID = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee3"
+	// Tagged as egress addresses so that only a Service's choice keeps the chosen ones.
+	detached := func(name, address string) *armnetwork.PublicIPAddress {
+		identity, _ := identityFromPublicIPName(name)
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To(address)}}
+	}
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{
+		detached(byName, "20.0.0.7"), detached(byAddress, "20.0.0.9"), detached(orphan, "20.0.0.5"),
+		{Name: ptr.To(PublicIPName(movedUID)), Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.0.0.11")}},
+	}, nil).Times(1)
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", orphan).Return(nil).Times(1)
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(movedUID)).Return(nil).Times(1)
+
+	rejected := func(name, uid string, mutate func(*v1.Service)) *v1.Service {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns", UID: types.UID(uid)},
+			Spec: v1.ServiceSpec{
+				Type:            v1.ServiceTypeLoadBalancer,
+				SessionAffinity: v1.ServiceAffinityClientIP,
+				Ports:           []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
+			},
+		}
+		mutate(svc)
+		return svc
+	}
+	kube := fake.NewSimpleClientset(
+		rejected("by-name", "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1", func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: byName}
+		}),
+		rejected("by-address", "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee2", func(s *v1.Service) { s.Spec.LoadBalancerIP = "20.0.0.9" }),
+		rejected("moved", movedUID, func(s *v1.Service) {
+			s.Annotations = map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "user-y"}
+		}),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	// The mock fails on any delete but the orphan's: the Public IPs the Services choose are kept.
+	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+	assert.NoError(t, err)
+	assert.NotNil(t, dt)
+}
+
+// A Service deleted while the controller was down, whose Public IP was created under the name it chose but
+// whose load balancer never was, still has that Public IP released at startup.
+func TestInitializeFromCluster_ReleasesNamedPublicIPOfServiceDeletedWhileDown(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockLB.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+	mockLB.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+	const uid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee1"
+	named := &armnetwork.PublicIPAddress{Name: ptr.To("web-ip"), Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
+		Tags: map[string]*string{consts.ServiceTagKey: ptr.To("ns/web"), consts.ClusterNameKey: ptr.To("cluster")}}
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{named}, nil).AnyTimes()
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", "web-ip", gomock.Any()).Return(named, nil).AnyTimes()
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
+	released := make(chan struct{}, 1)
+	mockPIP.EXPECT().Delete(gomock.Any(), "rg", "web-ip").DoAndReturn(func(context.Context, string, string) error {
+		released <- struct{}{}
+		return nil
+	}).Times(1)
+
+	now := metav1.Now()
+	kube := fake.NewSimpleClientset(&v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "ns", UID: types.UID(uid), DeletionTimestamp: &now,
+			Finalizers:  []string{ServiceGatewayServiceCleanupFinalizer},
+			Annotations: map[string]string{consts.ServiceAnnotationPIPNameDualStack[false]: "web-ip"}},
+		Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+	assert.NoError(t, err)
+	assert.NotNil(t, dt)
+	select {
+	case <-released:
+	case <-ctx.Done():
+		t.Fatal("the named Public IP the controller created was not released")
+	}
+	assert.Eventually(t, func() bool {
+		svc, err := kube.CoreV1().Services("ns").Get(context.Background(), "web", metav1.GetOptions{})
+		return err == nil && !hasServiceGatewayFinalizer(svc)
+	}, 10*time.Second, 50*time.Millisecond, "the finalizer is removed once the Public IP is released")
 }
 
 // TestARMPrimitivesDoNotHoldStateLock enforces the package concurrency invariant: ARM

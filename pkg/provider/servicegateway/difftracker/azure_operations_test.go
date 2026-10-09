@@ -688,3 +688,24 @@ func TestConvertServiceDTOsToServiceRequests_MapsServiceType(t *testing.T) {
 	_, err = convertServiceDTOsToServiceRequests([]ServiceDTO{{Service: "x", ServiceType: "Sideways"}}, testConfig())
 	assert.Error(t, err, "an unknown service type must not be silently mapped")
 }
+
+func TestServiceKeepsLoadBalancer(t *testing.T) {
+	dt := newTestDiffTracker()
+	dt.kubeClient = fake.NewSimpleClientset(
+		loadBalancerService("ns", "a", "uid-a"),
+		loadBalancerService("ns", "b", "uid-b"),
+	)
+	ctx := context.Background()
+	assert.True(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-self"))
+	assert.True(t, dt.serviceKeepsLoadBalancer(ctx, "ns/gone, ns/b", "uid-self"), "any listed Service that keeps its load balancer counts")
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-a"), "the Service itself is not another Service")
+	dt.pendingServiceOps["uid-a"] = &ServiceOperationState{ServiceUID: "uid-a", State: StateDeletionInProgress}
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-self"), "a Service being deleted does not keep its load balancer")
+	delete(dt.pendingServiceOps, "uid-a")
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/gone", "uid-self"))
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "uid-gone", "uid-self"))
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "", "uid-self"))
+
+	dt.kubeClient = nil
+	assert.False(t, dt.serviceKeepsLoadBalancer(ctx, "ns/a", "uid-self"), "without a client the owner cannot be confirmed, so the caller retries")
+}

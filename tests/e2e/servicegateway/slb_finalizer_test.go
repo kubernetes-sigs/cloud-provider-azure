@@ -284,9 +284,6 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      serviceName,
 					Namespace: ns.Name,
-					Annotations: map[string]string{
-						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
-					},
 				},
 				Spec: v1.ServiceSpec{
 					Type:     v1.ServiceTypeLoadBalancer,

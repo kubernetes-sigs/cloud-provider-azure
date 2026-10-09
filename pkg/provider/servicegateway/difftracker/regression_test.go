@@ -243,6 +243,7 @@ func TestDeleteInboundServiceLastErrMonotonic(t *testing.T) {
 	f := mock_azclient.NewMockClientFactory(ctrl)
 	sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
 	lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+	lb.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	pip := mock_publicipaddressclient.NewMockInterface(ctrl)
 	f.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
 	f.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()

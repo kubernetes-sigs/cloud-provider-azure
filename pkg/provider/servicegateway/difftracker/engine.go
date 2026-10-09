@@ -114,6 +114,7 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 	if inboundConfig == nil {
 		return nil
 	}
+	inboundConfig.ClusterName = dt.getClusterName()
 
 	config := NewInboundServiceConfig(serviceUID, inboundConfig)
 	config.Namespace = service.Namespace
@@ -1072,6 +1073,14 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 			// landed while this attempt was in flight.
 			attempted := opState.InFlightConfig
 			opState.InFlightConfig = nil
+
+			// A load balancer that is already live, e.g. attached before a park or left by an earlier
+			// attempt, receives endpoint events directly once the Service leaves CreationInProgress. Replay
+			// the buffer now so it is served, and so a later successful create does not replay it stale.
+			if dt.NRPResources.LoadBalancers.Has(serviceUID) {
+				dt.promotePendingEndpointsLocked(serviceUID)
+				dt.triggerLocationsUpdater()
+			}
 
 			if isTerminalError(err) {
 				recordServiceOperation("create", opState.Config.IsInbound, startTime, err, "ValidationError", opState.IsOrphan)

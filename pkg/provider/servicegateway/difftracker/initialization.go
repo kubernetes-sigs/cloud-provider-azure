@@ -19,6 +19,7 @@ package difftracker
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/netip"
 	"reflect"
 	"regexp"
@@ -27,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -171,7 +173,7 @@ func InitializeFromCluster(
 	// Recover resources stuck with finalizers from a previous crash
 	// This must happen BEFORE informers start to avoid race conditions
 	// Reuse lists from buildK8sState (avoids duplicate API calls)
-	recoverStuckFinalizers(ctx, diffTracker, serviceList, egressPodList, endpointSliceList, currentLoadBalancersInNRP, currentNATGatewaysInNRP, pipNamesInAzure)
+	namedPublicIPDeletions := recoverStuckFinalizers(ctx, diffTracker, serviceList, egressPodList, endpointSliceList, currentLoadBalancersInNRP, currentNATGatewaysInNRP, pipNamesInAzure)
 
 	// Counter already initialized from K8s state during buildK8sState
 	// After initialization sync completes, NRP will match K8s, so counter reflects final state
@@ -193,13 +195,17 @@ func InitializeFromCluster(
 	}
 
 	// Reconcile services (create/delete LBs and NAT Gateways in Azure)
-	diffTracker.reconcileServices(syncOperations, serviceUIDToService)
+	dispatchedAdditions := diffTracker.reconcileServices(syncOperations, serviceUIDToService)
 
 	// Schedule deletion of orphaned Azure resources via ServiceUpdater.
 	// Orphaned resources are LBs/NATs/PIPs that exist in Azure but NOT in ServiceGateway.
 	// This happens when services are deleted while CCM is down, or from failed operations.
 	// We add them to NRPResources and call DeleteService to use the standard async deletion flow.
+	chosen := chosenPublicIPs(serviceUIDToService, diffTracker.config.ResourceGroup)
 	scheduleOrphanedResourceDeletions(diffTracker, currentLoadBalancersInNRP, currentNATGatewaysInNRP, pipNamesInAzure)
+	for _, uid := range namedPublicIPDeletions {
+		diffTracker.DeleteService(uid, true, true)
+	}
 
 	// Trigger initial location sync if needed:
 	// - For deletions: Clear orphaned locations so services can be deleted
@@ -207,13 +213,14 @@ func InitializeFromCluster(
 	// - For new services: OnServiceCreationComplete will trigger after creation
 	// - For recovered stuck finalizers: pendingPodDeletions need processing
 	hasDeletions := syncOperations.LoadBalancerUpdates.Removals.Len() > 0 || syncOperations.NATGatewayUpdates.Removals.Len() > 0
-	// hasOnlyExistingServices is true when we have NO new services to create.
-	// This covers two cases:
+	// hasOnlyExistingServices is true when no new service was dispatched for creation.
+	// This covers three cases:
 	//   1. All services already exist in NRP (need location sync for potential updates)
 	//   2. NO services exist at all (no-op, but harmless to trigger)
-	// The key insight: when Additions > 0, OnServiceCreationComplete will trigger the sync,
-	// so we don't need an explicit trigger here. When Additions == 0, no such callback exists.
-	hasOnlyExistingServices := syncOperations.LoadBalancerUpdates.Additions.Len() == 0 && syncOperations.NATGatewayUpdates.Additions.Len() == 0
+	//   3. Every addition was skipped (rejected by admission or owned by another LoadBalancerClass)
+	// The key insight: a dispatched addition's OnServiceCreationComplete triggers the sync, so we
+	// don't need an explicit trigger then. Without one, no such callback exists.
+	hasOnlyExistingServices := dispatchedAdditions == 0
 
 	// Check if we have pending items from recoverStuckFinalizers, and whether NRP already tracks a
 	// service. An existing NRP service may carry endpoint/location drift from cluster changes during
@@ -254,7 +261,7 @@ func InitializeFromCluster(
 	// already fetched by buildNRPState rather than re-listing: a transient failure on a second List
 	// is swallowed (cleanupOrphanedPIPs is non-fatal) and would leak orphan PIPs that were already
 	// visible in the fetched list.
-	cleanupOrphanedPIPs(ctx, diffTracker, azurePIPs)
+	cleanupOrphanedPIPs(ctx, diffTracker, azurePIPs, chosen, serviceUIDToService)
 
 	// Mark initialization complete
 	diffTracker.InitialSyncDone = true
@@ -478,7 +485,9 @@ func (dt *DiffTracker) outboundIPFamilies() []string {
 //
 // Recovery strategy:
 //   - For Services: The diff mechanism handles LB/NAT deletion (not in K8s.Services → marked for removal)
-//     Just log for visibility; no explicit pendingServiceDeletions needed as GetSyncOperations will handle it
+//     Just log for visibility; no explicit pendingServiceDeletions needed as GetSyncOperations will handle it.
+//     A Service with no Azure resource that chose a Public IP by name is returned so the caller deletes it
+//     explicitly: only the delete path can tell whether that Public IP was created by this controller.
 //   - For Pods with valid addresses: Track in pendingPodDeletions (don't call DeletePod - counters are clean)
 //   - For Pods with missing addresses: Track a service-level NRP verification before removal
 //   - For malformed resources (no egress label): Directly remove finalizer
@@ -495,7 +504,7 @@ func recoverStuckFinalizers(
 	currentLBsInAzure *utilsets.IgnoreCaseSet,
 	currentNATsInAzure *utilsets.IgnoreCaseSet,
 	azurePIPNames *utilsets.IgnoreCaseSet,
-) {
+) (namedPublicIPDeletions []string) {
 	logger := log.FromContextOrBackground(ctx)
 
 	servicesRecovered := 0
@@ -517,10 +526,13 @@ func recoverStuckFinalizers(
 	//   absent from NRPResources. We therefore also consult the Azure LB/NAT/PIP enumeration below so
 	//   the finalizer (the only anchor to those resources) is not stripped before their cleanup runs.
 	//
-	// Two cases for stuck services:
+	// Three cases for stuck services:
 	// 1. A real Azure resource EXISTS (registered in NRP or found by the Azure enumeration) → leave the
 	//    finalizer in place; the diff/orphan cleanup deletes the resource and then removes the finalizer.
-	// 2. No Azure resource exists → directly remove the finalizer (nothing to clean up).
+	// 2. No Azure resource is found but the Service chose a Public IP by name → leave the finalizer in place
+	//    and return the Service; the caller's explicit delete releases that Public IP if it is ours and then
+	//    removes the finalizer.
+	// 3. Otherwise → directly remove the finalizer (nothing to clean up).
 	servicesDirectCleaned := 0
 	if services == nil {
 		logger.V(4).Info("Skipped service finalizer recovery because service list was nil")
@@ -555,11 +567,19 @@ func recoverStuckFinalizers(
 				(currentNATsInAzure != nil && currentNATsInAzure.Has(uid)) ||
 				pipExistsInAzure
 
-			if hasAzureResource {
-				// Azure resource exists - diff mechanism will handle deletion
+			// A Public IP created under the name the Service chooses may be left without a load balancer (a crash
+			// or a failed rollback). Only the delete path can tell whether it is ours, so it runs for the Service.
+			namedPublicIP := !hasAzureResource && selectedPublicIPName(svc) != ""
+			if namedPublicIP {
+				namedPublicIPDeletions = append(namedPublicIPDeletions, uid)
+			}
+
+			if hasAzureResource || namedPublicIP {
+				// The diff (an Azure resource exists) or the caller's explicit delete (a chosen Public IP name)
+				// releases the resources and then removes the finalizer.
 				logger.V(2).Info("Found stuck service finalizer", "namespace", svc.Namespace, "service", svc.Name, "uid", uid)
 				servicesRecovered++
-				// The finalizer is still on the Service; the diff owns its removal from here.
+				// The finalizer is still on the Service; its removal is owned by that delete from here.
 				dt.markServiceFinalizerRecovering(uid)
 				recordFinalizerRecoveryScheduled()
 			} else {
@@ -693,6 +713,7 @@ func recoverStuckFinalizers(
 	} else {
 		logger.V(2).Info("Found no stuck finalizers")
 	}
+	return namedPublicIPDeletions
 }
 
 // processK8sServices fetches and processes LoadBalancer services from K8s
@@ -1240,9 +1261,22 @@ func recoverServiceExternalIPs(ctx context.Context, diffTracker *DiffTracker, se
 		// Service exists in NRP but has no External IP in K8s - need to recover
 		logger.V(2).Info("Found service missing External IP", "namespace", svc.Namespace, "service", svc.Name, "uid", serviceUID)
 
-		// Look up IP from pre-fetched PIP map (no API call needed)
+		// The address is the one of the Public IP the load balancer uses, which a chosen Public IP may name
+		// differently or keep in another resource group; the pre-fetched map covers the cluster resource group.
 		pipName := PublicIPName(serviceUID)
 		ipAddress, exists := pipNameToIP[strings.ToLower(pipName)]
+		if lb, err := diffTracker.networkClientFactory.GetLoadBalancerClient().Get(ctx, diffTracker.config.ResourceGroup, serviceUID, nil); err == nil {
+			if id, err := arm.ParseResourceID(frontendPublicIPID(lb)); err == nil {
+				pipName = id.Name
+				ipAddress, exists = pipNameToIP[strings.ToLower(id.Name)]
+				if !strings.EqualFold(id.ResourceGroupName, diffTracker.config.ResourceGroup) {
+					ipAddress, exists = "", false
+					if pip, err := diffTracker.networkClientFactory.GetPublicIPAddressClient().Get(ctx, id.ResourceGroupName, id.Name, nil); err == nil && pip != nil && pip.Properties != nil {
+						ipAddress, exists = derefString(pip.Properties.IPAddress), true
+					}
+				}
+			}
+		}
 		if !exists || ipAddress == "" {
 			logger.V(4).Info("Could not recover service External IP", "publicIP", pipName, "serviceUID", serviceUID)
 			continue
@@ -1400,11 +1434,64 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 
 // cleanupOrphanedPIPs attempts to cleanup orphaned Public IPs (non-fatal)
 // Uses pre-fetched PIPs from buildNRPState to avoid duplicate API calls.
-func cleanupOrphanedPIPs(ctx context.Context, diffTracker *DiffTracker, azurePIPs []*armnetwork.PublicIPAddress) {
+func cleanupOrphanedPIPs(ctx context.Context, diffTracker *DiffTracker, azurePIPs []*armnetwork.PublicIPAddress, chosen *utilsets.IgnoreCaseSet, services map[string]*v1.Service) {
 	logger := log.FromContextOrBackground(ctx)
-	if err := diffTracker.cleanupOrphanedPublicIPs(ctx, azurePIPs); err != nil {
+	if err := diffTracker.cleanupOrphanedPublicIPs(ctx, azurePIPs, chosen, services); err != nil {
 		logger.V(4).Info("Could not clean up orphaned Public IPs", "err", err)
 	}
+}
+
+// choosesAnotherPublicIP reports whether the Service now chooses a Public IP other than pip, in the cluster
+// resource group, so an unattached pip it once used is left over from a move.
+func choosesAnotherPublicIP(svc *v1.Service, clusterResourceGroup string, pip *armnetwork.PublicIPAddress) bool {
+	if svc == nil || svc.Spec.Type != v1.ServiceTypeLoadBalancer || pip == nil || pip.Name == nil {
+		return false
+	}
+	config := ExtractInboundConfigFromService(svc)
+	switch {
+	case config == nil:
+		return false
+	case config.PIPName != "":
+		return !strings.EqualFold(config.PIPName, *pip.Name) || (config.PIPResourceGroup != "" && !strings.EqualFold(config.PIPResourceGroup, clusterResourceGroup))
+	case config.LoadBalancerIP != "":
+		return pip.Properties == nil || !net.ParseIP(derefString(pip.Properties.IPAddress)).Equal(net.ParseIP(config.LoadBalancerIP))
+	default:
+		identity, ok := identityFromPublicIPName(*pip.Name)
+		return !ok || !strings.EqualFold(identity, ServiceUID(svc))
+	}
+}
+
+// liveServiceTaggedOn returns the Service, among those Kubernetes still wants, that the ownership tag of pip names.
+func liveServiceTaggedOn(pip *armnetwork.PublicIPAddress, services map[string]*v1.Service) *v1.Service {
+	name := publicIPServiceTag(pip)
+	if name == "" {
+		return nil
+	}
+	for _, svc := range services {
+		if svc != nil && strings.EqualFold(svc.Namespace+"/"+svc.Name, name) {
+			return svc
+		}
+	}
+	return nil
+}
+
+// chosenPublicIPs returns the names, in resourceGroup, and the addresses of the Public IPs Services choose.
+func chosenPublicIPs(services map[string]*v1.Service, resourceGroup string) *utilsets.IgnoreCaseSet {
+	chosen := utilsets.NewString()
+	for _, svc := range services {
+		if svc == nil || svc.Spec.Type != v1.ServiceTypeLoadBalancer {
+			continue
+		}
+		config := ExtractInboundConfigFromService(svc)
+		switch {
+		case config == nil:
+		case config.LoadBalancerIP != "":
+			chosen.Insert(config.LoadBalancerIP)
+		case config.PIPName != "" && (config.PIPResourceGroup == "" || strings.EqualFold(config.PIPResourceGroup, resourceGroup)):
+			chosen.Insert(config.PIPName)
+		}
+	}
+	return chosen
 }
 
 // ================================================================================================
@@ -1665,7 +1752,7 @@ func (p *WorkerPool) Wait() error {
 // ================================================================================================
 
 // reconcileServices reconciles service additions and deletions using Engine flows.
-func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, serviceUIDToService map[string]*v1.Service) {
+func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, serviceUIDToService map[string]*v1.Service) (dispatchedAdditions int) {
 	logger := dt.logger
 	logger.V(2).Info("Started service reconciliation")
 
@@ -1721,6 +1808,7 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 			config := NewInboundServiceConfig(serviceUID, inboundConfig)
 			logger.V(5).Info("Called AddService for load balancer", "serviceUID", serviceUID)
 			dt.AddService(config)
+			dispatchedAdditions++
 		}
 
 		// Startup must decide address families exactly as the runtime pod path does. Outbound has
@@ -1734,17 +1822,19 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 			config := NewOutboundServiceConfig(serviceUID, &OutboundConfig{IPFamilies: outboundFamilies})
 			logger.V(5).Info("Called AddService for NAT gateway", "serviceUID", serviceUID)
 			dt.AddService(config)
+			dispatchedAdditions++
 		}
 	}
 
 	logger.V(2).Info("Completed service reconciliation")
+	return dispatchedAdditions
 }
 
 // cleanupOrphanedPublicIPs identifies and deletes Public IPs that are not associated with any tracked service.
 // This handles PIPs that were left behind when their associated LB/NAT Gateway was deleted outside the normal flow.
 // Uses pre-fetched PIPs from initialization to avoid duplicate API calls.
 // If pips is nil, falls back to fetching from Azure (for non-initialization use cases).
-func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*armnetwork.PublicIPAddress) error {
+func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*armnetwork.PublicIPAddress, chosen *utilsets.IgnoreCaseSet, services map[string]*v1.Service) error {
 	logger := dt.logger
 	logger.V(2).Info("Started orphaned Public IP cleanup")
 
@@ -1767,9 +1857,16 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		pipName := *pip.Name
 
-		// Map the address back to its identity. Both "-pip" and "-pip-v6" are ours.
+		// Map the address back to its identity. Both "-pip" and "-pip-v6" are ours. A Public IP the controller
+		// created under a name a Service chose is ours only when its tags name a Service that now chooses another:
+		// a move whose release a restart interrupted left it behind.
 		identity, ok := identityFromPublicIPName(pipName)
-		if !ok {
+		movedOff := false
+		if ok {
+			movedOff = isValidServiceUUID(identity) && dt.K8sResources.Services.Has(identity) && choosesAnotherPublicIP(services[identity], dt.config.ResourceGroup, pip)
+		} else if svc := liveServiceTaggedOn(pip, services); svc != nil && choosesAnotherPublicIP(svc, dt.config.ResourceGroup, pip) {
+			movedOff = true
+		} else {
 			logger.V(5).Info("Skipped Public IP with unexpected name", "publicIP", pipName)
 			continue
 		}
@@ -1777,6 +1874,13 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		// Skip the default NAT Gateway PIP
 		if IsReservedEgressIdentity(identity) {
 			logger.V(5).Info("Skipped default NAT gateway Public IP")
+			continue
+		}
+
+		// A Service may choose a Public IP by name or address; it is the user's or in use, never an orphan. One
+		// named after a Service UID can never be another Service's, so a choice does not keep it.
+		if chosen != nil && !isValidServiceUUID(identity) && (chosen.Has(pipName) || (pip.Properties != nil && chosen.Has(derefString(pip.Properties.IPAddress)))) {
+			logger.V(4).Info("Skipped Public IP a Service chooses", "publicIP", pipName)
 			continue
 		}
 
@@ -1788,9 +1892,15 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		serviceName := identity
 
-		// Every "*-pip" in this resource group is ours: it is the cluster's managed node resource
-		// group, so there are no customer-created addresses here to protect. Both a UUID-named
-		// inbound address and an egress address named from a pod label are swept.
+		// Only an address this controller can prove it created is swept: one named after a Service UID,
+		// or carrying Service ownership tags or this egress identity's tag. A user's Public IP in this
+		// resource group (one a Service chose by name or address) carries none of these. The cluster name
+		// is not known yet at startup; as in releasePublicIP, a cluster tag in the cluster resource group
+		// is taken as this cluster's, since only this cluster's controller writes Public IPs there.
+		if !isValidServiceUUID(identity) && !ownedByClusterTags(pip, clusterOwnershipTag(pip)) && !taggedForEgressIdentity(pip, identity) {
+			logger.V(2).Info("Skipped unattached Public IP not created by this controller", "publicIP", pipName)
+			continue
+		}
 
 		// A Service or egress identity Kubernetes still wants is not an orphan, even when NRP has
 		// no record of it. That combination is exactly the crash-mid-create state: the Public IP was
@@ -1799,7 +1909,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		// operations deliberately do not block initialization, so this cleanup runs while the
 		// Service is still being reconciled. Deleting here destroys an address that is in use and
 		// forces a new one to be allocated on the next successful create.
-		if dt.K8sResources.Services.Has(serviceName) || dt.K8sResources.Egresses.Has(serviceName) {
+		if !movedOff && (dt.K8sResources.Services.Has(serviceName) || dt.K8sResources.Egresses.Has(serviceName)) {
 			logger.V(4).Info("Skipped Public IP for a service still desired in Kubernetes", "publicIP", pipName, "service", serviceName)
 			continue
 		}
@@ -1808,7 +1918,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		lbExists := dt.NRPResources.LoadBalancers.Has(serviceName)
 		natExists := dt.NRPResources.NATGateways.Has(serviceName)
 
-		if !lbExists && !natExists {
+		if movedOff || (!lbExists && !natExists) {
 			// PIP is orphaned - not associated with any tracked service
 			orphanedPIPs = append(orphanedPIPs, pipName)
 		}
