@@ -254,13 +254,6 @@ func NewCloudFromSecret(ctx context.Context, clientBuilder cloudprovider.Control
 	return az, nil
 }
 
-var (
-	// newARMClientFactory is a function that returns a new ARM client factory.
-	// It is used to mock the ARM client factory for testing.
-	// TODO: use fake options for testing
-	newARMClientFactory = azclient.NewClientFactory
-)
-
 // InitializeCloudFromConfig initializes the Cloud from config.
 func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azureconfig.Config, _, callFromCCM bool) error {
 	logger := log.FromContextOrBackground(ctx).WithName("InitializeCloudFromConfig")
@@ -441,27 +434,25 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 	}
 
 	if az.ComputeClientFactory == nil && az.AuthProvider != nil {
-		var (
-			computeCred = az.AuthProvider.GetAzIdentity()
-			networkCred = az.AuthProvider.GetNetworkAzIdentity() // It would fallback to compute credential if network credential is not set
+		var networkSubscriptionID, computeSubscriptionID string
+		az.NetworkClientFactory, networkSubscriptionID, err = newCompatibleARMClientFactory(
+			az.getNetworkResourceSubscriptionID(),  // It would also fallback to compute subscription ID if network subscription ID is not set
+			az.AuthProvider.GetNetworkAzIdentity(), // It would fallback to compute credential if network credential is not set
+			&az.ARMClientConfig, clientOps.Cloud,
 		)
-
-		networkSubscriptionID := az.getNetworkResourceSubscriptionID() // It would also fallback to compute subscription ID if network subscription ID is not set
-		az.NetworkClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
-			SubscriptionID: networkSubscriptionID,
-		}, &az.ARMClientConfig, clientOps.Cloud, networkCred)
 		if err != nil {
 			return err
 		}
 		logger.Info("Setting up ARM client factory for network resources", "subscriptionID", networkSubscriptionID)
 
-		az.ComputeClientFactory, err = newARMClientFactory(&azclient.ClientFactoryConfig{
-			SubscriptionID: az.SubscriptionID,
-		}, &az.ARMClientConfig, clientOps.Cloud, computeCred, az.AuthProvider.AdditionalComputeClientOptions...)
+		az.ComputeClientFactory, computeSubscriptionID, err = newCompatibleARMClientFactory(
+			az.SubscriptionID, az.AuthProvider.GetAzIdentity(),
+			&az.ARMClientConfig, clientOps.Cloud, az.AuthProvider.AdditionalComputeClientOptions...,
+		)
 		if err != nil {
 			return err
 		}
-		logger.Info("Setting up ARM client factory for compute resources", "subscriptionID", az.SubscriptionID)
+		logger.Info("Setting up ARM client factory for compute resources", "subscriptionID", computeSubscriptionID)
 	}
 
 	networkClientFactory := az.NetworkClientFactory
