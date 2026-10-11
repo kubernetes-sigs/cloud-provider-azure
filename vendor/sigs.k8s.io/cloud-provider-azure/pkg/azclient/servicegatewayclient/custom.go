@@ -18,12 +18,13 @@ package servicegatewayclient
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
-	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/metrics"
-	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
 const UpdateTagsOperationName = "ServiceGatewaysClient.UpdateTags"
@@ -82,23 +83,70 @@ func (client *Client) GetServices(ctx context.Context, resourceGroupName string,
 const UpdateAddressLocationsOperationName = "ServiceGatewaysClient.UpdateAddressLocations"
 
 // UpdateAddressLocations updates the address locations of a ServiceGateway.
+// NRP completes the update synchronously and answers 200 OK; there is no long-running operation to poll.
 func (client *Client) UpdateAddressLocations(ctx context.Context, resourceGroupName string, serviceGatewayName string, parameters armnetwork.ServiceGatewayUpdateAddressLocationsRequest) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "ServiceGateway", "update_address_locations")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, UpdateAddressLocationsOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginUpdateAddressLocations(ctx, resourceGroupName, serviceGatewayName, parameters, nil)).WaitforPollerResp(ctx)
-	return err
+	var raw *http.Response
+	if _, err = client.ServiceGatewaysClient.UpdateAddressLocations(runtime.WithCaptureResponse(ctx, &raw), resourceGroupName, serviceGatewayName, parameters, nil); err != nil {
+		return err
+	}
+	return errorCodeInSuccess(raw)
 }
 
 const UpdateServicesOperationName = "ServiceGatewaysClient.UpdateServices"
 
 // UpdateServices updates the services of a ServiceGateway.
+// NRP completes the update synchronously and answers 200 OK; there is no long-running operation to poll.
 func (client *Client) UpdateServices(ctx context.Context, resourceGroupName string, serviceGatewayName string, parameters armnetwork.ServiceGatewayUpdateServicesRequest) (err error) {
 	metricsCtx := metrics.BeginARMRequest(client.subscriptionID, resourceGroupName, "ServiceGateway", "update_services")
 	defer func() { metricsCtx.Observe(ctx, err) }()
 	ctx, endSpan := runtime.StartSpan(ctx, UpdateServicesOperationName, client.tracer, nil)
 	defer endSpan(err)
-	_, err = utils.NewPollerWrapper(client.BeginUpdateServices(ctx, resourceGroupName, serviceGatewayName, parameters, nil)).WaitforPollerResp(ctx)
-	return err
+	var raw *http.Response
+	if _, err = client.ServiceGatewaysClient.UpdateServices(runtime.WithCaptureResponse(ctx, &raw), resourceGroupName, serviceGatewayName, parameters, nil); err != nil {
+		return err
+	}
+	return errorCodeInSuccess(raw)
+}
+
+// errorCodeInSuccess returns a 200 response as an error when it names an error code in the
+// x-ms-error-code header or the body. A successful update must not carry one; accepting it would
+// report a change NRP did not make. The error is only built when a code is present, because
+// building it also writes an SDK response-error log event.
+func errorCodeInSuccess(resp *http.Response) error {
+	if resp == nil {
+		return nil
+	}
+	code := resp.Header.Get("x-ms-error-code")
+	if code == "" {
+		code = errorCodeInBody(resp)
+	}
+	if code == "" {
+		return nil
+	}
+	return runtime.NewResponseErrorWithErrorCode(resp, code)
+}
+
+// errorCodeInBody returns the code of an ARM error body, {"error":{"code":...}} or {"code":...}.
+func errorCodeInBody(resp *http.Response) string {
+	body, err := runtime.Payload(resp)
+	if err != nil || len(body) == 0 {
+		return ""
+	}
+	var payload struct {
+		Code  string `json:"code"`
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return ""
+	}
+	if payload.Error.Code != "" {
+		return payload.Error.Code
+	}
+	return payload.Code
 }
