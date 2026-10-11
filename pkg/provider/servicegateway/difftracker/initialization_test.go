@@ -1257,6 +1257,46 @@ func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *te
 	assert.False(t, hasServiceGatewayFinalizer(gotLB), "control: a LoadBalancer Service recovers as before")
 }
 
+// TestRecoverStuckFinalizers_RecoversAliveServiceRetypedAwayFromLoadBalancer pins that a live Service
+// retyped away from LoadBalancer, or claimed by another LoadBalancerClass, is recovered too. It is not desired, so without this its finalizer,
+// added by a create the CCM never finished, is only released after it is deleted and the CCM restarts.
+// A live LoadBalancer Service is the control: its finalizer is owned by the normal lifecycle.
+func TestRecoverStuckFinalizers_RecoversAliveServiceRetypedAwayFromLoadBalancer(t *testing.T) {
+	newLive := func(name, uid string, svcType v1.ServiceType) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default", UID: types.UID(uid),
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: svcType},
+		}
+	}
+	retyped := newLive("retyped", "uid-retyped", v1.ServiceTypeClusterIP)
+	retypedWithLB := newLive("retyped-lb", "uid-retyped-lb", v1.ServiceTypeClusterIP)
+	foreignClass := newLive("foreign-class", "uid-foreign-class", v1.ServiceTypeLoadBalancer)
+	foreignClass.Spec.LoadBalancerClass = ptr.To("example.com/other-controller")
+	liveLB := newLive("live-lb", "uid-live-lb", v1.ServiceTypeLoadBalancer)
+
+	kube := fake.NewSimpleClientset(retyped, retypedWithLB, foreignClass, liveLB)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	services := &v1.ServiceList{Items: []v1.Service{*retyped, *retypedWithLB, *foreignClass, *liveLB}}
+
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString("uid-retyped-lb"), utilsets.NewString(), nil)
+
+	get := func(name string) *v1.Service {
+		svc, err := kube.CoreV1().Services("default").Get(context.Background(), name, metav1.GetOptions{})
+		assert.NoError(t, err)
+		return svc
+	}
+	assert.False(t, hasServiceGatewayFinalizer(get("retyped")), "a retyped Service with no Azure resource must be released")
+	assert.True(t, hasServiceGatewayFinalizer(get("retyped-lb")), "the finalizer anchors the cleanup of an existing load balancer")
+	assert.Contains(t, dt.recoveredServiceFinalizers, "uid-retyped-lb")
+	assert.False(t, hasServiceGatewayFinalizer(get("foreign-class")), "a Service claimed by another LoadBalancerClass is not desired either")
+	assert.True(t, hasServiceGatewayFinalizer(get("live-lb")), "control: a live LoadBalancer Service is not recovered")
+	assert.NotContains(t, dt.recoveredServiceFinalizers, "uid-live-lb")
+}
+
 // TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway pins that ownership is decided
 // where desired state is built. A Service claimed by another LoadBalancerClass, or one admission
 // rejects, is neither an addition nor a removal once its LoadBalancer already exists, so admitting
