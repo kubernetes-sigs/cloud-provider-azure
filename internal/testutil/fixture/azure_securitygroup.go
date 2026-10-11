@@ -22,7 +22,7 @@ import (
 	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil"

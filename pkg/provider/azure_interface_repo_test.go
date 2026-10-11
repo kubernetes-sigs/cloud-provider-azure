@@ -27,7 +27,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -40,17 +40,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
-
-// staticTokenCredential is a TokenCredential whose value is never used by the transport test.
-type staticTokenCredential string
-
-func (staticTokenCredential) GetToken(context.Context, policy.TokenRequestOptions) (azcore.AccessToken, error) {
-	return azcore.AccessToken{}, nil
-}
-
-type transportFunc func(*http.Request) (*http.Response, error)
-
-func (f transportFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
 
 func TestUpdateInterfaceSendsIfMatchWildcardAndPropagatesErrors(t *testing.T) {
 	for _, status := range []int{http.StatusOK, http.StatusPreconditionFailed, http.StatusInternalServerError} {
