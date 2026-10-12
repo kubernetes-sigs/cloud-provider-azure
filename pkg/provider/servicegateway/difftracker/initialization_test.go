@@ -1704,6 +1704,7 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 	}
 
 	dual := initWithNodes(t, node("dual", "10.0.0.1", "fd00::1"))
+	assert.Equal(t, map[string][]string{"dual": {"10.0.0.1", "fd00::1"}}, dual.startupNodeIPs)
 	assert.True(t, dual.clusterHasIPv6.Load(),
 		"a dual-stack cluster must be observed during init, while no Node lister exists yet")
 	dual.mu.Lock()
