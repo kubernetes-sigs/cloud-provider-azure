@@ -24,3 +24,16 @@ To build the binary for the health probe proxy, navigate to the root directory o
 ```sh
 CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o health-probe-proxy-bin .
 ```
+
+### Testing
+
+From the `health-probe-proxy/` directory, run:
+
+```sh
+go test -mod=readonly -v -race ./...
+```
+
+The unit tests check that the listener created by `newProxyListener` accepts
+both plain HTTP health probes and requests that start with a PROXY v1 header.
+They run in-process on a local ephemeral port and do not build or launch the
+binary. CI runs them through `make test-unit`.
