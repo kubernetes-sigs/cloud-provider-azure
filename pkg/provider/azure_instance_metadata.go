@@ -29,6 +29,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
 )
 
 // NetworkMetadata contains metadata about an instance's network
@@ -90,6 +91,11 @@ type ComputeMetadata struct {
 type InstanceMetadata struct {
 	Compute *ComputeMetadata `json:"compute,omitempty"`
 	Network *NetworkMetadata `json:"network,omitempty"`
+	// LBMetadataError is set when load balancer metadata could not be retrieved
+	// due to a transient failure. It wraps both
+	// utilnode.ErrLoadBalancerMetadataUnavailable and the original cause, and is
+	// created once per cache fill.
+	LBMetadataError error `json:"-"`
 }
 
 // PublicIPMetadata represents the public IP metadata.
@@ -112,6 +118,34 @@ type LoadBalancerMetadata struct {
 type InstanceMetadataService struct {
 	imdsServer string
 	imsCache   azcache.Resource
+}
+
+// imdsResponseError is returned when IMDS responds with a non-200 status code.
+type imdsResponseError struct {
+	statusCode int
+}
+
+func (e *imdsResponseError) Error() string {
+	return fmt.Sprintf("failure of getting loadbalancer metadata, status code %d", e.statusCode)
+}
+
+// isTransientIMDSError reports whether an error from getLoadBalancerMetadata is a
+// transient failure whose missing public IPs should not be treated as authoritative.
+//
+// Server-side (5xx), throttling (429) and request-timeout (408) responses are
+// treated as transient, as are non-HTTP errors such as connection resets,
+// timeouts, and malformed responses. Other non-200 responses keep the legacy
+// non-blocking behavior, e.g. when the VM is not in a standard load balancer
+// backend pool, and are not reported.
+func isTransientIMDSError(err error) bool {
+	var respErr *imdsResponseError
+	if errors.As(err, &respErr) {
+		return respErr.statusCode >= 500 ||
+			respErr.statusCode == http.StatusTooManyRequests ||
+			respErr.statusCode == http.StatusRequestTimeout
+	}
+	// Non-HTTP errors (network failure, timeout, JSON parse) are transient.
+	return true
 }
 
 // NewInstanceMetadataService creates an instance of the InstanceMetadataService accessor object.
@@ -176,6 +210,9 @@ func (ims *InstanceMetadataService) getMetadata(ctx context.Context, key string)
 			// Log a warning since loadbalancer metadata may not be available when the VM
 			// is not in standard LoadBalancer backend address pool.
 			logger.V(4).Info("Warning: failed to get loadbalancer metadata", "error", err)
+			if err != nil && isTransientIMDSError(err) {
+				instanceMetadata.LBMetadataError = fmt.Errorf("failed to get loadbalancer metadata: %w: %w", utilnode.ErrLoadBalancerMetadataUnavailable, err)
+			}
 			return instanceMetadata, nil
 		}
 
@@ -245,7 +282,8 @@ func (ims *InstanceMetadataService) getLoadBalancerMetadata() (*LoadBalancerMeta
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failure of getting loadbalancer metadata with response %q", resp.Status)
+		// Return an imdsResponseError to indicate that this is a non-200 response from IMDS.
+		return nil, &imdsResponseError{statusCode: resp.StatusCode}
 	}
 
 	data, err := io.ReadAll(resp.Body)
