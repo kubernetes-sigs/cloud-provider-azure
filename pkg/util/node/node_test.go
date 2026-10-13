@@ -145,7 +145,8 @@ func TestPreserveExternalIPsReturnsNewSlice(t *testing.T) {
 	assert.Equal(t, "vm1", fresh[0].Address)
 
 	// Appending must not write into the spare capacity of fresh.
-	assert.Equal(t, v1.NodeAddress{}, fresh[:3][2])
+	spare := fresh[len(fresh):cap(fresh)]
+	assert.Equal(t, make([]v1.NodeAddress, len(spare)), spare)
 
 	// Mutating the result must not affect either input.
 	result[0].Address = "changed"
