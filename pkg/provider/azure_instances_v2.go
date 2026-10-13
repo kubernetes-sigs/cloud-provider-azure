@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
 )
 
 var _ cloudprovider.InstancesV2 = (*Cloud)(nil)
@@ -169,8 +171,12 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 	}
 	meta.InstanceType = instanceType
 
-	nodeAddresses, err := az.NodeAddresses(ctx, types.NodeName(node.Name))
-	if err != nil {
+	nodeAddresses, err := az.NodeAddressesWithLBStatus(ctx, types.NodeName(node.Name))
+	if err != nil && errors.Is(err, utilnode.ErrLoadBalancerMetadataUnavailable) {
+		// Load balancer metadata is temporarily unavailable, so keep the recorded ExternalIPs.
+		// The cloud node controller still validates the provided node IP against these addresses.
+		nodeAddresses = utilnode.PreserveExternalIPs(node.Status.Addresses, nodeAddresses)
+	} else if err != nil {
 		logger.Error(err, "failed to get the node address", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
 	}

@@ -48,6 +48,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
 )
 
 // NodeProvider defines the interfaces for node provider.
@@ -279,7 +280,8 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	}
 
 	nodeAddresses, err := cnc.getNodeAddressesByName(ctx, node)
-	if err != nil {
+	lbMetadataUnavailable := isLBMetadataUnavailable(nodeAddresses, err)
+	if err != nil && !lbMetadataUnavailable {
 		return fmt.Errorf("getting node addresses for node %q: %w", node.Name, err)
 	}
 
@@ -309,6 +311,11 @@ func (cnc *CloudNodeController) updateNodeAddress(ctx context.Context, node *v1.
 	// it can be found in the cloud as well (consistent with the behaviour in kubelet)
 	if existNodeIPs, ok := ensureNodeProvidedIPsExists(node, nodeAddresses); !ok {
 		return fmt.Errorf("not all specified Node IP %s found in cloudprovider for node %q, existing Node IPs are %s ", nodeAddresses, node.Name, existNodeIPs)
+	}
+	if lbMetadataUnavailable {
+		// Load balancer metadata is temporarily unavailable, so keep the recorded
+		// ExternalIPs instead of removing them from the node.
+		nodeAddresses = utilnode.PreserveExternalIPs(node.Status.Addresses, nodeAddresses)
 	}
 	if !nodeAddressesChangeDetected(node.Status.Addresses, nodeAddresses) {
 		return nil
@@ -466,7 +473,7 @@ func (cnc *CloudNodeController) getNodeModifiersFromCloudProvider(ctx context.Co
 	}
 
 	nodeAddresses, err := cnc.getNodeAddressesByName(ctx, node)
-	if err != nil {
+	if err != nil && !isLBMetadataUnavailable(nodeAddresses, err) {
 		return nil, err
 	}
 
@@ -580,9 +587,19 @@ func (cnc *CloudNodeController) ensureNodeExistsByProviderID(ctx context.Context
 func (cnc *CloudNodeController) getNodeAddressesByName(ctx context.Context, node *v1.Node) ([]v1.NodeAddress, error) {
 	nodeAddresses, err := cnc.nodeProvider.NodeAddresses(ctx, types.NodeName(node.Name))
 	if err != nil {
+		if isLBMetadataUnavailable(nodeAddresses, err) {
+			// Keep the valid partial addresses so that callers can decide how to handle them.
+			return nodeAddresses, fmt.Errorf("error fetching node by name %s: %w", node.Name, err)
+		}
 		return nil, fmt.Errorf("error fetching node by name %s: %w", node.Name, err)
 	}
 	return nodeAddresses, nil
+}
+
+// isLBMetadataUnavailable reports whether err only indicates that load balancer
+// metadata was unavailable while valid, non-empty node addresses were still returned.
+func isLBMetadataUnavailable(nodeAddresses []v1.NodeAddress, err error) bool {
+	return err != nil && errors.Is(err, utilnode.ErrLoadBalancerMetadataUnavailable) && len(nodeAddresses) > 0
 }
 
 func nodeAddressesChangeDetected(addressSet1, addressSet2 []v1.NodeAddress) bool {

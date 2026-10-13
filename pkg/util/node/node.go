@@ -19,6 +19,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -45,6 +46,36 @@ type nodeForConditionPatch struct {
 
 type nodeStatusForPatch struct {
 	Conditions []v1.NodeCondition `json:"conditions"`
+}
+
+// ErrLoadBalancerMetadataUnavailable marks errors reporting that instance metadata
+// was retrieved but load balancer metadata, which supplies public IPs, could not be
+// retrieved due to a transient failure. Addresses returned alongside such an error
+// are valid but may lack ExternalIPs.
+var ErrLoadBalancerMetadataUnavailable = errors.New("load balancer metadata unavailable")
+
+// PreserveExternalIPs returns a new slice containing all fresh addresses unchanged,
+// followed by the ExternalIP addresses from recorded that are not already present
+// in the result. Neither input is mutated.
+func PreserveExternalIPs(recorded, fresh []v1.NodeAddress) []v1.NodeAddress {
+	result := make([]v1.NodeAddress, len(fresh), len(fresh)+len(recorded))
+	copy(result, fresh)
+	for _, addr := range recorded {
+		if addr.Type != v1.NodeExternalIP {
+			continue
+		}
+		found := false
+		for _, existing := range result {
+			if existing.Type == addr.Type && existing.Address == addr.Address {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, addr)
+		}
+	}
+	return result
 }
 
 // PatchNodeCIDR patches the specified node's CIDR to the given value.
