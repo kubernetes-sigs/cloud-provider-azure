@@ -132,17 +132,18 @@ func (e *imdsResponseError) Error() string {
 // isTransientIMDSError reports whether an error from getLoadBalancerMetadata is a
 // transient failure whose missing public IPs should not be treated as authoritative.
 //
-// Server-side (5xx), throttling (429) and request-timeout (408) responses are
-// treated as transient, as are non-HTTP errors such as connection resets,
-// timeouts, and malformed responses. Other non-200 responses keep the legacy
-// non-blocking behavior, e.g. when the VM is not in a standard load balancer
-// backend pool, and are not reported.
+// Server-side (5xx), throttling (429), request-timeout (408) and gone (410)
+// responses are treated as transient (IMDS documents 410 as retryable), as are
+// non-HTTP errors such as connection resets, timeouts, and malformed responses.
+// Other non-200 responses keep the legacy non-blocking behavior, e.g. when the
+// VM is not in a standard load balancer backend pool, and are not reported.
 func isTransientIMDSError(err error) bool {
 	var respErr *imdsResponseError
 	if errors.As(err, &respErr) {
 		return respErr.statusCode >= 500 ||
 			respErr.statusCode == http.StatusTooManyRequests ||
-			respErr.statusCode == http.StatusRequestTimeout
+			respErr.statusCode == http.StatusRequestTimeout ||
+			respErr.statusCode == http.StatusGone
 	}
 	// Non-HTTP errors (network failure, timeout, JSON parse) are transient.
 	return true
