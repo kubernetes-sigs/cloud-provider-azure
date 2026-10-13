@@ -158,7 +158,7 @@ func TestNodeProvidersNodeAddresses(t *testing.T) {
 				addressesAgain, errAgain := provider.NodeAddresses(ctx, testNodeName)
 				assert.Equal(t, tc.expectedAddresses, addressesAgain)
 				if tc.expectedErr != "" {
-					assert.True(t, firstErr == errAgain, "cached error should be returned unchanged")
+					assert.Same(t, firstErr, errAgain, "cached error should be returned unchanged")
 				} else {
 					assert.NoError(t, errAgain)
 				}

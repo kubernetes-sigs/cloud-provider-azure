@@ -390,12 +390,13 @@ func TestIsTransientIMDSError(t *testing.T) {
 		{desc: "503 should be transient", err: &imdsResponseError{statusCode: http.StatusServiceUnavailable}, expected: true},
 		{desc: "429 should be transient", err: &imdsResponseError{statusCode: http.StatusTooManyRequests}, expected: true},
 		{desc: "408 should be transient", err: &imdsResponseError{statusCode: http.StatusRequestTimeout}, expected: true},
+		{desc: "410 should be transient", err: &imdsResponseError{statusCode: http.StatusGone}, expected: true},
 		{desc: "400 should keep legacy behavior", err: &imdsResponseError{statusCode: http.StatusBadRequest}, expected: false},
 		{desc: "403 should keep legacy behavior", err: &imdsResponseError{statusCode: http.StatusForbidden}, expected: false},
 		{desc: "404 should keep legacy behavior", err: &imdsResponseError{statusCode: http.StatusNotFound}, expected: false},
-		{desc: "410 should keep legacy behavior", err: &imdsResponseError{statusCode: http.StatusGone}, expected: false},
 		{desc: "wrapped 404 should keep legacy behavior", err: fmt.Errorf("wrapped: %w", &imdsResponseError{statusCode: http.StatusNotFound}), expected: false},
 		{desc: "wrapped 503 should be transient", err: fmt.Errorf("wrapped: %w", &imdsResponseError{statusCode: http.StatusServiceUnavailable}), expected: true},
+		{desc: "wrapped 410 should be transient", err: fmt.Errorf("wrapped: %w", &imdsResponseError{statusCode: http.StatusGone}), expected: true},
 		{desc: "network error should be transient", err: errors.New("connection reset by peer"), expected: true},
 		{desc: "read error should be transient", err: io.ErrUnexpectedEOF, expected: true},
 	} {
@@ -481,6 +482,14 @@ func TestGetMetadataLoadBalancerStatus(t *testing.T) {
 			expectedLBCalls: 1,
 		},
 		{
+			desc:            "410 should be recorded as a marked error",
+			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
+			lbHandler:       imdsLBStatus(http.StatusGone),
+			expectedErr:     testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 410",
+			expectedStatus:  http.StatusGone,
+			expectedLBCalls: 1,
+		},
+		{
 			desc:              "network failure should be recorded as a marked error",
 			instanceBody:      testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:         imdsLBConnectionReset,
@@ -547,7 +556,7 @@ func TestGetMetadataLoadBalancerStatus(t *testing.T) {
 						assert.Equal(t, tc.expectedStatus, respErr.statusCode)
 					}
 				}
-				assert.True(t, firstLBErr == second.LBMetadataError, "cached error should be returned unchanged")
+				assert.Same(t, firstLBErr, second.LBMetadataError, "cached error should be returned unchanged")
 			}
 			f.assertCalls(t, 1, tc.expectedLBCalls)
 		})
@@ -601,11 +610,11 @@ func TestGetMetadataLoadBalancerRecoveryAfterCacheExpiry(t *testing.T) {
 				assert.NoError(t, fresh.LBMetadataError)
 			} else {
 				assert.EqualError(t, fresh.LBMetadataError, tc.expectedErr)
-				assert.True(t, fresh.LBMetadataError != staleLBErr, "a new error should be created per cache fill")
+				assert.NotSame(t, staleLBErr, fresh.LBMetadataError, "a new error should be created per cache fill")
 			}
 
 			// The previously returned metadata must not be mutated by the refresh.
-			assert.True(t, stale.LBMetadataError == staleLBErr)
+			assert.Same(t, staleLBErr, stale.LBMetadataError)
 			assert.Equal(t, "", stale.Network.Interface[0].IPV4.IPAddress[0].PublicIP)
 			f.assertCalls(t, 2, 2)
 		})

@@ -1084,7 +1084,7 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			if tc.expectedAwareErr == markedErr {
 				cached, err := cloud.Metadata.GetMetadata(context.Background(), azcache.CacheReadTypeUnsafe)
 				assert.NoError(t, err)
-				assert.True(t, awareErr == cached.LBMetadataError, "aware method should return the cached error unchanged")
+				assert.Same(t, cached.LBMetadataError, awareErr, "aware method should return the cached error unchanged")
 			}
 			if tc.expectedPublicErr != "" {
 				assert.EqualError(t, publicErr, tc.expectedPublicErr)
