@@ -52,8 +52,10 @@ func NewIMDSNodeProvider(ctx context.Context) *IMDSNodeProvider {
 }
 
 // NodeAddresses returns the addresses of the specified instance.
+// Like Cloud.NodeAddressesWithLBStatus, it may return valid addresses together
+// with an error reporting that load balancer metadata was unavailable.
 func (np *IMDSNodeProvider) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
-	return np.azure.NodeAddresses(ctx, name)
+	return np.azure.NodeAddressesWithLBStatus(ctx, name)
 }
 
 // InstanceID returns the cloud provider ID of the specified instance.
