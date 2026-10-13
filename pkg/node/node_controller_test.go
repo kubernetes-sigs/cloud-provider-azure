@@ -294,6 +294,14 @@ func TestCloudNodeControllerUpdateNodeStatusIMDSEdgeCases(t *testing.T) {
 			expectedLB:        1,
 		},
 		{
+			desc:              "loadbalancer 410 should keep the ExternalIP",
+			privateIP:         composedOldPrivate,
+			lbStatus:          http.StatusGone,
+			expectedAddresses: []v1.NodeAddress{composedHostname, composedOldInternal, composedExternalA},
+			expectedInstance:  1,
+			expectedLB:        1,
+		},
+		{
 			desc:              "loadbalancer 503 with a valid provided private IP should update it and keep the ExternalIP",
 			privateIP:         composedNewPrivate,
 			lbStatus:          http.StatusServiceUnavailable,
