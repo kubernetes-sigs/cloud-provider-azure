@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -34,9 +35,13 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/informers"
+	discoveryinformers "k8s.io/client-go/informers/discovery/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	clientgotesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
@@ -553,6 +558,320 @@ func getTestEndpointSlice(name, namespace, svcName string, nodeNames ...string) 
 	}
 }
 
+func TestWaitForEndpointSlicesSync(test *testing.T) {
+	multiSLBConfig := config.Config{
+		LoadBalancerSKU: consts.LoadBalancerSKUStandard,
+		MultipleStandardLoadBalancerConfigurations: []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+	}
+	for _, testCase := range []struct {
+		name            string
+		prepare         func(*testing.T) (*Cloud, context.Context, func())
+		wantErr         error
+		wantErrContains string
+	}{
+		{
+			name: "returns without waiting in single-SLB mode",
+			prepare: func(*testing.T) (*Cloud, context.Context, func()) {
+				return &Cloud{Config: config.Config{LoadBalancerSKU: consts.LoadBalancerSKUStandard}}, context.Background(), nil
+			},
+		},
+		{
+			name: "returns an error when the EndpointSlice handler sync signal is missing",
+			prepare: func(*testing.T) (*Cloud, context.Context, func()) {
+				return &Cloud{Config: multiSLBConfig}, context.Background(), nil
+			},
+			wantErrContains: "EndpointSlice handler is not initialized",
+		},
+		{
+			name: "returns immediately when the EndpointSlice handler is already synced",
+			prepare: func(*testing.T) (*Cloud, context.Context, func()) {
+				synced := make(chan struct{})
+				close(synced)
+				return &Cloud{Config: multiSLBConfig, endpointSlicesSynced: synced}, context.Background(), nil
+			},
+		},
+		{
+			name: "waits until the EndpointSlice handler is synced",
+			prepare: func(*testing.T) (*Cloud, context.Context, func()) {
+				synced := make(chan struct{})
+				return &Cloud{Config: multiSLBConfig, endpointSlicesSynced: synced},
+					context.Background(), func() { close(synced) }
+			},
+		},
+		{
+			name: "returns cancellation when the caller cancels while waiting",
+			prepare: func(test *testing.T) (*Cloud, context.Context, func()) {
+				ctx, cancel := context.WithCancel(context.Background())
+				test.Cleanup(cancel)
+				return &Cloud{Config: multiSLBConfig, endpointSlicesSynced: make(chan struct{})}, ctx, cancel
+			},
+			wantErr: context.Canceled,
+		},
+		{
+			name: "returns cancellation when the provider stops while waiting",
+			prepare: func(*testing.T) (*Cloud, context.Context, func()) {
+				stopCh := make(chan struct{})
+				return &Cloud{Config: multiSLBConfig, endpointSlicesSynced: make(chan struct{}), stopCh: stopCh},
+					context.TODO(), func() { close(stopCh) }
+			},
+			wantErr: context.Canceled,
+		},
+		{
+			name: "returns cancellation when the caller is canceled even if the EndpointSlice handler is synced",
+			prepare: func(*testing.T) (*Cloud, context.Context, func()) {
+				synced := make(chan struct{})
+				close(synced)
+				ctx, cancel := context.WithCancel(context.Background())
+				cancel()
+				return &Cloud{Config: multiSLBConfig, endpointSlicesSynced: synced}, ctx, nil
+			},
+			wantErr: context.Canceled,
+		},
+		{
+			name: "returns cancellation when the provider is stopped even if the EndpointSlice handler is synced",
+			prepare: func(*testing.T) (*Cloud, context.Context, func()) {
+				synced := make(chan struct{})
+				close(synced)
+				stopCh := make(chan struct{})
+				close(stopCh)
+				return &Cloud{Config: multiSLBConfig, endpointSlicesSynced: synced, stopCh: stopCh}, context.Background(), nil
+			},
+			wantErr: context.Canceled,
+		},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			synctest.Test(test, func(test *testing.T) {
+				cloud, ctx, unblockWait := testCase.prepare(test)
+				result := make(chan error, 1)
+				go func() { result <- cloud.waitForEndpointSlicesSync(ctx) }()
+				synctest.Wait()
+				if unblockWait != nil {
+					select {
+					case err := <-result:
+						test.Fatalf("wait returned before sync or cancellation was signaled: %v", err)
+					default:
+					}
+					unblockWait()
+					synctest.Wait()
+				}
+
+				select {
+				case err := <-result:
+					if testCase.wantErrContains != "" {
+						assert.ErrorContains(test, err, testCase.wantErrContains)
+					} else {
+						assert.ErrorIs(test, err, testCase.wantErr)
+					}
+				default:
+					test.Fatal("wait did not return after sync or cancellation was signaled")
+				}
+			})
+		})
+	}
+}
+
+func TestWaitForEndpointSlicesSyncUsesProviderShutdown(test *testing.T) {
+	cloud := &Cloud{
+		Config: config.Config{
+			LoadBalancerSKU: consts.LoadBalancerSKUStandard,
+			MultipleStandardLoadBalancerConfigurations: []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+		},
+		KubeClient:           fake.NewSimpleClientset(),
+		endpointSlicesSynced: make(chan struct{}),
+	}
+	stopCh := make(chan struct{})
+	cloud.Initialize(nil, stopCh)
+	test.Cleanup(cloud.eventBroadcaster.Shutdown)
+	close(stopCh)
+	assert.ErrorIs(test, cloud.waitForEndpointSlicesSync(context.TODO()), context.Canceled)
+}
+
+func TestEndpointSlicesInitialSync(test *testing.T) {
+	endpointSlice := getTestEndpointSlice("slice", "test", "svc-b", "node1")
+	for _, testCase := range []struct {
+		name           string
+		objects        []runtime.Object
+		initialListErr error
+	}{
+		{
+			name: "completes sync with an empty cache after an empty initial EndpointSlice list",
+		},
+		{
+			name:    "completes sync and populates the cache after the initial EndpointSlice list",
+			objects: []runtime.Object{endpointSlice},
+		},
+		{
+			name: "completes sync after processing multiple EndpointSlices in the initial list",
+			objects: []runtime.Object{
+				endpointSlice,
+				getTestEndpointSlice("slice-2", "test", "svc-b", "node2"),
+				getTestEndpointSlice("slice-3", "test", "svc-c", "node3"),
+			},
+		},
+		{
+			name:           "completes sync after an initial EndpointSlice list error and a successful retry",
+			objects:        []runtime.Object{endpointSlice},
+			initialListErr: apierrors.NewForbidden(schema.GroupResource{Group: discovery_v1.GroupName, Resource: "endpointslices"}, "", fmt.Errorf("initial list denied")),
+		},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			synctest.Test(test, func(test *testing.T) {
+				expectedSlices := make(map[string]*discovery_v1.EndpointSlice, len(testCase.objects))
+				for _, object := range testCase.objects {
+					slice := object.(*discovery_v1.EndpointSlice)
+					expectedSlices[slice.Namespace+"/"+slice.Name] = slice
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				client := fake.NewSimpleClientset(testCase.objects...)
+				factory := informers.NewSharedInformerFactory(client, 0)
+				defer factory.Shutdown()
+				defer cancel()
+				cloud := &Cloud{Config: config.Config{
+					LoadBalancerSKU: consts.LoadBalancerSKUStandard,
+					MultipleStandardLoadBalancerConfigurations: []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+				}}
+				listStarted := make(chan struct{})
+				releaseList := make(chan struct{})
+				notifyListStarted := sync.OnceFunc(func() { close(listStarted) })
+				initialListErr := testCase.initialListErr
+				client.PrependReactor("list", "endpointslices", func(clientgotesting.Action) (bool, runtime.Object, error) {
+					if initialListErr != nil {
+						err := initialListErr
+						initialListErr = nil
+						return true, nil, err
+					}
+					notifyListStarted()
+					select {
+					case <-releaseList:
+						return false, nil, nil
+					case <-ctx.Done():
+						return true, nil, ctx.Err()
+					}
+				})
+				if !assert.NoError(test, cloud.setUpEndpointSlicesInformer(factory)) {
+					return
+				}
+				result := make(chan error, 1)
+				go func() { result <- cloud.waitForEndpointSlicesSync(ctx) }()
+				synctest.Wait()
+				select {
+				case err := <-result:
+					test.Fatalf("wait returned before the informer started: %v", err)
+				default:
+				}
+				factory.Start(ctx.Done())
+				<-listStarted
+				synctest.Wait()
+				select {
+				case err := <-result:
+					test.Fatalf("wait returned before a successful initial list: %v", err)
+				default:
+				}
+				close(releaseList)
+				assert.NoError(test, <-result)
+				actualSlices := make(map[string]*discovery_v1.EndpointSlice)
+				cloud.endpointSlicesCache.Range(func(key, value interface{}) bool {
+					actualSlices[key.(string)] = value.(*discovery_v1.EndpointSlice)
+					return true
+				})
+				assert.Equal(test, expectedSlices, actualSlices)
+				assert.NoError(test, cloud.waitForEndpointSlicesSync(ctx))
+			})
+		})
+	}
+}
+
+// delayedEndpointSliceHandlerInformer pauses the callback that fills
+// cloud.endpointSlicesCache. The test checks that waitForEndpointSlicesSync
+// stays blocked even when the informer's own store has already synced.
+type delayedEndpointSliceHandlerInformer struct {
+	cache.SharedIndexInformer
+	started chan struct{}
+	release <-chan struct{}
+	stopCh  <-chan struct{}
+}
+
+func (informer *delayedEndpointSliceHandlerInformer) AddEventHandler(handler cache.ResourceEventHandler) (cache.ResourceEventHandlerRegistration, error) {
+	return informer.SharedIndexInformer.AddEventHandler(cache.ResourceEventHandlerDetailedFuncs{
+		AddFunc: func(object interface{}, initial bool) {
+			close(informer.started)
+			select {
+			case <-informer.release:
+				handler.OnAdd(object, initial)
+			case <-informer.stopCh:
+			}
+		},
+		UpdateFunc: handler.OnUpdate,
+		DeleteFunc: handler.OnDelete,
+	})
+}
+
+func TestEndpointSlicesInitialSyncWaitsForHandler(test *testing.T) {
+	synctest.Test(test, func(test *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		client := fake.NewSimpleClientset(getTestEndpointSlice("slice", "test", "svc-b", "node1"))
+		factory := informers.NewSharedInformerFactory(client, 0)
+		defer factory.Shutdown()
+		defer cancel()
+		handlerStarted := make(chan struct{})
+		releaseHandler := make(chan struct{})
+		informer := factory.InformerFor(&discovery_v1.EndpointSlice{}, func(kubeClient kubernetes.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+			return &delayedEndpointSliceHandlerInformer{
+				SharedIndexInformer: discoveryinformers.NewEndpointSliceInformer(kubeClient, metav1.NamespaceAll, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}),
+				started:             handlerStarted,
+				release:             releaseHandler,
+				stopCh:              ctx.Done(),
+			}
+		})
+		cloud := &Cloud{Config: config.Config{
+			LoadBalancerSKU: consts.LoadBalancerSKUStandard,
+			MultipleStandardLoadBalancerConfigurations: []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+		}}
+		if !assert.NoError(test, cloud.setUpEndpointSlicesInformer(factory)) {
+			return
+		}
+		factory.Start(ctx.Done())
+		<-handlerStarted
+		<-informer.HasSyncedChecker().Done()
+		assert.True(test, informer.HasSynced())
+		_, found := cloud.endpointSlicesCache.Load("test/slice")
+		assert.False(test, found)
+		result := make(chan error, 1)
+		go func() { result <- cloud.waitForEndpointSlicesSync(ctx) }()
+		synctest.Wait()
+		select {
+		case err := <-result:
+			test.Fatalf("wait returned before the handler populated the cache: %v", err)
+		default:
+		}
+		close(releaseHandler)
+		assert.NoError(test, <-result)
+		_, found = cloud.endpointSlicesCache.Load("test/slice")
+		assert.True(test, found)
+	})
+}
+
+func TestEndpointSlicesInformerRegistrationFailure(test *testing.T) {
+	synctest.Test(test, func(test *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		factory := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 0)
+		factory.Discovery().V1().EndpointSlices().Informer()
+		factory.Start(ctx.Done())
+		cancel()
+		factory.Shutdown()
+		cloud := &Cloud{Config: config.Config{
+			LoadBalancerSKU: consts.LoadBalancerSKUStandard,
+			MultipleStandardLoadBalancerConfigurations: []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+		}}
+		synced := make(chan struct{})
+		close(synced)
+		cloud.endpointSlicesSynced = synced
+		assert.ErrorContains(test, cloud.setUpEndpointSlicesInformer(factory), "register EndpointSlice handler")
+		assert.Nil(test, cloud.endpointSlicesSynced)
+		assert.ErrorContains(test, cloud.waitForEndpointSlicesSync(context.Background()), "EndpointSlice handler is not initialized")
+	})
+}
+
 func TestEndpointSlicesInformer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -631,7 +950,7 @@ func TestEndpointSlicesInformer(t *testing.T) {
 				cloud.backendPoolUpdater.run(ctx)
 			}()
 
-			cloud.setUpEndpointSlicesInformer(informerFactory)
+			assert.NoError(t, cloud.setUpEndpointSlicesInformer(informerFactory))
 			stopChan := make(chan struct{})
 			informerFactory.Start(stopChan)
 
@@ -713,7 +1032,7 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Hour)
 			cloud.backendPoolUpdater = u
 
-			cloud.setUpEndpointSlicesInformer(informerFactory)
+			assert.NoError(t, cloud.setUpEndpointSlicesInformer(informerFactory))
 			stopChan := make(chan struct{})
 			informerFactory.Start(stopChan)
 			defer close(stopChan)

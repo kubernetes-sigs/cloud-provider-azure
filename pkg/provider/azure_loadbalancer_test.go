@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -49,6 +50,8 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil"
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil/fixture"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
@@ -995,6 +998,148 @@ func TestEnsureLoadBalancerDeletedKeepsDenyAllDestinationsOnMultipleStandardLoad
 	}
 }
 
+func TestEnsureLoadBalancerDeletedPreservesLocalServiceRulesAfterEndpointSliceSync(test *testing.T) {
+	const (
+		clusterName     = "kubernetes"
+		nodeName        = "node1"
+		backendIPv4     = "10.0.0.1"
+		sourceRangeIPv4 = "198.51.100.0/24"
+	)
+	svcAWithFloatingIPEnabled := getTestService("svc-a", v1.ProtocolTCP, map[string]string{
+		consts.ServiceAnnotationDisableLoadBalancerFloatingIP:         "false",
+		consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+		consts.ServiceAnnotationLoadBalancerConfigurations:            clusterName,
+	}, false, 18080)
+	svcAWithFloatingIPEnabled.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyCluster
+	svcAWithFloatingIPEnabled.Spec.LoadBalancerSourceRanges = []string{sourceRangeIPv4}
+	svcAWithFloatingIPEnabled.Spec.Ports[0].NodePort = 30080
+	svcAWithFloatingIPDisabled := svcAWithFloatingIPEnabled.DeepCopy()
+	svcAWithFloatingIPDisabled.Annotations[consts.ServiceAnnotationDisableLoadBalancerFloatingIP] = "true"
+	svcBLocalWithFloatingIPDisabled := getTestService("svc-b", v1.ProtocolTCP, map[string]string{
+		consts.ServiceAnnotationDisableLoadBalancerFloatingIP:         "true",
+		consts.ServiceAnnotationDenyAllExceptLoadBalancerSourceRanges: "true",
+		consts.ServiceAnnotationLoadBalancerConfigurations:            clusterName,
+	}, false, 18081)
+	svcBLocalWithFloatingIPDisabled.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+	svcBLocalWithFloatingIPDisabled.Spec.LoadBalancerSourceRanges = []string{sourceRangeIPv4}
+	svcBLocalWithFloatingIPDisabled.Spec.Ports[0].NodePort = 30081
+
+	for _, testCase := range []struct {
+		name           string
+		deletedService *v1.Service
+	}{
+		{name: "removes unused node access and preserves the Local Service's rules when deleting a Service with floating IP enabled", deletedService: &svcAWithFloatingIPEnabled},
+		{name: "removes unused node access and preserves the Local Service's rules when deleting a Service with floating IP disabled", deletedService: svcAWithFloatingIPDisabled},
+	} {
+		test.Run(testCase.name, func(test *testing.T) {
+			ctrl := gomock.NewController(test)
+			cloud := GetTestCloud(ctrl)
+			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			cloud.LoadBalancerBackendPool = newBackendPoolTypeNodeIP(cloud)
+			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{{Name: clusterName}}
+			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{nodeName: utilsets.NewString(backendIPv4)}
+			cloud.nodePrivateIPToNodeNameMap = map[string]string{backendIPv4: nodeName}
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: nodeName},
+				Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: backendIPv4}}},
+			}
+			cloud.KubeClient = fake.NewSimpleClientset(testCase.deletedService, &svcBLocalWithFloatingIPDisabled, node)
+			factory := informers.NewSharedInformerFactory(cloud.KubeClient, 0)
+			serviceInformer := factory.Core().V1().Services()
+			nodeInformer := factory.Core().V1().Nodes()
+			assert.NoError(test, serviceInformer.Informer().GetStore().Add(testCase.deletedService))
+			assert.NoError(test, serviceInformer.Informer().GetStore().Add(&svcBLocalWithFloatingIPDisabled))
+			assert.NoError(test, nodeInformer.Informer().GetStore().Add(node))
+			cloud.serviceLister = serviceInformer.Lister()
+			cloud.nodeLister = nodeInformer.Lister()
+
+			azureFixture := fixture.NewFixture().Azure()
+			// With floating IP enabled, the node-port 30080 rule is unused access.
+			// Deletion must remove it while preserving svc-b's port 30081 and deny-all rule.
+			securityGroup := &armnetwork.SecurityGroup{
+				Name: ptr.To(cloud.SecurityGroupName),
+				Properties: &armnetwork.SecurityGroupPropertiesFormat{SecurityRules: []*armnetwork.SecurityRule{
+					azureFixture.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{sourceRangeIPv4}, []int32{30080}).WithPriority(500).WithDestination(backendIPv4).Build(),
+					azureFixture.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{sourceRangeIPv4}, []int32{30081}).WithPriority(501).WithDestination(backendIPv4).Build(),
+					azureFixture.DenyAllSecurityRule(iputil.IPv4).WithPriority(4095).WithDestination(backendIPv4).Build(),
+				}},
+			}
+			expectedRules := []*armnetwork.SecurityRule{
+				azureFixture.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{sourceRangeIPv4}, []int32{30081}).WithPriority(501).WithDestination(backendIPv4).Build(),
+				azureFixture.DenyAllSecurityRule(iputil.IPv4).WithPriority(4095).WithDestination(backendIPv4).Build(),
+			}
+			securityGroupClient := cloud.NetworkClientFactory.GetSecurityGroupClient().(*mock_securitygroupclient.MockInterface)
+			securityGroupClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, cloud.SecurityGroupName).Return(securityGroup, nil).Times(1)
+			securityGroupClient.EXPECT().CreateOrUpdate(gomock.Any(), cloud.ResourceGroup, cloud.SecurityGroupName, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, group armnetwork.SecurityGroup) (*armnetwork.SecurityGroup, error) {
+					testutil.ExpectExactSecurityRules(test, &group, expectedRules)
+					return nil, nil
+				}).Times(1)
+			loadBalancer := &armnetwork.LoadBalancer{
+				Name: ptr.To(clusterName), Location: ptr.To(cloud.Location),
+				Properties: &armnetwork.LoadBalancerPropertiesFormat{
+					LoadBalancingRules: []*armnetwork.LoadBalancingRule{
+						{Name: ptr.To(cloud.getLoadBalancerRuleName(testCase.deletedService, v1.ProtocolTCP, 18080, false))},
+						{Name: ptr.To(cloud.getLoadBalancerRuleName(&svcBLocalWithFloatingIPDisabled, v1.ProtocolTCP, 18081, false))},
+					},
+					BackendAddressPools: []*armnetwork.BackendAddressPool{{
+						Name: ptr.To(clusterName),
+						Properties: &armnetwork.BackendAddressPoolPropertiesFormat{LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{{
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{IPAddress: ptr.To(backendIPv4)},
+						}}},
+					}},
+					FrontendIPConfigurations: []*armnetwork.FrontendIPConfiguration{},
+				},
+			}
+			loadBalancerClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			loadBalancerClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armnetwork.LoadBalancer{loadBalancer}, nil).AnyTimes()
+			loadBalancerClient.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(loadBalancer, nil).Times(1)
+			loadBalancerClient.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			cloud.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface).EXPECT().
+				List(gomock.Any(), gomock.Any()).Return([]*armnetwork.PublicIPAddress{}, nil).Times(1)
+
+			synctest.Test(test, func(test *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				// The paused EndpointSlice request holds its fake client's lock. Use a separate
+				// client so deletion can still read Services if the sync check is missing.
+				// Otherwise the lock could satisfy the test's blocking assertion even if
+				// waitForEndpointSlicesSync were removed from the deletion path.
+				endpointClient := fake.NewSimpleClientset(getTestEndpointSlice("slice", svcBLocalWithFloatingIPDisabled.Namespace, svcBLocalWithFloatingIPDisabled.Name, nodeName))
+				endpointFactory := informers.NewSharedInformerFactory(endpointClient, 0)
+				defer endpointFactory.Shutdown()
+				defer cancel()
+				listStarted := make(chan struct{})
+				releaseList := make(chan struct{})
+				notifyListStarted := sync.OnceFunc(func() { close(listStarted) })
+				endpointClient.PrependReactor("list", "endpointslices", func(k8stesting.Action) (bool, runtime.Object, error) {
+					notifyListStarted()
+					select {
+					case <-releaseList:
+						return false, nil, nil
+					case <-ctx.Done():
+						return true, nil, ctx.Err()
+					}
+				})
+				if !assert.NoError(test, cloud.setUpEndpointSlicesInformer(endpointFactory)) {
+					return
+				}
+				endpointFactory.Start(ctx.Done())
+				<-listStarted
+				result := make(chan error, 1)
+				go func() { result <- cloud.EnsureLoadBalancerDeleted(ctx, clusterName, testCase.deletedService) }()
+				synctest.Wait()
+				select {
+				case err := <-result:
+					test.Fatalf("deletion returned before EndpointSlice sync completed: %v", err)
+				default:
+				}
+				close(releaseList)
+				assert.NoError(test, <-result)
+			})
+		})
+	}
+}
+
 func TestEnsureLoadBalancerDeletedWithOwnConflictingAdditionalIP(t *testing.T) {
 	const serviceIP = "1.2.3.4"
 
@@ -1087,6 +1232,169 @@ func TestEnsureLoadBalancerDeletedWithOwnConflictingAdditionalIP(t *testing.T) {
 	assert.Equal(t, []v1.LoadBalancerIngress{{IP: serviceIP}}, service.Status.LoadBalancer.Ingress)
 
 	assert.NoError(t, az.EnsureLoadBalancerDeleted(context.TODO(), testClusterName, &service))
+}
+
+func TestLoadBalancerWaitsForEndpointSlicesSync(test *testing.T) {
+	// An error from the first API call proves execution passed the sync check
+	// without requiring a complete load balancer reconciliation.
+	afterSyncErr := errors.New("test error after the EndpointSlice sync check")
+	expectLeaseAfterSync := func(_ *Cloud, client *fake.Clientset) {
+		client.PrependReactor("get", "leases", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, afterSyncErr
+		})
+	}
+	operations := []struct {
+		name            string
+		run             func(context.Context, *Cloud, *v1.Service) error
+		expectAfterSync func(*Cloud, *fake.Clientset)
+	}{
+		{
+			name: "EnsureLoadBalancer",
+			run: func(ctx context.Context, cloud *Cloud, service *v1.Service) error {
+				_, err := cloud.EnsureLoadBalancer(ctx, testClusterName, service, nil)
+				return err
+			},
+			expectAfterSync: expectLeaseAfterSync,
+		},
+		{
+			name: "UpdateLoadBalancer",
+			run: func(ctx context.Context, cloud *Cloud, service *v1.Service) error {
+				return cloud.UpdateLoadBalancer(ctx, testClusterName, service, nil)
+			},
+			expectAfterSync: func(cloud *Cloud, _ *fake.Clientset) {
+				cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface).EXPECT().
+					List(gomock.Any(), gomock.Any()).Return(nil, afterSyncErr).Times(1)
+			},
+		},
+		{
+			name: "EnsureLoadBalancerDeleted",
+			run: func(ctx context.Context, cloud *Cloud, service *v1.Service) error {
+				return cloud.EnsureLoadBalancerDeleted(ctx, testClusterName, service)
+			},
+			expectAfterSync: expectLeaseAfterSync,
+		},
+	}
+	modes := []struct {
+		name              string
+		disableFloatingIP string
+	}{
+		{name: "floating IP enabled", disableFloatingIP: "false"},
+		{name: "floating IP disabled", disableFloatingIP: "true"},
+	}
+	waitCases := []struct {
+		name        string
+		prepare     func(*testing.T, chan struct{}, chan struct{}) (context.Context, func())
+		wantWaitErr error
+	}{
+		{
+			name: "continues after the EndpointSlice handler is synced",
+			prepare: func(_ *testing.T, synced, _ chan struct{}) (context.Context, func()) {
+				return context.Background(), func() { close(synced) }
+			},
+		},
+		{
+			name: "returns cancellation when the caller cancels while waiting",
+			prepare: func(test *testing.T, _, _ chan struct{}) (context.Context, func()) {
+				ctx, cancel := context.WithCancel(context.Background())
+				test.Cleanup(cancel)
+				return ctx, cancel
+			},
+			wantWaitErr: context.Canceled,
+		},
+		{
+			name: "returns cancellation when the provider stops while waiting",
+			prepare: func(_ *testing.T, _, stopCh chan struct{}) (context.Context, func()) {
+				return context.TODO(), func() { close(stopCh) }
+			},
+			wantWaitErr: context.Canceled,
+		},
+		{
+			name: "returns a deadline error when the caller times out while waiting",
+			prepare: func(test *testing.T, _, _ chan struct{}) (context.Context, func()) {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				test.Cleanup(cancel)
+				return ctx, nil
+			},
+			wantWaitErr: context.DeadlineExceeded,
+		},
+	}
+	for _, operation := range operations {
+		test.Run(operation.name+"/single-SLB continues without an EndpointSlice sync signal", func(test *testing.T) {
+			ctrl := gomock.NewController(test)
+			cloud := GetTestCloud(ctrl)
+			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			cloud.endpointSlicesSynced = nil
+			svc := getTestService("svc-wait", v1.ProtocolTCP, map[string]string{
+				consts.ServiceAnnotationDisableLoadBalancerFloatingIP: "false",
+			}, false, 80)
+			svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyCluster
+			kubeClient := fake.NewSimpleClientset()
+			cloud.KubeClient = kubeClient
+			serviceInformer := informers.NewSharedInformerFactory(kubeClient, 0).Core().V1().Services()
+			assert.NoError(test, serviceInformer.Informer().GetStore().Add(&svc))
+			cloud.serviceLister = serviceInformer.Lister()
+			cloud.azureResourceLocker = NewAzureResourceLocker(cloud, "holder", "aks-managed-resource-locker", "kube-system", 900)
+			operation.expectAfterSync(cloud, kubeClient)
+			assert.ErrorContains(test, operation.run(context.Background(), cloud, &svc), afterSyncErr.Error())
+		})
+
+		for _, mode := range modes {
+			for _, waitCase := range waitCases {
+				test.Run(operation.name+"/"+mode.name+"/"+waitCase.name, func(test *testing.T) {
+					ctrl := gomock.NewController(test)
+					cloud := GetTestCloud(ctrl)
+					cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+					cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{{Name: testClusterName}}
+					svc := getTestService("svc-wait", v1.ProtocolTCP, map[string]string{
+						consts.ServiceAnnotationDisableLoadBalancerFloatingIP: mode.disableFloatingIP,
+					}, false, 80)
+					svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyCluster
+					kubeClient := fake.NewSimpleClientset()
+					cloud.KubeClient = kubeClient
+					serviceInformer := informers.NewSharedInformerFactory(kubeClient, 0).Core().V1().Services()
+					assert.NoError(test, serviceInformer.Informer().GetStore().Add(&svc))
+					cloud.serviceLister = serviceInformer.Lister()
+					cloud.azureResourceLocker = NewAzureResourceLocker(cloud, "holder", "aks-managed-resource-locker", "kube-system", 900)
+
+					synctest.Test(test, func(test *testing.T) {
+						synced := make(chan struct{})
+						stopCh := make(chan struct{})
+						cloud.endpointSlicesSynced = synced
+						cloud.stopCh = stopCh
+						ctx, unblockWait := waitCase.prepare(test, synced, stopCh)
+						result := make(chan error, 1)
+						go func() { result <- operation.run(ctx, cloud, &svc) }()
+						synctest.Wait()
+						select {
+						case err := <-result:
+							test.Fatalf("operation returned before sync or cancellation was signaled: %v", err)
+						default:
+						}
+						if cloud.serviceReconcileLock.TryLock() {
+							cloud.serviceReconcileLock.Unlock()
+						} else {
+							test.Error("operation holds the reconciliation lock while waiting")
+						}
+						assert.Empty(test, kubeClient.Actions(), "the Azure resource lease must not be acquired while waiting")
+
+						if waitCase.wantWaitErr == nil {
+							operation.expectAfterSync(cloud, kubeClient)
+						}
+						if unblockWait != nil {
+							unblockWait()
+						}
+						err := <-result
+						if waitCase.wantWaitErr == nil {
+							assert.ErrorContains(test, err, afterSyncErr.Error())
+						} else {
+							assert.ErrorIs(test, err, waitCase.wantWaitErr)
+							assert.Empty(test, kubeClient.Actions())
+						}
+					})
+				})
+			}
+		}
+	}
 }
 
 func TestEnsureLoadBalancerLock(t *testing.T) {

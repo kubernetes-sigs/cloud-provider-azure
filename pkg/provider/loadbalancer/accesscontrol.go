@@ -257,10 +257,7 @@ func (ac *AccessControl) AllowedIPv6Ranges() []netip.Prefix {
 	return rv
 }
 
-// PatchSecurityGroup checks and adds rules for the given destination IP addresses.
-func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses []netip.Addr) error {
-	logger := ac.logger.WithName("PatchSecurityGroup")
-
+func (ac *AccessControl) allowedSources() ([]netip.Prefix, []netip.Prefix, []string) {
 	var (
 		allowedIPRanges    = append(ac.AllowedIPv4Ranges(), ac.AllowedIPv6Ranges()...)
 		allowedServiceTags = ac.AllowedServiceTags
@@ -274,15 +271,20 @@ func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses [
 		}
 	}
 
-	{
-		// Aggregate allowed IP ranges.
-		ipRanges := iputil.AggregatePrefixes(allowedIPRanges)
-		if len(ipRanges) != len(allowedIPRanges) {
-			logger.Info("Overlapping IP ranges detected", "allowed-ip-ranges", allowedIPRanges, "aggregated-ip-ranges", ipRanges)
-		}
-		allowedIPRanges = ipRanges
+	allowedIPRanges = iputil.AggregatePrefixes(allowedIPRanges)
+	allowedIPv4Ranges, allowedIPv6Ranges := iputil.GroupPrefixesByFamily(allowedIPRanges)
+	return allowedIPv4Ranges, allowedIPv6Ranges, allowedServiceTags
+}
+
+// PatchSecurityGroup checks and adds rules for the given destination IP addresses.
+func (ac *AccessControl) PatchSecurityGroup(dstIPv4Addresses, dstIPv6Addresses []netip.Addr) error {
+	logger := ac.logger.WithName("PatchSecurityGroup")
+	allowedIPv4Ranges, allowedIPv6Ranges, allowedServiceTags := ac.allowedSources()
+	allowedIPRanges := append(ac.AllowedIPv4Ranges(), ac.AllowedIPv6Ranges()...)
+	if len(allowedIPv4Ranges)+len(allowedIPv6Ranges) != len(allowedIPRanges) {
+		aggregatedIPRanges := append(append([]netip.Prefix{}, allowedIPv4Ranges...), allowedIPv6Ranges...)
+		logger.Info("Overlapping IP ranges detected", "allowed-ip-ranges", allowedIPRanges, "aggregated-ip-ranges", aggregatedIPRanges)
 	}
-	var allowedIPv4Ranges, allowedIPv6Ranges = iputil.GroupPrefixesByFamily(allowedIPRanges)
 
 	logger.V(10).Info("Start patching",
 		"num-allowed-ipv4-ranges", len(allowedIPv4Ranges),
@@ -367,10 +369,46 @@ func (ac *AccessControl) EnsureDenyAllRules(dstIPv4Addresses, dstIPv6Addresses [
 	return nil
 }
 
+// RecordDesiredRuleDestinations records this Service's exact desired allow-rule
+// names and destination IPs in desiredRuleDestinations. It does not modify NSG rules.
+func (ac *AccessControl) RecordDesiredRuleDestinations(desiredRuleDestinations securitygroup.CurrentServiceRuleRequirements, dstIPv4Addresses, dstIPv6Addresses []netip.Addr) {
+	ac.forEachAllowRuleConfiguration(dstIPv4Addresses, dstIPv6Addresses, desiredRuleDestinations.Add)
+}
+
+// AddRulePortsToRetain adds this Service's ports to retainedPorts for its allowed
+// source prefixes and destination IPs. It does not modify any NSG rules.
+func (ac *AccessControl) AddRulePortsToRetain(retainedPorts securitygroup.OtherServiceAccessRequirements, dstIPv4Addresses, dstIPv6Addresses []netip.Addr) {
+	ac.forEachAllowRuleConfiguration(dstIPv4Addresses, dstIPv6Addresses, retainedPorts.Add)
+}
+
+func (ac *AccessControl) forEachAllowRuleConfiguration(
+	dstIPv4Addresses, dstIPv6Addresses []netip.Addr,
+	recordRule func(armnetwork.SecurityRuleProtocol, []string, []netip.Addr, []int32),
+) {
+	allowedIPv4Ranges, allowedIPv6Ranges, allowedServiceTags := ac.allowedSources()
+	for protocol, ports := range ac.securityRuleDestinationPortsByProtocol {
+		for _, tag := range allowedServiceTags {
+			recordRule(protocol, []string{tag}, dstIPv4Addresses, ports)
+			recordRule(protocol, []string{tag}, dstIPv6Addresses, ports)
+		}
+		if len(allowedIPv4Ranges) > 0 {
+			sources := fnutil.Map(func(prefix netip.Prefix) string { return prefix.String() }, allowedIPv4Ranges)
+			recordRule(protocol, sources, dstIPv4Addresses, ports)
+		}
+		if len(allowedIPv6Ranges) > 0 {
+			sources := fnutil.Map(func(prefix netip.Prefix) string { return prefix.String() }, allowedIPv6Ranges)
+			recordRule(protocol, sources, dstIPv6Addresses, ports)
+		}
+	}
+}
+
 // CleanSecurityGroup removes the given IP addresses from the SecurityGroup.
+// Destination ports matched by otherServicePorts and exact rule/destination
+// pairs matched by desiredRuleDestinations are kept in allow rules.
 func (ac *AccessControl) CleanSecurityGroup(
 	dstIPv4Addresses, dstIPv6Addresses []netip.Addr,
-	retainPortRanges map[armnetwork.SecurityRuleProtocol][]int32,
+	otherServicePorts securitygroup.OtherServiceAccessRequirements,
+	desiredRuleDestinations securitygroup.CurrentServiceRuleRequirements,
 ) error {
 	logger := ac.logger.WithName("CleanSecurityGroup").
 		WithValues("num-dst-ipv4-addresses", len(dstIPv4Addresses)).
@@ -389,13 +427,12 @@ func (ac *AccessControl) CleanSecurityGroup(
 	}
 
 	for _, protocol := range protocols {
-		retainDstPorts := retainPortRanges[protocol]
-		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv4Prefixes, retainDstPorts); err != nil {
+		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv4Prefixes, otherServicePorts, desiredRuleDestinations); err != nil {
 			logger.Error(err, "Failed to remove IPv4 destination from rules")
 			return err
 		}
 
-		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv6Prefixes, retainDstPorts); err != nil {
+		if err := ac.sgHelper.RemoveDestinationFromRules(protocol, ipv6Prefixes, otherServicePorts, desiredRuleDestinations); err != nil {
 			logger.Error(err, "Failed to remove IPv6 destination from rules")
 			return err
 		}
@@ -434,6 +471,40 @@ func (ac *AccessControl) RetainSecurityGroup(dstIPv4Addresses, dstIPv6Addresses 
 // It would return unchanged SecurityGroup and `false` if the operations undo each other.
 func (ac *AccessControl) SecurityGroup() (*armnetwork.SecurityGroup, bool, error) {
 	return ac.sgHelper.SecurityGroup()
+}
+
+// AddOtherServiceRulePortsToRetain adds otherSvc's ports to retainedPorts for its
+// allowed source prefixes and otherSvcDestinations. It does not modify the Service
+// or any NSG rules.
+func AddOtherServiceRulePortsToRetain(logger logr.Logger, otherSvc *v1.Service, otherSvcDestinations []netip.Addr, retainedPorts securitygroup.OtherServiceAccessRequirements) error {
+	portsByProtocol, err := SecurityRuleDestinationPortsByProtocol(otherSvc)
+	if err != nil {
+		return err
+	}
+	sourceRanges, invalidSourceRanges, _ := SourceRanges(otherSvc)
+	allowedIPRanges, invalidAllowedIPRanges, _ := AllowedIPRanges(otherSvc)
+	if len(sourceRanges) > 0 && len(allowedIPRanges) > 0 {
+		// These source range settings conflict, so the source prefixes still needed by the
+		// other Service cannot be determined. Retain existing rules matching its protocol, destination
+		// IPs, and ports. Stale rules may remain until the other Service is reconciled with a
+		// valid configuration or deleted.
+		for protocol, ports := range portsByProtocol {
+			retainedPorts.AddIgnoringSourcePrefixes(protocol, otherSvcDestinations, ports)
+		}
+		return nil
+	}
+	otherSvcAccessControl := &AccessControl{
+		logger:                                 logger,
+		svc:                                    otherSvc,
+		SourceRanges:                           sourceRanges,
+		AllowedIPRanges:                        allowedIPRanges,
+		AllowedServiceTags:                     AllowedServiceTags(otherSvc),
+		invalidRanges:                          append(invalidSourceRanges, invalidAllowedIPRanges...),
+		securityRuleDestinationPortsByProtocol: portsByProtocol,
+	}
+	ipv4Addresses, ipv6Addresses := iputil.GroupAddressesByFamily(otherSvcDestinations)
+	otherSvcAccessControl.AddRulePortsToRetain(retainedPorts, ipv4Addresses, ipv6Addresses)
+	return nil
 }
 
 // SecurityRuleDestinationPortsByProtocol returns the service ports grouped by SecurityGroup protocol.

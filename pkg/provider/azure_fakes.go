@@ -79,6 +79,8 @@ func NewTestFlexScaleSet(ctrl *gomock.Controller) (*FlexScaleSet, error) {
 
 // GetTestCloud returns a fake azure cloud for unit tests in Azure related CSI drivers
 func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
+	endpointSlicesSynced := make(chan struct{})
+	close(endpointSlicesSynced)
 	az = &Cloud{
 		Config: config.Config{
 			AzureClientConfig: config.AzureClientConfig{
@@ -106,6 +108,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 		},
 		nodeZones:                map[string]*utilsets.IgnoreCaseSet{},
 		nodeInformerSynced:       func() bool { return true },
+		endpointSlicesSynced:     endpointSlicesSynced,
 		nodeResourceGroups:       map[string]string{},
 		unmanagedNodes:           utilsets.NewString(),
 		excludeLoadBalancerNodes: utilsets.NewString(),
