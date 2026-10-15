@@ -21,3 +21,12 @@ reference doc when the related logic, workflow, or convention changes.
 | Pull requests | [references/pull-requests.md](references/pull-requests.md) | Creating or updating GitHub pull requests |
 | Shared agent skills and authoring | [references/shared-skills.md](references/shared-skills.md) | Adding, editing, reviewing, or opening PRs for shared skills under `.agents/skills/` |
 | ETag and cache invalidation | [references/etag-cache.md](references/etag-cache.md) | Modifying Azure resource create/update/delete operations, or changing cache logic |
+
+## Security Model
+
+Do not treat Kubernetes namespaces as a security boundary in clusters running
+cloud provider Azure. Do not design or document behavior that relies on
+namespace separation alone to isolate users, and do not report cross-namespace
+interaction as a security-boundary violation by itself. This is a threat-model
+assumption only: it does not relax RBAC, Azure authorization, input validation,
+ownership checks, or other existing security controls.
