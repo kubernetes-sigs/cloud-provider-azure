@@ -43,6 +43,285 @@ func ExpectNewSecurityGroupHelper(t *testing.T, sg *armnetwork.SecurityGroup) *R
 	return helper
 }
 
+func TestRetainedRulePorts(t *testing.T) {
+	ipv4 := netip.MustParseAddr("203.0.113.5")
+	otherIPv4 := netip.MustParseAddr("203.0.113.6")
+	ipv6 := netip.MustParseAddr("2001:db8::5")
+	sources := []string{"198.51.100.0/24", "192.0.2.0/24"}
+
+	for _, tt := range []struct {
+		name        string
+		setup       func(RetainedRulePorts)
+		protocol    armnetwork.SecurityRuleProtocol
+		sources     []string
+		destination netip.Addr
+		port        int32
+		expected    bool
+	}{
+		{
+			name: "adding another port does not replace existing ports for the same destination",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{80})
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{443})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     sources,
+			destination: ipv4,
+			port:        80,
+			expected:    true,
+		},
+		{
+			name: "a port added for one destination does not match another destination",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{80})
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{otherIPv4}, []int32{81})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     sources,
+			destination: ipv4,
+			port:        81,
+			expected:    false,
+		},
+		{
+			name: "adding another destination does not replace an existing destination's ports",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{otherIPv4}, []int32{81})
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{80})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     sources,
+			destination: otherIPv4,
+			port:        81,
+			expected:    true,
+		},
+		{
+			name: "a port added only for TCP is not retained for UDP",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{80})
+				mapping.Add(armnetwork.SecurityRuleProtocolUDP, sources,
+					[]netip.Addr{ipv4}, []int32{53})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolUDP,
+			sources:     sources,
+			destination: ipv4,
+			port:        80,
+			expected:    false,
+		},
+		{
+			name: "adding TCP ports does not replace existing UDP ports",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolUDP, sources,
+					[]netip.Addr{ipv4}, []int32{53})
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{80})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolUDP,
+			sources:     sources,
+			destination: ipv4,
+			port:        53,
+			expected:    true,
+		},
+		{
+			name: "retains a port for an IPv6 destination",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, []string{"Internet"},
+					[]netip.Addr{ipv6}, []int32{443})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: ipv6,
+			port:        443,
+			expected:    true,
+		},
+		{
+			name: "an IPv6 destination does not match an IPv4 destination",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, []string{"Internet"},
+					[]netip.Addr{ipv6}, []int32{443})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: ipv4,
+			port:        443,
+			expected:    false,
+		},
+		{
+			name: "source prefix order and duplicates do not affect matching",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{80})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"192.0.2.0/24", "198.51.100.0/24", "192.0.2.0/24"},
+			destination: ipv4,
+			port:        80,
+			expected:    true,
+		},
+		{
+			name: "does not retain a port for different source prefixes",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{ipv4}, []int32{80})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: ipv4,
+			port:        80,
+			expected:    false,
+		},
+		{
+			name: "retains a port for matching nil source prefixes",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, nil,
+					[]netip.Addr{ipv4}, []int32{8081})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     nil,
+			destination: ipv4,
+			port:        8081,
+			expected:    true,
+		},
+		{
+			name: "does not retain a port for different source prefixes when added with nil sources",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, nil,
+					[]netip.Addr{ipv4}, []int32{8081})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: ipv4,
+			port:        8081,
+			expected:    false,
+		},
+		{
+			name: "retains a port for a matching empty source string",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, []string{""},
+					[]netip.Addr{ipv4}, []int32{8082})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{""},
+			destination: ipv4,
+			port:        8082,
+			expected:    true,
+		},
+		{
+			name: "does not retain a port for different source prefixes when added with an empty source string",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, []string{""},
+					[]netip.Addr{ipv4}, []int32{8082})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: ipv4,
+			port:        8082,
+			expected:    false,
+		},
+		{
+			name: "retains a port for a matching empty source list",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, []string{},
+					[]netip.Addr{ipv4}, []int32{8083})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{},
+			destination: ipv4,
+			port:        8083,
+			expected:    true,
+		},
+		{
+			name: "does not retain a port for different source prefixes when added with an empty source list",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, []string{},
+					[]netip.Addr{ipv4}, []int32{8083})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: ipv4,
+			port:        8083,
+			expected:    false,
+		},
+		{
+			name: "AddIgnoringSourcePrefixes retains the port without matching source prefixes",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.AddIgnoringSourcePrefixes(armnetwork.SecurityRuleProtocolTCP,
+					[]netip.Addr{otherIPv4}, []int32{8080})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: otherIPv4,
+			port:        8080,
+			expected:    true,
+		},
+		{
+			name: "Add does not replace ports added with AddIgnoringSourcePrefixes",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.AddIgnoringSourcePrefixes(armnetwork.SecurityRuleProtocolTCP,
+					[]netip.Addr{otherIPv4}, []int32{8080})
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{otherIPv4}, []int32{81})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     sources,
+			destination: otherIPv4,
+			port:        8080,
+			expected:    true,
+		},
+		{
+			name: "AddIgnoringSourcePrefixes still requires a matching destination",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.AddIgnoringSourcePrefixes(armnetwork.SecurityRuleProtocolTCP,
+					[]netip.Addr{otherIPv4}, []int32{8080})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: ipv4,
+			port:        8080,
+			expected:    false,
+		},
+		{
+			name: "AddIgnoringSourcePrefixes still requires a matching protocol",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.AddIgnoringSourcePrefixes(armnetwork.SecurityRuleProtocolTCP,
+					[]netip.Addr{otherIPv4}, []int32{8080})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolUDP,
+			sources:     []string{"Internet"},
+			destination: otherIPv4,
+			port:        8080,
+			expected:    false,
+		},
+		{
+			name: "ignoring source prefixes for port 8080 does not change source matching for port 81",
+			setup: func(mapping RetainedRulePorts) {
+				mapping.Add(armnetwork.SecurityRuleProtocolTCP, sources,
+					[]netip.Addr{otherIPv4}, []int32{81})
+				mapping.AddIgnoringSourcePrefixes(armnetwork.SecurityRuleProtocolTCP,
+					[]netip.Addr{otherIPv4}, []int32{8080})
+			},
+			protocol:    armnetwork.SecurityRuleProtocolTCP,
+			sources:     []string{"Internet"},
+			destination: otherIPv4,
+			port:        81,
+			expected:    false,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			mapping := make(RetainedRulePorts)
+			tt.setup(mapping)
+			assert.Equal(t, tt.expected, mapping.Retains(tt.protocol, tt.sources, tt.destination, tt.port))
+		})
+	}
+	assert.Equal(t, []string{"198.51.100.0/24", "192.0.2.0/24"}, sources)
+}
+
 func TestNewSecurityGroupHelper(t *testing.T) {
 	{
 		_, err := NewSecurityGroupHelper(log.Noop(), nil)
@@ -1350,6 +1629,154 @@ func TestRuleHelper_RetainDestinationFromRules(t *testing.T) {
 	})
 }
 
+func TestRuleHelper_RemoveDestinationFromRulesByDestination(t *testing.T) {
+	factory := fixture.NewFixture().Azure()
+	const (
+		firstIPv4       = "203.0.113.5"
+		secondIPv4      = "203.0.113.6"
+		unrelatedIPv4   = "198.51.100.10"
+		existingIPv4    = "198.51.100.20"
+		sourceRangeIPv4 = "192.0.2.0/24"
+	)
+	allowRuleTCP := func(source string, ports []int32, priority int32, destinations ...string) *armnetwork.SecurityRule {
+		return factory.AllowSecurityRule(armnetwork.SecurityRuleProtocolTCP, iputil.IPv4, []string{source}, ports).
+			WithPriority(priority).WithDestination(destinations...).Build()
+	}
+
+	for _, tt := range []struct {
+		name               string
+		setupRetainedPorts func(RetainedRulePorts)
+		dstPrefixes        []string
+		existingRules      []*armnetwork.SecurityRule
+		expectedRules      []*armnetwork.SecurityRule
+		updated            bool
+	}{
+		{
+			name: "leaves rules unchanged when all destination ports are retained",
+			setupRetainedPorts: func(retainedPorts RetainedRulePorts) {
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(firstIPv4)}, []int32{80})
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(secondIPv4)}, []int32{81})
+			},
+			dstPrefixes: []string{firstIPv4, secondIPv4},
+			existingRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80}, 700, firstIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{81}, 900, secondIPv4),
+			},
+			expectedRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80}, 700, firstIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{81}, 900, secondIPv4),
+			},
+			updated: false,
+		},
+		{
+			name: "removes the Internet rule when the retained port has different source prefixes",
+			setupRetainedPorts: func(retainedPorts RetainedRulePorts) {
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(firstIPv4)}, []int32{80})
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(secondIPv4)}, []int32{81})
+			},
+			dstPrefixes: []string{firstIPv4, secondIPv4},
+			existingRules: []*armnetwork.SecurityRule{
+				allowRuleTCP("Internet", []int32{80}, 700, firstIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{81}, 501, secondIPv4),
+			},
+			expectedRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{81}, 501, secondIPv4),
+			},
+			updated: true,
+		},
+		{
+			name: "duplicate cleanup addresses do not prevent removing the second IP from port 80",
+			setupRetainedPorts: func(retainedPorts RetainedRulePorts) {
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(firstIPv4)}, []int32{80})
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(secondIPv4)}, []int32{81})
+			},
+			dstPrefixes: []string{firstIPv4, firstIPv4, secondIPv4},
+			existingRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80}, 500, firstIPv4, secondIPv4),
+			},
+			expectedRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80}, 500, firstIPv4),
+			},
+			updated: true,
+		},
+		{
+			name: "splits ports 80 and 81 by destination and reuses the existing port 81 rule",
+			setupRetainedPorts: func(retainedPorts RetainedRulePorts) {
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(firstIPv4)}, []int32{80})
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(secondIPv4)}, []int32{81})
+			},
+			dstPrefixes: []string{firstIPv4, secondIPv4},
+			existingRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80, 81}, 700, firstIPv4, secondIPv4, unrelatedIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{81}, 501, existingIPv4),
+			},
+			expectedRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80}, 500, firstIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{81}, 501, secondIPv4, existingIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{80, 81}, 700, unrelatedIPv4),
+			},
+			updated: true,
+		},
+		{
+			name: "assigns freed priorities to split rules in rule-name order",
+			setupRetainedPorts: func(retainedPorts RetainedRulePorts) {
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(firstIPv4)}, []int32{80})
+				retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+					[]netip.Addr{netip.MustParseAddr(secondIPv4)}, []int32{81})
+			},
+			dstPrefixes: []string{firstIPv4, secondIPv4},
+			// Both original rules are deleted. Split rules get the lowest free priorities in
+			// rule-name order: 500 for port 80, then 501 for port 81.
+			existingRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80, 443}, 501, firstIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{81, 443}, 500, secondIPv4),
+			},
+			expectedRules: []*armnetwork.SecurityRule{
+				allowRuleTCP(sourceRangeIPv4, []int32{80}, 500, firstIPv4),
+				allowRuleTCP(sourceRangeIPv4, []int32{81}, 501, secondIPv4),
+			},
+			updated: true,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			retainedPorts := make(RetainedRulePorts)
+			tt.setupRetainedPorts(retainedPorts)
+			helper := ExpectNewSecurityGroupHelper(t, factory.SecurityGroup().WithRules(tt.existingRules).Build())
+			assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, tt.dstPrefixes, retainedPorts))
+			securityGroup, updated, err := helper.SecurityGroup()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.updated, updated)
+			testutil.ExpectExactSecurityRules(t, securityGroup, tt.expectedRules)
+		})
+	}
+
+	t.Run("adding a source-range allow rule reuses priority 500 released by deleting the Internet rule", func(t *testing.T) {
+		retainedPorts := make(RetainedRulePorts)
+		retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{sourceRangeIPv4},
+			[]netip.Addr{netip.MustParseAddr(firstIPv4)}, []int32{80})
+		helper := ExpectNewSecurityGroupHelper(t, factory.SecurityGroup().WithRules([]*armnetwork.SecurityRule{
+			allowRuleTCP("Internet", []int32{80}, 500, firstIPv4),
+		}).Build())
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, []string{firstIPv4}, retainedPorts))
+		assert.NoError(t, helper.AddRuleForAllowedIPRanges([]netip.Prefix{netip.MustParsePrefix(sourceRangeIPv4)}, armnetwork.SecurityRuleProtocolTCP,
+			[]netip.Addr{netip.MustParseAddr(firstIPv4)}, []int32{80}))
+		securityGroup, _, err := helper.SecurityGroup()
+		assert.NoError(t, err)
+		testutil.ExpectExactSecurityRules(t, securityGroup, []*armnetwork.SecurityRule{
+			allowRuleTCP(sourceRangeIPv4, []int32{80}, 500, firstIPv4),
+		})
+	})
+}
+
 func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 	fx := fixture.NewFixture()
 
@@ -1361,7 +1788,7 @@ func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 				return p.String()
 			}, fx.RandomIPv4Addresses(2))
 		)
-		err := helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, []int32{})
+		err := helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, nil)
 		assert.NoError(t, err)
 
 		_, updated, err := helper.SecurityGroup()
@@ -1407,8 +1834,8 @@ func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 				"192.168.0.2",
 			}
 		)
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, []int32{}))
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolUDP, dstAddresses, []int32{}))
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, nil))
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolUDP, dstAddresses, nil))
 
 		_, updated, err := helper.SecurityGroup()
 		assert.NoError(t, err)
@@ -1467,8 +1894,8 @@ func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 			}
 		)
 
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, []int32{}))
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolUDP, dstAddresses, []int32{}))
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, nil))
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolUDP, dstAddresses, nil))
 
 		outputSG, updated, err := helper.SecurityGroup()
 		assert.NoError(t, err)
@@ -1608,8 +2035,8 @@ func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 				"192.168.0.2",
 			}
 		)
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, []int32{}))
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolUDP, dstAddresses, []int32{}))
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, nil))
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolUDP, dstAddresses, nil))
 
 		outputSG, updated, err := helper.SecurityGroup()
 		assert.NoError(t, err)
@@ -1684,7 +2111,11 @@ func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 			}
 		)
 
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, []int32{443, 80}))
+		retainedPorts := make(RetainedRulePorts)
+		addresses, err := iputil.ParseAddresses(dstAddresses)
+		assert.NoError(t, err)
+		retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{"src_foo", "src_bar"}, addresses, []int32{443, 80})
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, retainedPorts))
 
 		_, updated, err := helper.SecurityGroup()
 		assert.NoError(t, err)
@@ -1730,7 +2161,11 @@ func TestRuleHelper_RemoveDestinationFromRules(t *testing.T) {
 			}
 		)
 
-		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, []int32{443}))
+		retainedPorts := make(RetainedRulePorts)
+		addresses, err := iputil.ParseAddresses(dstAddresses)
+		assert.NoError(t, err)
+		retainedPorts.Add(armnetwork.SecurityRuleProtocolTCP, []string{"bar", "foo"}, addresses, []int32{443})
+		assert.NoError(t, helper.RemoveDestinationFromRules(armnetwork.SecurityRuleProtocolTCP, dstAddresses, retainedPorts))
 
 		outputSG, updated, err := helper.SecurityGroup()
 		assert.NoError(t, err)
