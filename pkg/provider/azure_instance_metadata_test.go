@@ -246,7 +246,7 @@ const (
 	testIMDSNodeName        = "vm1"
 	testIMDSResourceID      = "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1"
 	testIMDSVMSize          = "Standard_D2s_v3"
-	testLBMarkedErrPrefix   = "failed to get loadbalancer metadata: load balancer metadata unavailable: "
+	testLBMetadataErrPrefix = "load balancer metadata unavailable: "
 	testLBEmptyPublicIPBody = `{"loadbalancer":{"publicIpAddresses":[]}}`
 )
 
@@ -391,10 +391,10 @@ func TestIsTransientIMDSError(t *testing.T) {
 		{desc: "429 should be transient", err: &imdsResponseError{statusCode: http.StatusTooManyRequests}, expected: true},
 		{desc: "408 should be transient", err: &imdsResponseError{statusCode: http.StatusRequestTimeout}, expected: true},
 		{desc: "410 should be transient", err: &imdsResponseError{statusCode: http.StatusGone}, expected: true},
-		{desc: "400 should keep legacy behavior", err: &imdsResponseError{statusCode: http.StatusBadRequest}, expected: false},
-		{desc: "403 should keep legacy behavior", err: &imdsResponseError{statusCode: http.StatusForbidden}, expected: false},
-		{desc: "404 should keep legacy behavior", err: &imdsResponseError{statusCode: http.StatusNotFound}, expected: false},
-		{desc: "wrapped 404 should keep legacy behavior", err: fmt.Errorf("wrapped: %w", &imdsResponseError{statusCode: http.StatusNotFound}), expected: false},
+		{desc: "HTTP 400 is not classified as transient", err: &imdsResponseError{statusCode: http.StatusBadRequest}, expected: false},
+		{desc: "HTTP 403 is not classified as transient", err: &imdsResponseError{statusCode: http.StatusForbidden}, expected: false},
+		{desc: "HTTP 404 is not classified as transient", err: &imdsResponseError{statusCode: http.StatusNotFound}, expected: false},
+		{desc: "wrapped HTTP 404 is not classified as transient", err: fmt.Errorf("wrapped: %w", &imdsResponseError{statusCode: http.StatusNotFound}), expected: false},
 		{desc: "wrapped 503 should be transient", err: fmt.Errorf("wrapped: %w", &imdsResponseError{statusCode: http.StatusServiceUnavailable}), expected: true},
 		{desc: "wrapped 410 should be transient", err: fmt.Errorf("wrapped: %w", &imdsResponseError{statusCode: http.StatusGone}), expected: true},
 		{desc: "network error should be transient", err: errors.New("connection reset by peer"), expected: true},
@@ -438,78 +438,78 @@ func TestGetMetadataLoadBalancerStatus(t *testing.T) {
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "404 should keep legacy behavior",
+			desc:            "404 should not record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBStatus(http.StatusNotFound),
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "400 should keep legacy behavior",
+			desc:            "400 should not record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBStatus(http.StatusBadRequest),
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "500 should be recorded as a marked error",
+			desc:            "500 should record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBStatus(http.StatusInternalServerError),
-			expectedErr:     testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 500",
+			expectedErr:     testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 500",
 			expectedStatus:  http.StatusInternalServerError,
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "503 should be recorded as a marked error",
+			desc:            "503 should record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBStatus(http.StatusServiceUnavailable),
-			expectedErr:     testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 503",
+			expectedErr:     testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 503",
 			expectedStatus:  http.StatusServiceUnavailable,
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "429 should be recorded as a marked error",
+			desc:            "429 should record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBStatus(http.StatusTooManyRequests),
-			expectedErr:     testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 429",
+			expectedErr:     testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 429",
 			expectedStatus:  http.StatusTooManyRequests,
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "408 should be recorded as a marked error",
+			desc:            "408 should record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBStatus(http.StatusRequestTimeout),
-			expectedErr:     testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 408",
+			expectedErr:     testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 408",
 			expectedStatus:  http.StatusRequestTimeout,
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "410 should be recorded as a marked error",
+			desc:            "410 should record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBStatus(http.StatusGone),
-			expectedErr:     testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 410",
+			expectedErr:     testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 410",
 			expectedStatus:  http.StatusGone,
 			expectedLBCalls: 1,
 		},
 		{
-			desc:              "network failure should be recorded as a marked error",
+			desc:              "network failure should record a load balancer metadata error",
 			instanceBody:      testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:         imdsLBConnectionReset,
-			expectedErrPrefix: testLBMarkedErrPrefix + "Get ",
+			expectedErrPrefix: testLBMetadataErrPrefix + "Get ",
 			expectedCause:     io.EOF,
 			expectedLBCalls:   1,
 		},
 		{
-			desc:            "body read failure should be recorded as a marked error",
+			desc:            "body read failure should record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBTruncatedBody,
-			expectedErr:     testLBMarkedErrPrefix + "unexpected EOF",
+			expectedErr:     testLBMetadataErrPrefix + "unexpected EOF",
 			expectedCause:   io.ErrUnexpectedEOF,
 			expectedLBCalls: 1,
 		},
 		{
-			desc:            "invalid JSON should be recorded as a marked error",
+			desc:            "invalid JSON should record a load balancer metadata error",
 			instanceBody:    testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:       imdsLBBody("not-json"),
-			expectedErr:     testLBMarkedErrPrefix + "invalid character 'o' in literal null (expecting 'u')",
+			expectedErr:     testLBMetadataErrPrefix + "invalid character 'o' in literal null (expecting 'u')",
 			expectedLBCalls: 1,
 		},
 		{
@@ -564,7 +564,7 @@ func TestGetMetadataLoadBalancerStatus(t *testing.T) {
 }
 
 func TestGetMetadataLoadBalancerRecoveryAfterCacheExpiry(t *testing.T) {
-	staleErr := testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 503"
+	staleErr := testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 503"
 	for _, tc := range []struct {
 		desc             string
 		recoveredLB      http.HandlerFunc
