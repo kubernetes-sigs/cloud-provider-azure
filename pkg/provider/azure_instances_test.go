@@ -964,7 +964,7 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 	hostname := v1.NodeAddress{Type: v1.NodeHostName, Address: testIMDSNodeName}
 	internalV4 := v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.5"}
 	internalV6 := v1.NodeAddress{Type: v1.NodeInternalIP, Address: "fd00::5"}
-	markedErr := testLBMarkedErrPrefix + "failure of getting loadbalancer metadata, status code 503"
+	lbMetadataErr := testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 503"
 
 	for _, tc := range []struct {
 		desc                  string
@@ -972,7 +972,7 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 		lbHandler             http.HandlerFunc
 		unmanaged             bool
 		expectedAddresses     []v1.NodeAddress
-		expectedAwareErr      string
+		expectedLBStatusErr   string
 		expectedPublicErr     string
 		expectedInstanceCalls int32
 		expectedLBCalls       int32
@@ -986,25 +986,25 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			expectedLBCalls:       1,
 		},
 		{
-			desc:                  "transient loadbalancer failure should return raw addresses with the marked error from the aware method only",
+			desc:                  "transient loadbalancer failure should return raw addresses with ErrLoadBalancerMetadataUnavailable from NodeAddressesWithLBStatus only",
 			instanceBody:          testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
 			expectedAddresses:     []v1.NodeAddress{hostname, internalV4},
-			expectedAwareErr:      markedErr,
+			expectedLBStatusErr:   lbMetadataErr,
 			expectedInstanceCalls: 1,
 			expectedLBCalls:       1,
 		},
 		{
-			desc:                  "dual-stack transient loadbalancer failure should return both private families with the marked error",
+			desc:                  "dual-stack transient loadbalancer failure should return both private families with ErrLoadBalancerMetadataUnavailable",
 			instanceBody:          testIMDSInstanceBody("10.0.0.5", "", "fd00::5"),
 			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
 			expectedAddresses:     []v1.NodeAddress{hostname, internalV4, internalV6},
-			expectedAwareErr:      markedErr,
+			expectedLBStatusErr:   lbMetadataErr,
 			expectedInstanceCalls: 1,
 			expectedLBCalls:       1,
 		},
 		{
-			desc:                  "benign loadbalancer response should keep legacy behavior",
+			desc:                  "benign loadbalancer response should return addresses without an error",
 			instanceBody:          testIMDSInstanceBody("10.0.0.5", "", ""),
 			lbHandler:             imdsLBStatus(http.StatusNotFound),
 			expectedAddresses:     []v1.NodeAddress{hostname, internalV4},
@@ -1020,10 +1020,10 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			expectedLBCalls:       0,
 		},
 		{
-			desc:                  "empty private IPs should take priority over the marked error and invalidate the cache",
+			desc:                  "empty private IPs should take priority over the load balancer metadata error and invalidate the cache",
 			instanceBody:          testIMDSInstanceBody("", "", ""),
 			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
-			expectedAwareErr:      "get empty IP addresses from instance metadata service",
+			expectedLBStatusErr:   "get empty IP addresses from instance metadata service",
 			expectedPublicErr:     "get empty IP addresses from instance metadata service",
 			expectedInstanceCalls: 2,
 			expectedLBCalls:       2,
@@ -1032,7 +1032,7 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			desc:                  "missing interface should keep the original error",
 			instanceBody:          `{"compute":{"name":"vm1"},"network":{"interface":[]}}`,
 			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
-			expectedAwareErr:      "no interface is found for the instance",
+			expectedLBStatusErr:   "no interface is found for the instance",
 			expectedPublicErr:     "no interface is found for the instance",
 			expectedInstanceCalls: 1,
 		},
@@ -1040,7 +1040,7 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			desc:                  "missing network should keep the original error",
 			instanceBody:          `{"compute":{"name":"vm1"}}`,
 			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
-			expectedAwareErr:      "failure of getting instance metadata",
+			expectedLBStatusErr:   "failure of getting instance metadata",
 			expectedPublicErr:     "failure of getting instance metadata",
 			expectedInstanceCalls: 1,
 		},
@@ -1048,7 +1048,7 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			desc:                  "missing compute should keep the original error",
 			instanceBody:          `{"network":{"interface":[]}}`,
 			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
-			expectedAwareErr:      "failure of getting instance metadata",
+			expectedLBStatusErr:   "failure of getting instance metadata",
 			expectedPublicErr:     "failure of getting instance metadata",
 			expectedInstanceCalls: 1,
 		},
@@ -1070,21 +1070,21 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			f := newFakeIMDS(t, tc.instanceBody, tc.lbHandler)
 			cloud.Metadata = newTestIMDSService(t, f)
 
-			awareAddresses, awareErr := cloud.NodeAddressesWithLBStatus(context.Background(), testIMDSNodeName)
+			lbStatusAddresses, lbStatusErr := cloud.NodeAddressesWithLBStatus(context.Background(), testIMDSNodeName)
 			publicAddresses, publicErr := cloud.NodeAddresses(context.Background(), testIMDSNodeName)
 
-			assert.Equal(t, tc.expectedAddresses, awareAddresses)
+			assert.Equal(t, tc.expectedAddresses, lbStatusAddresses)
 			assert.Equal(t, tc.expectedAddresses, publicAddresses)
-			if tc.expectedAwareErr != "" {
-				assert.EqualError(t, awareErr, tc.expectedAwareErr)
+			if tc.expectedLBStatusErr != "" {
+				assert.EqualError(t, lbStatusErr, tc.expectedLBStatusErr)
 			} else {
-				assert.NoError(t, awareErr)
+				assert.NoError(t, lbStatusErr)
 			}
-			assert.Equal(t, tc.expectedAwareErr == markedErr, errors.Is(awareErr, utilnode.ErrLoadBalancerMetadataUnavailable))
-			if tc.expectedAwareErr == markedErr {
+			assert.Equal(t, tc.expectedLBStatusErr == lbMetadataErr, errors.Is(lbStatusErr, utilnode.ErrLoadBalancerMetadataUnavailable))
+			if tc.expectedLBStatusErr == lbMetadataErr {
 				cached, err := cloud.Metadata.GetMetadata(context.Background(), azcache.CacheReadTypeUnsafe)
 				assert.NoError(t, err)
-				assert.Same(t, cached.LBMetadataError, awareErr, "aware method should return the cached error unchanged")
+				assert.Same(t, cached.LBMetadataError, lbStatusErr, "NodeAddressesWithLBStatus should return the cached error unchanged")
 			}
 			if tc.expectedPublicErr != "" {
 				assert.EqualError(t, publicErr, tc.expectedPublicErr)
@@ -1106,10 +1106,10 @@ func TestNodeAddressesInstanceMetadataFailure(t *testing.T) {
 	cloud.Metadata = newTestIMDSService(t, f)
 	expectedErr := `failure of getting instance metadata with response "503 Service Unavailable"`
 
-	awareAddresses, awareErr := cloud.NodeAddressesWithLBStatus(context.Background(), testIMDSNodeName)
-	assert.Nil(t, awareAddresses)
-	assert.EqualError(t, awareErr, expectedErr)
-	assert.False(t, errors.Is(awareErr, utilnode.ErrLoadBalancerMetadataUnavailable))
+	lbStatusAddresses, lbStatusErr := cloud.NodeAddressesWithLBStatus(context.Background(), testIMDSNodeName)
+	assert.Nil(t, lbStatusAddresses)
+	assert.EqualError(t, lbStatusErr, expectedErr)
+	assert.False(t, errors.Is(lbStatusErr, utilnode.ErrLoadBalancerMetadataUnavailable))
 
 	publicAddresses, publicErr := cloud.NodeAddresses(context.Background(), testIMDSNodeName)
 	assert.Nil(t, publicAddresses)

@@ -120,13 +120,13 @@ func TestNodeProvidersNodeAddresses(t *testing.T) {
 			expectedAddresses: []v1.NodeAddress{hostname, internalIP, externalIP},
 		},
 		{
-			desc:              "transient loadbalancer metadata failure should forward partial addresses with the marked error",
+			desc:              "transient loadbalancer metadata failure should forward partial addresses with ErrLoadBalancerMetadataUnavailable",
 			lbStatus:          http.StatusServiceUnavailable,
 			expectedAddresses: []v1.NodeAddress{hostname, internalIP},
-			expectedErr:       "failed to get loadbalancer metadata: load balancer metadata unavailable: failure of getting loadbalancer metadata, status code 503",
+			expectedErr:       "load balancer metadata unavailable: failure of getting loadbalancer metadata, status code 503",
 		},
 		{
-			desc:              "benign loadbalancer metadata failure should keep legacy behavior",
+			desc:              "benign loadbalancer metadata failure should return addresses without an error",
 			lbStatus:          http.StatusNotFound,
 			expectedAddresses: []v1.NodeAddress{hostname, internalIP},
 		},
