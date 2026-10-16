@@ -1,5 +1,15 @@
 # ETag & Cache Invalidation
 
+## IMDS Partial Metadata
+
+`InstanceMetadataService` caches valid instance metadata together with an
+`LBMetadataError` when the load balancer endpoint returns a transient failure.
+Compute and identity reads remain usable. Local `NodeAddresses` returns the
+cached error without invalidating the entry, so node status addresses remain
+unchanged and repeated reads do not trigger an IMDS request burst. Normal cache
+expiry refreshes both endpoints; a successful refresh clears the error. Remote
+node address lookups through ARM are not blocked by the local LB error.
+
 ## Problem Overview
 
 Azure uses ETags for optimistic concurrency control. When the SDK sends a
