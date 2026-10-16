@@ -364,10 +364,9 @@ func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (
 // backfills Service.Status.LoadBalancer.Ingress once the PIP is created, since it would otherwise
 // stay empty.
 //
-// The Service is resolved by UID only, so a Service that changed type or started terminating while
-// the PIP was provisioning still gets stamped: the ingress IP is written onto a Service that is no
-// longer a LoadBalancer, and nothing clears it until that Service is edited again. The startup
-// recovery path re-applies it for the same reason.
+// The Service is resolved by UID only. If it changed type while the PIP was provisioning, the
+// apiserver rejects the write (ingress is only allowed on LoadBalancer Services) and the failed
+// operation moves on to the pending delete; a terminating LoadBalancer Service is still stamped.
 func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serviceUID string, ip string) error {
 	if ip == "" {
 		return fmt.Errorf("updateServiceLoadBalancerStatus: ip is empty")
