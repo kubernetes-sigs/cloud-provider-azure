@@ -41,6 +41,7 @@ import (
 	"k8s.io/klog/v2"
 
 	cloudnodeconfig "sigs.k8s.io/cloud-provider-azure/cmd/cloud-node-manager/app/config"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 
 	// add the related feature gates
 	_ "k8s.io/controller-manager/pkg/features/register"
@@ -82,6 +83,10 @@ type CloudNodeManagerOptions struct {
 	WaitForRoutes bool
 
 	UseInstanceMetadata bool
+
+	// NodeIPFamilies determines which IP families are reported in a node's
+	// status.addresses and in what order. Valid entries are "ipv4" and "ipv6".
+	NodeIPFamilies []string
 
 	// WindowsService should be set to true if cloud-node-manager is running as a service on Windows.
 	// Its corresponding flag only gets registered in Windows builds
@@ -136,6 +141,7 @@ func (o *CloudNodeManagerOptions) Flags() cliflag.NamedFlagSets {
 	fs.BoolVar(&o.WaitForRoutes, "wait-routes", false, "Whether the nodes should wait for routes created on Azure route table. It should be set to true when using kubenet plugin.")
 	fs.BoolVar(&o.UseInstanceMetadata, "use-instance-metadata", true, "Should use Instance Metadata Service for fetching node information; if false will use ARM instead.")
 	fs.StringVar(&o.CloudConfigFilePath, "cloud-config", o.CloudConfigFilePath, "The path to the cloud config file to be used when using ARM to fetch node information.")
+	fs.StringSliceVar(&o.NodeIPFamilies, "node-ip-families", o.NodeIPFamilies, "Comma-separated list of IP families ('ipv4', 'ipv6') to report in a node's status.addresses, in order. The first entry becomes the node's primary address and therefore the family of its status.hostIP, which must agree with the primary family of the cluster's service CIDR. Defaults to IPv4 first.")
 	fs.BoolVar(&o.EnableDeprecatedBetaTopologyLabels, "enable-deprecated-beta-topology-labels", o.EnableDeprecatedBetaTopologyLabels, "DEPRECATED: This flag will be removed in a future release. If true, the node will apply beta topology labels.")
 	return fss
 }
@@ -197,12 +203,44 @@ func (o *CloudNodeManagerOptions) ApplyTo(c *cloudnodeconfig.Config, userAgent s
 	c.UseInstanceMetadata = o.UseInstanceMetadata
 	c.CloudConfigFilePath = o.CloudConfigFilePath
 
+	nodeIPFamilies, err := normalizeNodeIPFamilies(o.NodeIPFamilies)
+	if err != nil {
+		return err
+	}
+	c.NodeIPFamilies = nodeIPFamilies
+
 	c.WindowsService = o.WindowsService
 
 	// Allow users to choose to apply beta topology labels until they are removed by all cloud providers.
 	c.EnableDeprecatedBetaTopologyLabels = o.EnableDeprecatedBetaTopologyLabels
 
 	return nil
+}
+
+// normalizeNodeIPFamilies lowercases and validates the --node-ip-families entries.
+// An empty list is valid and leaves the cloud provider's default ordering in place.
+func normalizeNodeIPFamilies(families []string) ([]string, error) {
+	if len(families) == 0 {
+		return nil, nil
+	}
+
+	normalized := make([]string, 0, len(families))
+	seen := make(map[string]bool, len(families))
+	for _, family := range families {
+		f := strings.ToLower(strings.TrimSpace(family))
+		switch f {
+		case consts.IPVersionIPv4StringLower, consts.IPVersionIPv6StringLower:
+		default:
+			return nil, fmt.Errorf("invalid --node-ip-families entry %q: must be one of %q, %q", family, consts.IPVersionIPv4StringLower, consts.IPVersionIPv6StringLower)
+		}
+		if seen[f] {
+			return nil, fmt.Errorf("duplicate --node-ip-families entry %q", family)
+		}
+		seen[f] = true
+		normalized = append(normalized, f)
+	}
+
+	return normalized, nil
 }
 
 // resyncPeriod computes the time interval a shared informer waits before resyncing with the api server

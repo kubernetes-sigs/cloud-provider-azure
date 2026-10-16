@@ -461,6 +461,7 @@ func TestNodeAddresses(t *testing.T) {
 		ipV4Public          string
 		ipV6Public          string
 		loadBalancerSKU     string
+		nodeIPFamilies      []string
 		expectedAddress     []v1.NodeAddress
 		useInstanceMetadata bool
 		useCustomImsCache   bool
@@ -569,6 +570,41 @@ func TestNodeAddresses(t *testing.T) {
 			},
 		},
 		{
+			name:                "NodeAddresses should report the IPv6 addresses first when nodeIPFamilies is IPv6-primary",
+			nodeName:            "vm1",
+			metadataName:        "vm1",
+			vmType:              consts.VMTypeStandard,
+			ipV4:                "10.240.0.1",
+			ipV4Public:          "192.168.1.12",
+			ipV6:                "1111:11111:00:00:1111:1111:000:111",
+			ipV6Public:          "2222:22221:00:00:2222:2222:000:111",
+			loadBalancerSKU:     "basic",
+			nodeIPFamilies:      []string{"ipv6", "ipv4"},
+			useInstanceMetadata: true,
+			expectedAddress: []v1.NodeAddress{
+				{
+					Type:    v1.NodeHostName,
+					Address: "vm1",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "1111:11111:00:00:1111:1111:000:111",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "2222:22221:00:00:2222:2222:000:111",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.240.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "192.168.1.12",
+				},
+			},
+		},
+		{
 			name:                "NodeAddresses should get IP addresses from local IMDS for standard LoadBalancer if node's name is equal to metadataName",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
@@ -612,6 +648,7 @@ func TestNodeAddresses(t *testing.T) {
 		}
 		cloud.VMType = test.vmType
 		cloud.UseInstanceMetadata = test.useInstanceMetadata
+		cloud.NodeIPFamilies = test.nodeIPFamilies
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)

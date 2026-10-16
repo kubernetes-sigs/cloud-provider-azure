@@ -109,6 +109,22 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 	return az.addressGetter(ctx, name)
 }
 
+// nodeIPFamilies returns the IP families to add to node objects, in the order they
+// should appear in Node.status.addresses. The first family listed becomes the node's
+// primary address. When the cloud config does not set nodeIPFamilies, both families
+// are reported with IPv4 first, which is the historical behaviour.
+func (az *Cloud) nodeIPFamilies() []string {
+	if len(az.NodeIPFamilies) == 0 {
+		return []string{consts.IPVersionIPv4StringLower, consts.IPVersionIPv6StringLower}
+	}
+
+	families := make([]string, 0, len(az.NodeIPFamilies))
+	for _, family := range az.NodeIPFamilies {
+		families = append(families, strings.ToLower(family))
+	}
+	return families
+}
+
 func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []*NetworkInterface, nodeName string) ([]v1.NodeAddress, error) {
 	if len(netInterfaces) == 0 {
 		return nil, fmt.Errorf("no interface is found for the instance")
@@ -119,21 +135,20 @@ func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []*NetworkInterface
 	addresses := []v1.NodeAddress{
 		{Type: v1.NodeHostName, Address: nodeName},
 	}
-	if len(netInterface.IPV4.IPAddress) > 0 && len(netInterface.IPV4.IPAddress[0].PrivateIP) > 0 {
-		address := netInterface.IPV4.IPAddress[0]
-		addresses = append(addresses, v1.NodeAddress{
-			Type:    v1.NodeInternalIP,
-			Address: address.PrivateIP,
-		})
-		if len(address.PublicIP) > 0 {
-			addresses = append(addresses, v1.NodeAddress{
-				Type:    v1.NodeExternalIP,
-				Address: address.PublicIP,
-			})
+	for _, family := range az.nodeIPFamilies() {
+		var ipAddresses []IPAddress
+		switch family {
+		case consts.IPVersionIPv4StringLower:
+			ipAddresses = netInterface.IPV4.IPAddress
+		case consts.IPVersionIPv6StringLower:
+			ipAddresses = netInterface.IPV6.IPAddress
+		default:
+			continue
 		}
-	}
-	if len(netInterface.IPV6.IPAddress) > 0 && len(netInterface.IPV6.IPAddress[0].PrivateIP) > 0 {
-		address := netInterface.IPV6.IPAddress[0]
+		if len(ipAddresses) == 0 || len(ipAddresses[0].PrivateIP) == 0 {
+			continue
+		}
+		address := ipAddresses[0]
 		addresses = append(addresses, v1.NodeAddress{
 			Type:    v1.NodeInternalIP,
 			Address: address.PrivateIP,
