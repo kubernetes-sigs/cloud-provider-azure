@@ -298,6 +298,32 @@ func (c *CCMClusterClient) CrashCCMAndWaitForRecovery(ctx context.Context, recov
 	return nil
 }
 
+// GetCCMLogs returns the log of a container in the named CCM pod, with every line prefixed by its
+// RFC3339Nano timestamp.
+func (c *CCMClusterClient) GetCCMLogs(ctx context.Context, podName, container string) (string, error) {
+	raw, err := c.ClientSet.CoreV1().Pods(c.Namespace).GetLogs(podName, &v1.PodLogOptions{
+		Container:  container,
+		Timestamps: true,
+	}).DoRaw(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get logs of CCM pod %s: %w", podName, err)
+	}
+	return string(raw), nil
+}
+
+// ccmLogLineTime returns the timestamp of the first line of a GetCCMLogs result that contains marker.
+func ccmLogLineTime(logs, marker string) (time.Time, bool) {
+	for line := range strings.Lines(logs) {
+		if !strings.Contains(line, marker) {
+			continue
+		}
+		timestamp, _, _ := strings.Cut(line, " ")
+		t, err := time.Parse(time.RFC3339Nano, timestamp)
+		return t, err == nil
+	}
+	return time.Time{}, false
+}
+
 // GetCCMRecoveryTimeout returns the configured CCM recovery timeout
 func GetCCMRecoveryTimeout() time.Duration {
 	// Could add environment variable override here if needed
