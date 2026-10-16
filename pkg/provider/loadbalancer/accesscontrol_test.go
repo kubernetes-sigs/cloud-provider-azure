@@ -1529,6 +1529,82 @@ func TestAccessControl_RetainSecurityGroup(t *testing.T) {
 	})
 }
 
+func TestAddOtherServiceRulePortsToRetain(t *testing.T) {
+	fx := fixture.NewFixture()
+	ipv4 := []netip.Addr{netip.MustParseAddr("203.0.113.5")}
+	ipv6 := []netip.Addr{netip.MustParseAddr("2001:db8::5")}
+	destinations := append(append([]netip.Addr{}, ipv4...), ipv6...)
+	for _, tt := range []struct {
+		name    string
+		service *fixture.KubernetesServiceFixture
+	}{
+		{
+			name:    "default Internet access",
+			service: fx.Kubernetes().Service(),
+		},
+		{
+			name:    "internal Service without source ranges",
+			service: fx.Kubernetes().Service().WithInternalEnabled(),
+		},
+		{
+			name: "aggregated source ranges",
+			service: fx.Kubernetes().Service().WithLoadBalancerSourceRanges(
+				"198.51.100.0/25", "198.51.100.128/25", "2001:db8:1::/64"),
+		},
+		{
+			name: "service tags and allowed ranges",
+			service: fx.Kubernetes().Service().WithAllowedServiceTags("AzureCloud").
+				WithAllowedIPRanges("198.51.100.0/24", "2001:db8:1::/64"),
+		},
+		{
+			name:    "invalid ranges do not become Internet access",
+			service: fx.Kubernetes().Service().WithAllowedIPRanges("invalid-range"),
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := tt.service.WithIPFamilies(v1.IPv4Protocol, v1.IPv6Protocol).Build()
+			retainedPorts := make(securitygroup.RetainedRulePorts)
+			assert.NoError(t, AddOtherServiceRulePortsToRetain(log.Noop(), &svc, destinations, retainedPorts))
+			accessControl, err := NewAccessControl(log.Noop(), &svc, fx.Azure().SecurityGroup().Build())
+			assert.NoError(t, err)
+			assert.NoError(t, accessControl.PatchSecurityGroup(ipv4, ipv6))
+			securityGroup, _, err := accessControl.SecurityGroup()
+			assert.NoError(t, err)
+			expectedPorts := make(securitygroup.RetainedRulePorts)
+			for _, rule := range securityGroup.Properties.SecurityRules {
+				if *rule.Properties.Access != armnetwork.SecurityRuleAccessAllow {
+					continue
+				}
+				addresses, err := iputil.ParseAddresses(securitygroup.ListDestinationPrefixes(rule))
+				assert.NoError(t, err)
+				ports, err := securitygroup.ListDestinationPortRanges(rule)
+				assert.NoError(t, err)
+				expectedPorts.Add(*rule.Properties.Protocol, securitygroup.ListSourcePrefixes(rule), addresses, ports)
+			}
+			assert.Equal(t, expectedPorts, retainedPorts)
+		})
+	}
+
+	t.Run("empty service-tag entries do not retain rules for other source prefixes", func(t *testing.T) {
+		svc := fx.Kubernetes().Service().WithAllowedServiceTags("AzureCloud", "").Build()
+		retainedPorts := make(securitygroup.RetainedRulePorts)
+		assert.NoError(t, AddOtherServiceRulePortsToRetain(log.Noop(), &svc, ipv4, retainedPorts))
+		assert.True(t, retainedPorts.Retains(armnetwork.SecurityRuleProtocolTCP, []string{"AzureCloud"}, ipv4[0], 80))
+		assert.True(t, retainedPorts.Retains(armnetwork.SecurityRuleProtocolTCP, []string{""}, ipv4[0], 80))
+		assert.False(t, retainedPorts.Retains(armnetwork.SecurityRuleProtocolTCP, []string{"Internet"}, ipv4[0], 80))
+	})
+
+	t.Run("conflicting peer ranges retain existing access only at its known destinations and ports", func(t *testing.T) {
+		svc := fx.Kubernetes().Service().WithLoadBalancerSourceRanges("198.51.100.0/24").
+			WithAllowedIPRanges("192.0.2.0/24").Build()
+		retainedPorts := make(securitygroup.RetainedRulePorts)
+		assert.NoError(t, AddOtherServiceRulePortsToRetain(log.Noop(), &svc, ipv4, retainedPorts))
+		assert.True(t, retainedPorts.Retains(armnetwork.SecurityRuleProtocolTCP, []string{"Internet"}, ipv4[0], 80))
+		assert.False(t, retainedPorts.Retains(armnetwork.SecurityRuleProtocolTCP, []string{"Internet"}, ipv4[0], 81))
+		assert.False(t, retainedPorts.Retains(armnetwork.SecurityRuleProtocolTCP, []string{"Internet"}, ipv6[0], 80))
+	})
+}
+
 func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 
 	var (
@@ -1544,7 +1620,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		)
 		assert.NoError(t, err)
 
-		assert.NoError(t, ac.CleanSecurityGroup(fx.RandomIPv4Addresses(2), fx.RandomIPv6Addresses(2), make(map[armnetwork.SecurityRuleProtocol][]int32)))
+		assert.NoError(t, ac.CleanSecurityGroup(fx.RandomIPv4Addresses(2), fx.RandomIPv6Addresses(2), nil))
 		_, updated, err := ac.SecurityGroup()
 		assert.NoError(t, err)
 		assert.False(t, updated)
@@ -1591,7 +1667,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		)
 		assert.NoError(t, err)
 
-		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, make(map[armnetwork.SecurityRuleProtocol][]int32)))
+		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, nil))
 		_, updated, err := ac.SecurityGroup()
 		assert.NoError(t, err)
 		assert.False(t, updated)
@@ -1651,7 +1727,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		)
 		assert.NoError(t, err)
 
-		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, make(map[armnetwork.SecurityRuleProtocol][]int32)))
+		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, nil))
 		outputSG, updated, err := ac.SecurityGroup()
 		assert.NoError(t, err)
 		assert.True(t, updated)
@@ -1766,7 +1842,7 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		)
 		assert.NoError(t, err)
 
-		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, make(map[armnetwork.SecurityRuleProtocol][]int32)))
+		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, nil))
 		outputSG, updated, err := ac.SecurityGroup()
 		assert.NoError(t, err)
 
@@ -1855,9 +1931,9 @@ func TestAccessControl_CleanSecurityGroup(t *testing.T) {
 		)
 		assert.NoError(t, err)
 
-		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, map[armnetwork.SecurityRuleProtocol][]int32{
-			armnetwork.SecurityRuleProtocolUDP: {56, 53},
-		}))
+		retainedPorts := make(securitygroup.RetainedRulePorts)
+		retainedPorts.Add(armnetwork.SecurityRuleProtocolUDP, []string{"src_baz", "src_quo"}, dstIPv4Addresses, []int32{56, 53})
+		assert.NoError(t, ac.CleanSecurityGroup(dstIPv4Addresses, nil, retainedPorts))
 		outputSG, updated, err := ac.SecurityGroup()
 		assert.NoError(t, err)
 		assert.True(t, updated)

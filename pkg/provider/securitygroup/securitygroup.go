@@ -23,6 +23,7 @@ import (
 	"net/netip"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
@@ -57,6 +58,54 @@ var (
 	ErrSecurityRuleDestinationAddressesNotFromSameIPFamily = fmt.Errorf("security rule destination addresses must be from the same IP family")
 	ErrSecurityRuleSourceAndDestinationNotFromSameIPFamily = fmt.Errorf("security rule source addresses and destination addresses must be from the same IP family")
 )
+
+type ruleSourceKey struct {
+	protocol             armnetwork.SecurityRuleProtocol
+	sourcePrefixes       string
+	ignoreSourcePrefixes bool
+}
+
+// RetainedRulePorts maps (protocol, source prefixes, ignoreSourcePrefixes) to
+// destination IPs, then ports. A true value means the IP and port should be kept.
+type RetainedRulePorts map[ruleSourceKey]map[netip.Addr]map[int32]bool
+
+// Add records ports to keep for the given protocol, source prefixes, and destination IPs.
+func (mapping RetainedRulePorts) Add(protocol armnetwork.SecurityRuleProtocol, sources []string, destinations []netip.Addr, ports []int32) {
+	key := ruleSourceKey{protocol: protocol, sourcePrefixes: strings.Join(NormalizeSecurityRuleAddressPrefixes(sources), ",")}
+	mapping.add(key, destinations, ports)
+}
+
+// AddIgnoringSourcePrefixes records ports to keep for the protocol and destination IPs,
+// regardless of the source prefixes on existing rules.
+// Used to retain existing rules when another Service has conflicting source range settings.
+func (mapping RetainedRulePorts) AddIgnoringSourcePrefixes(protocol armnetwork.SecurityRuleProtocol, destinations []netip.Addr, ports []int32) {
+	key := ruleSourceKey{protocol: protocol, ignoreSourcePrefixes: true}
+	mapping.add(key, destinations, ports)
+}
+
+func (mapping RetainedRulePorts) add(key ruleSourceKey, destinations []netip.Addr, ports []int32) {
+	if mapping[key] == nil {
+		mapping[key] = make(map[netip.Addr]map[int32]bool)
+	}
+	for _, destination := range destinations {
+		if mapping[key][destination] == nil {
+			mapping[key][destination] = make(map[int32]bool)
+		}
+		for _, port := range ports {
+			mapping[key][destination][port] = true
+		}
+	}
+}
+
+// Retains reports whether to keep the destination IP and port for the given protocol
+// and source prefixes.
+func (mapping RetainedRulePorts) Retains(protocol armnetwork.SecurityRuleProtocol, sources []string, destination netip.Addr, port int32) bool {
+	key := ruleSourceKey{protocol: protocol, sourcePrefixes: strings.Join(NormalizeSecurityRuleAddressPrefixes(sources), ",")}
+	if mapping[key][destination][port] {
+		return true
+	}
+	return mapping[ruleSourceKey{protocol: protocol, ignoreSourcePrefixes: true}][destination][port]
+}
 
 // RuleHelper manages security rules within a security group.
 type RuleHelper struct {
@@ -293,28 +342,62 @@ func (helper *RuleHelper) AddRuleForDenyAll(dstAddresses []netip.Addr) error {
 	return nil
 }
 
-// RemoveDestinationFromRules removes the given destination addresses from rules that match the given protocol and ports is in the retainDstPorts list.
+type splitAllowRule struct {
+	ipFamily            iputil.Family
+	sourcePrefixes      []string
+	destinationPrefixes []string
+	destinationPorts    []int32
+}
+
+// RemoveDestinationFromRules removes the given destination addresses from rules matching the given protocol.
+// Destination ports matched by retainDstPorts are kept in allow rules.
 // It may add a new rule if the original rule needs to be split.
 func (helper *RuleHelper) RemoveDestinationFromRules(
 	protocol armnetwork.SecurityRuleProtocol,
 	dstPrefixes []string,
-	retainDstPorts []int32,
+	retainDstPorts RetainedRulePorts,
 ) error {
 	logger := helper.logger.WithName("RemoveDestinationFromRules").WithValues("protocol", protocol, "num-dst-prefixes", len(dstPrefixes))
 	logger.V(10).Info("Cleaning destination from SecurityGroup")
 
-	for _, rule := range helper.rules {
+	splitRulesByName := make(map[string]*splitAllowRule)
+	for name, rule := range helper.rules {
 		if !IsManagedSecurityRule(rule) {
-			logger.V(4).Info("Skip rule with not-managed priority", "rule-name", *rule.Name)
+			logger.V(4).Info("Skip rule with not-managed priority", "rule-name", name)
 			continue
 		}
 
 		if *rule.Properties.Protocol != protocol {
 			continue
 		}
+		splitRules, err := helper.removeDestinationFromRule(rule, dstPrefixes, retainDstPorts)
+		if err != nil {
+			logger.Error(err, "Failed to remove destination from rule", "rule-name", name)
+			return err
+		}
+		for _, splitRule := range splitRules {
+			name := GenerateAllowSecurityRuleName(protocol, splitRule.ipFamily, splitRule.sourcePrefixes, splitRule.destinationPorts)
+			if splitRulesByName[name] == nil {
+				splitRulesByName[name] = &splitAllowRule{
+					ipFamily:         splitRule.ipFamily,
+					sourcePrefixes:   splitRule.sourcePrefixes,
+					destinationPorts: splitRule.destinationPorts,
+				}
+			}
+			splitRulesByName[name].destinationPrefixes = append(splitRulesByName[name].destinationPrefixes, splitRule.destinationPrefixes...)
+		}
+	}
 
-		if err := helper.removeDestinationFromRule(rule, dstPrefixes, retainDstPorts); err != nil {
-			logger.Error(err, "Failed to remove destination from rule", "rule-name", *rule.Name)
+	splitRuleNames := make([]string, 0, len(splitRulesByName))
+	for name := range splitRulesByName {
+		splitRuleNames = append(splitRuleNames, name)
+	}
+	sort.Strings(splitRuleNames)
+	// Add split rules after cleanup so priorities from deleted rules can be reused.
+	for _, name := range splitRuleNames {
+		splitRule := splitRulesByName[name]
+		if err := helper.addAllowRule(protocol, splitRule.ipFamily, splitRule.sourcePrefixes, splitRule.destinationPrefixes, splitRule.destinationPorts); err != nil {
+			logger.Error(err, "Failed to remove destination from rule", "rule-name", name)
 			return err
 		}
 	}
@@ -355,23 +438,30 @@ func (helper *RuleHelper) RetainDestinationFromRules(dstPrefixes []string) error
 	return nil
 }
 
-func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRule, prefixes []string, retainDstPorts []int32) error {
+// removeDestinationFromRule removes the given destination prefixes from a rule,
+// keeping destination ports matched by retainDstPorts in allow rules.
+// It returns split allow rules for destinations that retain only some original ports.
+func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRule, prefixes []string, retainDstPorts RetainedRulePorts) ([]splitAllowRule, error) {
 	logger := helper.logger.WithName("removeDestinationFromRule").WithValues("security-rule-name", rule.Name)
 
 	var (
 		prefixIndex     = fnutil.IndexSet(prefixes) // Used to check whether the prefix should be removed.
 		currentPrefixes = ListDestinationPrefixes(rule)
 
-		expectedPrefixes = prefixIndex.SubtractedBy(currentPrefixes)      // The prefixes to keep.
-		targetPrefixes   = fnutil.Intersection(currentPrefixes, prefixes) // The prefixes to remove.
+		expectedPrefixes = prefixIndex.SubtractedBy(currentPrefixes) // The prefixes to keep.
+		targetPrefixes   = prefixIndex.Intersection(currentPrefixes) // The prefixes to check for removal.
 	)
 
+	if len(targetPrefixes) == 0 {
+		return nil, nil
+	}
+
 	// Clean DenyAll rule
-	if *rule.Properties.Access == armnetwork.SecurityRuleAccessDeny && len(retainDstPorts) == 0 {
+	if *rule.Properties.Access == armnetwork.SecurityRuleAccessDeny {
 		// Update the prefixes
 		SetDestinationPrefixes(rule, expectedPrefixes)
 
-		return nil
+		return nil, nil
 	}
 
 	// Clean Allow rule
@@ -380,32 +470,54 @@ func (helper *RuleHelper) removeDestinationFromRule(rule *armnetwork.SecurityRul
 		// Skip the rule with invalid destination port ranges.
 		// NOTE: cloud-provider would not create allow rules with `*` or `4000-5000` as destination port ranges.
 		logger.Info("Skip because it contains `*` or port-ranges as destination port ranges.")
-		return nil
+		return nil, nil
 	}
 	var (
-		expectedPorts = fnutil.Intersection(currentPorts, retainDstPorts) // The ports to keep.
+		sourcePrefixes = ListSourcePrefixes(rule)
+		splitRules     []splitAllowRule
 	)
 
-	if len(targetPrefixes) == 0 || len(currentPorts) == len(expectedPorts) {
-		return nil
+	for _, prefix := range targetPrefixes {
+		addr, err := netip.ParseAddr(prefix)
+		if err != nil {
+			logger.Error(err, "Failed to parse dst IP address", "dst-ip", prefix)
+			return nil, fmt.Errorf("parse prefix as IP address %q: %w", prefix, err)
+		}
+		var expectedPorts []int32 // The ports to keep for this destination.
+		for _, port := range currentPorts {
+			if retainDstPorts.Retains(*rule.Properties.Protocol, sourcePrefixes, addr, port) {
+				expectedPorts = append(expectedPorts, port)
+			}
+		}
+		if len(currentPorts) == len(expectedPorts) {
+			// Keep the destination on the original rule to preserve its name and priority.
+			expectedPrefixes = append(expectedPrefixes, prefix)
+			continue
+		}
+		if len(expectedPorts) == 0 {
+			// No ports are retained for this destination.
+			continue
+		}
+		splitRules = append(splitRules, splitAllowRule{
+			ipFamily:            iputil.FamilyOfAddr(addr),
+			sourcePrefixes:      sourcePrefixes,
+			destinationPrefixes: []string{prefix},
+			destinationPorts:    expectedPorts,
+		})
+	}
+
+	if len(expectedPrefixes) == len(currentPrefixes) {
+		// Every destination remains on the original rule, so no update is needed.
+		return nil, nil
 	}
 
 	// Update the prefixes
 	SetDestinationPrefixes(rule, expectedPrefixes)
-
-	if len(expectedPorts) == 0 {
-		// No additional ports are expected, no more actions are needed.
-		return nil
+	if len(expectedPrefixes) == 0 && len(rule.Properties.DestinationApplicationSecurityGroups) == 0 {
+		delete(helper.rules, *rule.Name)
+		delete(helper.priorities, *rule.Properties.Priority)
 	}
-
-	// There are additional ports are expected, need to create a new rule for them.
-	addr, err := netip.ParseAddr(prefixes[0])
-	if err != nil {
-		logger.Error(err, "Failed to parse dst IP address", "dst-ip", prefixes[0])
-		return fmt.Errorf("parse prefix as IP address %q: %w", prefixes[0], err)
-	}
-	ipFamily := iputil.FamilyOfAddr(addr)
-	return helper.addAllowRule(*rule.Properties.Protocol, ipFamily, ListSourcePrefixes(rule), prefixes, expectedPorts)
+	return splitRules, nil
 }
 
 // SecurityGroup returns the underlying SecurityGroup object and a bool indicating whether any changes were made to the RuleHelper.
