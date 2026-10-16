@@ -157,10 +157,10 @@ func TestPreserveExternalIPsReturnsNewSlice(t *testing.T) {
 
 func TestErrLoadBalancerMetadataUnavailable(t *testing.T) {
 	cause := errors.New("connection reset")
-	err := fmt.Errorf("failed to get loadbalancer metadata: %w: %w", ErrLoadBalancerMetadataUnavailable, cause)
+	err := fmt.Errorf("%w: %w", ErrLoadBalancerMetadataUnavailable, cause)
 
 	assert.Equal(t, "load balancer metadata unavailable", ErrLoadBalancerMetadataUnavailable.Error())
-	assert.Equal(t, "failed to get loadbalancer metadata: load balancer metadata unavailable: connection reset", err.Error())
+	assert.Equal(t, "load balancer metadata unavailable: connection reset", err.Error())
 	assert.True(t, errors.Is(err, ErrLoadBalancerMetadataUnavailable))
 	assert.True(t, errors.Is(err, cause))
 	assert.False(t, errors.Is(cause, ErrLoadBalancerMetadataUnavailable))
