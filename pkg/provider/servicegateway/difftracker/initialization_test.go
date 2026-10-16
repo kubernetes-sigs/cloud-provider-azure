@@ -1721,3 +1721,207 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 	v4Only.mu.Unlock()
 	assert.Equal(t, []string{"IPv4"}, v4Families)
 }
+
+type initClients struct {
+	factory       *mock_azclient.MockClientFactory
+	provisionings atomic.Int32
+}
+
+// newInitClients returns a ServiceGateway holding only the RP-owned default NAT gateway, with
+// lbs in the resource group, counting LB/PIP creations.
+func newInitClients(t *testing.T, lbs []*armnetwork.LoadBalancer, onLBDelete func()) *initClients {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+
+	c := &initClients{factory: mock_azclient.NewMockClientFactory(ctrl)}
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+
+	c.factory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	c.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	c.factory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	c.factory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
+		Name:       ptr.To(DefaultOutboundNATGatewayName),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound)},
+	}}, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(lbs, nil).AnyTimes()
+	mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, lb armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+			c.provisionings.Add(1)
+			return &lb, nil
+		}).AnyTimes()
+	mockLB.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string) error {
+			if onLBDelete != nil {
+				onLBDelete()
+			}
+			return nil
+		}).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+			c.provisionings.Add(1)
+			return &pip, nil
+		}).AnyTimes()
+	mockPIP.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	return c
+}
+
+func internalLBService() *v1.Service {
+	return &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "internal",
+			Namespace:   "default",
+			UID:         types.UID("11111111-1111-1111-1111-111111111111"),
+			Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue},
+		},
+		Spec: v1.ServiceSpec{
+			Type:  v1.ServiceTypeLoadBalancer,
+			Ports: []v1.ServicePort{{Name: "http", Protocol: v1.ProtocolTCP, Port: 80}},
+		},
+	}
+}
+
+func withInitialSyncProgressInterval(t *testing.T, d time.Duration) {
+	t.Helper()
+	prev := initialSyncProgressInterval.Load()
+	initialSyncProgressInterval.Store(int64(d))
+	t.Cleanup(func() { initialSyncProgressInterval.Store(prev) })
+}
+
+type initResult struct {
+	dt  *DiffTracker
+	err error
+}
+
+func initializeAsync(ctx context.Context, clients *initClients, services ...*v1.Service) <-chan initResult {
+	objects := make([]runtime.Object, 0, len(services))
+	for _, svc := range services {
+		objects = append(objects, svc)
+	}
+	result := make(chan initResult, 1)
+	go func() {
+		dt, err := InitializeFromCluster(ctx, testConfig(), clients.factory, fake.NewSimpleClientset(objects...))
+		result <- initResult{dt: dt, err: err}
+	}()
+	return result
+}
+
+// TestInitializeFromCluster_CompletesWhenEveryAdditionIsDeclinedByAdmission pins that a declined
+// addition, which is never dispatched, does not block startup. The periodic re-check is disabled.
+func TestInitializeFromCluster_CompletesWhenEveryAdditionIsDeclinedByAdmission(t *testing.T) {
+	withInitialSyncProgressInterval(t, time.Hour)
+	clients := newInitClients(t, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	select {
+	case r := <-initializeAsync(ctx, clients, internalLBService()):
+		assert.NoError(t, r.err)
+		if assert.NotNil(t, r.dt) {
+			assert.True(t, r.dt.InitialSyncDone)
+			r.dt.mu.Lock()
+			assert.True(t, r.dt.K8sResources.Services.Has("11111111-1111-1111-1111-111111111111"))
+			assert.Empty(t, r.dt.pendingServiceOps)
+			r.dt.mu.Unlock()
+		}
+		assert.Zero(t, clients.provisionings.Load())
+	case <-time.After(10 * time.Second):
+		t.Fatal("InitializeFromCluster did not complete")
+	}
+}
+
+// TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined pins that the
+// completion check runs after orphan deletions are scheduled.
+func TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined(t *testing.T) {
+	withInitialSyncProgressInterval(t, time.Hour)
+	const orphan = "22222222-2222-2222-2222-222222222222"
+
+	deleting := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	clients := newInitClients(t, []*armnetwork.LoadBalancer{{Name: ptr.To(orphan)}}, func() {
+		once.Do(func() { close(deleting) })
+		<-release
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result := initializeAsync(ctx, clients, internalLBService())
+
+	select {
+	case <-deleting:
+	case r := <-result:
+		close(release)
+		t.Fatalf("InitializeFromCluster returned (err=%v) before the orphan deletion started", r.err)
+	case <-time.After(10 * time.Second):
+		close(release)
+		t.Fatal("the orphaned load balancer was never deleted")
+	}
+
+	select {
+	case r := <-result:
+		close(release)
+		t.Fatalf("InitializeFromCluster returned (err=%v) while an orphan deletion was in flight", r.err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case r := <-result:
+		assert.NoError(t, r.err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("InitializeFromCluster did not complete after the orphan deletion finished")
+	}
+}
+
+func initializingDiffTracker() *DiffTracker {
+	dt := newTestDiffTracker()
+	dt.initCompletionChecker = make(chan struct{})
+	atomic.StoreInt32(&dt.isInitializing, 1)
+	return dt
+}
+
+func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *testing.T) {
+	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+	dt := initializingDiffTracker()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logr.Discard()))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
+}
+
+func TestWaitForInitialSyncReportingProgress_TickDoesNotCompleteOutstandingWork(t *testing.T) {
+	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+	dt := initializingDiffTracker()
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{State: StateCreationInProgress}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	assert.Error(t, waitForInitialSyncReportingProgress(ctx, dt, logr.Discard()))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&dt.isInitializing))
+}
+
+func TestRecheckInitializationComplete_ReportsOnlyTheCompletionItCaused(t *testing.T) {
+	dt := initializingDiffTracker()
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{State: StateCreationInProgress}
+	assert.False(t, dt.recheckInitializationComplete())
+
+	delete(dt.pendingServiceOps, "svc")
+	assert.True(t, dt.recheckInitializationComplete())
+	assert.False(t, dt.recheckInitializationComplete())
+
+	assert.False(t, newTestDiffTracker().recheckInitializationComplete())
+}
