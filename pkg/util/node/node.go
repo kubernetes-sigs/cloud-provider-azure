@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -64,14 +65,7 @@ func PreserveExternalIPs(recorded, fresh []v1.NodeAddress) []v1.NodeAddress {
 		if addr.Type != v1.NodeExternalIP {
 			continue
 		}
-		found := false
-		for _, existing := range result {
-			if existing.Type == addr.Type && existing.Address == addr.Address {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(result, addr) {
 			result = append(result, addr)
 		}
 	}
