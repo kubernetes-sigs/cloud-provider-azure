@@ -175,6 +175,10 @@ type Config struct {
 
 	// ServiceGatewayEnabled indicates whether the service gateway is enabled for the cluster.
 	ServiceGatewayEnabled bool `json:"serviceGatewayEnabled,omitempty" yaml:"serviceGatewayEnabled,omitempty"`
+	// ServiceGatewayLocationsUpdateIntervalInMilliseconds is the minimum time between the end of one
+	// ServiceGateway address-location sync run and the start of the next. Changes that arrive in
+	// between are batched into the next run. Default is 400 milliseconds.
+	ServiceGatewayLocationsUpdateIntervalInMilliseconds int `json:"serviceGatewayLocationsUpdateIntervalInMilliseconds,omitempty" yaml:"serviceGatewayLocationsUpdateIntervalInMilliseconds,omitempty"`
 
 	// NodeInstanceNotFoundGracePeriodInSeconds is the period, measured from a node's
 	// creation timestamp, during which a node whose backing VM/VMSS instance is not yet
