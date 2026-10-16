@@ -1530,17 +1530,17 @@ const (
 )
 
 var (
-	lbHostname          = v1.NodeAddress{Type: v1.NodeHostName, Address: lbTestNodeName}
-	lbOldInternalV4     = v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.4"}
-	lbNewInternalV4     = v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.5"}
-	lbOldInternalV6     = v1.NodeAddress{Type: v1.NodeInternalIP, Address: "fd00::4"}
-	lbOldExternalV4     = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "20.0.0.1"}
-	lbNewExternalV4     = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "20.0.0.9"}
-	lbOldExternalV6     = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "2001:db8::1"}
-	errLBTransientCause = errors.New("failure of getting loadbalancer metadata, status code 503")
-	errLBMarked         = fmt.Errorf("failed to get loadbalancer metadata: %w: %w", utilnode.ErrLoadBalancerMetadataUnavailable, errLBTransientCause)
-	errLBUnrelated      = errors.New("unrelated failure")
-	lbMarkedErrMessage  = "failed to get loadbalancer metadata: load balancer metadata unavailable: failure of getting loadbalancer metadata, status code 503"
+	lbHostname               = v1.NodeAddress{Type: v1.NodeHostName, Address: lbTestNodeName}
+	lbOldInternalV4          = v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.4"}
+	lbNewInternalV4          = v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.5"}
+	lbOldInternalV6          = v1.NodeAddress{Type: v1.NodeInternalIP, Address: "fd00::4"}
+	lbOldExternalV4          = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "20.0.0.1"}
+	lbNewExternalV4          = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "20.0.0.9"}
+	lbOldExternalV6          = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "2001:db8::1"}
+	errLBTransientCause      = errors.New("failure of getting loadbalancer metadata, status code 503")
+	errLBMetadataUnavailable = fmt.Errorf("%w: %w", utilnode.ErrLoadBalancerMetadataUnavailable, errLBTransientCause)
+	errLBUnrelated           = errors.New("unrelated failure")
+	lbMetadataErrMessage     = "load balancer metadata unavailable: failure of getting loadbalancer metadata, status code 503"
 )
 
 func newLBTestNode(providerID string, tainted bool, annotations map[string]string, addresses []v1.NodeAddress) *v1.Node {
@@ -1610,20 +1610,20 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 		expectedInitialized bool
 	}{
 		{
-			desc:                "marked partial result should initialize a new node and publish fresh private addresses",
+			desc:                "partial result with a load balancer metadata error should initialize a new node and publish fresh private addresses",
 			initialAddresses:    []v1.NodeAddress{lbHostname, lbOldInternalV4},
 			cloudAddresses:      []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:            errLBMarked,
+			cloudErr:            errLBMetadataUnavailable,
 			expectedLookups:     2,
 			expectedAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
 			expectedInitialized: true,
 		},
 		{
-			desc:                "marked partial result should keep recorded ExternalIP after the post-taint lookup",
+			desc:                "partial result with a load balancer metadata error should keep recorded ExternalIP after the post-taint lookup",
 			annotations:         map[string]string{providedIP: "10.0.0.5"},
 			initialAddresses:    []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudAddresses:      []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:            errLBMarked,
+			cloudErr:            errLBMetadataUnavailable,
 			expectedLookups:     2,
 			expectedAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4, lbOldExternalV4},
 			expectedInitialized: true,
@@ -1637,29 +1637,29 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			expectedInitialized: true,
 		},
 		{
-			desc:             "marked partial result with a stale provided private IP should not remove the taint",
+			desc:             "partial result with a load balancer metadata error and a stale provided private IP should not remove the taint",
 			annotations:      map[string]string{providedIP: "10.0.0.4"},
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:         errLBMarked,
+			cloudErr:         errLBMetadataUnavailable,
 			expectedErr:      "failed to initialize node at cloudprovider node0: failed to find kubelet node IP from cloud provider",
 			expectedLookups:  1,
 		},
 		{
-			desc:             "marked partial result with a stale provided public IP should not self-validate from recorded status",
+			desc:             "partial result with a load balancer metadata error and a stale provided public IP should not self-validate from recorded status",
 			annotations:      map[string]string{providedIP: "20.0.0.1"},
 			initialAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4, lbOldExternalV4},
 			cloudAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:         errLBMarked,
+			cloudErr:         errLBMetadataUnavailable,
 			expectedErr:      "failed to initialize node at cloudprovider node0: failed to find kubelet node IP from cloud provider",
 			expectedLookups:  1,
 		},
 		{
-			desc:             "marked partial result with a stale provided IPv6 of a missing family should not remove the taint",
+			desc:             "partial result with a load balancer metadata error and a stale provided IPv6 of a missing family should not remove the taint",
 			annotations:      map[string]string{providedIP: "10.0.0.5,fd00::4"},
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldInternalV6},
 			cloudAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:         errLBMarked,
+			cloudErr:         errLBMetadataUnavailable,
 			expectedErr:      "failed to initialize node at cloudprovider node0: failed to find kubelet node IP from cloud provider",
 			expectedLookups:  1,
 		},
@@ -1673,10 +1673,10 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			expectedLookups:  1,
 		},
 		{
-			desc:             "marked error without addresses should fail initialization",
+			desc:             "load balancer metadata error without addresses should fail initialization",
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4},
-			cloudErr:         errLBMarked,
-			expectedErr:      "failed to initialize node at cloudprovider node0: error fetching node by name node0: " + lbMarkedErrMessage,
+			cloudErr:         errLBMetadataUnavailable,
+			expectedErr:      "failed to initialize node at cloudprovider node0: error fetching node by name node0: " + lbMetadataErrMessage,
 			expectedErrIs:    []error{utilnode.ErrLoadBalancerMetadataUnavailable, errLBTransientCause},
 			expectedLookups:  1,
 		},
@@ -1741,14 +1741,14 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			desc:              "private-only node should apply a private IP change",
 			recorded:          []v1.NodeAddress{lbHostname, lbOldInternalV4},
 			cloudAddresses:    []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:          errLBMarked,
+			cloudErr:          errLBMetadataUnavailable,
 			expectedAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4},
 		},
 		{
 			desc:              "restarted controller should apply a private IP change and keep the recorded ExternalIP",
 			recorded:          []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudAddresses:    []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:          errLBMarked,
+			cloudErr:          errLBMetadataUnavailable,
 			expectedAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4, lbOldExternalV4},
 		},
 		{
@@ -1756,7 +1756,7 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			annotations:       map[string]string{providedIP: "10.0.0.5"},
 			recorded:          []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudAddresses:    []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:          errLBMarked,
+			cloudErr:          errLBMetadataUnavailable,
 			expectedAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4, lbOldExternalV4},
 		},
 		{
@@ -1765,13 +1765,13 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			cloudAddresses: []v1.NodeAddress{
 				lbHostname, lbOldInternalV4,
 			},
-			cloudErr: errLBMarked,
+			cloudErr: errLBMetadataUnavailable,
 		},
 		{
 			desc:              "dual-stack should not rescue a missing private family but keep all recorded ExternalIPs",
 			recorded:          []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4, lbOldInternalV6, lbOldExternalV6},
 			cloudAddresses:    []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:          errLBMarked,
+			cloudErr:          errLBMetadataUnavailable,
 			expectedAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4, lbOldExternalV4, lbOldExternalV6},
 		},
 		{
@@ -1779,7 +1779,7 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			annotations:    map[string]string{providedIP: "10.0.0.4"},
 			recorded:       []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:       errLBMarked,
+			cloudErr:       errLBMetadataUnavailable,
 			expectedErr:    `not all specified Node IP [{Hostname node0} {InternalIP 10.0.0.5}] found in cloudprovider for node "node0", existing Node IPs are [] `,
 		},
 		{
@@ -1787,7 +1787,7 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			annotations:    map[string]string{providedIP: "20.0.0.1"},
 			recorded:       []v1.NodeAddress{lbHostname, lbNewInternalV4, lbOldExternalV4},
 			cloudAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:       errLBMarked,
+			cloudErr:       errLBMetadataUnavailable,
 			expectedErr:    `not all specified Node IP [{Hostname node0} {InternalIP 10.0.0.5}] found in cloudprovider for node "node0", existing Node IPs are [] `,
 		},
 		{
@@ -1795,7 +1795,7 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			annotations:    map[string]string{providedIP: "10.0.0.5,fd00::4"},
 			recorded:       []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldInternalV6},
 			cloudAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4},
-			cloudErr:       errLBMarked,
+			cloudErr:       errLBMetadataUnavailable,
 			expectedErr:    `not all specified Node IP [{Hostname node0} {InternalIP 10.0.0.5}] found in cloudprovider for node "node0", existing Node IPs are [{InternalIP 10.0.0.5}] `,
 		},
 		{
@@ -1805,7 +1805,7 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			expectedAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4, lbNewExternalV4},
 		},
 		{
-			desc:              "unmarked result without ExternalIP (healthy empty or legacy benign) should remove the recorded ExternalIP",
+			desc:              "result without an error or ExternalIP (healthy empty or benign non-transient response) should remove the recorded ExternalIP",
 			recorded:          []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudAddresses:    []v1.NodeAddress{lbHostname, lbOldInternalV4},
 			expectedAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4},
@@ -1819,10 +1819,10 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			expectedErrIs:  []error{errLBUnrelated},
 		},
 		{
-			desc:          "marked error without addresses should fail without a patch",
+			desc:          "load balancer metadata error without addresses should fail without a patch",
 			recorded:      []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
-			cloudErr:      errLBMarked,
-			expectedErr:   `getting node addresses for node "node0": error fetching node by name node0: ` + lbMarkedErrMessage,
+			cloudErr:      errLBMetadataUnavailable,
+			expectedErr:   `getting node addresses for node "node0": error fetching node by name node0: ` + lbMetadataErrMessage,
 			expectedErrIs: []error{utilnode.ErrLoadBalancerMetadataUnavailable, errLBTransientCause},
 		},
 	} {
@@ -1867,7 +1867,7 @@ func TestUpdateNodeAddressLBMetadataRecovery(t *testing.T) {
 	client := fake.NewSimpleClientset(initialNode)
 	mockNP := mocknodeprovider.NewMockNodeProvider(ctrl)
 	gomock.InOrder(
-		mockNP.EXPECT().NodeAddresses(gomock.Any(), types.NodeName(lbTestNodeName)).Return([]v1.NodeAddress{lbHostname, lbNewInternalV4}, errLBMarked),
+		mockNP.EXPECT().NodeAddresses(gomock.Any(), types.NodeName(lbTestNodeName)).Return([]v1.NodeAddress{lbHostname, lbNewInternalV4}, errLBMetadataUnavailable),
 		mockNP.EXPECT().NodeAddresses(gomock.Any(), types.NodeName(lbTestNodeName)).Return([]v1.NodeAddress{lbHostname, lbNewInternalV4, lbNewExternalV4}, nil),
 		mockNP.EXPECT().NodeAddresses(gomock.Any(), types.NodeName(lbTestNodeName)).Return([]v1.NodeAddress{lbHostname, lbNewInternalV4}, nil),
 	)
