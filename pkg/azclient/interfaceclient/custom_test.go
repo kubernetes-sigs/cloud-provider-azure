@@ -32,8 +32,7 @@ var subnet *armnetwork.Subnet
 var vnetClient *armnetwork.VirtualNetworksClient
 
 func init() {
-	additionalTestCases = func() {
-	}
+	additionalTestCases = addNICETagLiveTests
 
 	beforeAllFunc = func(ctx context.Context) {
 		subscriptionID = recorder.SubscriptionID()

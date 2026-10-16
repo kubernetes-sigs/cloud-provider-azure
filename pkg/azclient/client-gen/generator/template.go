@@ -356,10 +356,23 @@ var _ = ginkgo.Describe("{{.ClientName}}",ginkgo.Ordered, func() {
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 {{if .Etag}}
-		ginkgo.It("should return error", func(ctx context.Context) {
-			newResource.Etag = to.Ptr("invalid")
-			_, err := realClient.CreateOrUpdate(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName, *newResource)
-			gomega.Expect(err).To(gomega.HaveOccurred())
+		ginkgo.It("should send the ETag as an If-Match precondition", func(ctx context.Context) {
+			resource := *newResource
+			resource.Etag = to.Ptr("etag")
+			intercepted := errors.New("request intercepted after ETag validation")
+			options := utils.GetDefaultOption()
+			options.Retry.MaxRetries = -1
+			options.PerRetryPolicies = append(options.PerRetryPolicies, utils.FuncPolicyWrapper(
+				func(req *policy.Request) (*http.Response, error) {
+					gomega.Expect(req.Raw().Method).To(gomega.Equal(http.MethodPut))
+					gomega.Expect(req.Raw().Header.Get("If-Match")).To(gomega.Equal(*resource.Etag))
+					return nil, intercepted
+				},
+			))
+			client, err := New({{if not .OutOfSubscriptionScope}}subscriptionID, {{end}}&fake.TokenCredential{}, options)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			_, err = client.CreateOrUpdate(ctx, resourceGroupName,{{if .SubResource}}{{toLower .Resource}}Name,{{end}} resourceName, resource)
+			gomega.Expect(errors.Is(err, intercepted)).To(gomega.BeTrue())
 		})
 {{end -}}
 	})
