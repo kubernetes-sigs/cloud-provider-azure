@@ -19,6 +19,8 @@ package difftracker
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/component-base/metrics/legacyregistry"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
@@ -224,6 +227,49 @@ func TestLoadBalancerEnsureDeletedSchedulesTeardown(t *testing.T) {
 			[]ResourceState{StateDeletionPending, StateDeletionInProgress},
 			opState.State,
 			"the Service must be moved into a deleting state, not left as-is")
+	}
+}
+
+// TestLoadBalancerMetricsDoNotKeepPerServiceSeries pins that the load balancer metrics are labelled with
+// the ServiceGateway, not the Service. The shared metric vectors never delete a label value, so a
+// per-Service label kept a series for every Service name ever handled, long after it was deleted.
+func TestLoadBalancerMetricsDoNotKeepPerServiceSeries(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset())
+	tracker.config.ServiceGatewayResourceName = "metrics-sgw"
+	lb := NewLoadBalancer(nil)
+	assert.NoError(t, lb.SetTracker(tracker))
+
+	for i := range 5 {
+		svc := newInboundService(fmt.Sprintf("metrics-uid-%d", i))
+		svc.Name = fmt.Sprintf("metrics-churn-%d", i)
+		_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+		assert.NoError(t, err)
+		assert.NoError(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", svc))
+	}
+
+	families, err := legacyregistry.DefaultGatherer.Gather()
+	assert.NoError(t, err)
+	sources := map[string]map[string]bool{}
+	for _, family := range families {
+		for _, metric := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, label := range metric.GetLabel() {
+				labels[label.GetName()] = label.GetValue()
+			}
+			assert.NotContains(t, labels["source"], "metrics-churn-", "metric %s keeps a series for a Service", family.GetName())
+			if request := labels["request"]; strings.HasPrefix(request, "services_ensure_loadbalancer") {
+				if sources[request] == nil {
+					sources[request] = map[string]bool{}
+				}
+				sources[request][labels["source"]] = true
+			}
+		}
+	}
+	for _, request := range []string{"services_ensure_loadbalancer", "services_ensure_loadbalancer_deleted"} {
+		assert.True(t, sources[request]["metrics-sgw"], "%s must be recorded under the ServiceGateway name", request)
 	}
 }
 
