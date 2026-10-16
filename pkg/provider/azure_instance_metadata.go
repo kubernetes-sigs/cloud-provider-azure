@@ -137,6 +137,9 @@ func (e *imdsResponseError) Error() string {
 // non-HTTP errors such as connection resets, timeouts, and malformed responses.
 // Other non-200 responses keep the legacy non-blocking behavior, e.g. when the
 // VM is not in a standard load balancer backend pool, and are not reported.
+//
+// See https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service#errors-and-debugging
+// for the documented 410 and 500 retry guidance.
 func isTransientIMDSError(err error) bool {
 	var respErr *imdsResponseError
 	if errors.As(err, &respErr) {
@@ -212,7 +215,7 @@ func (ims *InstanceMetadataService) getMetadata(ctx context.Context, key string)
 			// is not in standard LoadBalancer backend address pool.
 			logger.V(4).Info("Warning: failed to get loadbalancer metadata", "error", err)
 			if err != nil && isTransientIMDSError(err) {
-				instanceMetadata.LBMetadataError = fmt.Errorf("failed to get loadbalancer metadata: %w: %w", utilnode.ErrLoadBalancerMetadataUnavailable, err)
+				instanceMetadata.LBMetadataError = fmt.Errorf("%w: %w", utilnode.ErrLoadBalancerMetadataUnavailable, err)
 			}
 			return instanceMetadata, nil
 		}
