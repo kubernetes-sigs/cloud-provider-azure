@@ -41,8 +41,8 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	mocknodeprovider "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager/mock"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/controller/testutil"
-	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
 )
 
 func TestEnsureNodeExistsByProviderID(t *testing.T) {
@@ -1538,7 +1538,7 @@ var (
 	lbNewExternalV4          = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "20.0.0.9"}
 	lbOldExternalV6          = v1.NodeAddress{Type: v1.NodeExternalIP, Address: "2001:db8::1"}
 	errLBTransientCause      = errors.New("failure of getting loadbalancer metadata, status code 503")
-	errLBMetadataUnavailable = fmt.Errorf("%w: %w", utilnode.ErrLoadBalancerMetadataUnavailable, errLBTransientCause)
+	errLBMetadataUnavailable = fmt.Errorf("%w: %w", providererrors.ErrLoadBalancerMetadataUnavailable, errLBTransientCause)
 	errLBUnrelated           = errors.New("unrelated failure")
 	lbMetadataErrMessage     = "load balancer metadata unavailable: failure of getting loadbalancer metadata, status code 503"
 )
@@ -1677,7 +1677,7 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4},
 			cloudErr:         errLBMetadataUnavailable,
 			expectedErr:      "failed to initialize node at cloudprovider node0: error fetching node by name node0: " + lbMetadataErrMessage,
-			expectedErrIs:    []error{utilnode.ErrLoadBalancerMetadataUnavailable, errLBTransientCause},
+			expectedErrIs:    []error{providererrors.ErrLoadBalancerMetadataUnavailable, errLBTransientCause},
 			expectedLookups:  1,
 		},
 	} {
@@ -1823,7 +1823,7 @@ func TestUpdateNodeAddressWithLBMetadataStatus(t *testing.T) {
 			recorded:      []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudErr:      errLBMetadataUnavailable,
 			expectedErr:   `getting node addresses for node "node0": error fetching node by name node0: ` + lbMetadataErrMessage,
-			expectedErrIs: []error{utilnode.ErrLoadBalancerMetadataUnavailable, errLBTransientCause},
+			expectedErrIs: []error{providererrors.ErrLoadBalancerMetadataUnavailable, errLBTransientCause},
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {

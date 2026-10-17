@@ -35,7 +35,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 )
 
 // TestFillNetInterfacePublicIPs tests if IPv6 IPs from imds load balancer are
@@ -545,7 +545,7 @@ func TestGetMetadataLoadBalancerStatus(t *testing.T) {
 						assert.True(t, strings.HasPrefix(lbErr.Error(), tc.expectedErrPrefix), lbErr.Error())
 					}
 				}
-				assert.True(t, errors.Is(lbErr, utilnode.ErrLoadBalancerMetadataUnavailable))
+				assert.True(t, errors.Is(lbErr, providererrors.ErrLoadBalancerMetadataUnavailable))
 				if tc.expectedCause != nil {
 					assert.True(t, errors.Is(lbErr, tc.expectedCause))
 				}

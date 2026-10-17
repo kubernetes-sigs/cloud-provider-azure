@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
-	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 )
 
 const (
@@ -144,7 +144,7 @@ func TestNodeProvidersNodeAddresses(t *testing.T) {
 				assert.Equal(t, tc.expectedAddresses, addresses)
 				if tc.expectedErr != "" {
 					assert.EqualError(t, err, tc.expectedErr)
-					assert.True(t, errors.Is(err, utilnode.ErrLoadBalancerMetadataUnavailable))
+					assert.True(t, errors.Is(err, providererrors.ErrLoadBalancerMetadataUnavailable))
 				} else {
 					assert.NoError(t, err)
 				}

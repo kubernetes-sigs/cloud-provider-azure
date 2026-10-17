@@ -29,7 +29,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
-	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 )
 
 // NetworkMetadata contains metadata about an instance's network
@@ -93,7 +93,7 @@ type InstanceMetadata struct {
 	Network *NetworkMetadata `json:"network,omitempty"`
 	// LBMetadataError is set when load balancer metadata could not be retrieved
 	// due to a transient failure. It wraps both
-	// utilnode.ErrLoadBalancerMetadataUnavailable and the original cause, and is
+	// providererrors.ErrLoadBalancerMetadataUnavailable and the original cause, and is
 	// created once per cache fill.
 	LBMetadataError error `json:"-"`
 }
@@ -215,7 +215,7 @@ func (ims *InstanceMetadataService) getMetadata(ctx context.Context, key string)
 			// is not in standard LoadBalancer backend address pool.
 			logger.V(4).Info("Warning: failed to get loadbalancer metadata", "error", err)
 			if err != nil && isTransientIMDSError(err) {
-				instanceMetadata.LBMetadataError = fmt.Errorf("%w: %w", utilnode.ErrLoadBalancerMetadataUnavailable, err)
+				instanceMetadata.LBMetadataError = fmt.Errorf("%w: %w", providererrors.ErrLoadBalancerMetadataUnavailable, err)
 			}
 			return instanceMetadata, nil
 		}
