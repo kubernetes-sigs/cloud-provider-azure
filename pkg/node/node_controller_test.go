@@ -20,9 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,7 +33,7 @@ import (
 	cloudproviderapi "k8s.io/cloud-provider/api"
 	"k8s.io/utils/ptr"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil/imdstest"
 	"sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
@@ -93,6 +90,26 @@ type composedStage struct {
 	expectedLB        int32
 }
 
+// imdsHandlers returns the scripted instance and load balancer metadata handlers
+// for the stage. The handlers capture a copy of the stage.
+func (stage composedStage) imdsHandlers() (instance, lb http.HandlerFunc) {
+	instance = func(w http.ResponseWriter, _ *http.Request) {
+		if stage.instanceStatus != 0 {
+			w.WriteHeader(stage.instanceStatus)
+			return
+		}
+		_, _ = fmt.Fprint(w, composedInstanceBody(stage.privateIP))
+	}
+	lb = func(w http.ResponseWriter, _ *http.Request) {
+		if stage.lbStatus != 0 {
+			w.WriteHeader(stage.lbStatus)
+			return
+		}
+		_, _ = fmt.Fprint(w, stage.lbBody)
+	}
+	return instance, lb
+}
+
 // composedWarmStage publishes ExternalIP A through healthy metadata.
 var composedWarmStage = composedStage{
 	desc:              "healthy loadbalancer metadata should publish the ExternalIP",
@@ -109,23 +126,16 @@ var composedWarmStage = composedStage{
 // The node informer is not started; its indexer is synced from the client explicitly.
 type composedHarness struct {
 	t          *testing.T
-	server     *httptest.Server
+	imds       *imdstest.Server
 	client     *fake.Clientset
 	indexer    cache.Indexer
 	cloud      *azureprovider.Cloud
 	controller *nodemanager.CloudNodeController
-
-	instanceCalls atomic.Int32
-	lbCalls       atomic.Int32
-
-	mu    sync.Mutex
-	stage composedStage
 }
 
 func newComposedHarness(t *testing.T, recorded []v1.NodeAddress) *composedHarness {
 	h := &composedHarness{t: t}
-	h.server = httptest.NewServer(http.HandlerFunc(h.serveIMDS))
-	t.Cleanup(h.server.Close)
+	h.imds = imdstest.NewServer(t, nil, nil, false)
 
 	node := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: composedNodeName},
@@ -142,30 +152,6 @@ func newComposedHarness(t *testing.T, recorded []v1.NodeAddress) *composedHarnes
 		&IMDSNodeProvider{azure: h.cloud}, time.Minute, false, false)
 	h.syncInformer()
 	return h
-}
-
-func (h *composedHarness) serveIMDS(w http.ResponseWriter, r *http.Request) {
-	h.mu.Lock()
-	stage := h.stage
-	h.mu.Unlock()
-	switch r.URL.Path {
-	case consts.ImdsInstanceURI:
-		h.instanceCalls.Add(1)
-		if stage.instanceStatus != 0 {
-			w.WriteHeader(stage.instanceStatus)
-			return
-		}
-		_, _ = fmt.Fprint(w, composedInstanceBody(stage.privateIP))
-	case consts.ImdsLoadBalancerURI:
-		h.lbCalls.Add(1)
-		if stage.lbStatus != 0 {
-			w.WriteHeader(stage.lbStatus)
-			return
-		}
-		_, _ = fmt.Fprint(w, stage.lbBody)
-	default:
-		w.WriteHeader(http.StatusNotFound)
-	}
 }
 
 func (h *composedHarness) getNode() *v1.Node {
@@ -207,17 +193,16 @@ func (h *composedHarness) run(stage composedStage) {
 		h.syncInformer()
 	}
 	if !stage.reuseMetadata {
-		ims, err := azureprovider.NewInstanceMetadataService(h.server.URL)
+		ims, err := azureprovider.NewInstanceMetadataService(h.imds.URL)
 		if err != nil {
 			t.Fatalf("failed to create instance metadata service: %v", err)
 		}
 		h.cloud.Metadata = ims
 	}
-	h.mu.Lock()
-	h.stage = stage
-	h.mu.Unlock()
-	h.instanceCalls.Store(0)
-	h.lbCalls.Store(0)
+	instance, lb := stage.imdsHandlers()
+	h.imds.SetInstanceHandler(instance)
+	h.imds.SetLoadBalancerHandler(lb)
+	h.imds.ResetCalls()
 	h.client.ClearActions()
 	before := h.getNode()
 
@@ -227,8 +212,8 @@ func (h *composedHarness) run(stage composedStage) {
 	after := h.getNode()
 	assert.Equal(t, stage.expectedAddresses, after.Status.Addresses, "%s: node addresses", stage.desc)
 	assert.Equal(t, stage.expectedPatches, h.statusPatches(), "%s: node status patches", stage.desc)
-	assert.Equal(t, stage.expectedInstance, h.instanceCalls.Load(), "%s: instance metadata requests", stage.desc)
-	assert.Equal(t, stage.expectedLB, h.lbCalls.Load(), "%s: loadbalancer metadata requests", stage.desc)
+	assert.Equal(t, stage.expectedInstance, h.imds.InstanceCalls(), "%s: instance metadata requests", stage.desc)
+	assert.Equal(t, stage.expectedLB, h.imds.LBCalls(), "%s: loadbalancer metadata requests", stage.desc)
 	assert.Equal(t, before.Annotations, after.Annotations, "%s: node annotations", stage.desc)
 	assert.Equal(t, before.Spec, after.Spec, "%s: node spec", stage.desc)
 }

@@ -25,13 +25,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil/imdstest"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
@@ -252,58 +251,25 @@ const (
 
 // fakeIMDS is a local IMDS server that counts instance and load balancer requests.
 type fakeIMDS struct {
-	server        *httptest.Server
-	instanceCalls atomic.Int32
-	lbCalls       atomic.Int32
-
-	mu           sync.Mutex
-	instanceBody string
-	// instanceStatus, when non-zero, is returned for instance requests instead of instanceBody.
-	instanceStatus int
-	lbHandler      http.HandlerFunc
+	*imdstest.Server
 }
 
 func newFakeIMDS(t *testing.T, instanceBody string, lbHandler http.HandlerFunc) *fakeIMDS {
-	f := &fakeIMDS{instanceBody: instanceBody, lbHandler: lbHandler}
-	f.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		f.mu.Lock()
-		body, status, handler := f.instanceBody, f.instanceStatus, f.lbHandler
-		f.mu.Unlock()
-		// Disable connection reuse so that transport-level retries cannot hide request counts.
-		w.Header().Set("Connection", "close")
-		switch r.URL.Path {
-		case consts.ImdsInstanceURI:
-			f.instanceCalls.Add(1)
-			if status != 0 {
-				w.WriteHeader(status)
-				return
-			}
-			fmt.Fprint(w, body)
-		case consts.ImdsLoadBalancerURI:
-			f.lbCalls.Add(1)
-			handler(w, r)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	t.Cleanup(f.server.Close)
-	return f
-}
-
-func (f *fakeIMDS) setLoadBalancerHandler(handler http.HandlerFunc) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.lbHandler = handler
+	instance := func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, instanceBody)
+	}
+	// Disable connection reuse so that transport-level retries cannot hide request counts.
+	return &fakeIMDS{Server: imdstest.NewServer(t, instance, lbHandler, true)}
 }
 
 func (f *fakeIMDS) assertCalls(t *testing.T, instanceCalls, lbCalls int32) {
 	t.Helper()
-	assert.Equal(t, instanceCalls, f.instanceCalls.Load(), "instance metadata requests")
-	assert.Equal(t, lbCalls, f.lbCalls.Load(), "loadbalancer metadata requests")
+	assert.Equal(t, instanceCalls, f.InstanceCalls(), "instance metadata requests")
+	assert.Equal(t, lbCalls, f.LBCalls(), "loadbalancer metadata requests")
 }
 
 func newTestIMDSService(t *testing.T, f *fakeIMDS) *InstanceMetadataService {
-	ims, err := NewInstanceMetadataService(f.server.URL)
+	ims, err := NewInstanceMetadataService(f.URL)
 	if err != nil {
 		t.Fatalf("failed to create instance metadata service: %v", err)
 	}
@@ -599,7 +565,7 @@ func TestGetMetadataLoadBalancerRecoveryAfterCacheExpiry(t *testing.T) {
 			assert.EqualError(t, stale.LBMetadataError, staleErr)
 			staleLBErr := stale.LBMetadataError
 
-			f.setLoadBalancerHandler(tc.recoveredLB)
+			f.SetLoadBalancerHandler(tc.recoveredLB)
 			expireMetadataCache(t, ims)
 
 			fresh, err := ims.GetMetadata(context.Background(), azcache.CacheReadTypeDefault)
