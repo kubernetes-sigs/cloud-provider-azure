@@ -1102,7 +1102,9 @@ func TestNodeAddressesInstanceMetadataFailure(t *testing.T) {
 	cloud := GetTestCloud(ctrl)
 	cloud.UseInstanceMetadata = true
 	f := newFakeIMDS(t, "", imdsLBBody(testIMDSLBBody("20.0.0.9", "10.0.0.5")))
-	f.instanceStatus = http.StatusServiceUnavailable
+	f.SetInstanceHandler(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
 	cloud.Metadata = newTestIMDSService(t, f)
 	expectedErr := `failure of getting instance metadata with response "503 Service Unavailable"`
 
