@@ -19,7 +19,6 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -48,12 +47,6 @@ type nodeForConditionPatch struct {
 type nodeStatusForPatch struct {
 	Conditions []v1.NodeCondition `json:"conditions"`
 }
-
-// ErrLoadBalancerMetadataUnavailable marks errors reporting that instance metadata
-// was retrieved but load balancer metadata, which supplies public IPs, could not be
-// retrieved due to a transient failure. Addresses returned alongside such an error
-// are valid but may lack ExternalIPs.
-var ErrLoadBalancerMetadataUnavailable = errors.New("load balancer metadata unavailable")
 
 // PreserveExternalIPs returns a new slice containing all fresh addresses unchanged,
 // followed by the ExternalIP addresses from recorded that are not already present
