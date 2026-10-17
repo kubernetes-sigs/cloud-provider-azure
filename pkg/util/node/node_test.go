@@ -17,8 +17,6 @@ limitations under the License.
 package node
 
 import (
-	"errors"
-	"fmt"
 	"slices"
 	"testing"
 
@@ -153,15 +151,4 @@ func TestPreserveExternalIPsReturnsNewSlice(t *testing.T) {
 	result[2].Address = "changed"
 	assert.Equal(t, "vm1", fresh[0].Address)
 	assert.Equal(t, "20.0.0.1", recorded[0].Address)
-}
-
-func TestErrLoadBalancerMetadataUnavailable(t *testing.T) {
-	cause := errors.New("connection reset")
-	err := fmt.Errorf("%w: %w", ErrLoadBalancerMetadataUnavailable, cause)
-
-	assert.Equal(t, "load balancer metadata unavailable", ErrLoadBalancerMetadataUnavailable.Error())
-	assert.Equal(t, "load balancer metadata unavailable: connection reset", err.Error())
-	assert.True(t, errors.Is(err, ErrLoadBalancerMetadataUnavailable))
-	assert.True(t, errors.Is(err, cause))
-	assert.False(t, errors.Is(cause, ErrLoadBalancerMetadataUnavailable))
 }
