@@ -21,8 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,7 +28,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/internal/testutil/imdstest"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
@@ -45,32 +43,18 @@ const (
 	testLoadBalancerMetadata = `{"loadbalancer":{"publicIpAddresses":[{"frontendIpAddress":"20.0.0.1","privateIpAddress":"10.0.0.4"}]}}`
 )
 
-type testIMDSServer struct {
-	server        *httptest.Server
-	instanceCalls atomic.Int32
-	lbCalls       atomic.Int32
-}
-
-func newTestIMDSServer(t *testing.T, lbStatus int) *testIMDSServer {
-	s := &testIMDSServer{}
-	s.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case consts.ImdsInstanceURI:
-			s.instanceCalls.Add(1)
-			_, _ = fmt.Fprint(w, testInstanceMetadata)
-		case consts.ImdsLoadBalancerURI:
-			s.lbCalls.Add(1)
-			if lbStatus != http.StatusOK {
-				w.WriteHeader(lbStatus)
-				return
-			}
-			_, _ = fmt.Fprint(w, testLoadBalancerMetadata)
-		default:
-			w.WriteHeader(http.StatusNotFound)
+func newTestIMDSServer(t *testing.T, lbStatus int) *imdstest.Server {
+	instance := func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprint(w, testInstanceMetadata)
+	}
+	lb := func(w http.ResponseWriter, _ *http.Request) {
+		if lbStatus != http.StatusOK {
+			w.WriteHeader(lbStatus)
+			return
 		}
-	}))
-	t.Cleanup(s.server.Close)
-	return s
+		_, _ = fmt.Fprint(w, testLoadBalancerMetadata)
+	}
+	return imdstest.NewServer(t, instance, lb, false)
 }
 
 func newTestCloud(t *testing.T, imdsServer string) *azureprovider.Cloud {
@@ -136,7 +120,7 @@ func TestNodeProvidersNodeAddresses(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(p.name+"/"+tc.desc, func(t *testing.T) {
 				imds := newTestIMDSServer(t, tc.lbStatus)
-				provider := p.new(newTestCloud(t, imds.server.URL))
+				provider := p.new(newTestCloud(t, imds.URL))
 				ctx := context.Background()
 
 				addresses, err := provider.NodeAddresses(ctx, testNodeName)
@@ -162,8 +146,8 @@ func TestNodeProvidersNodeAddresses(t *testing.T) {
 				} else {
 					assert.NoError(t, errAgain)
 				}
-				assert.Equal(t, int32(1), imds.instanceCalls.Load())
-				assert.Equal(t, int32(1), imds.lbCalls.Load())
+				assert.Equal(t, int32(1), imds.InstanceCalls())
+				assert.Equal(t, int32(1), imds.LBCalls())
 			})
 		}
 	}
