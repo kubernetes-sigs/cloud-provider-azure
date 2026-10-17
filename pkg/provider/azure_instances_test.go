@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -40,6 +41,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	cloudproviderapi "k8s.io/cloud-provider/api"
+	cloudnodeutil "k8s.io/cloud-provider/node/helpers"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/interfaceclient/mock_interfaceclient"
@@ -49,6 +52,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -954,6 +958,324 @@ func TestInstanceMetadata(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, expectedMetadata, *meta)
 	})
+}
+
+func TestNodeAddressesWithLBStatus(t *testing.T) {
+	hostname := v1.NodeAddress{Type: v1.NodeHostName, Address: testIMDSNodeName}
+	internalV4 := v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.5"}
+	internalV6 := v1.NodeAddress{Type: v1.NodeInternalIP, Address: "fd00::5"}
+	lbMetadataErr := testLBMetadataErrPrefix + "failure of getting loadbalancer metadata, status code 503"
+
+	for _, tc := range []struct {
+		desc                  string
+		instanceBody          string
+		lbHandler             http.HandlerFunc
+		unmanaged             bool
+		expectedAddresses     []v1.NodeAddress
+		expectedLBStatusErr   string
+		expectedPublicErr     string
+		expectedInstanceCalls int32
+		expectedLBCalls       int32
+	}{
+		{
+			desc:                  "healthy loadbalancer metadata should return the ExternalIP",
+			instanceBody:          testIMDSInstanceBody("10.0.0.5", "", ""),
+			lbHandler:             imdsLBBody(testIMDSLBBody("20.0.0.9", "10.0.0.5")),
+			expectedAddresses:     []v1.NodeAddress{hostname, internalV4, {Type: v1.NodeExternalIP, Address: "20.0.0.9"}},
+			expectedInstanceCalls: 1,
+			expectedLBCalls:       1,
+		},
+		{
+			desc:                  "transient loadbalancer failure should return raw addresses with ErrLoadBalancerMetadataUnavailable from NodeAddressesWithLBStatus only",
+			instanceBody:          testIMDSInstanceBody("10.0.0.5", "", ""),
+			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
+			expectedAddresses:     []v1.NodeAddress{hostname, internalV4},
+			expectedLBStatusErr:   lbMetadataErr,
+			expectedInstanceCalls: 1,
+			expectedLBCalls:       1,
+		},
+		{
+			desc:                  "dual-stack transient loadbalancer failure should return both private families with ErrLoadBalancerMetadataUnavailable",
+			instanceBody:          testIMDSInstanceBody("10.0.0.5", "", "fd00::5"),
+			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
+			expectedAddresses:     []v1.NodeAddress{hostname, internalV4, internalV6},
+			expectedLBStatusErr:   lbMetadataErr,
+			expectedInstanceCalls: 1,
+			expectedLBCalls:       1,
+		},
+		{
+			desc:                  "benign loadbalancer response should return addresses without an error",
+			instanceBody:          testIMDSInstanceBody("10.0.0.5", "", ""),
+			lbHandler:             imdsLBStatus(http.StatusNotFound),
+			expectedAddresses:     []v1.NodeAddress{hostname, internalV4},
+			expectedInstanceCalls: 1,
+			expectedLBCalls:       1,
+		},
+		{
+			desc:                  "public IP in instance metadata should skip loadbalancer metadata",
+			instanceBody:          testIMDSInstanceBody("10.0.0.5", "20.0.0.1", ""),
+			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
+			expectedAddresses:     []v1.NodeAddress{hostname, internalV4, {Type: v1.NodeExternalIP, Address: "20.0.0.1"}},
+			expectedInstanceCalls: 1,
+			expectedLBCalls:       0,
+		},
+		{
+			desc:                  "empty private IPs should take priority over the load balancer metadata error and invalidate the cache",
+			instanceBody:          testIMDSInstanceBody("", "", ""),
+			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
+			expectedLBStatusErr:   "get empty IP addresses from instance metadata service",
+			expectedPublicErr:     "get empty IP addresses from instance metadata service",
+			expectedInstanceCalls: 2,
+			expectedLBCalls:       2,
+		},
+		{
+			desc:                  "missing interface should keep the original error",
+			instanceBody:          `{"compute":{"name":"vm1"},"network":{"interface":[]}}`,
+			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
+			expectedLBStatusErr:   "no interface is found for the instance",
+			expectedPublicErr:     "no interface is found for the instance",
+			expectedInstanceCalls: 1,
+		},
+		{
+			desc:                  "missing network should keep the original error",
+			instanceBody:          `{"compute":{"name":"vm1"}}`,
+			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
+			expectedLBStatusErr:   "failure of getting instance metadata",
+			expectedPublicErr:     "failure of getting instance metadata",
+			expectedInstanceCalls: 1,
+		},
+		{
+			desc:                  "missing compute should keep the original error",
+			instanceBody:          `{"network":{"interface":[]}}`,
+			lbHandler:             imdsLBStatus(http.StatusServiceUnavailable),
+			expectedLBStatusErr:   "failure of getting instance metadata",
+			expectedPublicErr:     "failure of getting instance metadata",
+			expectedInstanceCalls: 1,
+		},
+		{
+			desc:         "unmanaged node should return no addresses without querying IMDS",
+			instanceBody: testIMDSInstanceBody("10.0.0.5", "", ""),
+			lbHandler:    imdsLBStatus(http.StatusServiceUnavailable),
+			unmanaged:    true,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			cloud := GetTestCloud(ctrl)
+			cloud.UseInstanceMetadata = true
+			if tc.unmanaged {
+				cloud.unmanagedNodes = utilsets.NewString(testIMDSNodeName)
+			}
+			f := newFakeIMDS(t, tc.instanceBody, tc.lbHandler)
+			cloud.Metadata = newTestIMDSService(t, f)
+
+			lbStatusAddresses, lbStatusErr := cloud.NodeAddressesWithLBStatus(context.Background(), testIMDSNodeName)
+			publicAddresses, publicErr := cloud.NodeAddresses(context.Background(), testIMDSNodeName)
+
+			assert.Equal(t, tc.expectedAddresses, lbStatusAddresses)
+			assert.Equal(t, tc.expectedAddresses, publicAddresses)
+			if tc.expectedLBStatusErr != "" {
+				assert.EqualError(t, lbStatusErr, tc.expectedLBStatusErr)
+			} else {
+				assert.NoError(t, lbStatusErr)
+			}
+			assert.Equal(t, tc.expectedLBStatusErr == lbMetadataErr, errors.Is(lbStatusErr, providererrors.ErrLoadBalancerMetadataUnavailable))
+			if tc.expectedLBStatusErr == lbMetadataErr {
+				cached, err := cloud.Metadata.GetMetadata(context.Background(), azcache.CacheReadTypeUnsafe)
+				assert.NoError(t, err)
+				assert.Same(t, cached.LBMetadataError, lbStatusErr, "NodeAddressesWithLBStatus should return the cached error unchanged")
+			}
+			if tc.expectedPublicErr != "" {
+				assert.EqualError(t, publicErr, tc.expectedPublicErr)
+			} else {
+				assert.NoError(t, publicErr)
+			}
+			f.assertCalls(t, tc.expectedInstanceCalls, tc.expectedLBCalls)
+		})
+	}
+}
+
+func TestNodeAddressesInstanceMetadataFailure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	cloud := GetTestCloud(ctrl)
+	cloud.UseInstanceMetadata = true
+	f := newFakeIMDS(t, "", imdsLBBody(testIMDSLBBody("20.0.0.9", "10.0.0.5")))
+	f.SetInstanceHandler(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	})
+	cloud.Metadata = newTestIMDSService(t, f)
+	expectedErr := `failure of getting instance metadata with response "503 Service Unavailable"`
+
+	lbStatusAddresses, lbStatusErr := cloud.NodeAddressesWithLBStatus(context.Background(), testIMDSNodeName)
+	assert.Nil(t, lbStatusAddresses)
+	assert.EqualError(t, lbStatusErr, expectedErr)
+	assert.False(t, errors.Is(lbStatusErr, providererrors.ErrLoadBalancerMetadataUnavailable))
+
+	publicAddresses, publicErr := cloud.NodeAddresses(context.Background(), testIMDSNodeName)
+	assert.Nil(t, publicAddresses)
+	assert.EqualError(t, publicErr, expectedErr)
+
+	instanceID, err := cloud.InstanceID(context.Background(), testIMDSNodeName)
+	assert.Equal(t, "", instanceID)
+	assert.EqualError(t, err, expectedErr)
+
+	// Unusable instance metadata is not cached and never triggers loadbalancer requests.
+	f.assertCalls(t, 3, 0)
+}
+
+func TestInstanceMetadataWithLBStatus(t *testing.T) {
+	hostname := v1.NodeAddress{Type: v1.NodeHostName, Address: testIMDSNodeName}
+	internalV4 := v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.5"}
+	recordedInternalV4 := v1.NodeAddress{Type: v1.NodeInternalIP, Address: "10.0.0.4"}
+	recordedInternalV6 := v1.NodeAddress{Type: v1.NodeInternalIP, Address: "fd00::4"}
+	recordedExternalV4 := v1.NodeAddress{Type: v1.NodeExternalIP, Address: "20.0.0.1"}
+	recordedExternalV6 := v1.NodeAddress{Type: v1.NodeExternalIP, Address: "2001:db8::1"}
+	recorded := []v1.NodeAddress{hostname, recordedInternalV4, recordedExternalV4}
+	transient := imdsLBStatus(http.StatusServiceUnavailable)
+
+	for _, tc := range []struct {
+		desc              string
+		lbHandler         http.HandlerFunc
+		recorded          []v1.NodeAddress
+		annotation        *string
+		expectedAddresses []v1.NodeAddress
+		expectedUpstream  string
+		cachedPublicIP    string
+	}{
+		{
+			desc:              "transient failure should keep recorded ExternalIPs with changed private IP",
+			lbHandler:         transient,
+			recorded:          recorded,
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4},
+		},
+		{
+			desc:              "transient failure on first discovery should return raw addresses",
+			lbHandler:         transient,
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4},
+		},
+		{
+			desc:              "transient failure with a valid provided IP should keep recorded ExternalIPs",
+			lbHandler:         transient,
+			recorded:          recorded,
+			annotation:        ptr.To("10.0.0.5"),
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4},
+		},
+		{
+			desc:              "transient failure with a stale provided private IP should keep recorded ExternalIPs and leave rejection to upstream",
+			lbHandler:         transient,
+			recorded:          recorded,
+			annotation:        ptr.To("10.0.0.4"),
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4},
+			expectedUpstream:  "failed to get node address from cloud provider that matches ip: 10.0.0.4",
+		},
+		{
+			desc:              "transient failure with a present empty provided IP should keep recorded ExternalIPs and leave rejection to upstream",
+			lbHandler:         transient,
+			recorded:          recorded,
+			annotation:        ptr.To(""),
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4},
+			expectedUpstream:  `failed to parse node IP "": could not parse ""`,
+		},
+		{
+			desc:              "transient failure with a malformed provided IP should keep recorded ExternalIPs and leave rejection to upstream",
+			lbHandler:         transient,
+			recorded:          recorded,
+			annotation:        ptr.To("not-an-ip"),
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4},
+			expectedUpstream:  `failed to parse node IP "not-an-ip": could not parse "not-an-ip"`,
+		},
+		{
+			desc:              "transient failure should not rescue a missing private family",
+			lbHandler:         transient,
+			recorded:          []v1.NodeAddress{hostname, recordedInternalV4, recordedExternalV4, recordedInternalV6, recordedExternalV6},
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4, recordedExternalV6},
+		},
+		{
+			desc:              "transient failure with a provided IPv6 only in recorded status should keep recorded ExternalIPs and leave rejection to upstream",
+			lbHandler:         transient,
+			recorded:          []v1.NodeAddress{hostname, recordedInternalV4, recordedExternalV4, recordedInternalV6, recordedExternalV6},
+			annotation:        ptr.To("fd00::4"),
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4, recordedExternalV6},
+			expectedUpstream:  "failed to get node address from cloud provider that matches ip: fd00::4",
+		},
+		{
+			desc:              "transient failure with a dual-stack provided pair missing the IPv6 family should keep recorded ExternalIPs and leave rejection to upstream",
+			lbHandler:         transient,
+			recorded:          []v1.NodeAddress{hostname, recordedInternalV4, recordedExternalV4, recordedInternalV6, recordedExternalV6},
+			annotation:        ptr.To("10.0.0.5,fd00::4"),
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, recordedExternalV4, recordedExternalV6},
+			expectedUpstream:  "failed to get node address from cloud provider that matches ip: fd00::4",
+		},
+		{
+			desc:              "healthy loadbalancer metadata should replace the recorded ExternalIP",
+			lbHandler:         imdsLBBody(testIMDSLBBody("20.0.0.9", "10.0.0.5")),
+			recorded:          recorded,
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4, {Type: v1.NodeExternalIP, Address: "20.0.0.9"}},
+			cachedPublicIP:    "20.0.0.9",
+		},
+		{
+			desc:              "healthy loadbalancer metadata without public IPs should remove the recorded ExternalIP",
+			lbHandler:         imdsLBBody(testLBEmptyPublicIPBody),
+			recorded:          recorded,
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4},
+		},
+		{
+			desc:              "benign loadbalancer response should remove the recorded ExternalIP",
+			lbHandler:         imdsLBStatus(http.StatusNotFound),
+			recorded:          recorded,
+			expectedAddresses: []v1.NodeAddress{hostname, internalV4},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			cloud := GetTestCloud(ctrl)
+			cloud.UseInstanceMetadata = true
+			f := newFakeIMDS(t, testIMDSInstanceBody("10.0.0.5", "", ""), tc.lbHandler)
+			cloud.Metadata = newTestIMDSService(t, f)
+			mockVMSet := NewMockVMSet(ctrl)
+			mockVMSet.EXPECT().GetZoneByNodeName(gomock.Any(), testIMDSNodeName).Return(cloudprovider.Zone{FailureDomain: "eastus-1", Region: "eastus"}, nil)
+			cloud.VMSet = mockVMSet
+
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: testIMDSNodeName},
+				Status:     v1.NodeStatus{Addresses: tc.recorded},
+			}
+			if tc.annotation != nil {
+				node.Annotations = map[string]string{cloudproviderapi.AnnotationAlphaProvidedIPAddr: *tc.annotation}
+			}
+			nodeBefore := node.DeepCopy()
+
+			meta, err := cloud.InstanceMetadata(context.Background(), node)
+			assert.NoError(t, err)
+			assert.Equal(t, cloudprovider.InstanceMetadata{
+				ProviderID:    "azure://" + testIMDSResourceID,
+				InstanceType:  testIMDSVMSize,
+				NodeAddresses: tc.expectedAddresses,
+				Zone:          "eastus-1",
+				Region:        "eastus",
+			}, *meta)
+			assert.Equal(t, nodeBefore, node)
+
+			// Upstream validation of the provided node IP runs on the returned addresses.
+			if tc.annotation != nil {
+				_, upstreamErr := cloudnodeutil.GetNodeAddressesFromNodeIP(*tc.annotation, meta.NodeAddresses)
+				if tc.expectedUpstream != "" {
+					assert.EqualError(t, upstreamErr, tc.expectedUpstream)
+				} else {
+					assert.NoError(t, upstreamErr)
+				}
+			}
+
+			// Merging must not mutate the cached metadata, and all reads share one cache fill.
+			cached, err := cloud.Metadata.GetMetadata(context.Background(), azcache.CacheReadTypeUnsafe)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.cachedPublicIP, cached.Network.Interface[0].IPV4.IPAddress[0].PublicIP)
+			f.assertCalls(t, 1, 1)
+		})
+	}
 }
 
 func TestCloud_InstanceExists(t *testing.T) {
