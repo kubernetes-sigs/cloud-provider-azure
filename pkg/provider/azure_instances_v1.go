@@ -30,7 +30,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
-	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 )
 
 var _ cloudprovider.Instances = (*Cloud)(nil)
@@ -71,7 +71,7 @@ func (az *Cloud) addressGetter(ctx context.Context, nodeName types.NodeName) ([]
 // valid addresses retrieved from instance metadata are returned instead.
 func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	addresses, err := az.NodeAddressesWithLBStatus(ctx, name)
-	if err != nil && errors.Is(err, utilnode.ErrLoadBalancerMetadataUnavailable) {
+	if err != nil && errors.Is(err, providererrors.ErrLoadBalancerMetadataUnavailable) {
 		return addresses, nil
 	}
 	return addresses, err
@@ -80,7 +80,7 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 // NodeAddressesWithLBStatus returns the addresses of the specified instance.
 // If the addresses of the local instance were retrieved but the load balancer
 // metadata was unavailable due to a transient failure, it returns the valid
-// addresses together with an error wrapping utilnode.ErrLoadBalancerMetadataUnavailable.
+// addresses together with an error wrapping providererrors.ErrLoadBalancerMetadataUnavailable.
 func (az *Cloud) NodeAddressesWithLBStatus(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("NodeAddresses")
 	// Returns nil for unmanaged nodes because azure cloud provider couldn't fetch information for them.

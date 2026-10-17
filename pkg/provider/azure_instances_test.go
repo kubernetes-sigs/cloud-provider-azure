@@ -52,7 +52,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
-	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -1080,7 +1080,7 @@ func TestNodeAddressesWithLBStatus(t *testing.T) {
 			} else {
 				assert.NoError(t, lbStatusErr)
 			}
-			assert.Equal(t, tc.expectedLBStatusErr == lbMetadataErr, errors.Is(lbStatusErr, utilnode.ErrLoadBalancerMetadataUnavailable))
+			assert.Equal(t, tc.expectedLBStatusErr == lbMetadataErr, errors.Is(lbStatusErr, providererrors.ErrLoadBalancerMetadataUnavailable))
 			if tc.expectedLBStatusErr == lbMetadataErr {
 				cached, err := cloud.Metadata.GetMetadata(context.Background(), azcache.CacheReadTypeUnsafe)
 				assert.NoError(t, err)
@@ -1109,7 +1109,7 @@ func TestNodeAddressesInstanceMetadataFailure(t *testing.T) {
 	lbStatusAddresses, lbStatusErr := cloud.NodeAddressesWithLBStatus(context.Background(), testIMDSNodeName)
 	assert.Nil(t, lbStatusAddresses)
 	assert.EqualError(t, lbStatusErr, expectedErr)
-	assert.False(t, errors.Is(lbStatusErr, utilnode.ErrLoadBalancerMetadataUnavailable))
+	assert.False(t, errors.Is(lbStatusErr, providererrors.ErrLoadBalancerMetadataUnavailable))
 
 	publicAddresses, publicErr := cloud.NodeAddresses(context.Background(), testIMDSNodeName)
 	assert.Nil(t, publicAddresses)
