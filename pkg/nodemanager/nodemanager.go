@@ -48,6 +48,7 @@ import (
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
 )
 
@@ -599,7 +600,7 @@ func (cnc *CloudNodeController) getNodeAddressesByName(ctx context.Context, node
 // isLBMetadataUnavailable reports whether err only indicates that load balancer
 // metadata was unavailable while valid, non-empty node addresses were still returned.
 func isLBMetadataUnavailable(nodeAddresses []v1.NodeAddress, err error) bool {
-	return err != nil && errors.Is(err, utilnode.ErrLoadBalancerMetadataUnavailable) && len(nodeAddresses) > 0
+	return err != nil && errors.Is(err, providererrors.ErrLoadBalancerMetadataUnavailable) && len(nodeAddresses) > 0
 }
 
 func nodeAddressesChangeDetected(addressSet1, addressSet2 []v1.NodeAddress) bool {
