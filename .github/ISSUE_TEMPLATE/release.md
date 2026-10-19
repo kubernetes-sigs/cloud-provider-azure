@@ -2,6 +2,7 @@
 name: New version release
 about: Track preparation and tasks for a new release
 title: "Release v<major>.<minor>.0"
+type: Task
 labels: ""
 assignees: ""
 
@@ -10,8 +11,6 @@ assignees: ""
 #### Release details
 
 - New release version:
-- Version entering LTS:
-- Retiring version:
 
 #### Checklist
 
@@ -27,17 +26,6 @@ assignees: ""
 
 - [ ] Update the chart.
 
-##### Version entering LTS
-
-- [ ] Remove periodic test-infra jobs.
-- [ ] Replace `latest-xx` Kubernetes version references with pinned versions in test-infra jobs.
-- [ ] Disable Dependabot jobs.
-
-##### Retiring version
-
-- [ ] Remove test-infra jobs.
-- [ ] Set RP versioning manifest `imageTagUpdateStrategy` to `"no-update"`.
-
 #### Notes
 
-<!-- Add blockers, related PRs, and release-specific changes here. -->
+<!-- Add blockers, related PRs, and release-specific changes. -->
