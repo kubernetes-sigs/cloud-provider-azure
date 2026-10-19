@@ -49,8 +49,8 @@ type Config struct {
 	// VNet is in a separate resource group (mirrors the cloud config's vnetResourceGroup).
 	VNetResourceGroup string
 
-	// LocationsUpdateInterval is the minimum time between the end of one LocationsUpdater run and the
-	// start of the next. Zero disables the spacing.
+	// LocationsUpdateInterval is the minimum time between the return of an address-location update sent
+	// to NRP and the start of the next LocationsUpdater run. Zero disables the spacing.
 	LocationsUpdateInterval time.Duration
 }
 
