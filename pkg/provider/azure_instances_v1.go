@@ -26,6 +26,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	utilnet "k8s.io/utils/net"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -52,10 +53,17 @@ func (az *Cloud) addressGetter(ctx context.Context, nodeName types.NodeName) ([]
 		return nil, err
 	}
 
-	addresses := []v1.NodeAddress{
-		{Type: v1.NodeInternalIP, Address: ip},
-		{Type: v1.NodeHostName, Address: string(nodeName)},
+	internalIPs, err := az.internalIPsByFamily(ctx, nodeName, ip)
+	if err != nil {
+		logger.V(2).Info("NodeAddresses abort backoff", "nodeName", nodeName, "error", err)
+		return nil, err
 	}
+
+	addresses := make([]v1.NodeAddress, 0, len(internalIPs)+2)
+	for _, internalIP := range internalIPs {
+		addresses = append(addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: internalIP})
+	}
+	addresses = append(addresses, v1.NodeAddress{Type: v1.NodeHostName, Address: string(nodeName)})
 	if len(publicIP) > 0 {
 		addresses = append(addresses, v1.NodeAddress{
 			Type:    v1.NodeExternalIP,
@@ -63,6 +71,42 @@ func (az *Cloud) addressGetter(ctx context.Context, nodeName types.NodeName) ([]
 		})
 	}
 	return addresses, nil
+}
+
+// internalIPsByFamily returns the node's private IPs read from ARM, one per entry
+// of az.nodeIPFamilies() and in that order, so the first address is the family the
+// cloud config asks for as primary. Azure requires the primary IP configuration of
+// a NIC to be IPv4, so that configuration alone cannot express an IPv6-primary node.
+// primaryIP is the address of the primary IP configuration and is only used as a
+// fallback when the node carries none of the configured families.
+func (az *Cloud) internalIPsByFamily(ctx context.Context, nodeName types.NodeName, primaryIP string) ([]string, error) {
+	// Reading every private IP costs an extra ARM call, so when the cloud config
+	// does not ask for a family order the ARM path keeps reporting Azure's primary
+	// IP configuration, as it always has.
+	if len(az.NodeIPFamilies) == 0 {
+		return []string{primaryIP}, nil
+	}
+
+	privateIPs, err := az.getPrivateIPsForMachine(ctx, nodeName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get private IPs of node %q: %w", nodeName, err)
+	}
+
+	internalIPs := make([]string, 0, len(privateIPs))
+	for _, family := range az.nodeIPFamilies() {
+		isIPv6 := family == consts.IPVersionIPv6StringLower
+		for _, privateIP := range privateIPs {
+			if privateIP != "" && utilnet.IsIPv6String(privateIP) == isIPv6 {
+				internalIPs = append(internalIPs, privateIP)
+				break
+			}
+		}
+	}
+
+	if len(internalIPs) == 0 {
+		return []string{primaryIP}, nil
+	}
+	return internalIPs, nil
 }
 
 // NodeAddresses returns the addresses of the specified instance.
@@ -109,6 +153,22 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 	return az.addressGetter(ctx, name)
 }
 
+// nodeIPFamilies returns the IP families to add to node objects, in the order they
+// should appear in Node.status.addresses. The first family listed becomes the node's
+// primary address. When the cloud config does not set nodeIPFamilies, both families
+// are reported with IPv4 first, which is the historical behaviour.
+func (az *Cloud) nodeIPFamilies() []string {
+	if len(az.NodeIPFamilies) == 0 {
+		return []string{consts.IPVersionIPv4StringLower, consts.IPVersionIPv6StringLower}
+	}
+
+	families := make([]string, 0, len(az.NodeIPFamilies))
+	for _, family := range az.NodeIPFamilies {
+		families = append(families, strings.ToLower(family))
+	}
+	return families
+}
+
 func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []*NetworkInterface, nodeName string) ([]v1.NodeAddress, error) {
 	if len(netInterfaces) == 0 {
 		return nil, fmt.Errorf("no interface is found for the instance")
@@ -119,21 +179,20 @@ func (az *Cloud) getLocalInstanceNodeAddresses(netInterfaces []*NetworkInterface
 	addresses := []v1.NodeAddress{
 		{Type: v1.NodeHostName, Address: nodeName},
 	}
-	if len(netInterface.IPV4.IPAddress) > 0 && len(netInterface.IPV4.IPAddress[0].PrivateIP) > 0 {
-		address := netInterface.IPV4.IPAddress[0]
-		addresses = append(addresses, v1.NodeAddress{
-			Type:    v1.NodeInternalIP,
-			Address: address.PrivateIP,
-		})
-		if len(address.PublicIP) > 0 {
-			addresses = append(addresses, v1.NodeAddress{
-				Type:    v1.NodeExternalIP,
-				Address: address.PublicIP,
-			})
+	for _, family := range az.nodeIPFamilies() {
+		var ipAddresses []IPAddress
+		switch family {
+		case consts.IPVersionIPv4StringLower:
+			ipAddresses = netInterface.IPV4.IPAddress
+		case consts.IPVersionIPv6StringLower:
+			ipAddresses = netInterface.IPV6.IPAddress
+		default:
+			return nil, fmt.Errorf("invalid node IP family: %s", family)
 		}
-	}
-	if len(netInterface.IPV6.IPAddress) > 0 && len(netInterface.IPV6.IPAddress[0].PrivateIP) > 0 {
-		address := netInterface.IPV6.IPAddress[0]
+		if len(ipAddresses) == 0 || len(ipAddresses[0].PrivateIP) == 0 {
+			continue
+		}
+		address := ipAddresses[0]
 		addresses = append(addresses, v1.NodeAddress{
 			Type:    v1.NodeInternalIP,
 			Address: address.PrivateIP,

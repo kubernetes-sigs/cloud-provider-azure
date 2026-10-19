@@ -183,6 +183,15 @@ type Config struct {
 	// ARM, preventing the cloud-node-lifecycle controller from deleting the node
 	// prematurely. If not set, it defaults to 0, which disables the grace period.
 	NodeInstanceNotFoundGracePeriodInSeconds int `json:"nodeInstanceNotFoundGracePeriodInSeconds,omitempty" yaml:"nodeInstanceNotFoundGracePeriodInSeconds,omitempty"`
+
+	// NodeIPFamilies determines which IP families are added to node objects and in
+	// what order. Valid entries are "ipv4" and "ipv6". The first entry becomes the
+	// node's primary address, which in turn determines the family of the node's
+	// status.hostIP. On a dual-stack cluster whose service CIDR is IPv6-primary this
+	// must be set to ["ipv6", "ipv4"], otherwise the node comes up IPv4-primary and
+	// contradicts the service CIDR. If unset, it defaults to ["ipv4", "ipv6"], which
+	// preserves the historical ordering.
+	NodeIPFamilies []string `json:"nodeIPFamilies,omitempty" yaml:"nodeIPFamilies,omitempty"`
 }
 
 // HasExtendedLocation returns true if extendedlocation prop are specified.

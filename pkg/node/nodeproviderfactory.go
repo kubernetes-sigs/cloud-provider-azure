@@ -22,14 +22,16 @@ import (
 	nodemanager "sigs.k8s.io/cloud-provider-azure/pkg/nodemanager"
 )
 
-// NewNodeProvider returns a node provider depending on the use case
-func NewNodeProvider(ctx context.Context, useMetadata bool, cloudConfigFilePath string) nodemanager.NodeProvider {
+// NewNodeProvider returns a node provider depending on the use case.
+// nodeIPFamilies orders the IP families reported in a node's status.addresses;
+// an empty list leaves the cloud provider's default ordering in place.
+func NewNodeProvider(ctx context.Context, useMetadata bool, cloudConfigFilePath string, nodeIPFamilies []string) nodemanager.NodeProvider {
 	var nodeProvider nodemanager.NodeProvider
 
 	if useMetadata {
-		nodeProvider = NewIMDSNodeProvider(ctx)
+		nodeProvider = NewIMDSNodeProvider(ctx, nodeIPFamilies)
 	} else {
-		nodeProvider = NewARMNodeProvider(ctx, cloudConfigFilePath)
+		nodeProvider = NewARMNodeProvider(ctx, cloudConfigFilePath, nodeIPFamilies)
 	}
 
 	return nodeProvider
