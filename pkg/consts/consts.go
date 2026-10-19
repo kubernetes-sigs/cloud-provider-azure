@@ -598,7 +598,7 @@ const (
 	DefaultServiceGatewayResourceName = "servicegateway"
 
 	// DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds is the default minimum time between
-	// consecutive ServiceGateway address-location sync runs.
+	// consecutive ServiceGateway address-location updates sent to NRP.
 	DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds = 400
 )
 

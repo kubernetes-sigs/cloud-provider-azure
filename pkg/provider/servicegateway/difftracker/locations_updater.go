@@ -77,10 +77,12 @@ type LocationsUpdater struct {
 	// retry backoff. Accessed only from the single Run goroutine (process), so no lock.
 	failureCount int
 
-	// lastRunEnd is when the previous run (one process pass) finished. Run waits until
-	// config.LocationsUpdateInterval has passed since then before starting the next run. Accessed
-	// only from the single Run goroutine, so no lock.
-	lastRunEnd time.Time
+	// lastUpdateEnd is when the last address-location update sent to NRP returned, whether it
+	// succeeded or not. Run waits until config.LocationsUpdateInterval has passed since then before
+	// starting the next run; only process sets it, right after the NRP call returns, so a run with
+	// nothing to send does not move it. Accessed only from the single Run goroutine (process), so no
+	// lock.
+	lastUpdateEnd time.Time
 
 	// wg tracks the Run loop so Stop can wait for an in-flight sync to finish. Cancelling alone
 	// would let Stop return while process is still inside an NRP call and about to mutate tracker
@@ -133,7 +135,6 @@ func (lu *LocationsUpdater) Run() {
 			// other services' location/finalizer syncs; a timeout fails into the deferred backoffAndRetry.
 			attemptCtx, cancel := context.WithTimeout(lu.ctx, getNRPOperationTimeout())
 			lu.process(attemptCtx)
-			lu.lastRunEnd = time.Now()
 			cancel()
 		}
 	}
@@ -274,6 +275,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 
 	// Call NRP Service Gateway API to update locations/addresses
 	err := lu.diffTracker.updateNRPSGWAddressLocations(ctx, lu.diffTracker.config.ServiceGatewayResourceName, locationsDTO)
+	lu.lastUpdateEnd = time.Now()
 	if err != nil {
 		lastSyncErr = err
 		if httpStatus, errCode := extractAzureErrorInfo(err); isTerminalLocationSyncStatus(httpStatus) {
@@ -379,16 +381,17 @@ func isTerminalLocationSyncStatus(httpStatus int) bool {
 	return httpStatus == http.StatusBadRequest || httpStatus == http.StatusUnprocessableEntity
 }
 
-// waitForRunInterval waits until config.LocationsUpdateInterval has passed since the previous run
-// finished, so runs never start back to back and changes that arrive in between are batched into the
-// next run. It does not wait before the first run or after an idle period. It returns false if the
-// updater is stopped while waiting.
+// waitForRunInterval waits until config.LocationsUpdateInterval has passed since the last
+// address-location update sent to NRP returned, so updates are never sent back to back and changes
+// that arrive in between are batched into the next one. It does not wait before the first update or
+// after an idle period, and a run with nothing to send does not restart the interval. It returns false
+// if the updater is stopped while waiting.
 func (lu *LocationsUpdater) waitForRunInterval() bool {
 	interval := lu.diffTracker.config.LocationsUpdateInterval
-	if interval <= 0 || lu.lastRunEnd.IsZero() {
+	if interval <= 0 || lu.lastUpdateEnd.IsZero() {
 		return true
 	}
-	wait := interval - time.Since(lu.lastRunEnd)
+	wait := interval - time.Since(lu.lastUpdateEnd)
 	if wait <= 0 {
 		return true
 	}

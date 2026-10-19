@@ -18,10 +18,12 @@ package difftracker
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -65,7 +67,7 @@ func TestWaitForRunInterval(t *testing.T) {
 	const interval = 200 * time.Millisecond
 	sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
 
-	t.Run("no wait before the first call", func(t *testing.T) {
+	t.Run("no wait before the first update", func(t *testing.T) {
 		lu, _ := newIntervalTestUpdater(context.Background(), t, interval, sgw)
 		start := time.Now()
 		assert.True(t, lu.waitForRunInterval())
@@ -74,22 +76,25 @@ func TestWaitForRunInterval(t *testing.T) {
 
 	t.Run("no wait once the interval has passed", func(t *testing.T) {
 		lu, _ := newIntervalTestUpdater(context.Background(), t, interval, sgw)
-		lu.lastRunEnd = time.Now().Add(-2 * interval)
+		lu.lastUpdateEnd = time.Now().Add(-2 * interval)
 		start := time.Now()
 		assert.True(t, lu.waitForRunInterval())
 		assert.Less(t, time.Since(start), interval/2)
 	})
 
 	t.Run("waits for the rest of the interval", func(t *testing.T) {
-		lu, _ := newIntervalTestUpdater(context.Background(), t, interval, sgw)
-		lu.lastRunEnd = time.Now()
+		const longInterval = 400 * time.Millisecond
+		lu, _ := newIntervalTestUpdater(context.Background(), t, longInterval, sgw)
+		lu.lastUpdateEnd = time.Now().Add(-longInterval * 3 / 4)
+		start := time.Now()
 		assert.True(t, lu.waitForRunInterval())
-		assert.GreaterOrEqual(t, time.Since(lu.lastRunEnd), interval)
+		assert.GreaterOrEqual(t, time.Since(lu.lastUpdateEnd), longInterval)
+		assert.Less(t, time.Since(start), longInterval/2, "only the rest of the interval is waited")
 	})
 
 	t.Run("zero interval disables the wait", func(t *testing.T) {
 		lu, _ := newIntervalTestUpdater(context.Background(), t, 0, sgw)
-		lu.lastRunEnd = time.Now()
+		lu.lastUpdateEnd = time.Now()
 		start := time.Now()
 		assert.True(t, lu.waitForRunInterval())
 		assert.Less(t, time.Since(start), 50*time.Millisecond)
@@ -98,7 +103,7 @@ func TestWaitForRunInterval(t *testing.T) {
 	t.Run("returns promptly when stopped", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		lu, _ := newIntervalTestUpdater(ctx, t, 10*time.Second, sgw)
-		lu.lastRunEnd = time.Now()
+		lu.lastUpdateEnd = time.Now()
 		time.AfterFunc(50*time.Millisecond, cancel)
 		start := time.Now()
 		assert.False(t, lu.waitForRunInterval())
@@ -106,100 +111,165 @@ func TestWaitForRunInterval(t *testing.T) {
 	})
 }
 
-// TestLocationsUpdater_NoOpRunsAlsoStartTheInterval checks that the spacing is between runs, not only
-// between NRP calls: a run with nothing to send still delays the next run by the interval.
-func TestLocationsUpdater_NoOpRunsAlsoStartTheInterval(t *testing.T) {
-	const interval = 300 * time.Millisecond
-	var (
-		mu    sync.Mutex
-		start time.Time
-	)
-	sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
-	sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
-			mu.Lock()
-			defer mu.Unlock()
-			start = time.Now()
-			return nil
-		}).Times(1)
-	lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
-
+// runIntervalTestUpdater starts lu and stops it when the test ends.
+func runIntervalTestUpdater(t *testing.T, lu *LocationsUpdater) {
+	t.Helper()
 	stopped := make(chan struct{})
 	go func() {
 		lu.Run()
 		close(stopped)
 	}()
-	defer func() {
+	t.Cleanup(func() {
 		lu.Stop()
 		<-stopped
-	}()
-
-	// The first run has no location diff, so it makes no NRP call.
-	firstTrigger := time.Now()
-	dt.triggerLocationsUpdater()
-	time.Sleep(50 * time.Millisecond)
-
-	addInboundPod(dt, "node-1", "10.0.0.1")
-	dt.triggerLocationsUpdater()
-	assert.Eventually(t, func() bool {
-		mu.Lock()
-		defer mu.Unlock()
-		return !start.IsZero()
-	}, 5*time.Second, 5*time.Millisecond)
-	mu.Lock()
-	defer mu.Unlock()
-	assert.GreaterOrEqual(t, start.Sub(firstTrigger), interval,
-		"the run after a no-op run must still wait for the interval")
+	})
 }
 
-// TestLocationsUpdater_SpacesConsecutiveNRPCalls drives Run: the first run's update is sent at once,
-// and the next run starts no sooner than the interval after the previous run finished.
+// updateRecorder records when each address-location update reaches NRP and when it returns, after
+// latency, answering with the errors in answers in turn (nil once they run out).
+type updateRecorder struct {
+	mu           sync.Mutex
+	starts, ends []time.Time
+	answers      []error
+	latency      time.Duration
+}
+
+func (r *updateRecorder) update(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+	r.mu.Lock()
+	r.starts = append(r.starts, time.Now())
+	var err error
+	if len(r.answers) > 0 {
+		err, r.answers = r.answers[0], r.answers[1:]
+	}
+	r.mu.Unlock()
+	time.Sleep(r.latency)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ends = append(r.ends, time.Now())
+	return err
+}
+
+// calls returns how many updates have returned.
+func (r *updateRecorder) calls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.ends)
+}
+
+// TestLocationsUpdater_RunsWithNothingToSendDoNotDelayTheNextUpdate checks that the interval spaces the
+// updates sent to NRP, not the runs: a run with nothing to send, which makes no NRP call, neither waits
+// for an interval of its own making nor delays the next update.
+func TestLocationsUpdater_RunsWithNothingToSendDoNotDelayTheNextUpdate(t *testing.T) {
+	const interval = 600 * time.Millisecond
+
+	t.Run("a run with nothing to send before the first update", func(t *testing.T) {
+		rec := &updateRecorder{}
+		sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+		sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(1)
+		lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+		runIntervalTestUpdater(t, lu)
+
+		dt.triggerLocationsUpdater() // no location diff: no NRP call
+		time.Sleep(50 * time.Millisecond)
+		addInboundPod(dt, "node-1", "10.0.0.1")
+		triggered := time.Now()
+		dt.triggerLocationsUpdater()
+
+		assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		assert.Less(t, rec.starts[0].Sub(triggered), interval/2, "a run that sent nothing must not delay the next update")
+	})
+
+	t.Run("a run with nothing to send after an update", func(t *testing.T) {
+		rec := &updateRecorder{}
+		sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+		sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(2)
+		lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+		runIntervalTestUpdater(t, lu)
+
+		addInboundPod(dt, "node-1", "10.0.0.1")
+		dt.triggerLocationsUpdater()
+		assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+		rec.mu.Lock()
+		firstEnd := rec.ends[0]
+		rec.mu.Unlock()
+
+		// This run waits for the interval after the update, then finds nothing to send.
+		dt.triggerLocationsUpdater()
+		time.Sleep(time.Until(firstEnd.Add(interval + 200*time.Millisecond)))
+		addInboundPod(dt, "node-2", "10.0.0.2")
+		triggered := time.Now()
+		dt.triggerLocationsUpdater()
+
+		assert.Eventually(t, func() bool { return rec.calls() == 2 }, 5*time.Second, 5*time.Millisecond)
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		assert.Less(t, rec.starts[1].Sub(triggered), interval/3,
+			"the interval since the last update has passed: the run that sent nothing in between must not restart it")
+	})
+}
+
+// TestLocationsUpdater_FailedUpdateAlsoStartsTheInterval checks that an update NRP did not accept counts as
+// an update sent: the next one, which the next change starts, is still spaced by the interval.
+func TestLocationsUpdater_FailedUpdateAlsoStartsTheInterval(t *testing.T) {
+	const interval = 300 * time.Millisecond
+	for _, tc := range []struct {
+		name   string
+		answer error
+	}{
+		// A 400 is final for that batch: nothing retries it, only the next change.
+		{name: "refused", answer: &azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "InvalidRequest"}},
+		// A 429 is retried after a backoff, which a change arriving meanwhile ends at once.
+		{name: "throttled", answer: &azcore.ResponseError{StatusCode: http.StatusTooManyRequests, ErrorCode: "TooManyRequests"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &updateRecorder{answers: []error{tc.answer}}
+			sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+			sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(2)
+			lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+			runIntervalTestUpdater(t, lu)
+
+			addInboundPod(dt, "node-1", "10.0.0.1")
+			dt.triggerLocationsUpdater()
+			assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+			addInboundPod(dt, "node-2", "10.0.0.2")
+			dt.triggerLocationsUpdater()
+
+			assert.Eventually(t, func() bool { return rec.calls() == 2 }, 5*time.Second, 5*time.Millisecond)
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			gap := rec.starts[1].Sub(rec.ends[0])
+			assert.GreaterOrEqual(t, gap, interval, "the update after a failed one must wait for the interval")
+			assert.Less(t, gap, locationsRetryBaseDelay, "control: the next change, not a retry backoff, started the update")
+		})
+	}
+}
+
+// TestLocationsUpdater_SpacesConsecutiveNRPCalls drives Run: the first update is sent at once, and the
+// next one starts no sooner than the interval after the previous one returned.
 func TestLocationsUpdater_SpacesConsecutiveNRPCalls(t *testing.T) {
 	const interval = 300 * time.Millisecond
-	var (
-		mu     sync.Mutex
-		starts []time.Time
-		ends   []time.Time
-	)
+	// The latency tells the return of an update from its start.
+	rec := &updateRecorder{latency: 150 * time.Millisecond}
 	sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
-	sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
-			mu.Lock()
-			defer mu.Unlock()
-			starts = append(starts, time.Now())
-			ends = append(ends, time.Now())
-			return nil
-		}).Times(2)
+	sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(2)
 	lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
-
-	stopped := make(chan struct{})
-	go func() {
-		lu.Run()
-		close(stopped)
-	}()
-	defer func() {
-		lu.Stop()
-		<-stopped
-	}()
-	calls := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(starts)
-	}
+	runIntervalTestUpdater(t, lu)
 
 	addInboundPod(dt, "node-1", "10.0.0.1")
 	triggered := time.Now()
 	dt.triggerLocationsUpdater()
-	assert.Eventually(t, func() bool { return calls() == 1 }, 5*time.Second, 5*time.Millisecond)
-	mu.Lock()
-	assert.Less(t, starts[0].Sub(triggered), interval/2, "the first update must not be delayed")
-	mu.Unlock()
+	assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+	rec.mu.Lock()
+	assert.Less(t, rec.starts[0].Sub(triggered), interval/2, "the first update must not be delayed")
+	rec.mu.Unlock()
 
 	addInboundPod(dt, "node-2", "10.0.0.2")
 	dt.triggerLocationsUpdater()
-	assert.Eventually(t, func() bool { return calls() == 2 }, 5*time.Second, 5*time.Millisecond)
-	mu.Lock()
-	defer mu.Unlock()
-	assert.GreaterOrEqual(t, starts[1].Sub(ends[0]), interval,
+	assert.Eventually(t, func() bool { return rec.calls() == 2 }, 5*time.Second, 5*time.Millisecond)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	assert.GreaterOrEqual(t, rec.starts[1].Sub(rec.ends[0]), interval,
 		"the next update must start at least the interval after the previous one returned")
 }
