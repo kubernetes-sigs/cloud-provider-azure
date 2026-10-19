@@ -28,6 +28,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -1891,6 +1892,12 @@ func initializingDiffTracker() *DiffTracker {
 	return dt
 }
 
+// progressLog returns a logger that records what it logs. Only the waiting goroutine logs to it.
+func progressLog() (logr.Logger, *[]string) {
+	var logs []string
+	return funcr.New(func(_, args string) { logs = append(logs, args) }, funcr.Options{}), &logs
+}
+
 func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *testing.T) {
 	withInitialSyncProgressInterval(t, 20*time.Millisecond)
 	dt := initializingDiffTracker()
@@ -1898,8 +1905,12 @@ func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *test
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logr.Discard()))
+	logger, logs := progressLog()
+	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
 	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
+	logged := strings.Join(*logs, "\n")
+	assert.Contains(t, logged, "initial sync completed on the periodic re-check")
+	assert.NotContains(t, logged, "initial sync has not completed")
 }
 
 func TestWaitForInitialSyncReportingProgress_TickDoesNotCompleteOutstandingWork(t *testing.T) {
@@ -1910,18 +1921,10 @@ func TestWaitForInitialSyncReportingProgress_TickDoesNotCompleteOutstandingWork(
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
-	assert.Error(t, waitForInitialSyncReportingProgress(ctx, dt, logr.Discard()))
+	logger, logs := progressLog()
+	assert.Error(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&dt.isInitializing))
-}
-
-func TestRecheckInitializationComplete_ReportsOnlyTheCompletionItCaused(t *testing.T) {
-	dt := initializingDiffTracker()
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{State: StateCreationInProgress}
-	assert.False(t, dt.recheckInitializationComplete())
-
-	delete(dt.pendingServiceOps, "svc")
-	assert.True(t, dt.recheckInitializationComplete())
-	assert.False(t, dt.recheckInitializationComplete())
-
-	assert.False(t, newTestDiffTracker().recheckInitializationComplete())
+	logged := strings.Join(*logs, "\n")
+	assert.Contains(t, logged, "initial sync has not completed", "a stalled sync must stay loud")
+	assert.NotContains(t, logged, "initial sync completed on the periodic re-check")
 }
