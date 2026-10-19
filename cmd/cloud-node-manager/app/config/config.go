@@ -78,6 +78,11 @@ type Config struct {
 	// Specifies if node information is retrieved via IMDS or ARM.
 	UseInstanceMetadata bool
 
+	// NodeIPFamilies determines which IP families are reported in a node's
+	// status.addresses and in what order. Valid entries are "ipv4" and "ipv6".
+	// Empty means the cloud provider default of IPv4 first.
+	NodeIPFamilies []string
+
 	// WindowsService should be set to true if cloud-node-manager is running as a service on Windows.
 	// Its corresponding flag only gets registered in Windows builds
 	WindowsService bool
