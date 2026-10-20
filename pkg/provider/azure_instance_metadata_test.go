@@ -18,6 +18,7 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -583,6 +584,33 @@ func TestGetMetadataLoadBalancerRecoveryAfterCacheExpiry(t *testing.T) {
 			assert.Same(t, staleLBErr, stale.LBMetadataError)
 			assert.Equal(t, "", stale.Network.Interface[0].IPV4.IPAddress[0].PublicIP)
 			f.assertCalls(t, 2, 2)
+		})
+	}
+}
+
+func TestInstanceMetadataJSONOmitsLBMetadataError(t *testing.T) {
+	for _, tc := range []struct {
+		desc            string
+		lbMetadataError error
+	}{
+		{
+			desc: "nil LBMetadataError should not be serialized",
+		},
+		{
+			desc:            "wrapped LBMetadataError should not be serialized",
+			lbMetadataError: fmt.Errorf("%w: %w", providererrors.ErrLoadBalancerMetadataUnavailable, &imdsResponseError{statusCode: http.StatusServiceUnavailable}),
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			metadata := &InstanceMetadata{
+				Compute:         &ComputeMetadata{Name: "vm1", VMSize: "Standard_D2s_v3"},
+				Network:         &NetworkMetadata{Interface: []*NetworkInterface{}},
+				LBMetadataError: tc.lbMetadataError,
+			}
+
+			data, err := json.Marshal(metadata)
+			assert.NoError(t, err)
+			assert.JSONEq(t, `{"compute":{"name":"vm1","vmSize":"Standard_D2s_v3"},"network":{"interface":[]}}`, string(data))
 		})
 	}
 }
