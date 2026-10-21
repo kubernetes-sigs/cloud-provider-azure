@@ -28,6 +28,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -506,7 +507,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	}
 
 	// Step 2: Create Public IP and capture the response to get the allocated IP address
-	pipResponse, err := s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, &pipResource)
+	pipResponse, err := s.diffTracker.createManagedPublicIP(ctx, pipResource)
 	if err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not create Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
@@ -636,14 +637,14 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
 
-	byoNATGateway, err := s.resolveBYONATGateway(ctx, serviceUID, triggeringPodNS, triggeringPodName)
+	byoNATGateway, memberPod, err := s.resolveBYONATGateway(ctx, serviceUID, triggeringPodNS, triggeringPodName)
 	if err != nil {
 		s.logger.V(4).Info("Could not resolve NAT Gateway for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
 		s.onComplete(serviceUID, false, err)
 		return
 	}
 	if byoNATGateway != nil {
-		s.createBYOOutboundService(ctx, serviceUID, config, byoNATGateway, correlationID, triggeringPodNS, triggeringPodName)
+		s.createBYOOutboundService(ctx, serviceUID, byoNATGateway, correlationID, memberPod)
 		return
 	}
 
@@ -655,9 +656,13 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 	// reuses, and the gateway is never PUT referencing an address that does not exist.
 	for i := range pipResources {
 		pipResource := pipResources[i]
-		if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
+		if _, err := s.diffTracker.createManagedPublicIP(ctx, pipResource); err != nil {
 			httpStatus, errCode := extractAzureErrorInfo(err)
 			s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "publicIP", derefString(pipResource.Name), "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			if isEgressRejected(err) {
+				s.diffTracker.recordEgressEvent(memberPod, v1.EventTypeWarning, egressNATGatewayRejectedReason,
+					fmt.Sprintf("Egress identity %q cannot be used: %v.", serviceUID, err))
+			}
 			s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
 			return
 		}
@@ -754,11 +759,11 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 
 	// Step 4: Delete Public IP
 	_, pipName, _ := buildInboundResourceNames(serviceUID)
-	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
+	if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName, serviceUID, InboundServiceUIDTagKey); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not delete Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
-	} else {
+	} else if deleted {
 		s.logger.V(5).Info("Deleted Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName)
 	}
 
@@ -820,8 +825,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 		s.deleteBYOOutboundService(ctx, serviceUID, natGatewayID, correlationID)
 		return
 	}
-	if s.diffTracker.isUnmanagedNATGateway(serviceUID) {
-		// Its creation was rejected, so it provisioned nothing; the gateway of its name is not ours.
+	if s.diffTracker.isReservedOutboundService(serviceUID) {
 		s.finishOutboundDeletion(ctx, serviceUID, correlationID, nil)
 		return
 	}
@@ -920,16 +924,14 @@ func (s *ServiceUpdater) deleteManagedOutboundResources(ctx context.Context, ser
 		s.logger.V(5).Info("Deleted NAT Gateway for outbound service", "serviceUID", serviceUID)
 	}
 
-	// Step 4: Delete every Public IP this identity can own. Both names are reserved for this
-	// controller, and the config that decided the families is not available here, so both are
-	// always attempted. A delete for an address that was never created is a 404, which
-	// deletePublicIP already treats as success.
+	// Step 4: Check both address families, including a PIP left by a failed managed creation.
+	// A matching name alone does not establish ownership, especially after a rejected BYO creation.
 	for _, pipName := range OutboundPublicIPNames(serviceUID) {
-		if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
+		if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName, serviceUID, EgressIdentityTagKey); err != nil {
 			httpStatus, errCode := extractAzureErrorInfo(err)
 			s.logger.V(4).Info("Could not delete Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 			lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
-		} else {
+		} else if deleted {
 			s.logger.V(5).Info("Deleted Public IP for outbound service", "serviceUID", serviceUID, "publicIP", pipName)
 		}
 	}

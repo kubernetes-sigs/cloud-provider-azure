@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -212,6 +213,7 @@ func isTransientAzureFailure(output string) bool {
 		"(429)",
 		"temporarily unavailable",
 		"connection reset by peer",
+		"Temporary failure in name resolution", // this runner's DNS, e.g. for management.azure.com
 		"Please run 'az login'",
 		"AADSTS700082", // expired refresh token; the next attempt re-authenticates
 	} {
@@ -220,6 +222,24 @@ func isTransientAzureFailure(output string) bool {
 		}
 	}
 	return false
+}
+
+func TestIsTransientAzureFailure(t *testing.T) {
+	for _, tc := range []struct {
+		output    string
+		transient bool
+	}{
+		{"ERROR: HTTPSConnectionPool(host='management.azure.com', port=443): Max retries exceeded with url: /subscriptions/x " +
+			"(Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7cf50cc26510>: Failed to resolve " +
+			"'management.azure.com' ([Errno -3] Temporary failure in name resolution)\"))", true},
+		{"ERROR: (ServiceUnavailable) The service is temporarily unavailable.", true},
+		{"ERROR: (ResourceNotFound) The Resource 'Microsoft.Network/natGateways/x' under resource group 'rg' was not found.", false},
+		{"ERROR: (AuthorizationFailed) The client does not have authorization to perform action.", false},
+	} {
+		if got := isTransientAzureFailure(tc.output); got != tc.transient {
+			t.Errorf("isTransientAzureFailure(%q) = %v, want %v", tc.output, got, tc.transient)
+		}
+	}
 }
 
 // runAz runs an `az` command and returns its stdout, retrying transient control-plane failures.

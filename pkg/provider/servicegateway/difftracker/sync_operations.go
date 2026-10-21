@@ -63,7 +63,15 @@ func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
 
 // getSyncNRPNATGatewaysLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncNRPNATGatewaysLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.logger, dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+	result := GetServicesToSync(dt.logger, dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+	for _, identities := range []*utilsets.IgnoreCaseSet{result.Additions, result.Removals} {
+		for _, identity := range identities.UnsortedList() {
+			if dt.outboundIdentityConflictsWithInboundLocked(identity) {
+				identities.Delete(identity)
+			}
+		}
+	}
+	return result
 }
 
 func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {

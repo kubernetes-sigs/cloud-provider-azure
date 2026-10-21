@@ -924,8 +924,6 @@ func buildNRPState(
 		return NRPState{}, nil, nil, nil, nil, err
 	}
 
-	recordLinkedBYONATGateways(ctx, config, networkClientFactory, &nrp)
-
 	// Fetch ServiceGateway locations
 	if err := fetchServiceGatewayLocations(ctx, config, networkClientFactory, &nrp); err != nil {
 		return NRPState{}, nil, nil, nil, nil, err
@@ -1007,16 +1005,17 @@ func fetchServiceGatewayServices(
 			natGatewayID := derefString(service.Properties.PublicNatGatewayID)
 			if IsReservedEgressIdentity(*service.Name) || ptr.Deref(service.Properties.IsDefault, false) {
 				logger.V(4).Info("Skipped RP-owned default outbound service", "service", *service.Name)
-				// Neither its name nor its gateway (when in the cluster resource group) may be claimed
-				// by an egress identity or swept as an orphan.
+				// Reserve the service identity separately: its gateway's name is not a BYO identity.
+				if nrp.ReservedOutboundServices == nil {
+					nrp.ReservedOutboundServices = utilsets.NewString()
+				}
+				nrp.ReservedOutboundServices.Insert(*service.Name)
 				if nrp.UnmanagedNATGateways == nil {
 					nrp.UnmanagedNATGateways = utilsets.NewString()
 				}
 				nrp.UnmanagedNATGateways.Insert(*service.Name)
-				if natGatewayID != "" && !isBYONATGatewayID(natGatewayID, config) {
-					if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
-						nrp.UnmanagedNATGateways.Insert(parsed.Name)
-					}
+				if parsed, err := arm.ParseResourceID(natGatewayID); err == nil && isClusterResourceGroup(parsed, config) {
+					nrp.UnmanagedNATGateways.Insert(parsed.Name)
 				}
 				continue
 			}
@@ -1103,7 +1102,7 @@ func fetchAzureNATGateways(
 	for _, ng := range ngs {
 		if ng.Name != nil {
 			currentNATs.Insert(strings.ToLower(*ng.Name))
-			if !ownsNATGateway(ng, config) {
+			if !ownsNATGateway(ng) {
 				if nrp.UnmanagedNATGateways == nil {
 					nrp.UnmanagedNATGateways = utilsets.NewString()
 				}
@@ -1776,7 +1775,7 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 
 // cleanupOrphanedPublicIPs identifies and deletes Public IPs that are not associated with any tracked service.
 // This handles PIPs that were left behind when their associated LB/NAT Gateway was deleted outside the normal flow.
-// Uses pre-fetched PIPs from initialization to avoid duplicate API calls.
+// Uses pre-fetched PIPs to select candidates, then rechecks ownership before each delete.
 // If pips is nil, falls back to fetching from Azure (for non-initialization use cases).
 func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*armnetwork.PublicIPAddress) error {
 	logger := dt.logger
@@ -1792,16 +1791,19 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		}
 	}
 
-	orphanedPIPs := []string{}
+	type orphanedPublicIP struct {
+		name, identity, ownerTagKey string
+	}
+	var orphanedPIPs []orphanedPublicIP
 	dt.mu.Lock()
 	for _, pip := range pips {
-		if pip.Name == nil {
+		if pip == nil || pip.Name == nil {
 			continue
 		}
 
 		pipName := *pip.Name
 
-		// Map the address back to its identity. Both "-pip" and "-pip-v6" are ours.
+		// Map the address name to a candidate identity, then require its ownership tag.
 		identity, ok := identityFromPublicIPName(pipName)
 		if !ok {
 			logger.V(5).Info("Skipped Public IP with unexpected name", "publicIP", pipName)
@@ -1820,11 +1822,15 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 			continue
 		}
 
+		ownerTagKey := EgressIdentityTagKey
+		if !ownsPublicIP(pip, identity, ownerTagKey) {
+			ownerTagKey = InboundServiceUIDTagKey
+			if !ownsPublicIP(pip, identity, ownerTagKey) {
+				logger.V(4).Info("Kept orphaned Public IP without matching ownership tag", "publicIP", pipName)
+				continue
+			}
+		}
 		serviceName := identity
-
-		// Every "*-pip" in this resource group is ours: it is the cluster's managed node resource
-		// group, so there are no customer-created addresses here to protect. Both a UUID-named
-		// inbound address and an egress address named from a pod label are swept.
 
 		// A Service or egress identity Kubernetes still wants is not an orphan, even when NRP has
 		// no record of it. That combination is exactly the crash-mid-create state: the Public IP was
@@ -1844,7 +1850,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		if !lbExists && !natExists {
 			// PIP is orphaned - not associated with any tracked service
-			orphanedPIPs = append(orphanedPIPs, pipName)
+			orphanedPIPs = append(orphanedPIPs, orphanedPublicIP{pipName, identity, ownerTagKey})
 		}
 	}
 	dt.mu.Unlock()
@@ -1859,14 +1865,17 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 	// Delete orphaned PIPs in parallel using WorkerPool
 	pool := NewWorkerPool(ctx, workerPoolSize)
 	var deletedCount int32
-	for _, pipName := range orphanedPIPs {
-		pipName := pipName // capture for closure
+	for _, pip := range orphanedPIPs {
+		pip := pip // capture for closure
 		pool.Submit(func() error {
-			if err := dt.deletePublicIP(ctx, dt.config.ResourceGroup, pipName); err != nil {
-				return fmt.Errorf("deleting orphaned Public IP %s: %w", pipName, err)
+			deleted, err := dt.deleteOwnedPublicIP(ctx, pip.name, pip.identity, pip.ownerTagKey)
+			if err != nil {
+				return fmt.Errorf("deleting orphaned Public IP %s: %w", pip.name, err)
 			}
-			atomic.AddInt32(&deletedCount, 1)
-			logger.V(5).Info("Deleted orphaned Public IP", "publicIP", pipName)
+			if deleted {
+				atomic.AddInt32(&deletedCount, 1)
+				logger.V(5).Info("Deleted orphaned Public IP", "publicIP", pip.name)
+			}
 			return nil
 		})
 	}
