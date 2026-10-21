@@ -22,12 +22,19 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
 )
 
+const AzureUSSecCloudName = "AZUREUSSECCLOUD"
+
+var AzureUSSecCloud = cloud.Configuration{
+	Services: map[cloud.ServiceName]cloud.ServiceConfiguration{},
+}
+
 var EnvironmentMapping = map[string]*cloud.Configuration{
 	"AZURECHINACLOUD":        &cloud.AzureChina,
 	"AZURECLOUD":             &cloud.AzurePublic,
 	"AZUREPUBLICCLOUD":       &cloud.AzurePublic,
 	"AZUREUSGOVERNMENT":      &cloud.AzureGovernment,
 	"AZUREUSGOVERNMENTCLOUD": &cloud.AzureGovernment, //TODO: deprecate
+	"AZUREUSSECCLOUD":        &AzureUSSecCloud,
 }
 
 func AzureCloudConfigFromName(cloudName string) *cloud.Configuration {
