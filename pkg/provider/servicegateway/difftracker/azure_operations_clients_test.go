@@ -845,9 +845,6 @@ func TestARMPrimitivesDoNotHoldStateLock(t *testing.T) {
 	<-armDone
 }
 
-// buildNRPState must hand the NAT Gateways this controller does not own, and the default outbound
-// service's gateway, to the orphan sweep through NRPState. A registration whose NAT Gateway ID was
-// already cleared by an interrupted unlink names no NAT Gateway, so nothing is read to recover it.
 func TestBuildNRPState_RecordsUnmanagedNATGateways(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

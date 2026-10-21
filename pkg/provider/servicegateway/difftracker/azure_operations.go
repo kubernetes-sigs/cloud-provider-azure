@@ -261,15 +261,12 @@ func (dt *DiffTracker) getNatGatewayByID(ctx context.Context, natGatewayID strin
 	return &result, true, nil
 }
 
-// unlinkNatGateway clears the association between the egress service serviceName and its NAT
-// Gateway on both sides. The NAT Gateway side is only cleared while it points at this cluster's
-// Service Gateway (a gateway since linked elsewhere is left alone) and no other Service Gateway
-// service, such as the default outbound service, uses it.
+// unlinkNatGateway clears the service reference before the gateway link. The link is cleared
+// only if it still points here and no other Service Gateway service uses the gateway.
 func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName, serviceName, natGatewayResourceGroup, natGatewayName string) error {
 	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
 
-	// Step 1: clear the ServiceGateway-side reference if it still has one (none when the Service
-	// Gateway is gone).
+	// Step 1: clear the ServiceGateway-side reference if it still has one.
 	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, serviceGatewayName)
 	var respErr *azcore.ResponseError
 	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {

@@ -112,8 +112,7 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		}
 	}
 
-	// Only a NAT Gateway the annotation could name is BYO: one in another subscription can be neither
-	// read nor unlinked through this cluster's network clients.
+	// Recover BYO cleanup records only within the network client's subscription and outside the node RG.
 	for identity, natGatewayID := range nrp.OutboundNATGatewayIDs {
 		if diffTracker.outboundIdentityConflictsWithInboundLocked(identity) {
 			continue

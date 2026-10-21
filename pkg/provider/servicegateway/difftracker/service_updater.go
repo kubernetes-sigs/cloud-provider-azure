@@ -813,8 +813,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 	}
 }
 
-// deleteOutboundService releases an egress identity: unlinks its BYO NAT Gateway, or deletes the managed
-// NAT Gateway and Public IPs it owns
+// deleteOutboundService unlinks BYO gateways and deletes only owned managed resources.
 func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID string) {
 	s.logger.V(5).Info("Started deleting outbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 
@@ -869,8 +868,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 		s.logger.V(5).Info("Unregistered outbound service from ServiceGateway", "serviceUID", serviceUID)
 	}
 
-	// Steps 3-4: delete the NAT Gateway and its Public IPs, unless they are not this identity's to
-	// delete (not created by this controller, or used by another service such as the default one).
+	// Steps 3-4: delete only the managed NAT Gateway and Public IPs owned by this identity.
 	if !owned {
 		s.logger.V(2).Info("Kept NAT Gateway and Public IPs not owned by this identity", "serviceUID", serviceUID)
 	} else if err := s.deleteManagedOutboundResources(ctx, serviceUID, correlationID); err != nil {
@@ -880,9 +878,8 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 	s.finishOutboundDeletion(ctx, serviceUID, correlationID, lastErr)
 }
 
-// finishOutboundDeletion is Step 5 of deleting an egress identity: once its Azure resources are
-// released (deleted, unlinked for BYO, or left alone when not its own; lastErr == nil) it updates NRPResources, releases the last pods' finalizers and forgets any BYO
-// NAT Gateway; otherwise it reports the failure so the delete is retried.
+// finishOutboundDeletion reports failures for retry. On success it releases last-pod finalizers
+// before forgetting the BYO record, so retries stay on the unlink-only path.
 func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID, correlationID string, lastErr error) {
 	if lastErr != nil {
 		s.logger.V(4).Info("Could not delete outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", lastErr)
@@ -895,9 +892,7 @@ func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		})
 
-		// Remove finalizers from last-pod entries now that the identity's Azure resources are released
-		// (deleted, or unlinked for BYO). If that exhausts retries, report the delete as failed so it
-		// retries (every Azure step is idempotent) instead of stranding the pod finalizer.
+		// Azure cleanup precedes finalizer removal; a failed removal must retain the BYO record.
 		if err := s.diffTracker.RemoveLastPodFinalizers(ctx, serviceUID); err != nil {
 			s.logger.V(4).Info("Could not clean up last-pod finalizers for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
 			s.onComplete(serviceUID, false, err)
@@ -910,16 +905,13 @@ func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID,
 	}
 }
 
-// deleteManagedOutboundResources deletes the NAT Gateway and Public IPs this controller created for an
-// egress identity (steps 3 and 4 of deleteOutboundService) and returns the last error.
+// deleteManagedOutboundResources attempts NAT and PIP deletion, returning the last error.
 func (s *ServiceUpdater) deleteManagedOutboundResources(ctx context.Context, serviceUID, correlationID string) error {
 	var lastErr error
-	// Step 3: Delete NAT Gateway
 	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceUID); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not delete NAT Gateway for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		lastErr = fmt.Errorf("failed to delete NAT Gateway: %w", err)
-		// Continue with PIP deletion
 	} else {
 		s.logger.V(5).Info("Deleted NAT Gateway for outbound service", "serviceUID", serviceUID)
 	}

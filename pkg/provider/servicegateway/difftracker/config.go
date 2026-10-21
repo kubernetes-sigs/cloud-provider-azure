@@ -16,9 +16,7 @@ limitations under the License.
 
 package difftracker
 
-import (
-	"fmt"
-)
+import "fmt"
 
 // Config holds the configuration values needed by DiffTracker
 // to perform Azure operations without depending on the entire AzureCloud struct
