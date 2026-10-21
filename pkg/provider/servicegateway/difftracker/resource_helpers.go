@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	v1 "k8s.io/api/core/v1"
@@ -122,6 +121,9 @@ const DefaultOutboundNATGatewayName = "default-natgw"
 // ownsNATGateway) are ever swept as orphans.
 const EgressIdentityTagKey = "k8s-azure-egress-identity"
 
+// InboundServiceUIDTagKey identifies the Service that owns an SGW inbound Public IP.
+const InboundServiceUIDTagKey = "k8s-azure-service-uid"
+
 // IsReservedEgressIdentity reports whether name refers to a resource this controller must not
 // manage. Matching is case-insensitive because the value originates from a user-controlled label and
 // Azure may normalise resource-name casing differently across endpoints.
@@ -135,13 +137,8 @@ func IsReservedEgressIdentity(name string) bool {
 // validated to avoid malformed ARM requests (for example a path-traversal value like "../foo") or a
 // PIP name that overflows Azure's 80-char limit, either of which causes endless create retries.
 //
-// Reserved names are rejected here so every caller fails closed. The identity names the Azure
-// resources directly, so a pod label naming a resource this controller does not own would make the
-// egress lifecycle act on it: registering the first pod PUTs that NAT Gateway and its Public IP, and
-// removing the last pod DELETEs them. For the RP-owned default gateway that is a cluster-wide egress
-// outage reachable by anyone who can create a labelled pod in any namespace, and it is not otherwise
-// prevented: the default gateway is deliberately excluded from NRP state at startup, so the pod-add
-// path always concludes it must be created.
+// The RP-owned default identity is never admitted to the pod-driven lifecycle. Resource ownership
+// and other Service Gateway users are checked separately before managed resources are changed.
 func IsValidEgressIdentity(name string) bool {
 	if IsReservedEgressIdentity(name) {
 		return false
@@ -150,7 +147,7 @@ func IsValidEgressIdentity(name string) bool {
 }
 
 // buildInboundServiceResources constructs the PIP, LoadBalancer, and ServicesDTO for an inbound service
-// Returns the resources ready to be created via createOrUpdatePIP/createOrUpdateLB/updateNRPSGWServices
+// Returns resources for createManagedPublicIP/createOrUpdateLB/updateNRPSGWServices.
 func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtConfig Config) (
 	pip armnetwork.PublicIPAddress,
 	lb armnetwork.LoadBalancer,
@@ -192,6 +189,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
+		Tags:     map[string]*string{InboundServiceUIDTagKey: to.Ptr(serviceUID)},
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 			PublicIPAddressVersion:   to.Ptr(pipVersion),
@@ -420,35 +418,24 @@ func egressIdentityTags(identity string) map[string]*string {
 }
 
 // ownsNATGateway reports whether a cluster-resource-group NAT Gateway was created by this controller:
-// tagged with its own name as egress identity or, when created before tagging, carrying only the
-// Public IPs this controller names after the identity. Neither changes when the gateway is unlinked.
-// Either kind of match could still be used by another service (for example the default outbound
-// service); callers that write to or delete one must also check that no other Service Gateway
-// service uses it.
-func ownsNATGateway(natGateway *armnetwork.NatGateway, dtConfig Config) bool {
+// tagged with its own name as egress identity (EgressIdentityTagKey). An untagged one is never ours,
+// also one created by a version of this controller that did not tag yet. A tagged one could still be
+// used by another service (for example the default outbound service); callers that write to or delete
+// one must also check that no other Service Gateway service uses it.
+func ownsNATGateway(natGateway *armnetwork.NatGateway) bool {
 	if natGateway == nil {
 		return false
 	}
-	name := derefString(natGateway.Name)
-	if tag, ok := natGateway.Tags[EgressIdentityTagKey]; ok {
-		return tag != nil && strings.EqualFold(*tag, name)
-	}
-	props := natGateway.Properties
-	if props == nil || len(props.PublicIPPrefixes) > 0 || len(props.PublicIPPrefixesV6) > 0 {
+	tag, ok := natGateway.Tags[EgressIdentityTagKey]
+	return ok && tag != nil && strings.EqualFold(*tag, derefString(natGateway.Name))
+}
+
+func ownsPublicIP(pip *armnetwork.PublicIPAddress, identity, ownerTagKey string) bool {
+	if pip == nil || identity == "" {
 		return false
 	}
-	addresses := append(append([]*armnetwork.SubResource{}, props.PublicIPAddresses...), props.PublicIPAddressesV6...)
-	if len(addresses) == 0 {
-		return false
-	}
-	for _, address := range addresses {
-		parsed, err := arm.ParseResourceID(derefString(address.ID))
-		if err != nil || !strings.EqualFold(parsed.ResourceGroupName, dtConfig.ResourceGroup) ||
-			(!strings.EqualFold(parsed.Name, PublicIPName(name)) && !strings.EqualFold(parsed.Name, PublicIPNameV6(name))) {
-			return false
-		}
-	}
-	return true
+	owner := pip.Tags[ownerTagKey]
+	return owner != nil && strings.EqualFold(*owner, identity)
 }
 
 // newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings

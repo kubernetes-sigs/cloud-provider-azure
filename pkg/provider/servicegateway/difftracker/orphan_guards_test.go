@@ -209,9 +209,11 @@ func TestGuardDefaultNATGatewayPIPSurvivesOrphanSweep(t *testing.T) {
 	dt.networkClientFactory = mockFactory
 
 	detached := func(name string) *armnetwork.PublicIPAddress {
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		identity, _ := identityFromPublicIPName(name)
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 	const managedOrphan = "33333333-3333-3333-3333-333333333333-pip"
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", managedOrphan, nil).Return(detached(managedOrphan), nil).Times(1)
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
 		detached(PublicIPName(DefaultOutboundNATGatewayName)),
 		detached(managedOrphan),
@@ -366,11 +368,15 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 	dt.networkClientFactory = mockFactory
 
 	pip := func(name string) *armnetwork.PublicIPAddress {
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		identity, _ := identityFromPublicIPName(name)
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 
 	const egress = "team-egress"
 	const desired = "still-wanted-egress"
+	for _, name := range OutboundPublicIPNames(egress) {
+		mockPIP.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(pip(name), nil).Times(1)
+	}
 	dt.K8sResources.Egresses = newIgnoreCaseSetFromSlice([]string{desired})
 
 	attached := pip(PublicIPName("still-in-use"))

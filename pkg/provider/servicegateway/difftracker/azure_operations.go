@@ -49,6 +49,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -64,12 +65,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 )
-
-// createOrUpdatePIP creates or updates a public IP address
-func (dt *DiffTracker) createOrUpdatePIP(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
-	_, err := dt.createOrUpdatePIPWithResponse(ctx, pipResourceGroup, pip)
-	return err
-}
 
 // createOrUpdatePIPWithResponse creates or updates a public IP address and returns the response
 // containing the allocated IP address. Use this when you need the IP address after PIP creation.
@@ -91,7 +86,32 @@ func (dt *DiffTracker) createOrUpdatePIPWithResponse(ctx context.Context, pipRes
 	return response, nil
 }
 
-// deletePublicIP deletes a public IP address
+// createManagedPublicIP preserves existing tags; outbound creation cannot adopt an unowned address.
+// Inbound retries retain legacy ownership metadata without adding the new inbound marker.
+func (dt *DiffTracker) createManagedPublicIP(ctx context.Context, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+	pipName := ptr.Deref(pip.Name, "")
+	if pipName == "" {
+		return nil, fmt.Errorf("createManagedPublicIP: pip name is empty")
+	}
+	existing, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
+	if err != nil {
+		if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr != nil || exists {
+			return nil, fmt.Errorf("reading Public IP %q before creation: %w", pipName, err)
+		}
+	} else {
+		if existing == nil {
+			return nil, fmt.Errorf("reading Public IP %q before creation returned no resource", pipName)
+		}
+		if identity := pip.Tags[EgressIdentityTagKey]; identity != nil && !ownsPublicIP(existing, *identity, EgressIdentityTagKey) {
+			return nil, egressRejectedError{fmt.Errorf("public IP %q is not owned by egress identity %q", pipName, *identity)}
+		}
+		pip.Tags = existing.Tags
+		pip.Etag = existing.Etag
+	}
+	return dt.createOrUpdatePIPWithResponse(ctx, dt.config.ResourceGroup, &pip)
+}
+
+// deletePublicIP deletes a public IP address after the caller has established ownership.
 func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup string, pipName string) error {
 	if pipName == "" {
 		return fmt.Errorf("deletePublicIP: pipName is empty")
@@ -104,6 +124,33 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 	}
 
 	return nil
+}
+
+// deleteOwnedPublicIP rechecks ownership before deleting a managed node-resource-group address.
+// The bool reports whether deletion was performed, rather than an unowned or absent address kept.
+func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName, identity, ownerTagKey string) (bool, error) {
+	if pipName == "" {
+		return false, fmt.Errorf("deleteOwnedPublicIP: pip name is empty")
+	}
+	pip, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
+	if err != nil {
+		if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr == nil && !exists {
+			dt.logger.V(4).Info("Skipped absent Public IP", "publicIP", pipName)
+			return false, nil
+		}
+		return false, fmt.Errorf("reading Public IP %q to check ownership: %w", pipName, err)
+	}
+	if pip == nil {
+		return false, fmt.Errorf("reading Public IP %q to check ownership returned no resource", pipName)
+	}
+	if !ownsPublicIP(pip, identity, ownerTagKey) {
+		dt.logger.V(2).Info("Kept Public IP without matching ownership tag", "publicIP", pipName, "identity", identity, "ownerTag", ownerTagKey)
+		return false, nil
+	}
+	if err := dt.deletePublicIP(ctx, dt.config.ResourceGroup, pipName); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // createOrUpdateLB creates or updates a load balancer
@@ -133,6 +180,16 @@ func (dt *DiffTracker) deleteLB(ctx context.Context, uid string) error {
 	}
 
 	return nil
+}
+
+func withNATGatewayETag(ctx context.Context, etag *string) (context.Context, error) {
+	version := strings.TrimSpace(ptr.Deref(etag, ""))
+	if version == "" || version == "*" {
+		return nil, fmt.Errorf("BYO NAT Gateway was read without a usable ETag")
+	}
+	// A retried PUT can return 412 after an earlier attempt applied; let the controller observe that ambiguity.
+	ctx = policy.WithRetryOptions(ctx, policy.RetryOptions{MaxRetries: -1})
+	return policy.WithHTTPHeader(ctx, http.Header{"If-Match": {version}}), nil
 }
 
 // createOrUpdateNatGateway creates or updates a NAT gateway
@@ -184,13 +241,24 @@ func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Cont
 	return dt.unlinkNatGateway(ctx, serviceGatewayName, natGatewayName, dt.config.ResourceGroup, natGatewayName)
 }
 
-// getNatGatewayByID reads a NAT Gateway by resource ID. exists is false (with a nil error) when it is not found.
+// getNatGatewayByID reads a NAT Gateway by resource ID, which must be in the cluster's network subscription
+// (the one its clients reach). exists is false (with a nil error) when it is not found.
 func (dt *DiffTracker) getNatGatewayByID(ctx context.Context, natGatewayID string) (natGateway *armnetwork.NatGateway, exists bool, err error) {
 	parsed, err := arm.ParseResourceID(natGatewayID)
 	if err != nil {
 		return nil, false, fmt.Errorf("parsing NAT Gateway ID %q: %w", natGatewayID, err)
 	}
-	return dt.getNatGateway(ctx, parsed.ResourceGroupName, parsed.Name)
+	natGateway, exists, err = dt.getNatGateway(ctx, parsed.ResourceGroupName, parsed.Name)
+	if err != nil || !exists {
+		return natGateway, exists, err
+	}
+	if natGateway == nil {
+		return nil, false, fmt.Errorf("NAT Gateway %q was read without a resource", natGatewayID)
+	}
+	result := *natGateway
+	result.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, parsed.SubscriptionID, parsed.ResourceGroupName, parsed.Name))
+	result.Name = ptr.To(parsed.Name)
+	return &result, true, nil
 }
 
 // unlinkNatGateway clears the association between the egress service serviceName and its NAT
@@ -252,10 +320,21 @@ func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName,
 	if !exists {
 		return nil
 	}
+	if !strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup) &&
+		(natGateway == nil || natGateway.Properties == nil) {
+		return fmt.Errorf("NAT Gateway %q was read without its properties; link state is unknown", natGatewayID)
+	}
 	if linked := natGatewayServiceGatewayID(natGateway); linked != "" && strings.EqualFold(linked, dt.config.ServiceGatewayResourceID()) {
+		updateCtx := ctx
+		if !strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup) {
+			updateCtx, err = withNATGatewayETag(ctx, natGateway.Etag)
+			if err != nil {
+				return err
+			}
+		}
 		// See above: a plain nil would be omitted from the payload rather than clearing the field.
 		natGateway.Properties.ServiceGateway = azcore.NullValue[*armnetwork.SubResource]()
-		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, natGatewayResourceGroup, natGatewayName, *natGateway); err != nil {
+		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(updateCtx, natGatewayResourceGroup, natGatewayName, *natGateway); err != nil {
 			return fmt.Errorf("updating NAT Gateway %q to remove Service Gateway reference: %w", natGatewayName, err)
 		}
 	}

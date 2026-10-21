@@ -45,6 +45,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 
@@ -565,6 +566,322 @@ func TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer(t *testi
 	assert.NoError(t, err, "control: a LoadBalancer Service resolves regardless of the selector")
 	if assert.NotNil(t, gotLB) {
 		assert.Equal(t, "uid-lb", string(gotLB.UID))
+	}
+}
+
+type natGatewayTransportFunc func(*http.Request) (*http.Response, error)
+
+func (f natGatewayTransportFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
+
+func initialNATPutError(err error) error {
+	var responseErr *azcore.ResponseError
+	if !errors.As(err, &responseErr) || responseErr.RawResponse != nil {
+		return err
+	}
+	result := *responseErr
+	result.RawResponse = &http.Response{
+		StatusCode: result.StatusCode, Request: &http.Request{Method: http.MethodPut},
+	}
+	return &result
+}
+
+func TestInitialNATPutResponse(t *testing.T) {
+	assert.False(t, isInitialNATPutResponse(nil))
+	assert.False(t, isInitialNATPutResponse(&azcore.ResponseError{StatusCode: http.StatusForbidden}))
+	assert.False(t, isInitialNATPutResponse(&azcore.ResponseError{RawResponse: &http.Response{}}))
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut} {
+		err := &azcore.ResponseError{StatusCode: http.StatusForbidden,
+			RawResponse: &http.Response{Request: &http.Request{Method: method}}}
+		assert.Equal(t, method == http.MethodPut, isLinkRefusal(err))
+	}
+}
+
+func TestBYONATGatewayConditionalWrites(t *testing.T) {
+	const identity = "conditional-nat"
+	cfg := testConfig()
+	for _, unlink := range []bool{false, true} {
+		for _, conflict := range []bool{false, true} {
+			t.Run(fmt.Sprintf("unlink=%t/conflict=%t", unlink, conflict), func(t *testing.T) {
+				live := byoNATGateway(identity)
+				if unlink {
+					live.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+				}
+				lastReadETag := ""
+				gets, puts := 0, 0
+				transport := natGatewayTransportFunc(func(req *http.Request) (*http.Response, error) {
+					assert.Contains(t, req.URL.Path, "/resourceGroups/"+byoNATGatewayRG+"/providers/Microsoft.Network/natGateways/"+identity)
+					status := http.StatusOK
+					var body []byte
+					switch req.Method {
+					case http.MethodGet:
+						if req.Header.Get("If-Match") == "" {
+							gets++
+							lastReadETag = derefString(live.Etag)
+						}
+						var err error
+						body, err = json.Marshal(live)
+						assert.NoError(t, err)
+					case http.MethodPut:
+						puts++
+						if conflict && puts == 1 {
+							live.Etag = ptr.To(`W/"owner-edited"`)
+							live.Tags["owner"] = ptr.To("owner-changed")
+						}
+						assert.Equal(t, lastReadETag, req.Header.Get("If-Match"), "every BYO write must carry the ETag of its GET")
+						if req.Header.Get("If-Match") != "" && req.Header.Get("If-Match") != derefString(live.Etag) {
+							status = http.StatusPreconditionFailed
+							body = []byte(`{"error":{"code":"PreconditionFailed","message":"the owner changed the gateway"}}`)
+						} else {
+							data, err := io.ReadAll(req.Body)
+							assert.NoError(t, err)
+							var written armnetwork.NatGateway
+							assert.NoError(t, json.Unmarshal(data, &written))
+							assert.Equal(t, live.Tags, written.Tags, "owner edits must survive the retry")
+							assert.Equal(t, live.Zones, written.Zones)
+							assert.Equal(t, live.Properties.Nat64, written.Properties.Nat64)
+							assert.Equal(t, live.Properties.SourceVirtualNetwork, written.Properties.SourceVirtualNetwork)
+							if unlink {
+								assert.Nil(t, written.Properties.ServiceGateway)
+							} else {
+								assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(&written))
+							}
+							live = &written
+							live.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
+							live.Etag = ptr.To(`W/"updated"`)
+							body, err = json.Marshal(live)
+							assert.NoError(t, err)
+						}
+					default:
+						t.Errorf("unexpected method %s", req.Method)
+						return nil, fmt.Errorf("unexpected method %s", req.Method)
+					}
+					return &http.Response{
+						StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}},
+						Body: io.NopCloser(bytes.NewReader(body)), Request: req,
+					}, nil
+				})
+				client, err := natgatewayclient.New("sub", fakeCredential{}, &arm.ClientOptions{
+					ClientOptions: azcore.ClientOptions{Transport: transport},
+				})
+				if !assert.NoError(t, err) {
+					return
+				}
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				factory := mock_azclient.NewMockClientFactory(ctrl)
+				sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+				factory.EXPECT().GetNatGatewayClient().Return(client).AnyTimes()
+				factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+				sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+				sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+				dt := newTestDiffTracker()
+				dt.config, dt.networkClientFactory = testConfig(), factory
+				dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayARMID(identity)))
+				if unlink || conflict {
+					dt.setBYONATGatewayID(identity, byoNATGatewayARMID(identity))
+				}
+				if unlink {
+					dt.NRPResources.NATGateways.Insert(identity)
+				}
+				attempt := func() (bool, error) {
+					completed := &outboundCompletion{}
+					updater := outboundUpdater(dt, completed)
+					if unlink {
+						updater.deleteOutboundService(identity, "corr")
+					} else {
+						updater.createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
+					}
+					called, success, result := completed.result()
+					assert.True(t, called)
+					return success, result
+				}
+				success, err := attempt()
+				if conflict {
+					assert.False(t, success)
+					var responseErr *azcore.ResponseError
+					if assert.ErrorAs(t, err, &responseErr) {
+						assert.Equal(t, http.StatusPreconditionFailed, responseErr.StatusCode)
+					}
+					assert.False(t, isEgressRejected(err), "a stale precondition is retried, not a user configuration rejection")
+					assert.Equal(t, "owner-changed", derefString(live.Tags["owner"]))
+					assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity), "a stale retry must not forget an earlier possible link")
+					success, err = attempt()
+				}
+				assert.True(t, success, "%v", err)
+				assert.NoError(t, err)
+				assert.Equal(t, 1+wantedCalls(conflict), puts)
+				assert.Equal(t, puts, gets, "each retry must re-read the gateway")
+			})
+		}
+	}
+}
+
+func TestBYOLinkFailureRetainsCleanupAndRequiresAnotherWrite(t *testing.T) {
+	const identity = "link-failure"
+	cfg := testConfig()
+	for _, tc := range []struct {
+		name         string
+		prelinked    bool
+		status       int
+		code         string
+		transportErr error
+		attempts     int
+	}{
+		{name: "prelinked forbidden", prelinked: true, status: http.StatusForbidden, code: "AuthorizationFailed", attempts: 2},
+		{name: "prelinked locked", prelinked: true, status: http.StatusConflict, code: "ScopeLocked", attempts: 2},
+		{name: "applied then 500", status: http.StatusInternalServerError, code: "InternalServerError", attempts: 1},
+		{name: "applied then 504", status: http.StatusGatewayTimeout, code: "GatewayTimeout", attempts: 1},
+		{name: "applied then EOF", transportErr: io.ErrUnexpectedEOF, attempts: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			live := byoNATGateway(identity)
+			if tc.prelinked {
+				live.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+			}
+			writes := 0
+			client, err := natgatewayclient.New("sub", fakeCredential{}, &arm.ClientOptions{
+				ClientOptions: azcore.ClientOptions{
+					Retry: policy.RetryOptions{RetryDelay: time.Millisecond, MaxRetryDelay: time.Millisecond},
+					Transport: natGatewayTransportFunc(func(req *http.Request) (*http.Response, error) {
+						status := http.StatusOK
+						body, marshalErr := json.Marshal(live)
+						assert.NoError(t, marshalErr)
+						if req.Method == http.MethodPut {
+							writes++
+							switch {
+							case req.Header.Get("If-Match") != derefString(live.Etag):
+								status = http.StatusPreconditionFailed
+								body = []byte(`{"error":{"code":"PreconditionFailed"}}`)
+							default:
+								if !tc.prelinked {
+									live.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+									live.Etag = ptr.To(`W/"applied"`)
+								}
+								if tc.transportErr != nil {
+									return nil, tc.transportErr
+								}
+								status = tc.status
+								body = []byte(fmt.Sprintf(`{"error":{"code":%q}}`, tc.code))
+							}
+						}
+						return &http.Response{StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}},
+							Body: io.NopCloser(bytes.NewReader(body)), Request: req}, nil
+					}),
+				},
+			})
+			if !assert.NoError(t, err) {
+				return
+			}
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+			factory.EXPECT().GetNatGatewayClient().Return(client).AnyTimes()
+			factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+			sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			dt := newTestDiffTracker()
+			dt.config, dt.networkClientFactory = cfg, factory
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayARMID(identity)))
+			for i := 0; i < tc.attempts; i++ {
+				result := &outboundCompletion{}
+				outboundUpdater(dt, result).createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
+				called, success, resultErr := result.result()
+				assert.True(t, called)
+				assert.False(t, success, "a failed reassertion must not become successful registration on retry")
+				assert.Error(t, resultErr)
+				assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity), "a possibly applied link remains recorded")
+			}
+			assert.Equal(t, tc.attempts, writes, "the controller, not SDK retries, must re-read before the next mutation")
+		})
+	}
+}
+
+func TestBYOLinkPollingFailureRetainsAppliedLinkForDeletion(t *testing.T) {
+	const identity = "poll-failure"
+	cfg := testConfig()
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusPreconditionFailed} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			live := byoNATGateway(identity)
+			linkWrites, unlinkWrites := 0, 0
+			client, err := natgatewayclient.New("sub", fakeCredential{}, &arm.ClientOptions{
+				ClientOptions: azcore.ClientOptions{Transport: natGatewayTransportFunc(func(req *http.Request) (*http.Response, error) {
+					responseStatus := http.StatusOK
+					header := http.Header{"Content-Type": {"application/json"}}
+					body, marshalErr := json.Marshal(live)
+					assert.NoError(t, marshalErr)
+					switch {
+					case req.URL.Path == "/operations/poll-failure":
+						responseStatus = status
+						body = []byte(`{"error":{"code":"OperationStatusUnavailable"}}`)
+					case req.Method == http.MethodPut:
+						assert.Equal(t, derefString(live.Etag), req.Header.Get("If-Match"))
+						data, readErr := io.ReadAll(req.Body)
+						assert.NoError(t, readErr)
+						var value armnetwork.NatGateway
+						assert.NoError(t, json.Unmarshal(data, &value))
+						live = &value
+						live.Etag = ptr.To(`W/"new-version"`)
+						live.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
+						if natGatewayServiceGatewayID(live) != "" {
+							linkWrites++
+							responseStatus = http.StatusAccepted
+							header.Set("Azure-AsyncOperation", "https://management.azure.com/operations/poll-failure")
+							body = []byte(`{"properties":{"provisioningState":"Updating"}}`)
+						} else {
+							unlinkWrites++
+							body, marshalErr = json.Marshal(live)
+							assert.NoError(t, marshalErr)
+						}
+					}
+					return &http.Response{StatusCode: responseStatus, Header: header,
+						Body: io.NopCloser(bytes.NewReader(body)), Request: req}, nil
+				})},
+			})
+			if !assert.NoError(t, err) {
+				return
+			}
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+			factory.EXPECT().GetNatGatewayClient().Return(client).AnyTimes()
+			factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+			sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).DoAndReturn(
+				func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateServicesRequest) error {
+					assert.True(t, ptr.Deref(request.ServiceRequests[0].IsDelete, false), "failed creation must not register")
+					return nil
+				}).Times(1)
+			dt := newTestDiffTracker()
+			dt.config, dt.networkClientFactory = cfg, factory
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayARMID(identity)))
+			created := &outboundCompletion{}
+			outboundUpdater(dt, created).createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
+			_, success, createErr := created.result()
+			assert.False(t, success)
+			assert.Error(t, createErr)
+			assert.False(t, isEgressRejected(createErr), "a polling GET is not a refused PUT")
+			assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(live))
+			if !assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity), "an applied link must remain recorded") {
+				return
+			}
+			deleted := &outboundCompletion{}
+			outboundUpdater(dt, deleted).deleteOutboundService(identity, "corr")
+			_, success, deleteErr := deleted.result()
+			assert.True(t, success, "%v", deleteErr)
+			assert.Equal(t, 1, linkWrites)
+			assert.Equal(t, 1, unlinkWrites)
+			assert.Empty(t, natGatewayServiceGatewayID(live))
+			assert.Empty(t, dt.byoNATGatewayID(identity))
+		})
+	}
+}
+
+func TestWithNATGatewayETag_RejectsUnprotectedWrites(t *testing.T) {
+	for _, etag := range []*string{nil, ptr.To(""), ptr.To(" "), ptr.To("*"), ptr.To(" * ")} {
+		ctx, err := withNATGatewayETag(context.Background(), etag)
+		assert.ErrorContains(t, err, "usable ETag")
+		assert.Nil(t, ctx)
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -321,6 +322,7 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 	// Verify PIP
 	assert.NotNil(t, pip.Name)
 	assert.Equal(t, "service-uid-123-pip", *pip.Name)
+	assert.Equal(t, "service-uid-123", derefString(pip.Tags[InboundServiceUIDTagKey]))
 	assert.Contains(t, *pip.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.PublicIPAddressSKUNameStandardV2, *pip.SKU.Name)
 	assert.Equal(t, "eastus", *pip.Location)
@@ -381,6 +383,7 @@ func TestBuildInboundServiceResources_NilConfig(t *testing.T) {
 
 	// PIP should still be created
 	assert.NotNil(t, pip.Name)
+	assert.Equal(t, "service-uid-123", derefString(pip.Tags[InboundServiceUIDTagKey]))
 
 	// ServicesDTO should still be valid
 	assert.Len(t, servicesDTO.Services, 1)
@@ -1132,25 +1135,20 @@ func TestBYONATGatewayHelpers(t *testing.T) {
 		return "/subscriptions/" + sub + "/resourceGroups/" + rg + "/providers/Microsoft.Network/natGateways/n"
 	}
 
-	t.Run("BYO resource group", func(t *testing.T) {
-		for vnetRG, want := range map[string]string{"": "", "RG": "", "vnet-rg": "vnet-rg"} {
-			c := cfg
-			c.VNetResourceGroup = vnetRG
-			assert.Equal(t, want, c.byoNATGatewayResourceGroup(), "VNetResourceGroup %q", vnetRG)
+	t.Run("cluster resource group", func(t *testing.T) {
+		inClusterRG := func(id string, config Config) bool {
+			parsed, err := arm.ParseResourceID(id)
+			return assert.NoError(t, err) && isClusterResourceGroup(parsed, config)
 		}
-	})
-
-	t.Run("BYO NAT Gateway IDs", func(t *testing.T) {
-		assert.False(t, isBYONATGatewayID(natID("SUB", "RG"), cfg))
-		assert.True(t, isBYONATGatewayID(natID("sub", "vnet-rg"), cfg))
-		assert.True(t, isBYONATGatewayID(natID("other", "rg"), cfg))
-		assert.False(t, isBYONATGatewayID("not-an-id", cfg))
+		assert.True(t, inClusterRG(natID("SUB", "RG"), cfg))
+		assert.False(t, inClusterRG(natID("sub", "vnet-rg"), cfg))
+		assert.False(t, inClusterRG(natID("other", "rg"), cfg))
 
 		// Network resources in their own subscription: the cluster's NAT Gateways live there.
 		netCfg := cfg
 		netCfg.NetworkResourceSubscriptionID = "netsub"
-		assert.False(t, isBYONATGatewayID(natID("netsub", "rg"), netCfg))
-		assert.True(t, isBYONATGatewayID(natID("sub", "rg"), netCfg))
+		assert.True(t, inClusterRG(natID("netsub", "rg"), netCfg))
+		assert.False(t, inClusterRG(natID("sub", "rg"), netCfg))
 	})
 
 	t.Run("registration uses the BYO NAT Gateway", func(t *testing.T) {
@@ -1165,7 +1163,7 @@ func TestBYONATGatewayHelpers(t *testing.T) {
 	t.Run("other services using a NAT Gateway", func(t *testing.T) {
 		services := []*armnetwork.ServiceGatewayService{
 			{Name: ptr.To("inbound"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{}},
-			{Name: ptr.To("self"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{PublicNatGatewayID: ptr.To(natID("sub", "vnet-rg"))}},
+			{Name: ptr.To("SELF"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{PublicNatGatewayID: ptr.To(natID("sub", "vnet-rg"))}},
 			{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{PublicNatGatewayID: ptr.To(natID("sub", "rg"))}},
 		}
 		assert.Empty(t, otherServiceUsingNATGateway(services, "self", natID("SUB", "VNET-RG")), "the identity's own service does not count")
@@ -1186,20 +1184,17 @@ func TestBYONATGatewayHelpers(t *testing.T) {
 			}
 			return n
 		}
-		assert.Empty(t, byoNATGatewayProblem(gw(nil), nil, sgwID))
+		assert.Empty(t, byoNATGatewayProblem(gw(nil), sgwID))
 		assert.Empty(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) {
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(sgwID)}
-		}), []string{"IPv4"}, sgwID))
-		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) { n.SKU = nil }), nil, sgwID), "SKU")
+		}), sgwID))
+		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) { n.SKU = nil }), sgwID), "SKU")
 		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) {
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("other")}
-		}), nil, sgwID), "already linked")
-		assert.Contains(t, byoNATGatewayProblem(gw(nil), []string{"IPv4", "IPv6"}, sgwID), "IPv6")
-		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) {
-			n.Properties = &armnetwork.NatGatewayPropertiesFormat{PublicIPAddressesV6: []*armnetwork.SubResource{{ID: ptr.To("p6")}}}
-		}), []string{"IPv4", "IPv6"}, sgwID), "IPv4")
-		assert.Empty(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) {
-			n.Properties = &armnetwork.NatGatewayPropertiesFormat{PublicIPAddressesV6: []*armnetwork.SubResource{{ID: ptr.To("p6")}}}
-		}), []string{"IPv6"}, sgwID), "an IPv6-only cluster needs no IPv4 address")
+		}), sgwID), "already linked")
+		assert.Empty(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) { n.Properties = &armnetwork.NatGatewayPropertiesFormat{} }), sgwID),
+			"a NAT Gateway without addresses is its owner's to complete")
+		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) { n.Properties = nil }), sgwID), "without its properties",
+			"a gateway read without its properties cannot be linked without writing over what it has")
 	})
 }

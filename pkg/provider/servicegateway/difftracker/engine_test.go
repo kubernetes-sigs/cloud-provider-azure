@@ -526,6 +526,71 @@ func TestDeletePod_BufferedDeleteWithoutIdentityCancelsByAddress(t *testing.T) {
 	assert.Empty(t, dt.pendingPods[egressUID], "an identity-less delete must still cancel the buffered entry by address")
 }
 
+// TestAddPod_ReplayOfALiveStartupPodIsNotBuffered: a pod found at start-up is live before its identity
+// is created. When a creation that does not hold the initial sync open (rejected, or parked after its
+// retries) lets start-up finish, the pod informer's initial ADD replays that pod. The replay must refresh
+// the live pod rather than buffer a copy: a later delete would cancel only the copy and leave the live
+// address (published once the identity is created) and its ref-count behind.
+func TestAddPod_ReplayOfALiveStartupPodIsNotBuffered(t *testing.T) {
+	const (
+		identity = "byo-rejected"
+		location = "10.0.0.1"
+	)
+	// startedPending returns a tracker whose identity's creation was rejected (or, when parked, ran out of
+	// retries) and that has the given start-up pods (address -> pod name), live and then replayed by the
+	// pod informer.
+	startedPending := func(parked bool, pods map[string]string) *DiffTracker {
+		dt := newTestDiffTracker()
+		dt.pendingServiceOps[identity] = &ServiceOperationState{ServiceUID: identity, Config: NewOutboundServiceConfig(identity, nil),
+			State: StateNotStarted, RetryCount: 1, CreationRejected: !parked, RetriesExhausted: parked}
+		for address, name := range pods {
+			assert.NoError(t, dt.updateK8sPodLocked(UpdatePodInputType{PodOperation: Add, PublicOutboundIdentity: identity,
+				PodKey: "ns/" + name, PodUID: name + "-uid", Location: location, Address: address}))
+		}
+		for address, name := range pods {
+			dt.AddPodWithUID(identity, "ns/"+name, name+"-uid", location, address)
+		}
+		assert.Empty(t, dt.pendingPods[identity], "a live pod must not also be buffered")
+		return dt
+	}
+
+	for name, parked := range map[string]bool{"rejected": false, "parked": true} {
+		t.Run(name+": deleting the only pod deletes the identity", func(t *testing.T) {
+			dt := startedPending(parked, map[string]string{"10.244.0.5": "pod"})
+
+			assert.True(t, dt.DeletePod(identity, location, []string{"10.244.0.5"}, "ns", "pod", "pod-uid").IsLastPod)
+			assert.NotContains(t, dt.K8sResources.Nodes[location].Pods, "10.244.0.5")
+			_, counted := dt.outboundIdentityPodRefCount.Load(identity)
+			assert.False(t, counted, "the deleted pod must not keep the identity's ref-count")
+			assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[identity].State)
+		})
+	}
+
+	t.Run("a pod that reused a start-up pod's address takes it over", func(t *testing.T) {
+		dt := startedPending(false, map[string]string{"10.244.0.5": "old"})
+		dt.AddPodWithUID(identity, "ns/new", "new-uid", location, "10.244.0.5")
+		assert.Empty(t, dt.pendingPods[identity])
+
+		assert.True(t, dt.DeletePod(identity, location, []string{"10.244.0.5"}, "ns", "new", "new-uid").IsLastPod,
+			"the new pod's delete must remove the address it took over")
+		assert.NotContains(t, dt.K8sResources.Nodes[location].Pods, "10.244.0.5")
+	})
+
+	t.Run("a deleted pod is not published once the identity is created", func(t *testing.T) {
+		dt := startedPending(false, map[string]string{"10.244.0.5": "deleted", "10.244.0.6": "live"})
+
+		assert.False(t, dt.DeletePod(identity, location, []string{"10.244.0.5"}, "ns", "deleted", "deleted-uid").IsLastPod)
+		dt.pendingServiceOps[identity].State = StateCreated
+		addresses := dt.GetSyncLocationsAddresses().Locations[location].Addresses
+		if deleted, ok := addresses["10.244.0.5"]; ok {
+			assert.False(t, deleted.ServiceRef.Has(identity), "the deleted pod's address must not be published")
+		}
+		if assert.Contains(t, addresses, "10.244.0.6") {
+			assert.True(t, addresses["10.244.0.6"].ServiceRef.Has(identity))
+		}
+	})
+}
+
 // makeInboundConfig builds an InboundConfig with the given TCP frontend ports
 // and matching backend ports, for tests.
 func makeInboundConfig(frontendPorts ...int32) *InboundConfig {
@@ -1624,10 +1689,45 @@ func TestDeletePodWithoutAddresses_MatchingUIDCancelsBufferedAddresses(t *testin
 		"a pod's own no-IP delete must still cancel its buffered addresses")
 }
 
-// TestAddPod_RejectsEgressIdentityCollidingWithInboundService pins that an egress pod cannot attach
-// to an inbound service's operation. The key is shared by both kinds, and the egress side is a
-// user-controlled pod label, so without a kind check one tenant can attach to another tenant's
-// LoadBalancer. The ordinary egress identity is the control.
+func TestRecoveredInboundIdentityRejectsOutboundWork(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	for _, source := range []string{"NRP", "Kubernetes"} {
+		for _, entry := range []string{"AddService", "AddPod", "orphan deletion", "diff addition", "diff removal", "no-IP deletion"} {
+			t.Run(source+"/"+entry, func(t *testing.T) {
+				dt := newTestDiffTracker()
+				if source == "NRP" {
+					dt.NRPResources.LoadBalancers.Insert(uid)
+				} else {
+					dt.K8sResources.Services.Insert(uid)
+				}
+				switch entry {
+				case "AddService":
+					dt.AddService(NewOutboundServiceConfig(uid, &OutboundConfig{}))
+				case "AddPod":
+					dt.AddPodWithUID(uid, "ns/pod", "pod-uid", "10.0.0.1", "10.244.0.5")
+				case "orphan deletion":
+					dt.DeleteService(uid, false, true)
+				case "diff addition":
+					dt.K8sResources.Egresses.Insert(uid)
+				case "diff removal":
+					dt.NRPResources.NATGateways.Insert(uid)
+				case "no-IP deletion":
+					dt.DeletePodWithoutAddresses(uid, "ns", "pod", "pod-uid")
+				}
+				diff := dt.GetSyncNRPNATGateways()
+				assert.Zero(t, diff.Additions.Len())
+				assert.Zero(t, diff.Removals.Len())
+				assert.Empty(t, dt.pendingServiceOps, "a recovered inbound identity must not acquire an outbound operation")
+				assert.Empty(t, dt.pendingPods)
+				assert.Empty(t, dt.pendingServiceDeletions)
+				dt.AddPodWithUID("distinct", "ns/other", "other-uid", "10.0.0.2", "10.244.0.6")
+				assert.Contains(t, dt.pendingServiceOps, "distinct", "a distinct egress identity is still admitted")
+			})
+		}
+	}
+}
+
+// An egress pod cannot attach to an inbound operation; a distinct identity is the control.
 func TestAddPod_RejectsEgressIdentityCollidingWithInboundService(t *testing.T) {
 	const inboundUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	const egressUID = "team-egress"

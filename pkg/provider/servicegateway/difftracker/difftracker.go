@@ -17,20 +17,19 @@ limitations under the License.
 package difftracker
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/go-logr/logr"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // New creates and initializes a new DiffTracker with the given state and configuration.
@@ -106,16 +105,38 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		locationsUpdaterTrigger: make(chan bool, 1),
 	}
 
+	for _, identity := range k8s.Egresses.UnsortedList() {
+		if diffTracker.outboundIdentityConflictsWithInboundLocked(identity) {
+			k8s.Egresses.Delete(identity)
+			logger.V(2).Info("Rejected startup egress identity colliding with an inbound service", "service", identity)
+		}
+	}
+
+	// Only a NAT Gateway the annotation could name is BYO: one in another subscription can be neither
+	// read nor unlinked through this cluster's network clients.
 	for identity, natGatewayID := range nrp.OutboundNATGatewayIDs {
-		if isBYONATGatewayID(natGatewayID, config) {
-			diffTracker.byoNATGateways[strings.ToLower(identity)] = natGatewayID
+		if diffTracker.outboundIdentityConflictsWithInboundLocked(identity) {
+			continue
+		}
+		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil && byoNATGatewayIDProblem(natGatewayID, config) == "" {
+			diffTracker.byoNATGateways[strings.ToLower(identity)] = fmt.Sprintf(consts.NatGatewayIDTemplate,
+				parsed.SubscriptionID, parsed.ResourceGroupName, parsed.Name)
 		}
 	}
 
 	// Seed the outbound ref-counter from egress pods already in the initial state
 	// so a later REMOVE can drive the counter to zero.
 	for _, node := range k8s.Nodes {
-		for _, pod := range node.Pods {
+		for address, pod := range node.Pods {
+			if pod.PublicOutboundIdentity != "" && diffTracker.outboundIdentityConflictsWithInboundLocked(pod.PublicOutboundIdentity) {
+				pod.PublicOutboundIdentity, pod.OutboundPodKey, pod.OutboundPodUID = "", "", ""
+				if pod.HasIdentities() {
+					node.Pods[address] = pod
+				} else {
+					delete(node.Pods, address)
+				}
+				continue
+			}
 			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
 		}
 	}
@@ -199,19 +220,4 @@ func (dt *DiffTracker) GetServiceUpdaterTrigger() <-chan bool {
 // GetLocationsUpdaterTrigger returns the trigger channel for LocationsUpdater
 func (dt *DiffTracker) GetLocationsUpdaterTrigger() <-chan bool {
 	return dt.locationsUpdaterTrigger
-}
-
-// recordPodEvent emits an event on the pod identified by namespace/name, if one is known. The pod is
-// read so the event carries its UID; if it cannot be read the event is keyed by name only.
-func (dt *DiffTracker) recordPodEvent(ctx context.Context, namespace, name, eventType, reason, message string) {
-	if name == "" {
-		return
-	}
-	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}}
-	if dt.kubeClient != nil {
-		if got, err := dt.kubeClient.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{}); err == nil {
-			pod = got
-		}
-	}
-	dt.recordEvent(pod, eventType, reason, message)
 }
