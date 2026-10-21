@@ -161,6 +161,20 @@ func TestGetInterconnectGroupID(t *testing.T) {
 		expectedErr         bool
 	}{
 		{
+			name:                "InterconnectGroupId field present",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"interconnectGroupId":"group-from-field"}}`,
+			expectedID:          "group-from-field",
+			expectedErr:         false,
+		},
+		{
+			name:                "InterconnectGroupId field takes precedence over tag",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"interconnectGroupId":"group-from-field","tagsList":[{"name":"Platform_Interconnect_Group","value":"group-from-tag"}]}}`,
+			expectedID:          "group-from-field",
+			expectedErr:         false,
+		},
+		{
 			name:                "InterconnectGroup tag present",
 			useInstanceMetadata: true,
 			respString:          `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":"group-123"},{"name":"Other_Tag","value":"other"}]}}`,
@@ -223,6 +237,81 @@ func TestGetInterconnectGroupID(t *testing.T) {
 			assert.NoError(t, err)
 
 			id, err := cloud.GetInterconnectGroupID(context.TODO())
+
+			if tc.expectedErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedID, id)
+			}
+		})
+	}
+}
+
+func TestGetInterconnectSubgroupID(t *testing.T) {
+	testCases := []struct {
+		name                string
+		useInstanceMetadata bool
+		respString          string
+		expectedID          string
+		expectedErr         bool
+	}{
+		{
+			name:                "InterconnectSubgroupId field present",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"interconnectSubgroupId":"subgroup-123"}}`,
+			expectedID:          "subgroup-123",
+			expectedErr:         false,
+		},
+		{
+			name:                "InterconnectSubgroupId field absent",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
+			name:                "InterconnectSubgroupId field present with empty value",
+			useInstanceMetadata: true,
+			respString:          `{"compute":{"interconnectSubgroupId":""}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+		{
+			name:                "Compute metadata is nil",
+			useInstanceMetadata: true,
+			respString:          `{}`,
+			expectedID:          "",
+			expectedErr:         true,
+		},
+		{
+			name:                "UseInstanceMetadata false",
+			useInstanceMetadata: false,
+			respString:          `{"compute":{"interconnectSubgroupId":"subgroup-123"}}`,
+			expectedID:          "",
+			expectedErr:         false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{
+				Config: config.Config{
+					Location:            "eastus",
+					UseInstanceMetadata: tc.useInstanceMetadata,
+				},
+			}
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, tc.respString)
+			}))
+			defer server.Close()
+
+			var err error
+			cloud.Metadata, err = NewInstanceMetadataService(server.URL + "/")
+			assert.NoError(t, err)
+
+			id, err := cloud.GetInterconnectSubgroupID(context.TODO())
 
 			if tc.expectedErr {
 				assert.Error(t, err)

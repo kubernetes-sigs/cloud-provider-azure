@@ -83,6 +83,8 @@ type ComputeMetadata struct {
 	VMScaleSetName         string `json:"vmScaleSetName,omitempty"`
 	SubscriptionID         string `json:"subscriptionId,omitempty"`
 	ResourceID             string `json:"resourceId,omitempty"`
+	InterconnectGroupID    string `json:"interconnectGroupId,omitempty"`
+	InterconnectSubgroupID string `json:"interconnectSubgroupId,omitempty"`
 	TagsList               []Tag  `json:"tagsList,omitempty"`
 }
 
@@ -301,7 +303,6 @@ func (az *Cloud) GetPlatformSubFaultDomain(ctx context.Context) (string, error) 
 }
 
 // GetInterconnectGroupID returns the Platform Interconnect Group ID from IMDS if set.
-// It reads the value from the Platform_Interconnect_Group tag in tagsList.
 func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("GetInterconnectGroupID")
 	if az.UseInstanceMetadata {
@@ -312,6 +313,11 @@ func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
 		if metadata.Compute == nil {
 			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
 			return "", errors.New("failure of getting compute information from instance metadata")
+		}
+
+		if metadata.Compute.InterconnectGroupID != "" {
+			logger.V(2).Info("found Interconnect Group ID from IMDS", "InterconnectGroupID", metadata.Compute.InterconnectGroupID)
+			return metadata.Compute.InterconnectGroupID, nil
 		}
 
 		// Check tagsList for Platform_Interconnect_Group tag
@@ -328,6 +334,29 @@ func (az *Cloud) GetInterconnectGroupID(ctx context.Context) (string, error) {
 
 		// Tag not found - this is normal for VMs without Interconnect Groups
 		logger.V(4).Info("Tag not found in IMDS", "tagName", consts.TagNameInterconnectGroup)
+	}
+	return "", nil
+}
+
+// GetInterconnectSubgroupID returns the Platform Interconnect Subgroup ID from IMDS if set.
+func (az *Cloud) GetInterconnectSubgroupID(ctx context.Context) (string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("GetInterconnectSubgroupID")
+	if az.UseInstanceMetadata {
+		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
+		if err != nil {
+			return "", err
+		}
+		if metadata.Compute == nil {
+			_ = az.Metadata.imsCache.Delete(consts.MetadataCacheKey)
+			return "", errors.New("failure of getting compute information from instance metadata")
+		}
+
+		if metadata.Compute.InterconnectSubgroupID != "" {
+			logger.V(2).Info("found Interconnect Subgroup ID from IMDS", "InterconnectSubgroupID", metadata.Compute.InterconnectSubgroupID)
+			return metadata.Compute.InterconnectSubgroupID, nil
+		}
+
+		logger.V(4).Info("Interconnect Subgroup ID not found in IMDS")
 	}
 	return "", nil
 }

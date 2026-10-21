@@ -184,6 +184,7 @@ func TestNodeInitialized(t *testing.T) {
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
 	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("group-123", nil)
+	mockNP.EXPECT().GetInterconnectSubgroupID(ctx).Return("subgroup-123", nil)
 
 	cloudNodeController := NewCloudNodeController(
 		"node0",
@@ -202,6 +203,7 @@ func TestNodeInitialized(t *testing.T) {
 	assert.Equal(t, 0, len(fnh.UpdatedNodes[0].Spec.Taints), "Node Taint was not removed after cloud init")
 	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
 	assert.Equal(t, "group-123", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformInterconnectGroup])
+	assert.Equal(t, "subgroup-123", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformInterconnectSubgroup])
 }
 
 func TestUpdateCloudNode(t *testing.T) {
@@ -265,6 +267,7 @@ func TestUpdateCloudNode(t *testing.T) {
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("1", nil)
 	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("group-456", nil)
+	mockNP.EXPECT().GetInterconnectSubgroupID(ctx).Return("subgroup-456", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -287,6 +290,7 @@ func TestUpdateCloudNode(t *testing.T) {
 	assert.Equal(t, "NetworkUnavailable", string(fnh.UpdatedNodes[0].Status.Conditions[0].Type), "Node Condition NetworkUnavailable was not updated")
 	assert.Equal(t, "1", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformSubFaultDomain])
 	assert.Equal(t, "group-456", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformInterconnectGroup])
+	assert.Equal(t, "subgroup-456", fnh.UpdatedNodes[0].Labels[consts.LabelPlatformInterconnectSubgroup])
 }
 
 // This test checks that a node without the external cloud provider taint are NOT cloudprovider initialized
@@ -402,6 +406,7 @@ func TestZoneInitialized(t *testing.T) {
 		}, nil).AnyTimes()
 		mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
 		mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
+		mockNP.EXPECT().GetInterconnectSubgroupID(ctx).Return("", nil)
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -485,6 +490,7 @@ func TestZoneInitialized(t *testing.T) {
 		}, nil).AnyTimes()
 		mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
 		mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
+		mockNP.EXPECT().GetInterconnectSubgroupID(ctx).Return("", nil)
 
 		eventBroadcaster := record.NewBroadcaster()
 		cloudNodeController := &CloudNodeController{
@@ -584,6 +590,7 @@ func TestAddCloudNode(t *testing.T) {
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(gomock.Any()).Return("", nil)
 	mockNP.EXPECT().GetInterconnectGroupID(gomock.Any()).Return("", nil)
+	mockNP.EXPECT().GetInterconnectSubgroupID(gomock.Any()).Return("", nil)
 
 	factory := informers.NewSharedInformerFactory(fnh, 0)
 	nodeInformer := factory.Core().V1().Nodes()
@@ -750,6 +757,7 @@ func TestNodeProvidedIPAddresses(t *testing.T) {
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil)
 	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil)
+	mockNP.EXPECT().GetInterconnectSubgroupID(ctx).Return("", nil)
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := NewCloudNodeController(
@@ -1174,6 +1182,7 @@ func TestNodeProviderID(t *testing.T) {
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil).AnyTimes()
 	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetInterconnectSubgroupID(ctx).Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
@@ -1262,6 +1271,7 @@ func TestNodeProviderIDAlreadySet(t *testing.T) {
 	}, nil).AnyTimes()
 	mockNP.EXPECT().GetPlatformSubFaultDomain(ctx).Return("", nil).AnyTimes()
 	mockNP.EXPECT().GetInterconnectGroupID(ctx).Return("", nil).AnyTimes()
+	mockNP.EXPECT().GetInterconnectSubgroupID(ctx).Return("", nil).AnyTimes()
 
 	eventBroadcaster := record.NewBroadcaster()
 	cloudNodeController := &CloudNodeController{
