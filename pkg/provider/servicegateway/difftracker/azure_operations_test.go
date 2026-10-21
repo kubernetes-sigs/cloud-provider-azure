@@ -20,11 +20,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -49,7 +46,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
-	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 func TestConvertServiceDTOsToServiceRequests_OutboundRemovalHasNoNatGatewayID(t *testing.T) {
@@ -313,104 +309,6 @@ func TestUpdateServiceLoadBalancerStatus_DualStackSafeThroughLister(t *testing.T
 	assert.Contains(t, hosts, "example.com")
 }
 
-// responseError builds the shape azcore produces for the INITIAL updateServices/
-// updateAddressLocations call: a POST. isSynchronousCompletion requires the POST, because a 200 is
-// also how azcore reports a FAILED asynchronous operation (the terminal poll is a GET returning
-// 200 {"status":"Failed"}).
-func responseError(status int) error {
-	req, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
-	return &azcore.ResponseError{
-		StatusCode:  status,
-		RawResponse: &http.Response{StatusCode: status, Header: http.Header{}, Request: req},
-	}
-}
-
-// TestIsSynchronousCompletion pins the discriminator that lets the provider drop the vendored SDK
-// patch: NRP answers these long-running operations with 200 OK, which the generated client rejects
-// even though the request succeeded. Only 200 may be tolerated; every other status is a real
-// failure and must still propagate.
-func TestIsSynchronousCompletion(t *testing.T) {
-	assert.True(t, isSynchronousCompletion(responseError(http.StatusOK)))
-	assert.True(t, isSynchronousCompletion(fmt.Errorf("wrapped: %w", responseError(http.StatusOK))))
-
-	assert.False(t, isSynchronousCompletion(nil))
-	assert.False(t, isSynchronousCompletion(errors.New("boom")))
-	for _, status := range []int{
-		http.StatusAccepted,
-		http.StatusNoContent,
-		http.StatusBadRequest,
-		http.StatusUnauthorized,
-		http.StatusNotFound,
-		http.StatusConflict,
-		http.StatusTooManyRequests,
-		http.StatusInternalServerError,
-		http.StatusServiceUnavailable,
-	} {
-		assert.False(t, isSynchronousCompletion(responseError(status)), "status %d must not be treated as success", status)
-	}
-
-	// A 200 that is not provably the initial call must NOT be tolerated: azcore reports a failed
-	// long-running operation as a ResponseError built from the terminal poll, which is a GET
-	// returning 200. Treating that as success silently records NRP state that does not exist.
-	pollGET, _ := http.NewRequest(http.MethodGet, "https://poll.example/op/1", nil)
-	assert.False(t, isSynchronousCompletion(&azcore.ResponseError{
-		StatusCode:  http.StatusOK,
-		RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: pollGET},
-	}), "a 200 from an LRO poll (GET) is a failed async operation, not a synchronous completion")
-
-	assert.False(t, isSynchronousCompletion(&azcore.ResponseError{StatusCode: http.StatusOK}),
-		"a 200 with no RawResponse cannot be proven to be the initial call")
-
-	postReq, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
-	for _, header := range []string{"Location", "Azure-AsyncOperation"} {
-		// Set canonicalises the key exactly as net/http does when parsing a real response.
-		pollingHeader := http.Header{}
-		pollingHeader.Set(header, "https://poll")
-		assert.True(t, isSynchronousCompletion(&azcore.ResponseError{
-			StatusCode: http.StatusOK,
-			RawResponse: &http.Response{
-				StatusCode: http.StatusOK,
-				Header:     pollingHeader,
-				Request:    postReq,
-			},
-		}), "NRP stamps %s on its already-complete synchronous 200; rejecting it fails every registration", header)
-	}
-}
-
-func TestTolerateSynchronousCompletion(t *testing.T) {
-	dt := &DiffTracker{logger: log.Noop()}
-
-	assert.NoError(t, dt.tolerateSynchronousCompletion(responseError(http.StatusOK), "UpdateServices", "sgw"))
-	assert.NoError(t, dt.tolerateSynchronousCompletion(nil, "UpdateServices", "sgw"))
-
-	conflict := responseError(http.StatusConflict)
-	assert.Same(t, conflict, dt.tolerateSynchronousCompletion(conflict, "UpdateServices", "sgw"))
-
-	// NRP returns its synchronous 200 for updateServices with a Location header even though the
-	// operation has already completed, so this must be tolerated. Rejecting it fails every
-	// Service registration against the live provider.
-	postReq, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
-	async := &azcore.ResponseError{
-		StatusCode: http.StatusOK,
-		RawResponse: &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     http.Header{"Location": []string{"https://poll"}},
-			Request:    postReq,
-		},
-	}
-	assert.NoError(t, dt.tolerateSynchronousCompletion(async, "UpdateAddressLocations", "sgw"),
-		"a POST 200 carrying a polling header is still NRP's synchronous completion")
-
-	// A GET 200 is azcore's terminal poll for a FAILED async operation and must still propagate.
-	pollGET, _ := http.NewRequest(http.MethodGet, "https://poll.example/op/1", nil)
-	failedLRO := &azcore.ResponseError{
-		StatusCode:  http.StatusOK,
-		RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: pollGET},
-	}
-	assert.Same(t, failedLRO, dt.tolerateSynchronousCompletion(failedLRO, "UpdateServices", "sgw"),
-		"a failed async LRO must not be reported as a synchronous completion")
-}
-
 type fixedStatusTransport struct {
 	status int
 	header http.Header
@@ -448,73 +346,47 @@ func newServiceGatewayClient(t *testing.T, status int, header http.Header) servi
 	return client
 }
 
-// TestServiceGatewayClientSynchronousCompletionEndToEnd drives the real generated SDK client, so it
-// proves the provider no longer needs the vendored patch: NRP's 200 OK surfaces as an error that
-// isSynchronousCompletion recognises, while a 409 still propagates.
-func TestServiceGatewayClientSynchronousCompletionEndToEnd(t *testing.T) {
+// TestServiceGatewayClientUpdatesAreSynchronous drives the real ServiceGateway client through the
+// provider wrappers: NRP's synchronous 200 OK is a success, while a 200 that names an error code
+// and a 409 reach the caller as the client's ResponseError.
+func TestServiceGatewayClientUpdatesAreSynchronous(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("200 OK succeeds", func(t *testing.T) {
-		client := newServiceGatewayClient(t, http.StatusOK, nil)
+	for name, tc := range map[string]struct {
+		status  int
+		header  http.Header
+		wantErr bool
+	}{
+		"200 OK succeeds": {status: http.StatusOK},
+		"200 naming an error code fails": {
+			status:  http.StatusOK,
+			header:  http.Header{"X-Ms-Error-Code": []string{"OperationFailed"}},
+			wantErr: true,
+		},
+		"409 Conflict fails": {status: http.StatusConflict, wantErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockFactory.EXPECT().GetServiceGatewayClient().Return(newServiceGatewayClient(t, tc.status, tc.header)).AnyTimes()
+			dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 
-		err := client.UpdateServices(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateServicesRequest{})
-		assert.NoError(t, err, "the client treats NRP's synchronous 200 OK as success")
-
-		err = client.UpdateAddressLocations(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateAddressLocationsRequest{})
-		assert.NoError(t, err)
-	})
-
-	t.Run("409 Conflict still fails", func(t *testing.T) {
-		client := newServiceGatewayClient(t, http.StatusConflict, nil)
-
-		err := client.UpdateServices(ctx, "rg", "sgw", armnetwork.ServiceGatewayUpdateServicesRequest{})
-		assert.Error(t, err)
-		assert.False(t, isSynchronousCompletion(err), "a real ARM failure must never be tolerated")
-	})
-}
-
-// asyncFailureTransport answers the initial call with 202 + Azure-AsyncOperation and every poll
-// with 200 {"status":"Failed"} - the exact shape azcore turns into ResponseError{StatusCode:200}.
-type asyncFailureTransport struct{ calls int }
-
-func (t *asyncFailureTransport) Do(req *http.Request) (*http.Response, error) {
-	t.calls++
-	header := http.Header{}
-	header.Set("Content-Type", "application/json")
-	if t.calls == 1 {
-		header.Set("Azure-AsyncOperation", "https://poll.example/op/1")
-		return &http.Response{StatusCode: http.StatusAccepted, Header: header, Request: req, Body: http.NoBody}, nil
+			for operation, err := range map[string]error{
+				"UpdateServices":         dt.updateNRPServices(ctx, "sgw", armnetwork.ServiceGatewayUpdateServicesRequest{}),
+				"UpdateAddressLocations": dt.updateNRPAddressLocations(ctx, "sgw", armnetwork.ServiceGatewayUpdateAddressLocationsRequest{}),
+			} {
+				if !tc.wantErr {
+					assert.NoError(t, err, operation)
+					continue
+				}
+				var respErr *azcore.ResponseError
+				if assert.ErrorAs(t, err, &respErr, operation) {
+					assert.Equal(t, tc.status, respErr.StatusCode, operation)
+				}
+			}
+		})
 	}
-	body := `{"status":"Failed","error":{"code":"SGWUpdateFailed","message":"backend pool missing"}}`
-	return &http.Response{
-		StatusCode: http.StatusOK, Header: header, Request: req,
-		Body: io.NopCloser(strings.NewReader(body)),
-	}, nil
-}
-
-// TestServiceGatewayClientAsyncFailureIsNotSynchronousCompletion drives the real generated SDK
-// client through a genuinely FAILED long-running operation.
-//
-// azcore reports such a failure as a ResponseError built from the terminal poll response, and for
-// Azure-AsyncOperation polling that response is itself HTTP 200. Discriminating on the status code
-// alone therefore reports a failed NRP operation as success, after which the tracker records
-// LoadBalancer state NRP does not have and later address syncs referencing it are rejected. The
-// initial call is a POST and every poll is a GET, which is what separates the two cases.
-func TestServiceGatewayClientAsyncFailureIsNotSynchronousCompletion(t *testing.T) {
-	transport := &asyncFailureTransport{}
-	client, err := servicegatewayclient.New("subscription", fakeCredential{}, &arm.ClientOptions{
-		ClientOptions: azcore.ClientOptions{Transport: transport},
-	})
-	assert.NoError(t, err)
-
-	dt := &DiffTracker{logger: log.Noop()}
-	err = client.UpdateServices(context.Background(), "rg", "sgw", armnetwork.ServiceGatewayUpdateServicesRequest{})
-
-	assert.Error(t, err, "the SDK must surface the failed async operation")
-	assert.False(t, isSynchronousCompletion(err),
-		"a failed asynchronous operation reported as 200 must not be treated as a synchronous completion")
-	assert.Error(t, dt.tolerateSynchronousCompletion(err, "UpdateServices", "sgw"),
-		"a failed asynchronous operation must propagate so the caller retries instead of recording phantom NRP state")
 }
 
 // serviceClientWithTypeFieldSelector returns a fake clientset whose Service List honours a
@@ -629,34 +501,6 @@ func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
 	// empty body.
 	assert.Contains(t, string(natBody), `"idleTimeoutInMinutes":4`,
 		"control: sibling fields must survive the clear")
-}
-
-// TestIsSynchronousCompletion_RejectsErrorBearing200 pins that a 200 which names an error is not
-// mistaken for NRP's synchronous completion.
-//
-// The completion shape is a bare 200 on the initial POST, so matching on status and method alone
-// also swallows a 200 whose body reports failure. Tolerating that marks the service registered,
-// adds its finalizer and publishes an external IP while NRP holds no entry, so no traffic is ever
-// forwarded and nothing re-drives it. azcore fills ErrorCode from the body, so the empty case
-// remains the real completion.
-func TestIsSynchronousCompletion_RejectsErrorBearing200(t *testing.T) {
-	errorBearing := func(code string) error {
-		req, _ := http.NewRequest(http.MethodPost, "https://example/sgw", nil)
-		return &azcore.ResponseError{
-			StatusCode:  http.StatusOK,
-			ErrorCode:   code,
-			RawResponse: &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Request: req},
-		}
-	}
-
-	assert.False(t, isSynchronousCompletion(errorBearing("OperationFailed")),
-		"a 200 whose body reports a failure must propagate, not be tolerated as completion")
-	assert.False(t, isSynchronousCompletion(fmt.Errorf("wrapped: %w", errorBearing("ServiceRegistrationFailed"))),
-		"the same holds through a wrapped error")
-
-	// Control: the documented completion shape carries no error code and stays tolerated.
-	assert.True(t, isSynchronousCompletion(errorBearing("")),
-		"control: a bare 200 on the initial POST is NRP's synchronous completion")
 }
 
 // TestConvertServiceDTOsToServiceRequests_MapsServiceType pins the field that decides whether NRP
