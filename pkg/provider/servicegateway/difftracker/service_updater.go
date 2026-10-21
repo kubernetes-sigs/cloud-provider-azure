@@ -741,9 +741,20 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 		s.logger.V(5).Info("Unregistered inbound service from ServiceGateway", "serviceUID", serviceUID)
 	}
 
-	// Step 4: Delete Public IP
+	// Step 4: Withdraw the Public IP's address from the Service status, then delete the Public IP. A
+	// create that finished after this Service was marked for deletion may have published the address.
+	// Only the Public IP records it, so a failure before the withdrawal keeps the Public IP for the
+	// retry.
 	_, pipName, _ := buildInboundResourceNames(serviceUID)
-	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
+	pipAddress, err := s.diffTracker.getPublicIPAddress(ctx, s.diffTracker.config.ResourceGroup, pipName)
+	if err != nil {
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		s.logger.V(4).Info("Could not get Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		lastErr = fmt.Errorf("failed to get Public IP: %w", err)
+	} else if err = s.diffTracker.removeServiceLoadBalancerIngressIP(ctx, serviceUID, pipAddress); err != nil {
+		s.logger.V(4).Info("Could not withdraw Public IP address from service status", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "publicIPAddress", pipAddress, "err", err)
+		lastErr = fmt.Errorf("failed to withdraw Public IP address from service status: %w", err)
+	} else if err = s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not delete Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
