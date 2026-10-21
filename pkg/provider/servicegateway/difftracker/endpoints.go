@@ -22,7 +22,9 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	discovery_v1 "k8s.io/api/discovery/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	discoverylisters "k8s.io/client-go/listers/discovery/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 )
@@ -41,6 +43,12 @@ func serviceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) (uid string, load
 }
 
 func endpointSliceAddresses(es *discovery_v1.EndpointSlice, nodeLister corelisters.NodeLister) map[string]string {
+	return endpointSliceAddressesWithStartupIPs(es, nodeLister, nil)
+}
+
+// endpointSliceAddressesWithStartupIPs is endpointSliceAddresses, resolving a node in startupNodeIPs
+// through those IPs instead of the lister.
+func endpointSliceAddressesWithStartupIPs(es *discovery_v1.EndpointSlice, nodeLister corelisters.NodeLister, startupNodeIPs map[string][]string) map[string]string {
 	addresses := make(map[string]string)
 	if es == nil || nodeLister == nil {
 		return addresses
@@ -54,14 +62,16 @@ func endpointSliceAddresses(es *discovery_v1.EndpointSlice, nodeLister coreliste
 		if nodeName == "" {
 			continue
 		}
-		node, err := nodeLister.Get(nodeName)
-		if err != nil {
-			continue
-		}
-		nodeIPs := make([]string, 0, len(node.Status.Addresses))
-		for _, address := range node.Status.Addresses {
-			if address.Type == v1.NodeInternalIP {
-				nodeIPs = append(nodeIPs, address.Address)
+		nodeIPs, ok := startupNodeIPs[nodeName]
+		if !ok {
+			node, err := nodeLister.Get(nodeName)
+			if err != nil {
+				continue
+			}
+			for _, address := range node.Status.Addresses {
+				if address.Type == v1.NodeInternalIP {
+					nodeIPs = append(nodeIPs, address.Address)
+				}
 			}
 		}
 		for _, podIP := range endpoint.Addresses {
@@ -119,13 +129,32 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldSlice, newES *discovery_v1.Endp
 		return
 	}
 
+	// The cache swap and the apply are held under one lock, like seedInboundEndpointsFromCache, so a
+	// concurrent node replay of the cache cannot re-add an address this event removes.
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	if oldSlice == nil && newES != nil {
+		// The informer's first event for a slice initialization already listed is an Add. Diff it
+		// against that snapshot, or endpoints removed or made not-ready while initialization ran
+		// stay registered.
+		if value, ok := dt.endpointSlicesCache.Load(endpointSliceCacheKey(newES)); ok {
+			if cached, ok := value.(*discovery_v1.EndpointSlice); ok && cached != nil {
+				oldSlice = cached
+			}
+		}
+	}
+	dt.reconcileEndpointSliceLocked(oldSlice, newES)
+}
+
+// reconcileEndpointSliceLocked is ReconcileEndpointSlice without the lock. Must be called with dt.mu
+// held.
+func (dt *DiffTracker) reconcileEndpointSliceLocked(oldSlice, newES *discovery_v1.EndpointSlice) {
 	// Keep an internal snapshot even when dependencies or the owning Service are not available yet.
 	// A later Service registration or node event can then replay the current EndpointSlice state.
 	dt.updateEndpointSliceCache(oldSlice, newES)
 
-	dt.mu.Lock()
 	nodeLister := dt.nodeLister
-	dt.mu.Unlock()
 	if nodeLister == nil {
 		dt.logger.V(4).Info("Skipped EndpointSlice reconciliation because Node lister is unavailable")
 		return
@@ -139,30 +168,30 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldSlice, newES *discovery_v1.Endp
 	switch {
 	case newES == nil:
 		if oldLoaded {
-			oldAddresses = endpointSliceAddresses(oldSlice, nodeLister)
+			oldAddresses = endpointSliceAddressesWithStartupIPs(oldSlice, nodeLister, dt.startupNodeIPs)
 		}
 	case oldSlice == nil:
 		if newLoaded && newES.DeletionTimestamp == nil {
-			newAddresses = endpointSliceAddresses(newES, nodeLister)
+			newAddresses = endpointSliceAddressesWithStartupIPs(newES, nodeLister, dt.startupNodeIPs)
 		}
 	default:
 		if oldLoaded && oldSlice.DeletionTimestamp == nil {
-			oldAddresses = endpointSliceAddresses(oldSlice, nodeLister)
+			oldAddresses = endpointSliceAddressesWithStartupIPs(oldSlice, nodeLister, dt.startupNodeIPs)
 		}
 		if newLoaded && newES.DeletionTimestamp == nil {
-			newAddresses = endpointSliceAddresses(newES, nodeLister)
+			newAddresses = endpointSliceAddressesWithStartupIPs(newES, nodeLister, dt.startupNodeIPs)
 		}
 	}
 
 	if oldLoaded && (!newLoaded || !strings.EqualFold(oldUID, newUID)) {
 		if len(oldAddresses) > 0 {
-			dt.UpdateEndpoints(oldUID, oldAddresses, nil)
+			dt.updateEndpointsLocked(oldUID, oldAddresses, nil)
 		}
 		oldAddresses = nil
 	}
 	if newLoaded && (!oldLoaded || !strings.EqualFold(oldUID, newUID)) {
 		if len(newAddresses) > 0 {
-			dt.UpdateEndpoints(newUID, nil, newAddresses)
+			dt.updateEndpointsLocked(newUID, nil, newAddresses)
 		}
 		return
 	}
@@ -174,7 +203,43 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldSlice, newES *discovery_v1.Endp
 	if serviceUID == "" || len(oldAddresses) == 0 && len(newAddresses) == 0 {
 		return
 	}
-	dt.UpdateEndpoints(serviceUID, oldAddresses, newAddresses)
+	dt.updateEndpointsLocked(serviceUID, oldAddresses, newAddresses)
+}
+
+// CompleteStartupReconciliation reconciles the deletions made while initialization ran, which never
+// produce a Delete event: cached EndpointSlices the synced lister no longer has, and nodes whose
+// initial-list Add never arrived. It must run once the Node handler has received the initial list.
+func (dt *DiffTracker) CompleteStartupReconciliation(lister discoverylisters.EndpointSliceLister) {
+	if dt == nil || lister == nil {
+		return
+	}
+	dt.endpointSlicesCache.Range(func(key, _ interface{}) bool {
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
+		// Reload under the lock: a Delete event may have removed the entry since Range read it.
+		value, ok := dt.endpointSlicesCache.Load(key)
+		if !ok {
+			return true
+		}
+		cached, ok := value.(*discovery_v1.EndpointSlice)
+		if !ok || cached == nil {
+			return true
+		}
+		if _, err := lister.EndpointSlices(cached.Namespace).Get(cached.Name); !apierrors.IsNotFound(err) {
+			return true
+		}
+		dt.logger.V(2).Info("Pruned EndpointSlice deleted during initialization", "namespace", cached.Namespace, "endpointSlice", cached.Name)
+		dt.reconcileEndpointSliceLocked(cached, nil)
+		return true
+	})
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	for nodeName, nodeIPs := range dt.startupNodeIPs {
+		dt.logger.V(2).Info("Drained node deleted during initialization", "node", nodeName)
+		dt.reconcileNodeIPChangeLocked(nodeName, nodeIPs, nil)
+	}
+	dt.startupNodeIPs = nil
 }
 
 // seedInboundEndpointsFromCache replays the current ready endpoints for a newly registered or
@@ -213,7 +278,7 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 			return true
 		}
 
-		for podIP, nodeIP := range endpointSliceAddresses(es, nodeLister) {
+		for podIP, nodeIP := range endpointSliceAddressesWithStartupIPs(es, nodeLister, dt.startupNodeIPs) {
 			addresses[podIP] = nodeIP
 		}
 		return true
@@ -224,6 +289,21 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 	}
 	dt.logger.V(2).Info("Seeded endpoints for registered service", "service", serviceUID, "endpoints", len(addresses))
 	dt.updateEndpointsLocked(serviceUID, nil, addresses)
+}
+
+// ReconcileNodeAdd replays the cached EndpointSlices hosting a pod on an added node. Until its first
+// Add, a node initialization listed keeps its endpoints under the IPs listed then; the replay moves
+// them from those IPs, so an InternalIP change made meanwhile does not leave them behind, and later
+// events resolve the node through the lister.
+func (dt *DiffTracker) ReconcileNodeAdd(nodeName string, nodeIPs []string) {
+	if dt == nil || nodeName == "" {
+		return
+	}
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	oldNodeIPs := dt.startupNodeIPs[nodeName]
+	delete(dt.startupNodeIPs, nodeName)
+	dt.reconcileNodeIPChangeLocked(nodeName, oldNodeIPs, nodeIPs)
 }
 
 // ReconcileNodeIPChange replays the cached EndpointSlices hosting a pod on nodeName into the diff
@@ -245,6 +325,17 @@ func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNod
 		return
 	}
 
+	// The cache walk and the apply are held under one lock, like seedInboundEndpointsFromCache: the
+	// replay re-adds every cached address, so a concurrent EndpointSlice removal applied between them
+	// would be overwritten.
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	dt.reconcileNodeIPChangeLocked(nodeName, oldNodeIPs, newNodeIPs)
+}
+
+// reconcileNodeIPChangeLocked is ReconcileNodeIPChange without the lock. Must be called with dt.mu
+// held.
+func (dt *DiffTracker) reconcileNodeIPChangeLocked(nodeName string, oldNodeIPs, newNodeIPs []string) {
 	type endpointDelta struct {
 		oldAddresses map[string]string
 		newAddresses map[string]string
@@ -303,6 +394,6 @@ func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNod
 		}
 		klog.V(2).Infof("ReconcileNodeIPChange: node %s changed, moving pod addresses for service %s (old=%d new=%d)",
 			nodeName, serviceUID, len(delta.oldAddresses), len(delta.newAddresses))
-		dt.UpdateEndpoints(serviceUID, delta.oldAddresses, delta.newAddresses)
+		dt.updateEndpointsLocked(serviceUID, delta.oldAddresses, delta.newAddresses)
 	}
 }
