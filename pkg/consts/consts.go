@@ -255,15 +255,12 @@ const (
 
 	// PodLabelServiceEgressGateway is the label used on the pod
 	PodLabelServiceEgressGateway = "kubernetes.azure.com/service-egress-gateway"
-	// PodAnnotationServiceEgressGatewayNATGatewayID is the Azure resource ID of the NAT Gateway an egress
-	// identity uses instead of one the cloud provider manages (bring your own NAT Gateway), in a resource
-	// group of the cluster's network subscription other than the cluster resource group. It decides the
-	// identity's NAT Gateway once, when the identity is created, from the first pod still in the identity
-	// (the pod that triggered the creation, then the others), so all pods of an identity should carry the
-	// same value. While that NAT Gateway cannot be used, the creation is retried, reading the annotation
-	// again until a NAT Gateway it names may carry the controller's link to the Service Gateway (it was
-	// linked, or a link write to it may have been applied), and the pods keep the default outbound egress.
-	PodAnnotationServiceEgressGatewayNATGatewayID = "kubernetes.azure.com/service-egress-gateway-nat-gateway-id"
+	// PodAnnotationServiceEgressGatewayResourceGroup selects the same-named BYO NAT Gateway
+	// in this resource group, within the network subscription and outside the node resource group.
+	PodAnnotationServiceEgressGatewayResourceGroup = "kubernetes.azure.com/service-egress-gateway-resource-group"
+
+	// ResourceGroupNamePattern follows Azure resource-group naming rules.
+	ResourceGroupNamePattern = `^[\p{L}\p{Nd}_().-]{0,89}[\p{L}\p{Nd}_()-]$` // codespell:ignore nd
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"

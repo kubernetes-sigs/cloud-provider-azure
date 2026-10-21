@@ -45,8 +45,8 @@ import (
 const (
 	// egressLabel is the label key used to designate pods for outbound NAT gateway
 	egressLabel = "kubernetes.azure.com/service-egress-gateway"
-	// byoNATGatewayAnnotation names the BYO NAT Gateway (its resource ID) of the pods of an egress identity.
-	byoNATGatewayAnnotation = "kubernetes.azure.com/service-egress-gateway-nat-gateway-id"
+
+	byoNATGatewayResourceGroupAnnotation = "kubernetes.azure.com/service-egress-gateway-resource-group"
 )
 
 var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTestLabel), func() {
@@ -1023,20 +1023,25 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		utils.Logf("\n✓ Dual inbound+outbound pod test passed: %d pods with both LB and NAT Gateway", dualPods)
 	})
 
-	It("should use the BYO NAT Gateway its pods name, in any resource group under any name, and only unlink it when the identity goes away", func() {
+	It("should require the same-named BYO NAT Gateway in the annotated resource group and only unlink it on deletion", func() {
 		suffix := ns.Name[len(ns.Name)-5:]
 		byoRG := byoResourceGroup(suffix)
 		egressName := "byo-egress-" + suffix
-		natName := "their-nat-" + suffix
-
-		By("Creating a BYO Public IP and a NAT Gateway of another name in a resource group of their own")
-		addresses := createBYOAddresses(cs, byoRG, natName)
-		natGatewayID := createBYONATGateway(byoRG, natName, addresses)
-
-		By("Creating egress pods that name the BYO NAT Gateway")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 2)
+		otherGateway := createBYONATGateway(byoRG, "other-"+suffix, byoAddresses{})
+		By("Rejecting the missing same-named gateway rather than using another gateway or creating one")
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 2)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+		eventuallyRejected(cs, ns.Name, byoRG, fmt.Sprintf("NAT Gateway %q not found", egressName))
+		Expect(outboundServiceGoneErr(egressName)).To(Succeed())
+		Expect(byoNATGatewayLink(otherGateway)).To(BeEmpty())
+		expectNoManagedNATGateway(egressName)
+		missing, missingErr := runAz("rest", "--method", "get", "--url", armURL(byoNATGatewayARMID(byoRG, egressName)))
+		Expect(missingErr).To(HaveOccurred(), "CCM must not create the missing BYO gateway")
+		Expect(string(missing)).To(ContainSubstring("ResourceNotFound"))
 
+		By("Creating the same-named gateway so the existing pods' retry can use it")
+		addresses := createBYOAddresses(cs, byoRG, egressName)
+		natGatewayID := createBYONATGateway(byoRG, egressName, addresses)
 		By("Waiting for the identity to be registered with the BYO NAT Gateway")
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 		Expect(strings.ToLower(byoNATGatewayLink(natGatewayID))).To(Equal(strings.ToLower(serviceGatewayResourceID())), "the BYO NAT Gateway must be linked to the Service Gateway")
@@ -1054,10 +1059,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		expectBYOResourcesExist(natGatewayID, addresses)
 
 		By("Creating the pods again: the same BYO NAT Gateway must be linked again")
-		// The earlier pods are released only once the identity is unregistered; pods of the same names
-		// cannot be created until they are gone.
+		// Wait for old finalizers before reusing pod names.
 		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, egressName) }, 2*time.Minute, defaultPollInterval).Should(BeZero())
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 2)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 2)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 		deleteEgressPods(cs, ns.Name, egressName)
@@ -1079,7 +1083,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		natGatewayID := createBYONATGateway(byoRG, egressName, byoAddresses{})
 
 		By("Creating egress pods that name it: the identity is registered on it although it has no address")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 		events, err := cs.CoreV1().Events(ns.Name).List(context.TODO(), metav1.ListOptions{})
@@ -1088,7 +1092,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			if e.Reason != "ServiceGatewayEgressNATGatewayRejected" {
 				continue
 			}
-			// Where the spec granted access, "access denied" only means the role assignment was still propagating.
+			// Allow role-assignment propagation where this spec granted access.
 			if byoGrantedResourceGroups[byoRG] && strings.Contains(e.Message, "access denied") {
 				continue
 			}
@@ -1119,7 +1123,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		putBYOResource(natGatewayID, fmt.Sprintf(`{"location":%q,"sku":{"name":"Standard"}}`, clusterLocation()))
 
 		By("Creating egress pods that name it: the identity must be rejected and nothing linked")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyRejected(cs, ns.Name, byoRG, "SKU")
 		Expect(outboundServiceGoneErr(egressName)).To(Succeed(), "a rejected identity must not be registered")
@@ -1143,7 +1147,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			clusterLocation(), subResourceRefs(prefixes.ipv4), subResourceRefs(prefixes.ipv6)))
 
 		By("Creating egress pods that name it")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 		Expect(strings.ToLower(byoNATGatewayLink(natGatewayID))).To(Equal(strings.ToLower(serviceGatewayResourceID())))
@@ -1166,8 +1170,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		secondID := createBYONATGateway(byoRG, second, secondAddresses)
 
 		By("Creating pods for both identities")
-		createBYOEgressPods(cs, ns.Name, first, firstID, 1)
-		createBYOEgressPods(cs, ns.Name, second, secondID, 2)
+		createBYOEgressPods(cs, ns.Name, first, byoRG, 1)
+		createBYOEgressPods(cs, ns.Name, second, byoRG, 2)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, first, firstID, 3*time.Minute)
 		eventuallyBYORegistered(cs, ns.Name, byoRG, second, secondID, 3*time.Minute)
@@ -1189,7 +1193,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		managedID := byoNATGatewayARMID(resourceGroupName, managedName)
 
 		By("Creating pods for both identities")
-		createBYOEgressPods(cs, ns.Name, byoName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, byoName, byoRG, 1)
 		createEgressPods(cs, ns.Name, managedName, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, byoName, natGatewayID, 3*time.Minute)
@@ -1199,7 +1203,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		Expect(string(out)).To(ContainSubstring(fmt.Sprintf(`"k8s-azure-egress-identity": %q`, managedName)))
 
 		By("Scaling the BYO identity up to 3 pods and down to 1")
-		createBYOEgressPodsFrom(cs, ns.Name, byoName, natGatewayID, 1, 2)
+		createBYOEgressPodsFrom(cs, ns.Name, byoName, byoRG, 1, 2)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, byoName, natGatewayID, 2*time.Minute)
 		for _, i := range []int{1, 2} {
@@ -1216,22 +1220,29 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 	})
 
 	It("should never take over the NAT Gateway of the default outbound service", func() {
-		defaultNATGatewayID := defaultOutboundNATGatewayID()
+		defaultServiceName, defaultNATGatewayID := defaultOutboundService()
 		Expect(defaultNATGatewayID).NotTo(BeEmpty(), "the cluster must have a default outbound service")
-		defaultName := resourceNameFromID(defaultNATGatewayID)
+		defaultName := strings.ToLower(resourceNameFromID(defaultNATGatewayID))
 		defaultRG := resourceGroupFromID(defaultNATGatewayID)
 		defaultLink := byoNATGatewayLink(defaultNATGatewayID)
-		suffix := ns.Name[len(ns.Name)-5:]
-
-		By("Creating egress pods that name the default outbound NAT Gateway as their BYO NAT Gateway: rejected")
-		byoName := "byo-default-" + suffix
-		createBYOEgressPods(cs, ns.Name, byoName, defaultNATGatewayID, 1)
+		reservedIdentity := defaultName == "default-natgw" || strings.EqualFold(defaultName, defaultServiceName)
+		if len(validation.IsValidLabelValue(defaultName)) != 0 {
+			Skip("the default gateway name cannot be expressed as an egress label")
+		}
+		By("Requesting the default gateway by its resource group and same-name identity: rejected")
+		byoName := defaultName
+		createBYOEgressPods(cs, ns.Name, byoName, defaultRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyRejected(cs, ns.Name, defaultRG, fmt.Sprintf("Egress identity %q", byoName))
-		Expect(outboundServiceGoneErr(byoName)).To(Succeed(), "the identity must not be registered")
+		if reservedIdentity {
+			eventuallyNamespaceEvent(cs, ns.Name, "ServiceGatewayReservedEgressLabel", time.Minute)
+		} else {
+			eventuallyRejected(cs, ns.Name, defaultRG, fmt.Sprintf("Egress identity %q", byoName))
+			Expect(outboundServiceGoneErr(byoName)).To(Succeed(), "no additional identity may use the default gateway")
+		}
 		deleteEgressPods(cs, ns.Name, byoName)
+		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, byoName) }, 2*time.Minute, defaultPollInterval).Should(BeZero())
 
-		if strings.EqualFold(defaultRG, resourceGroupName) && !strings.EqualFold(defaultName, "default-natgw") && len(validation.IsValidLabelValue(defaultName)) == 0 {
+		if strings.EqualFold(defaultRG, resourceGroupName) && !reservedIdentity {
 			By(fmt.Sprintf("Creating egress pods named after the default outbound NAT Gateway %q: rejected", defaultName))
 			clearNamespaceEvents(cs, ns.Name)
 			createEgressPods(cs, ns.Name, defaultName, 1)
@@ -1280,12 +1291,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		deleteEgressPods(cs, ns.Name, foreignName)
 		expectUnchanged()
 
-		By("Creating egress pods that name it as their BYO NAT Gateway: rejected, it is in the cluster resource group")
+		By("Rejecting explicit BYO selection of the cluster resource group")
 		byoName := "byo-" + foreignName
 		clearNamespaceEvents(cs, ns.Name)
-		createBYOEgressPods(cs, ns.Name, byoName, foreignID, 1)
+		createBYOEgressPods(cs, ns.Name, byoName, resourceGroupName, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyRejected(cs, ns.Name, resourceGroupName, "is in the cluster resource group")
+		eventuallyRejected(cs, ns.Name, resourceGroupName, "is the cluster resource group")
 		Expect(outboundServiceGoneErr(byoName)).To(Succeed(), "a rejected identity must not be registered")
 		deleteEgressPods(cs, ns.Name, byoName)
 		expectUnchanged()
@@ -1299,12 +1310,24 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		Expect(ccmClient.CrashCCMAndWaitForRecovery(context.TODO(), GetCCMRecoveryTimeout())).To(Succeed())
 		expectUnchanged()
 
-		By("Creating egress pods named after it again: rejected by the start-up record")
+		By("Creating egress pods named after it again: rejected by the live ownership check")
 		clearNamespaceEvents(cs, ns.Name)
 		createEgressPods(cs, ns.Name, foreignName, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyRejected(cs, ns.Name, resourceGroupName, fmt.Sprintf("Egress identity %q", foreignName))
 		deleteEgressPods(cs, ns.Name, foreignName)
+		expectUnchanged()
+		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, foreignName) }, 2*time.Minute, defaultPollInterval).Should(BeZero())
+
+		By("Using a same-named BYO gateway in another RG despite the unrelated node-RG gateway")
+		byoRG := byoResourceGroup(ns.Name[len(ns.Name)-5:])
+		addresses := createBYOAddresses(cs, byoRG, foreignName)
+		externalID := createBYONATGateway(byoRG, foreignName, addresses)
+		createBYOEgressPods(cs, ns.Name, foreignName, byoRG, 1)
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+		eventuallyBYORegistered(cs, ns.Name, byoRG, foreignName, externalID, 3*time.Minute)
+		deleteEgressPods(cs, ns.Name, foreignName)
+		eventuallyBYOUnlinked(foreignName, externalID)
 		expectUnchanged()
 	})
 
@@ -1319,7 +1342,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		natGatewayID := createBYONATGateway(byoRG, egressName, addresses)
 
 		By("Registering an identity on the BYO NAT Gateway")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 2)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 2)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 
@@ -1344,7 +1367,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		natGatewayID := createBYONATGateway(byoRG, egressName, addresses)
 
 		By("Registering an identity on the BYO NAT Gateway")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 
@@ -1401,7 +1424,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		Expect(strings.ToLower(byoNATGatewayLink(natGatewayID))).To(Equal(strings.ToLower(serviceGatewayResourceID())), "precondition: linked by its owner")
 
 		By("Creating egress pods that name it")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 		expectNoManagedNATGateway(egressName)
@@ -1435,7 +1458,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			clusterLocation(), subResourceRefs(addresses.ipv4), subResourceRefs(addresses.ipv6), otherSGWID))
 
 		By("Creating egress pods that name it: rejected, and the other link kept")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyRejected(cs, ns.Name, byoRG, "already linked to Service Gateway")
 		Expect(outboundServiceGoneErr(egressName)).To(Succeed(), "a rejected identity must not be registered")
@@ -1499,8 +1522,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		secondID := createBYONATGateway(byoRG, second, secondAddresses)
 		managedID := byoNATGatewayARMID(resourceGroupName, managedName)
 
-		createBYOEgressPods(cs, ns.Name, first, firstID, 1)
-		createBYOEgressPods(cs, ns.Name, second, secondID, 1)
+		createBYOEgressPods(cs, ns.Name, first, byoRG, 1)
+		createBYOEgressPods(cs, ns.Name, second, byoRG, 1)
 		createEgressPods(cs, ns.Name, managedName, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, first, firstID, 3*time.Minute)
@@ -1508,12 +1531,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		eventuallyManagedRegistered(cs, ns.Name, managedName, managedID)
 
 		By("Moving the first BYO identity's only pod to the second: the first gateway is unlinked")
-		relabelEgressPod(cs, ns.Name, egressPodName(first, 0), second, secondID)
+		relabelEgressPod(cs, ns.Name, egressPodName(first, 0), second, byoRG)
 		eventuallyBYOUnlinked(first, firstID)
 		eventuallyBYORegistered(cs, ns.Name, byoRG, second, secondID, 3*time.Minute)
 
 		By("Moving the managed identity's only pod to the first BYO identity, naming its NAT Gateway: the managed gateway is deleted, the BYO one linked again")
-		relabelEgressPod(cs, ns.Name, egressPodName(managedName, 0), first, firstID)
+		relabelEgressPod(cs, ns.Name, egressPodName(managedName, 0), first, byoRG)
 		eventuallyResourcesDeleted(managedID)
 		eventuallyBYORegistered(cs, ns.Name, byoRG, first, firstID, 3*time.Minute)
 		expectBYOResourcesExist(firstID, firstAddresses)
@@ -1527,13 +1550,13 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		addresses := createBYOAddresses(cs, byoRG, egressName)
 		natGatewayID := createBYONATGateway(byoRG, egressName, addresses)
 
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 
 		By("Deleting the only pod and creating a replacement straight away")
 		Expect(cs.CoreV1().Pods(ns.Name).Delete(context.TODO(), egressPodName(egressName, 0), metav1.DeleteOptions{})).To(Succeed())
-		createBYOEgressPodsFrom(cs, ns.Name, egressName, natGatewayID, 1, 1)
+		createBYOEgressPodsFrom(cs, ns.Name, egressName, byoRG, 1, 1)
 		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, egressName) }, 3*time.Minute, defaultPollInterval).Should(Equal(1))
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 5*time.Minute)
@@ -1550,7 +1573,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		egressName := "byo-down-" + suffix
 		addresses := createBYOAddresses(cs, byoRG, egressName)
 		natGatewayID := createBYONATGateway(byoRG, egressName, addresses)
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 2)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 2)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 
@@ -1623,7 +1646,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		inUseID := createBYONATGateway(byoRG, inUse, inUseAddresses)
 
 		By("Registering an identity while the cluster identity has write access")
-		createBYOEgressPods(cs, ns.Name, inUse, inUseID, 1)
+		createBYOEgressPods(cs, ns.Name, inUse, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, inUse, inUseID, 3*time.Minute)
 
@@ -1647,7 +1670,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 					putBYONATGateway(byoRG, name, probeAddresses)
 				}
 			})
-			createBYOEgressPods(cs, ns.Name, probe, id, 1)
+			createBYOEgressPods(cs, ns.Name, probe, byoRG, 1)
 			Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 			denied := false
 			Eventually(func() bool {
@@ -1690,15 +1713,15 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Probing with new identities that name a NAT Gateway that does not exist, until one is rejected because it may not be read")
 		untilRoleChangeApplies(func(attempt int) bool {
-			// Rejected whether or not the change applied ("does not exist" before it), so a probe never links anything.
+			// A probe never links anything: its same-named gateway is absent.
 			probe := fmt.Sprintf("byo-noread-probe-%s-%d", suffix, attempt)
-			createBYOEgressPods(cs, ns.Name, probe, byoNATGatewayARMID(byoRG, probe), 1)
+			createBYOEgressPods(cs, ns.Name, probe, byoRG, 1)
 			Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 			rejected := fmt.Sprintf("Egress identity %q cannot be used", probe)
 			denied := false
 			Eventually(func() bool {
 				denied = namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayEgressNATGatewayRejected", rejected, "access denied when reading")
-				return denied || namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayEgressNATGatewayRejected", rejected, "does not exist")
+				return denied || namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayEgressNATGatewayRejected", rejected, "not found in resource group")
 			}, 3*time.Minute, defaultPollInterval).Should(BeTrue())
 			deleteEgressPods(cs, ns.Name, probe)
 			Eventually(func() (int, error) { return livePodCount(cs, ns.Name, probe) }, 6*time.Minute, defaultPollInterval).Should(BeZero(),
@@ -1707,7 +1730,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		})
 
 		By("Creating the identity's pod while access is denied: rejected, no managed NAT Gateway, nothing linked")
-		createBYOEgressPods(cs, ns.Name, egressName, natGatewayID, 1)
+		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		Eventually(func() bool {
 			return namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayEgressNATGatewayRejected",
@@ -1749,14 +1772,11 @@ func livePodIPsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue
 // byoResourceAPIVersion supports StandardV2 NAT Gateways and Public IPs.
 const byoResourceAPIVersion = "2025-05-01"
 
-// byoGrantedResourceGroups records the BYO resource groups on which the spec granted the cluster
-// identities access (byoResourceGroup); there a role assignment may still be propagating.
+// Resource groups granted access by this spec may still be waiting for RBAC propagation.
 var byoGrantedResourceGroups = map[string]bool{}
 
-// byoResourceGroup creates the resource group of a spec's BYO NAT Gateways and Public IPs, which may be
-// any resource group of the cluster's subscription but the cluster resource group. It is deleted after
-// the spec. The identities in byoAccessIdentitiesEnvVar get Network Contributor on it; without them the
-// cluster identity must have access to it in another way, or the BYO specs skip, saying why.
+// byoResourceGroup creates an isolated BYO resource group and grants the configured cluster
+// identities access. Specs skip inaccessible groups when no identities are configured.
 func byoResourceGroup(suffix string) string {
 	rg := createEgressResourceGroup("e2e-sgw-byo-" + suffix)
 	ids := clusterIdentityObjectIDs()
@@ -1768,12 +1788,9 @@ func byoResourceGroup(suffix string) string {
 	return rg
 }
 
-// createEgressResourceGroup creates resource group rg in the cluster's subscription and location and
-// deletes it after the spec, after the resources created in it. The spec skips when the test identity
-// cannot create resource groups.
+// createEgressResourceGroup registers cleanup before creation, in reverse dependency order.
 func createEgressResourceGroup(rg string) string {
-	// Registered first, so a failed create is still cleaned up. A group that was never created is not deleted, which a
-	// test identity that may not create one could not do, nor even tell that it does not exist.
+	// An authorization refusal may also prevent checking or deleting the group.
 	refused := false
 	DeferCleanup(func() {
 		if refused {
@@ -1795,8 +1812,6 @@ func createEgressResourceGroup(rg string) string {
 	return rg
 }
 
-// grantEgressNetworkContributor gives each identity Network Contributor on resource group rg until the
-// spec ends.
 func grantEgressNetworkContributor(rg string, ids []string) {
 	scope := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", subscriptionID, rg)
 	for _, id := range ids {
@@ -1825,13 +1840,11 @@ func clusterLocation() string {
 	return strings.TrimSpace(string(out))
 }
 
-// deleteBYOResource deletes an ARM resource and waits for the deletion to finish.
 func deleteBYOResource(resourceID string) {
 	out, err := runAz("resource", "delete", "--ids", resourceID)
 	Expect(err).NotTo(HaveOccurred(), "deleting %s: %s", resourceID, string(out))
 }
 
-// putBYOResource PUTs an ARM resource and waits until it is provisioned.
 func putBYOResource(resourceID, body string) {
 	out, err := runAz("rest", "--method", "put", "--url", armURL(resourceID), "--body", body)
 	Expect(err).NotTo(HaveOccurred(), string(out))
@@ -1841,11 +1854,9 @@ func putBYOResource(resourceID, body string) {
 	}, 3*time.Minute, defaultPollInterval).Should(Equal("Succeeded"), "resource %s should be provisioned", resourceID)
 }
 
-// byoAddresses are the BYO Public IPs of a BYO NAT Gateway; ipv6 is set only on clusters with IPv6
-// nodes, where egress identities need both families.
+// ipv6 is populated only for clusters with IPv6 nodes.
 type byoAddresses struct{ ipv4, ipv6 string }
 
-// createBYOAddresses creates the StandardV2 Public IPs a BYO NAT Gateway needs on this cluster.
 func createBYOAddresses(cs clientset.Interface, rg, name string) byoAddresses {
 	addresses := byoAddresses{ipv4: createBYOPublicIP(rg, name+"-pip", "IPv4")}
 	if clusterHasIPv6Node(cs) {
@@ -1854,19 +1865,16 @@ func createBYOAddresses(cs clientset.Interface, rg, name string) byoAddresses {
 	return addresses
 }
 
-// createBYOPublicIP creates a StandardV2 Public IP that is deleted after the spec.
 func createBYOPublicIP(rg, name, version string) string {
 	id := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", subscriptionID, rg, name)
-	// Registered first, so a failed create is still cleaned up (deleting a missing resource succeeds).
+	// Register cleanup before any write: a failed PUT may still create the resource.
 	DeferCleanup(deleteBYOResource, id)
 	putBYOResource(id, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"properties":{"publicIPAllocationMethod":"Static","publicIPAddressVersion":%q}}`, clusterLocation(), version))
 	return id
 }
 
-// createBYONATGateway creates a StandardV2 NAT Gateway with the given addresses (none when empty)
-// that is deleted after the spec, before its Public IPs, as DeferCleanup runs in reverse order.
+// Register after the addresses so reverse-order cleanup removes the NAT Gateway first.
 func createBYONATGateway(rg, name string, addresses byoAddresses) string {
-	// Registered first, so a failed create is still cleaned up (deleting a missing resource succeeds).
 	DeferCleanup(deleteBYOResource, byoNATGatewayARMID(rg, name))
 	return putBYONATGateway(rg, name, addresses)
 }
@@ -1882,15 +1890,13 @@ func putBYONATGateway(rg, name string, addresses byoAddresses) string {
 	return id
 }
 
-// egressSourceIP returns the IPv4 address the internet sees for the egress of pod podName, or "" when
-// the pod showed none: it has no egress, or the command could not be run in it.
+// egressSourceIP returns the pod's observed IPv4 egress address, or "" when unavailable.
 func egressSourceIP(namespace, podName string) string {
 	return egressSourceIPFrom(utils.RunKubectl(namespace, "exec", podName, "--", "/bin/sh", "-c", "curl -4 -s -m 10 ifconfig.me/ip || true"))
 }
 
-// egressSourceIPFrom parses what utils.RunKubectl returned for egressSourceIP: "stdout:<out>\nstderr:<err>".
-// Only an IPv4 address that is the whole of stdout counts, so an address in an error message (such as a
-// node's kubelet address when the exec fails) is never taken for the pod's egress.
+// RunKubectl wraps stdout and stderr; accept only a complete IPv4 address on stdout,
+// never an address embedded in an exec error.
 func egressSourceIPFrom(out string, err error) string {
 	if err != nil {
 		return ""
@@ -1902,22 +1908,16 @@ func egressSourceIPFrom(out string, err error) string {
 	return ""
 }
 
-// egressOutcome is what the source addresses seen from a pod show about its egress.
 type egressOutcome int
 
 const (
-	// egressUnobservable: neither the pod nor a control pod outside any egress identity showed an outbound
-	// address, so egress cannot be observed on this cluster.
+	// No address from either the test pod or the default-egress control pod.
 	egressUnobservable egressOutcome = iota
-	// egressThroughNATGateway: the pod egressed through a Public IP of the NAT Gateway.
 	egressThroughNATGateway
-	// egressElsewhere: egress can be observed, but not through the NAT Gateway.
 	egressElsewhere
 )
 
-// classifyEgress classifies the source addresses a pod showed (seen; "" for a probe that showed none),
-// given the NAT Gateway's Public IPs natIPs and whether a control pod outside any egress identity showed
-// an outbound address (controlSawEgress).
+// Only a matching source address passes; an observable mismatch must not be skipped.
 func classifyEgress(natIPs, seen []string, controlSawEgress bool) egressOutcome {
 	switch {
 	case slices.ContainsFunc(seen, func(ip string) bool { return ip != "" && slices.Contains(natIPs, ip) }):
@@ -1928,11 +1928,8 @@ func classifyEgress(natIPs, seen []string, controlSawEgress bool) egressOutcome 
 	return egressUnobservable
 }
 
-// expectEgressThroughNATGateway checks, for up to three minutes, that pod podName egresses through a
-// Public IP of NAT Gateway natGatewayID. It returns false, without failing, only when no egress can be
-// observed on this cluster: neither the pod nor a new pod outside any egress identity (which uses the
-// default outbound service) shows an outbound address, because the cluster carries no egress traffic or
-// commands cannot be run in its pods.
+// expectEgressThroughNATGateway returns false only when both the test pod and a
+// default-egress control pod are unobservable. An observed source outside the NAT fails.
 func expectEgressThroughNATGateway(cs clientset.Interface, namespace, podName, natGatewayID string) bool {
 	natIPs, err := getNatGatewayPublicIPs(natGatewayID)
 	Expect(err).NotTo(HaveOccurred())
@@ -1966,7 +1963,6 @@ func expectEgressThroughNATGateway(cs clientset.Interface, namespace, podName, n
 	return false
 }
 
-// byoNATGatewayLink returns the Service Gateway a NAT Gateway is linked to, or "".
 func byoNATGatewayLink(natGatewayID string) string {
 	out, err := runAz("rest", "--method", "get", "--url", armURL(natGatewayID), "--query", "properties.serviceGateway.id", "-o", "tsv")
 	Expect(err).NotTo(HaveOccurred(), string(out))
@@ -1977,23 +1973,18 @@ func createEgressPods(cs clientset.Interface, namespace, egressName string, coun
 	createEgressPodsFrom(cs, namespace, egressName, 0, count)
 }
 
-// createEgressPodsFrom creates count egress pods for egressName, numbered from first.
 func createEgressPodsFrom(cs clientset.Interface, namespace, egressName string, first, count int) {
 	createEgressPodsWith(cs, namespace, egressName, first, count, nil)
 }
 
-// createBYOEgressPods creates count egress pods for egressName that name the BYO NAT Gateway natGatewayID.
-func createBYOEgressPods(cs clientset.Interface, namespace, egressName, natGatewayID string, count int) {
-	createBYOEgressPodsFrom(cs, namespace, egressName, natGatewayID, 0, count)
+func createBYOEgressPods(cs clientset.Interface, namespace, egressName, resourceGroup string, count int) {
+	createBYOEgressPodsFrom(cs, namespace, egressName, resourceGroup, 0, count)
 }
 
-// createBYOEgressPodsFrom creates count egress pods for egressName that name the BYO NAT Gateway
-// natGatewayID, numbered from first.
-func createBYOEgressPodsFrom(cs clientset.Interface, namespace, egressName, natGatewayID string, first, count int) {
-	createEgressPodsWith(cs, namespace, egressName, first, count, map[string]string{byoNATGatewayAnnotation: natGatewayID})
+func createBYOEgressPodsFrom(cs clientset.Interface, namespace, egressName, resourceGroup string, first, count int) {
+	createEgressPodsWith(cs, namespace, egressName, first, count, map[string]string{byoNATGatewayResourceGroupAnnotation: resourceGroup})
 }
 
-// createEgressPodsWith creates count egress pods for egressName with the given annotations, numbered from first.
 func createEgressPodsWith(cs clientset.Interface, namespace, egressName string, first, count int, annotations map[string]string) {
 	for i := first; i < first+count; i++ {
 		pod := &v1.Pod{
@@ -2008,7 +1999,6 @@ func createEgressPodsWith(cs clientset.Interface, namespace, egressName string, 
 	}
 }
 
-// outboundServiceUsesNATGatewayErr returns nil once the egress identity is registered with natGatewayID.
 func outboundServiceUsesNATGatewayErr(egressName, natGatewayID string) error {
 	sgResponse, err := queryServiceGatewayServices()
 	if err != nil {
@@ -2025,7 +2015,6 @@ func outboundServiceUsesNATGatewayErr(egressName, natGatewayID string) error {
 	return fmt.Errorf("egress %s is not registered", egressName)
 }
 
-// outboundServiceGoneErr returns nil when the egress identity is not registered.
 func outboundServiceGoneErr(egressName string) error {
 	sgResponse, err := queryServiceGatewayServices()
 	if err != nil {
@@ -2039,30 +2028,13 @@ func outboundServiceGoneErr(egressName string) error {
 	return nil
 }
 
-// namespaceHasEvent reports whether namespace has an event with the given reason.
-func namespaceHasEvent(cs clientset.Interface, namespace, reason string) bool {
-	events, err := cs.CoreV1().Events(namespace).List(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return false
-	}
-	for _, e := range events.Items {
-		if e.Reason == reason {
-			return true
-		}
-	}
-	return false
-}
-
-// eventuallyNamespaceEvent waits for an event with the given reason in namespace.
 func eventuallyNamespaceEvent(cs clientset.Interface, namespace, reason string, timeout time.Duration) {
-	Eventually(func() bool { return namespaceHasEvent(cs, namespace, reason) }, timeout, defaultPollInterval).
+	Eventually(func() bool { return namespaceHasEventContaining(cs, namespace, reason) }, timeout, defaultPollInterval).
 		Should(BeTrue(), "expected a %s event in namespace %s", reason, namespace)
 }
 
-// skipIfBYONATGatewayInaccessible skips a BYO spec at once when the controller reported that the cluster
-// identity cannot read, or cannot link, the NAT Gateways in resource group byoRG: the BYO behaviour
-// cannot be observed without access to them. Where the spec granted the cluster identities access, a
-// denial only means the role assignment is still propagating, and the controller retries.
+// Skip missing access only when the spec did not grant it. Otherwise keep retrying to
+// allow role-assignment propagation.
 func skipIfBYONATGatewayInaccessible(cs clientset.Interface, namespace, byoRG string) {
 	if byoGrantedResourceGroups[byoRG] {
 		return
@@ -2079,10 +2051,7 @@ func skipIfBYONATGatewayInaccessible(cs clientset.Interface, namespace, byoRG st
 	}
 }
 
-// eventuallyBYORegistered waits until egressName is registered with the BYO NAT Gateway natGatewayID
-// for all its live pods and the gateway is linked to the Service Gateway. It skips at once when the
-// controller reports it may not read or link the NAT Gateways in byoRG, and waits longer where the spec
-// granted that access, which can take minutes to apply.
+// Newly granted roles need a longer registration timeout for RBAC propagation.
 func eventuallyBYORegistered(cs clientset.Interface, namespace, byoRG, egressName, natGatewayID string, timeout time.Duration) {
 	if byoGrantedResourceGroups[byoRG] {
 		timeout = max(timeout, 15*time.Minute)
@@ -2093,8 +2062,7 @@ func eventuallyBYORegistered(cs clientset.Interface, namespace, byoRG, egressNam
 	}, timeout, defaultPollInterval).Should(Succeed())
 }
 
-// byoRegisteredErr returns nil once egressName is registered with natGatewayID for all its live pods
-// and the gateway is linked to the Service Gateway.
+// byoRegisteredErr requires live-pod membership, NAT selection and the gateway link to agree.
 func byoRegisteredErr(cs clientset.Interface, namespace, egressName, natGatewayID string) error {
 	want, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
 	if err != nil {
@@ -2112,7 +2080,6 @@ func byoRegisteredErr(cs clientset.Interface, namespace, egressName, natGatewayI
 	return nil
 }
 
-// expectBYOResourcesExist checks a BYO NAT Gateway and its Public IPs still exist.
 func expectBYOResourcesExist(natGatewayID string, addresses byoAddresses) {
 	for _, id := range []string{natGatewayID, addresses.ipv4, addresses.ipv6} {
 		if id != "" {
@@ -2122,8 +2089,6 @@ func expectBYOResourcesExist(natGatewayID string, addresses byoAddresses) {
 	}
 }
 
-// expectBYOPrefixesAttached checks that a BYO NAT Gateway still uses exactly its owner's Public IP prefixes:
-// the controller's link and unlink writes must not drop them.
 func expectBYOPrefixesAttached(natGatewayID string, prefixes byoAddresses) {
 	for query, want := range map[string]string{"properties.publicIpPrefixes[].id": prefixes.ipv4, "properties.publicIpPrefixesV6[].id": prefixes.ipv6} {
 		out, err := runAz("rest", "--method", "get", "--url", armURL(natGatewayID), "--query", query, "-o", "tsv")
@@ -2132,19 +2097,22 @@ func expectBYOPrefixesAttached(natGatewayID string, prefixes byoAddresses) {
 	}
 }
 
-// defaultOutboundNATGatewayID returns the NAT Gateway ID of the default outbound service, or "".
 func defaultOutboundNATGatewayID() string {
+	_, id := defaultOutboundService()
+	return id
+}
+
+func defaultOutboundService() (name, natGatewayID string) {
 	sgResponse, err := queryServiceGatewayServices()
 	Expect(err).NotTo(HaveOccurred())
 	for _, svc := range sgResponse.Value {
-		if svc.Properties.IsDefault || svc.Name == "default-natgw" {
-			return svc.Properties.PublicNatGatewayID
+		if svc.Properties.IsDefault || strings.EqualFold(svc.Name, "default-natgw") {
+			return svc.Name, svc.Properties.PublicNatGatewayID
 		}
 	}
-	return ""
+	return "", ""
 }
 
-// resourceNameFromID returns the last segment of an ARM resource ID.
 func resourceNameFromID(id string) string {
 	return id[strings.LastIndex(id, "/")+1:]
 }
@@ -2161,7 +2129,6 @@ func egressPodName(egressName string, i int) string {
 
 var podNameInvalidChars = regexp.MustCompile(`[^a-z0-9-]+`)
 
-// deleteEgressPods deletes every pod of an egress identity.
 func deleteEgressPods(cs clientset.Interface, namespace, egressName string) {
 	Expect(cs.CoreV1().Pods(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{},
 		metav1.ListOptions{LabelSelector: egressLabel + "=" + egressName})).To(Succeed())
@@ -2176,7 +2143,6 @@ func livePodCount(cs clientset.Interface, namespace, egressName string) (int, er
 	return len(pods.Items), nil
 }
 
-// eventuallyBYOUnlinked waits until an egress identity is unregistered and its BYO NAT Gateway unlinked.
 func eventuallyBYOUnlinked(egressName, natGatewayID string) {
 	Eventually(func() error {
 		if err := outboundServiceGoneErr(egressName); err != nil {
@@ -2189,8 +2155,6 @@ func eventuallyBYOUnlinked(egressName, natGatewayID string) {
 	}, 6*time.Minute, defaultPollInterval).Should(Succeed())
 }
 
-// eventuallyManagedRegistered waits until a managed egress identity is registered with its NAT Gateway
-// in the cluster resource group for all its live pods.
 func eventuallyManagedRegistered(cs clientset.Interface, namespace, egressName, natGatewayID string) {
 	Eventually(func() error {
 		want, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
@@ -2204,13 +2168,10 @@ func eventuallyManagedRegistered(cs clientset.Interface, namespace, egressName, 
 	}, 3*time.Minute, defaultPollInterval).Should(Succeed(), "the managed identity must get a NAT Gateway in the cluster resource group")
 }
 
-// eventuallyRejected waits for a ServiceGatewayEgressNATGatewayRejected event whose message contains
-// want (any message when want is empty).
 func eventuallyRejected(cs clientset.Interface, namespace, rg, want string) {
 	timeout := 2 * time.Minute
 	if byoGrantedResourceGroups[rg] {
-		// Until the spec's role assignment applies, only "access denied" rejections appear, and the next
-		// retry can come up to 30 s later (5 minutes after 12 failures).
+		// Allow RBAC propagation plus the controller's retry backoff.
 		timeout = 15 * time.Minute
 	}
 	Eventually(func() bool {
@@ -2228,26 +2189,22 @@ func eventuallyRejected(cs clientset.Interface, namespace, rg, want string) {
 	}, timeout, defaultPollInterval).Should(BeTrue(), "expected a ServiceGatewayEgressNATGatewayRejected Warning containing %q", want)
 }
 
-// clearNamespaceEvents deletes the events in namespace, so a later wait sees only new ones.
 func clearNamespaceEvents(cs clientset.Interface, namespace string) {
 	Expect(cs.CoreV1().Events(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{})).To(Succeed())
 }
 
-// expectNoManagedNATGateway checks no managed NAT Gateway exists for an egress identity.
 func expectNoManagedNATGateway(egressName string) {
 	out, err := runAz("network", "nat", "gateway", "show", "-g", resourceGroupName, "-n", egressName)
 	Expect(err).To(HaveOccurred(), "no managed NAT Gateway may be created for %s", egressName)
 	Expect(string(out)).To(ContainSubstring("ResourceNotFound"))
 }
 
-// natGatewayTagsAndLink returns a NAT Gateway's tags and Service Gateway link, as JSON.
 func natGatewayTagsAndLink(natGatewayID string) string {
 	out, err := runAz("rest", "--method", "get", "--url", armURL(natGatewayID), "--query", "{tags:tags,link:properties.serviceGateway.id}", "-o", "json")
 	Expect(err).NotTo(HaveOccurred(), string(out))
 	return string(out)
 }
 
-// resourceGroupFromID returns the resource group of an ARM resource ID, or "".
 func resourceGroupFromID(id string) string {
 	if match := resourceGroupInIDRegexp.FindStringSubmatch(id); match != nil {
 		return match[1]
@@ -2263,22 +2220,18 @@ func subResourceRefs(id string) string {
 	return fmt.Sprintf(`[{"id":%q}]`, id)
 }
 
-// createBYOPublicIPPrefix creates a StandardV2 Public IP prefix that is deleted after the spec.
 func createBYOPublicIPPrefix(rg, name, version string, length int) string {
 	id := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPPrefixes/%s", subscriptionID, rg, name)
-	// Registered first, so a failed create is still cleaned up (deleting a missing resource succeeds).
 	DeferCleanup(deleteBYOResource, id)
 	putBYOResource(id, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"properties":{"prefixLength":%d,"publicIPAddressVersion":%q}}`,
 		clusterLocation(), length, version))
 	return id
 }
 
-// byoAccessIdentitiesEnvVar lists the object IDs of the identities the cloud-controller-manager uses,
-// comma separated. The BYO specs grant them access to the resource groups they create; the access
-// specs change their role there, so they only run when it is set.
+// Comma-separated CCM identity object IDs. Specs grant access only on their own groups;
+// access-denial specs require this setting and restore the original assignments.
 const byoAccessIdentitiesEnvVar = "BYO_E2E_CLUSTER_IDENTITY_OBJECT_IDS"
 
-// clusterIdentityObjectIDs returns the object IDs listed in byoAccessIdentitiesEnvVar.
 func clusterIdentityObjectIDs() []string {
 	var ids []string
 	for _, id := range strings.Split(os.Getenv(byoAccessIdentitiesEnvVar), ",") {
@@ -2297,11 +2250,9 @@ func byoAccessTestIdentities() []string {
 	return ids
 }
 
-// replaceClusterIdentityRoles replaces each identity's role assignments on the resource group with
-// role ("" for none). The original assignments are restored at cleanup, or earlier by calling the
-// returned function. It skips the spec when the identities get access in another way (a role other than
-// role granted above the resource group), because removing the resource-group assignments would then not
-// change what they can do.
+// replaceClusterIdentityRoles changes only assignments on this spec's resource group.
+// Cleanup (or the returned function) restores the originals. Skip inherited grants that
+// would mask the intended denial.
 func replaceClusterIdentityRoles(ids []string, rg, role string) (restore func()) {
 	scope := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", subscriptionID, rg)
 	original := map[string][]string{}
@@ -2321,7 +2272,7 @@ func replaceClusterIdentityRoles(ids []string, rg, role string) (restore func())
 	}
 	assign := func(roles map[string][]string) {
 		for _, id := range ids {
-			// Create first, then remove the rest, so the identity is never left with no role at all.
+			// Add replacement roles first; an empty target intentionally revokes access.
 			for _, r := range roles[id] {
 				out, err := runAz("role", "assignment", "create", "--assignee-object-id", id, "--assignee-principal-type", "ServicePrincipal", "--role", r, "--scope", scope)
 				Expect(err).NotTo(HaveOccurred(), string(out))
@@ -2351,20 +2302,18 @@ func replaceClusterIdentityRoles(ids []string, rg, role string) (restore func())
 	return restore
 }
 
-// relabelEgressPod moves a pod to another egress identity, naming the BYO NAT Gateway natGatewayID, or
-// none when it is "".
-func relabelEgressPod(cs clientset.Interface, namespace, podName, egressName, natGatewayID string) {
+// An empty NAT Gateway ID removes the annotation when moving to managed egress.
+func relabelEgressPod(cs clientset.Interface, namespace, podName, egressName, resourceGroup string) {
 	annotation := "null"
-	if natGatewayID != "" {
-		annotation = fmt.Sprintf("%q", natGatewayID)
+	if resourceGroup != "" {
+		annotation = fmt.Sprintf("%q", resourceGroup)
 	}
-	patch := fmt.Sprintf(`{"metadata":{"labels":{%q:%q},"annotations":{%q:%s}}}`, egressLabel, egressName, byoNATGatewayAnnotation, annotation)
+	patch := fmt.Sprintf(`{"metadata":{"labels":{%q:%q},"annotations":{%q:%s}}}`, egressLabel, egressName, byoNATGatewayResourceGroupAnnotation, annotation)
 	_, err := cs.CoreV1().Pods(namespace).Patch(context.TODO(), podName, types.MergePatchType, []byte(patch), metav1.PatchOptions{})
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// createClusterPublicIP creates a StandardV2 Public IP in the cluster resource group, tagged for
-// egressIdentity unless it is "", that is deleted after the spec unless the controller deletes it first.
+// An empty egressIdentity creates an unowned PIP fixture.
 func createClusterPublicIP(name, egressIdentity string) string {
 	id := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", subscriptionID, resourceGroupName, name)
 	tags := "{}"
@@ -2382,7 +2331,6 @@ func PublicIPNameForEgress(egressName string) string {
 	return egressName + "-pip"
 }
 
-// eventuallyResourcesDeleted waits until every resource is gone.
 func eventuallyResourcesDeleted(ids ...string) {
 	Eventually(func() error {
 		for _, id := range ids {
@@ -2398,8 +2346,8 @@ func eventuallyResourcesDeleted(ids ...string) {
 	}, 8*time.Minute, defaultPollInterval).Should(Succeed())
 }
 
-// namespaceHasEventContaining reports whether namespace has an event with the given reason whose
-// message contains every one of wants.
+// namespaceHasEventContaining matches the reason and every requested message fragment.
+// With no fragments, only the reason is matched.
 func namespaceHasEventContaining(cs clientset.Interface, namespace, reason string, wants ...string) bool {
 	events, err := cs.CoreV1().Events(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -2420,10 +2368,8 @@ func namespaceHasEventContaining(cs clientset.Interface, namespace, reason strin
 	return false
 }
 
-// untilRoleChangeApplies runs attempt with 0, 1, 2, ... until it reports that a role change on the
-// cluster identity has taken effect. Azure can take several minutes to apply one. Every attempt uses a
-// new identity, so one created before the change applied (and linked, where write access is tested) is
-// never mistaken for one created after it.
+// Probe with a new identity each time so a gateway linked before the role change
+// cannot be mistaken for a successful post-change write.
 func untilRoleChangeApplies(attempt func(i int) bool) {
 	deadline := time.Now().Add(20 * time.Minute)
 	for i := 0; ; i++ {

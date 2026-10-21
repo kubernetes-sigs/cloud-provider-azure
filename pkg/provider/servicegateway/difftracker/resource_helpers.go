@@ -116,9 +116,8 @@ func identityFromPublicIPName(pipName string) (identity string, ok bool) {
 // IP. It is not managed by this controller and must never be created, updated or deleted by it.
 const DefaultOutboundNATGatewayName = "default-natgw"
 
-// EgressIdentityTagKey tags the NAT Gateway and Public IPs this controller creates for an egress
-// identity with that identity. Only cluster-resource-group NAT Gateways this controller owns (see
-// ownsNATGateway) are ever swept as orphans.
+// EgressIdentityTagKey marks the egress identity owning a managed NAT Gateway or Public IP.
+// Ownership is never inferred from an untagged resource's name.
 const EgressIdentityTagKey = "k8s-azure-egress-identity"
 
 // InboundServiceUIDTagKey identifies the Service that owns an SGW inbound Public IP.
@@ -417,11 +416,9 @@ func egressIdentityTags(identity string) map[string]*string {
 	return map[string]*string{EgressIdentityTagKey: to.Ptr(identity)}
 }
 
-// ownsNATGateway reports whether a cluster-resource-group NAT Gateway was created by this controller:
-// tagged with its own name as egress identity (EgressIdentityTagKey). An untagged one is never ours,
-// also one created by a version of this controller that did not tag yet. A tagged one could still be
-// used by another service (for example the default outbound service); callers that write to or delete
-// one must also check that no other Service Gateway service uses it.
+// ownsNATGateway requires an ownership tag matching the gateway's own name.
+// Untagged legacy gateways are not adopted. Callers must also check other Service
+// Gateway users before writing or deleting the gateway.
 func ownsNATGateway(natGateway *armnetwork.NatGateway) bool {
 	if natGateway == nil {
 		return false

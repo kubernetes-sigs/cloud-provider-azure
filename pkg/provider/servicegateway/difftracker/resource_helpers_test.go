@@ -454,7 +454,6 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 	assert.Len(t, natGw.Properties.PublicIPAddresses, 1)
 	assert.Contains(t, *natGw.Properties.PublicIPAddresses[0].ID, "egress-uid-456-pip")
 
-	// Verify ownership tags
 	assert.Equal(t, "egress-uid-456", *natGw.Tags[EgressIdentityTagKey])
 	assert.Equal(t, "egress-uid-456", *pip.Tags[EgressIdentityTagKey])
 
@@ -1144,7 +1143,6 @@ func TestBYONATGatewayHelpers(t *testing.T) {
 		assert.False(t, inClusterRG(natID("sub", "vnet-rg"), cfg))
 		assert.False(t, inClusterRG(natID("other", "rg"), cfg))
 
-		// Network resources in their own subscription: the cluster's NAT Gateways live there.
 		netCfg := cfg
 		netCfg.NetworkResourceSubscriptionID = "netsub"
 		assert.True(t, inClusterRG(natID("netsub", "rg"), netCfg))

@@ -301,11 +301,9 @@ type NRPState struct {
 	NATGateways *utilsets.IgnoreCaseSet
 	// OutboundNATGatewayIDs maps each registered egress identity (lower-cased) to its NAT Gateway ID.
 	// Start-up snapshot only, not kept up to date; the live BYO record is DiffTracker.byoNATGateways.
-	// Optional.
 	OutboundNATGatewayIDs map[string]string
-	// UnmanagedNATGateways protects startup orphan cleanup: node-RG gateways not created by CCM,
-	// the default outbound service's name and its node-RG gateway. Normal reconciliation checks live
-	// ownership instead, so this snapshot cannot veto an unrelated BYO gateway or a later retry.
+	// UnmanagedNATGateways is the startup orphan-sweep exclusion set for unmanaged node-RG
+	// gateways and default outbound names. Normal reconciliation rechecks live ownership.
 	UnmanagedNATGateways *utilsets.IgnoreCaseSet
 	// ReservedOutboundServices contains RP-owned default service identities, regardless of NAT name.
 	// Unlike gateway names, these identities may never be claimed by pod-driven egress.
@@ -388,10 +386,9 @@ type ServiceOperationState struct {
 	// forever; a later UpdateService with a changed spec clears it.
 	CreationFailedTerminal bool
 
-	// CreationRejected records a rejected egress configuration or an identity with no remaining member
-	// pod. The operation keeps retrying with backoff. While it waits for its next attempt
-	// (StateNotStarted) it does not hold the initial sync open; a dispatched attempt does. Cleared when
-	// a creation succeeds and whenever the retry state starts afresh.
+	// CreationRejected marks rejected egress configuration or confirmed member absence.
+	// Backoff in StateNotStarted does not block initial sync; a dispatched retry still does.
+	// Cleared by successful creation or a retry reset.
 	CreationRejected bool
 
 	// CreatedAt is when this operation was first enqueued. Never overwritten on retry.

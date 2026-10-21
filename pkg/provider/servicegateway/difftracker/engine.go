@@ -1612,6 +1612,10 @@ func (dt *DiffTracker) deletePod(serviceUID, location string, addresses []string
 	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
 		dt.logger.V(2).Info("Rejected egress pod deletion whose identity collides with an inbound service",
 			"service", serviceUID, "location", location)
+		result = dt.inboundCollisionPodDeletionLocked(serviceUID, namespace, name, uid, addresses)
+		if result.Enqueued {
+			dt.triggerLocationsUpdater()
+		}
 		return result
 	}
 
@@ -1692,6 +1696,37 @@ func (dt *DiffTracker) deletePod(serviceUID, location string, addresses []string
 	return result
 }
 
+// A rejected pod has no outbound drain, but an earlier pending drain or uncertain state must survive.
+// Callers schedule the sync; startup recovery must not trigger it yet.
+func (dt *DiffTracker) inboundCollisionPodDeletionLocked(serviceUID, namespace, name, uid string, addresses []string) DeletePodResult {
+	result := DeletePodResult{}
+	if namespace == "" || name == "" {
+		return result
+	}
+	podKey := namespace + "/" + name
+	if existing, ok := dt.pendingPodDeletions[podKey]; ok {
+		if uid == "" || existing.UID == uid {
+			result.IsLastPod, result.Enqueued = existing.IsLastPod, true
+		}
+		result.setFinalizerDecision()
+		return result
+	}
+	op, tracked := dt.pendingServiceOps[serviceUID]
+	mayHaveOutboundState := (tracked && !op.Config.IsInbound && op.State != StateNotStarted) ||
+		dt.NRPResources.NATGateways.Has(serviceUID) || dt.byoNATGateways[strings.ToLower(serviceUID)] != "" ||
+		dt.outboundServiceHasLiveOrBufferedPodLocked(serviceUID)
+	if mayHaveOutboundState {
+		dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
+			Namespace: namespace, Name: name, UID: uid, ServiceUID: serviceUID,
+			Addresses: append([]string(nil), addresses...), VerifyServiceDrain: len(addresses) == 0,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+		result.Enqueued = true
+	}
+	result.setFinalizerDecision()
+	return result
+}
+
 // DeletePodWithoutAddresses handles a terminating egress pod first observed after its PodIPs/HostIP
 // were cleared. The exact old address set is unavailable, so release is gated on a service-level NRP
 // verification rather than inferred from missing pod status. Buffered entries for the same pod are
@@ -1707,6 +1742,10 @@ func (dt *DiffTracker) DeletePodWithoutAddresses(serviceUID, namespace, name, ui
 	}
 	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
 		dt.logger.V(2).Info("Rejected no-IP egress pod deletion colliding with an inbound service", "service", serviceUID)
+		result = dt.inboundCollisionPodDeletionLocked(serviceUID, namespace, name, uid, nil)
+		if result.Enqueued {
+			dt.triggerLocationsUpdater()
+		}
 		return result
 	}
 

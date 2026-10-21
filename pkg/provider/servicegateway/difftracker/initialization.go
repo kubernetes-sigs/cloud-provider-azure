@@ -617,6 +617,29 @@ func recoverStuckFinalizers(
 			podIPs := PodEgressAddresses(pod)
 			nodeIP := pod.Status.HostIP
 
+			// An inbound-only mapping must not manufacture an outbound drain for a rejected pod.
+			dt.mu.Lock()
+			collision := dt.outboundIdentityConflictsWithInboundLocked(egressLabel)
+			if collision {
+				podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+				result := dt.inboundCollisionPodDeletionLocked(egressLabel, pod.Namespace, pod.Name, string(pod.UID), podIPs)
+				if result.Enqueued {
+					dt.pendingPodDeletions[podKey].RecoveredAtStartup = true
+				} else if _, exists := dt.pendingPodDeletions[podKey]; !exists {
+					pendingPods[podKey] = &PendingPodDeletion{
+						Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID),
+						ServiceUID: egressLabel, RecoveredAtStartup: true,
+						Timestamp: time.Now().Format(time.RFC3339),
+					}
+				}
+			}
+			dt.mu.Unlock()
+			if collision {
+				podsRecovered++
+				recordFinalizerRecoveryScheduled()
+				continue
+			}
+
 			// If addresses are already cleared, retain the finalizer until the initialization
 			// locations sync proves there is no unbacked NRP mapping for this egress service.
 			if len(podIPs) == 0 || nodeIP == "" {

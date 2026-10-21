@@ -676,7 +676,7 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 				sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
 				dt := newTestDiffTracker()
 				dt.config, dt.networkClientFactory = testConfig(), factory
-				dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayARMID(identity)))
+				dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayRG))
 				if unlink || conflict {
 					dt.setBYONATGatewayID(identity, byoNATGatewayARMID(identity))
 				}
@@ -781,7 +781,7 @@ func TestBYOLinkFailureRetainsCleanupAndRequiresAnotherWrite(t *testing.T) {
 			sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
 			dt := newTestDiffTracker()
 			dt.config, dt.networkClientFactory = cfg, factory
-			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayARMID(identity)))
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayRG))
 			for i := 0; i < tc.attempts; i++ {
 				result := &outboundCompletion{}
 				outboundUpdater(dt, result).createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
@@ -854,7 +854,7 @@ func TestBYOLinkPollingFailureRetainsAppliedLinkForDeletion(t *testing.T) {
 				}).Times(1)
 			dt := newTestDiffTracker()
 			dt.config, dt.networkClientFactory = cfg, factory
-			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayARMID(identity)))
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayRG))
 			created := &outboundCompletion{}
 			outboundUpdater(dt, created).createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
 			_, success, createErr := created.result()

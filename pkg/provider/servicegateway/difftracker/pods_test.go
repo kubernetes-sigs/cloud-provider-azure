@@ -40,6 +40,101 @@ import (
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
+func TestPodInformerCollisionDoesNotStrandFinalizer(t *testing.T) {
+	const identity = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	for _, source := range []string{"NRP", "Kubernetes"} {
+		for _, tc := range []struct {
+			name              string
+			existingFinalizer bool
+			noIPs             bool
+			pendingDrain      bool
+			outboundPresent   bool
+			staleEvent        bool
+		}{
+			{name: "new pod"},
+			{name: "old finalizer", existingFinalizer: true},
+			{name: "old finalizer without IPs", existingFinalizer: true, noIPs: true},
+			{name: "existing drain", existingFinalizer: true, pendingDrain: true},
+			{name: "existing drain without IPs", existingFinalizer: true, noIPs: true, pendingDrain: true},
+			{name: "possible outbound registration", existingFinalizer: true, outboundPresent: true},
+			{name: "possible outbound registration without IPs", existingFinalizer: true, noIPs: true, outboundPresent: true},
+			{name: "stale delete preserves replacement drain", existingFinalizer: true, pendingDrain: true, outboundPresent: true, staleEvent: true},
+		} {
+			t.Run(source+"/"+tc.name, func(t *testing.T) {
+				pod := newTestPod("ns", "colliding", identity, "10.0.0.1", "10.244.0.5", v1.PodRunning, nil)
+				pod.UID = "pod-uid"
+				if tc.existingFinalizer {
+					pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+				}
+				kube := fake.NewSimpleClientset(pod)
+				ctrl := gomock.NewController(t)
+				defer ctrl.Finish()
+				dt := newProviderDiffTracker(t, ctrl, kube)
+				if source == "NRP" {
+					dt.NRPResources.LoadBalancers.Insert(identity)
+				} else {
+					dt.K8sResources.Services.Insert(identity)
+				}
+				dt.NRPResources.Locations[pod.Status.HostIP] = NRPLocation{
+					Addresses: map[string]NRPAddress{pod.Status.PodIP: {Services: utilsets.NewString(identity)}},
+				}
+				dt.podInformerAddPod(pod)
+				live, err := kube.CoreV1().Pods("ns").Get(context.Background(), pod.Name, metav1.GetOptions{})
+				if !assert.NoError(t, err) {
+					return
+				}
+				assert.Equal(t, tc.existingFinalizer, hasPodFinalizer(live), "rejected admission must not install a finalizer")
+				assert.Empty(t, dt.pendingServiceOps)
+				assert.Empty(t, dt.pendingPods)
+				now := metav1.Now()
+				live.DeletionTimestamp = &now
+				if tc.noIPs {
+					live.Status.HostIP, live.Status.PodIP = "", ""
+					live.Status.HostIPs, live.Status.PodIPs = nil, nil
+				}
+				live, err = kube.CoreV1().Pods("ns").Update(context.Background(), live, metav1.UpdateOptions{})
+				if !assert.NoError(t, err) {
+					return
+				}
+				if tc.pendingDrain {
+					dt.pendingPodDeletions["ns/colliding"] = &PendingPodDeletion{
+						Namespace: "ns", Name: pod.Name, UID: string(pod.UID), ServiceUID: identity, Addresses: []string{"10.244.0.5"},
+					}
+				}
+				if tc.outboundPresent {
+					dt.NRPResources.NATGateways.Insert(identity)
+				}
+				if tc.staleEvent {
+					live = live.DeepCopy()
+					live.UID = "older-pod-uid"
+				}
+				dt.podInformerRemovePod(live)
+				live, err = kube.CoreV1().Pods("ns").Get(context.Background(), pod.Name, metav1.GetOptions{})
+				if !assert.NoError(t, err) {
+					return
+				}
+				assert.Equal(t, tc.pendingDrain || tc.outboundPresent, hasPodFinalizer(live), "only a pending or possible outbound drain may hold this pod")
+				if tc.outboundPresent {
+					if assert.Contains(t, dt.pendingPodDeletions, "ns/colliding") {
+						entry := dt.pendingPodDeletions["ns/colliding"]
+						assert.Equal(t, string(pod.UID), entry.UID)
+						assert.False(t, entry.IsLastPod, "collision cleanup must never delete the inbound service")
+					}
+				}
+				dt.CheckPendingPodDeletions(context.Background())
+				live, err = kube.CoreV1().Pods("ns").Get(context.Background(), pod.Name, metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, tc.pendingDrain || tc.outboundPresent, hasPodFinalizer(live), "a genuine pending address must still drain")
+				assert.Empty(t, dt.pendingServiceOps)
+				assert.Empty(t, dt.pendingServiceDeletions, "cleanup must not delete the inbound service")
+				assert.Equal(t, source == "NRP", dt.NRPResources.LoadBalancers.Has(identity))
+				assert.Equal(t, source == "Kubernetes", dt.K8sResources.Services.Has(identity))
+				assert.True(t, dt.NRPResources.Locations[pod.Status.HostIP].Addresses[pod.Status.PodIP].Services.Has(identity))
+			})
+		}
+	}
+}
+
 // TestPodInformerAddPod tests the podInformerAddPod function
 func TestPodInformerAddPod(t *testing.T) {
 	now := metav1.Now()
