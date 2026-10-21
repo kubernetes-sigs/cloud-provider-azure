@@ -25,7 +25,7 @@ github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime/datetime
 github.com/Azure/azure-sdk-for-go/sdk/azcore/streaming
 github.com/Azure/azure-sdk-for-go/sdk/azcore/to
 github.com/Azure/azure-sdk-for-go/sdk/azcore/tracing
-# github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.1
+# github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.15.0
 ## explicit; go 1.25.0
 github.com/Azure/azure-sdk-for-go/sdk/azidentity
 github.com/Azure/azure-sdk-for-go/sdk/azidentity/internal
@@ -58,7 +58,7 @@ github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi v1.3.0
 ## explicit; go 1.23.0
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/msi/armmsi
-# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12 v12.0.0
+# github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12 v12.1.0
 ## explicit; go 1.25.0
 github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12
 # github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns v1.3.0
@@ -89,7 +89,7 @@ github.com/Azure/go-ansiterm/winterm
 github.com/Azure/msi-dataplane/pkg/dataplane
 github.com/Azure/msi-dataplane/pkg/dataplane/internal/challenge
 github.com/Azure/msi-dataplane/pkg/dataplane/internal/client
-# github.com/AzureAD/microsoft-authentication-library-for-go v1.8.1-0.20260810225554-63dcc2d8177b
+# github.com/AzureAD/microsoft-authentication-library-for-go v1.10.1
 ## explicit; go 1.18
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/cache
 github.com/AzureAD/microsoft-authentication-library-for-go/apps/confidential
