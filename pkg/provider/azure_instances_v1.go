@@ -30,6 +30,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 )
 
 var _ cloudprovider.Instances = (*Cloud)(nil)
@@ -66,7 +67,21 @@ func (az *Cloud) addressGetter(ctx context.Context, nodeName types.NodeName) ([]
 }
 
 // NodeAddresses returns the addresses of the specified instance.
+// A transient load balancer metadata failure is not reported as an error; the
+// valid addresses retrieved from instance metadata are returned instead.
 func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
+	addresses, err := az.NodeAddressesWithLBStatus(ctx, name)
+	if err != nil && errors.Is(err, providererrors.ErrLoadBalancerMetadataUnavailable) {
+		return addresses, nil
+	}
+	return addresses, err
+}
+
+// NodeAddressesWithLBStatus returns the addresses of the specified instance.
+// If the addresses of the local instance were retrieved but the load balancer
+// metadata was unavailable due to a transient failure, it returns the valid
+// addresses together with an error wrapping providererrors.ErrLoadBalancerMetadataUnavailable.
+func (az *Cloud) NodeAddressesWithLBStatus(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("NodeAddresses")
 	// Returns nil for unmanaged nodes because azure cloud provider couldn't fetch information for them.
 	unmanaged, err := az.IsNodeUnmanaged(string(name))
@@ -103,7 +118,14 @@ func (az *Cloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.N
 			return nil, fmt.Errorf("no credentials provided for Azure cloud provider")
 		}
 
-		return az.getLocalInstanceNodeAddresses(metadata.Network.Interface, string(name))
+		addresses, err := az.getLocalInstanceNodeAddresses(metadata.Network.Interface, string(name))
+		if err != nil {
+			return nil, err
+		}
+		if metadata.LBMetadataError != nil {
+			return addresses, metadata.LBMetadataError
+		}
+		return addresses, nil
 	}
 
 	return az.addressGetter(ctx, name)
