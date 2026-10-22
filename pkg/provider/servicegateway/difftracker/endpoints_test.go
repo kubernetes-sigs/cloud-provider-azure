@@ -159,7 +159,7 @@ func TestAddServiceSeedsInboundEndpointsFromCache(t *testing.T) {
 		}},
 	})
 
-	dt.AddService(NewInboundServiceConfig(svcUID, makeInboundConfig(80)))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(svcUID, makeInboundConfig(80))))
 
 	updates := dt.pendingEndpoints[svcUID]
 	if assert.Len(t, updates, 1, "AddService must replay unchanged EndpointSlices into the creation buffer") {

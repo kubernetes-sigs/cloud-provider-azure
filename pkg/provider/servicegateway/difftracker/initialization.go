@@ -231,6 +231,9 @@ func InitializeFromCluster(
 		diffTracker.triggerLocationsUpdater()
 	}
 
+	// Rejected additions can leave no work and therefore no completion callback.
+	diffTracker.checkInitializationComplete()
+
 	// Wait for all async operations to complete (service creations/deletions + location syncs + orphan deletions)
 	// WaitForInitialSync monitors:
 	//   - pendingServiceOps (ServiceUpdater work - includes orphan deletions)
@@ -1776,7 +1779,9 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 			}
 			config := NewInboundServiceConfig(serviceUID, inboundConfig)
 			logger.V(5).Info("Called AddService for load balancer", "serviceUID", serviceUID)
-			dt.AddService(config)
+			if err := dt.AddService(config); err != nil {
+				logger.Error(err, "Could not admit inbound service", "serviceUID", serviceUID)
+			}
 		}
 
 		// Startup must decide address families exactly as the runtime pod path does. Outbound has
@@ -1789,7 +1794,9 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 		for _, serviceUID := range natAdditions {
 			config := NewOutboundServiceConfig(serviceUID, &OutboundConfig{IPFamilies: outboundFamilies})
 			logger.V(5).Info("Called AddService for NAT gateway", "serviceUID", serviceUID)
-			dt.AddService(config)
+			if err := dt.AddService(config); err != nil {
+				logger.Error(err, "Could not admit outbound service", "serviceUID", serviceUID)
+			}
 		}
 	}
 

@@ -78,6 +78,50 @@ func TestLoadBalancerEnsureTracksExternalService(t *testing.T) {
 	assert.True(t, exists)
 }
 
+func TestLoadBalancerCleansDesiredOnlyReservation(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	for _, retype := range []bool{false, true} {
+		name := "delete"
+		if retype {
+			name = "retype"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			svc := newInboundService(uid)
+			svc.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}
+			pod := newTestPod("default", "fresh-egress", uid, "10.0.0.1", "10.244.0.5", v1.PodRunning, nil)
+			pod.UID = "pod-uid"
+			pod.Annotations = map[string]string{consts.PodAnnotationServiceEgressGatewayResourceGroup: "byo-rg"}
+			tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc, pod))
+			tracker.K8sResources.Services.Insert(uid)
+			lb := NewLoadBalancer(nil)
+			assert.NoError(t, lb.SetTracker(tracker))
+			_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
+			assert.Error(t, err)
+			assert.Empty(t, tracker.pendingServiceOps)
+			assert.False(t, tracker.NRPResources.LoadBalancers.Has(uid))
+
+			if retype {
+				svc.Spec.Type = v1.ServiceTypeClusterIP
+			} else {
+				deleted := metav1.Now()
+				svc.DeletionTimestamp = &deleted
+			}
+			_, exists, err := lb.GetLoadBalancer(context.Background(), "cluster", svc)
+			assert.NoError(t, err)
+			assert.True(t, exists, "the upstream controller must reach engine-driven cleanup")
+			if exists {
+				assert.NoError(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", svc))
+			}
+			assert.False(t, tracker.IsServiceTracked(uid))
+			tracker.podInformerAddPod(pod)
+			if assert.Contains(t, tracker.pendingServiceOps, uid) {
+				assert.False(t, tracker.pendingServiceOps[uid].Config.IsInbound)
+			}
+		})
+	}
+}
+
 // TestLoadBalancerEnsureEchoesExistingStatus pins the echo. The service controller only patches
 // when the returned status differs from what it captured before the call, so echoing is what keeps
 // it from clearing an ingress IP that updateServiceLoadBalancerStatus already wrote.
