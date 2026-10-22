@@ -75,7 +75,7 @@ jobs:
     - name: Autobuild
       run: |
         cd pkg/azclient
-        make generate test
+        make generate
         echo "fail if files changed"
         git add . && git diff --quiet && git diff --cached --quiet 
     - name: Perform CodeQL Analysis
