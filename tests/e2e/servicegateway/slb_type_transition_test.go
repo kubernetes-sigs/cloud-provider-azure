@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
@@ -306,6 +307,47 @@ var _ = Describe("SLB - Service Type Transition", Label(slbTestLabel), func() {
 			"a rapidly recreated LoadBalancer must regain both cleanup finalizers")
 
 		utils.Logf("\n✓ Rapid LoadBalancer→ClusterIP→LoadBalancer toggle preserved all %d endpoints", numPods)
+	})
+
+	// A create adds both finalizers before any Azure resource exists. If the CCM stops in that window
+	// and the Service leaves LoadBalancer meanwhile, the restarted CCM must still release its
+	// finalizer; otherwise deleting the Service hangs until a later restart.
+	It("should release the ServiceGateway finalizer of a Service that left LoadBalancer while the CCM was down", func() {
+		if !IsCCMClusterConfigured() {
+			Skip(fmt.Sprintf("Skipping: %s environment variable not set", CCMKubeconfigEnvVar))
+		}
+		ccmClient, err := NewCCMClusterClient()
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Creating the state a stopped create leaves behind on a Service retyped to ClusterIP")
+		strandedService := "stranded-finalizer-service"
+		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       strandedService,
+				Finalizers: []string{serviceGatewayCleanupFinalizer, loadBalancerCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{
+				Type:     v1.ServiceTypeClusterIP,
+				Selector: map[string]string{"app": strandedService},
+				Ports:    []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080)}},
+			},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Restarting the CCM")
+		Expect(ccmClient.CrashCCMAndWaitForRecovery(context.TODO(), GetCCMRecoveryTimeout())).To(Succeed())
+
+		By("Verifying the restarted CCM released its finalizer while the Service is alive")
+		Eventually(func() ([]string, error) {
+			return getServiceFinalizers(cs, ns.Name, strandedService)
+		}, 3*time.Minute, defaultPollInterval).ShouldNot(ContainElement(serviceGatewayCleanupFinalizer))
+
+		By("Verifying the Service deletes without waiting for another restart")
+		Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), strandedService, metav1.DeleteOptions{})).To(Succeed())
+		Eventually(func() bool {
+			_, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), strandedService, metav1.GetOptions{})
+			return apierrors.IsNotFound(getErr)
+		}, 1*time.Minute, defaultPollInterval).Should(BeTrue())
 	})
 })
 

@@ -468,11 +468,13 @@ func (dt *DiffTracker) outboundIPFamilies() []string {
 // ================================================================================================
 
 // recoverStuckFinalizers finds services and pods that have our finalizer + DeletionTimestamp
-// (indicating a crash during cleanup) and re-triggers the appropriate cleanup flows.
+// (indicating a crash during cleanup), and services that kept our finalizer but are no longer
+// desired (retyped away from LoadBalancer or claimed by another LoadBalancerClass), and
+// re-triggers the appropriate cleanup flows.
 // This runs during initialization, BEFORE informers start, so it's safe from race conditions.
 //
 // IMPORTANT: Since processK8sServices and processK8sEgresses skip resources
-// with DeletionTimestamp, these stuck resources are NOT in K8s state or counters. We just need to:
+// with DeletionTimestamp (and services that are not desired), these stuck resources are NOT in K8s state or counters. We just need to:
 // 1. Track them in pending deletions for finalizer removal
 // 2. Trigger LocationsUpdater to sync their addresses out of NRP
 //
@@ -505,10 +507,10 @@ func recoverStuckFinalizers(
 	// Collect pending items in local maps first, then batch-insert with a single lock
 	pendingPods := make(map[string]*PendingPodDeletion)
 
-	// Recover stuck services (LoadBalancer services with our finalizer + DeletionTimestamp)
+	// Recover stuck services (services with our finalizer that are deleting or no longer a LoadBalancer)
 	//
 	// SAFETY ANALYSIS: When is it safe to remove the finalizer directly?
-	// - processK8sServices() SKIPS services with a DeletionTimestamp, so they are NOT in K8s.Services
+	// - processK8sServices() SKIPS services with a DeletionTimestamp or of another type, so they are NOT in K8s.Services
 	//   and GetSyncOperations() (Additions = K8s.Services - NRP) will never re-create their resources.
 	// - So once we confirm no Azure resource currently EXISTS for the service, the finalizer is just
 	//   blocking deletion and can be removed.
@@ -528,10 +530,9 @@ func recoverStuckFinalizers(
 		for i := range services.Items {
 			svc := &services.Items[i]
 
-			// Keyed on our finalizer, not spec.type: the finalizer records that we provisioned Azure
-			// resources, and it survives a retype. A LoadBalancer switched to ClusterIP and then
-			// deleted still needs its PIP/LB torn down and its finalizer stripped.
-			if svc.DeletionTimestamp == nil {
+			// Keyed on our finalizer, not spec.type: the finalizer survives a retype, and a Service that
+			// processK8sServices does not keep as desired is released by nothing else, even while alive.
+			if svc.DeletionTimestamp == nil && svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Spec.LoadBalancerClass == nil {
 				continue
 			}
 			if !hasFinalizer(svc.Finalizers, ServiceGatewayServiceCleanupFinalizer) {
@@ -566,11 +567,11 @@ func recoverStuckFinalizers(
 				// No Azure resource - directly remove finalizer since there's nothing to clean up
 				logger.V(4).Info("Removed service finalizer without Azure resource", "namespace", svc.Namespace, "service", svc.Name, "uid", uid)
 				if err := dt.removeServiceGatewayFinalizer(ctx, svc); err != nil {
-					// Nothing re-drives this: a deleting Service is excluded from desired state and
-					// has no NRP entry, so no operation is scheduled for it. It is retried only on
-					// the next CCM restart, and blocks namespace deletion until then.
+					// Nothing re-drives this: the Service is excluded from desired state and has no NRP
+					// entry, so no operation is scheduled for it. It is retried only on the next CCM
+					// restart; until then deleting the Service blocks its namespace deletion.
 					RecordServiceFinalizerRemoveFailed()
-					logger.Error(err, "Service is left Terminating; removing its cleanup finalizer failed and will not be retried until CCM restart",
+					logger.Error(err, "Service keeps its cleanup finalizer; removing it failed and will not be retried until CCM restart",
 						"namespace", svc.Namespace, "service", svc.Name, "uid", uid)
 				} else {
 					servicesDirectCleaned++
