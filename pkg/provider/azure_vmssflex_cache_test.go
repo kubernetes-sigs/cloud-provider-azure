@@ -307,6 +307,15 @@ func TestGetNodeVmssFlexID(t *testing.T) {
 			expectedVmssFlexID:             "",
 			expectedErr:                    cloudprovider.InstanceNotFound,
 		},
+		{
+			description:                    "getNodeVmssFlexID should not panic when the node name is shorter than the 6-character instance id",
+			nodeName:                       "abc",
+			testVMListWithoutInstanceView:  []*armcompute.VirtualMachine{},
+			testVMListWithOnlyInstanceView: []*armcompute.VirtualMachine{},
+			vmListErr:                      nil,
+			expectedVmssFlexID:             "",
+			expectedErr:                    cloudprovider.InstanceNotFound,
+		},
 	}
 
 	for _, tc := range testCases {
