@@ -112,7 +112,7 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			}
 
 			newCfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
-			dt.UpdateService(newCfg)
+			assert.NoError(t, dt.UpdateService(newCfg))
 
 			op := dt.pendingServiceOps[uid]
 			assert.Equal(t, tc.afterState, op.State, "post-state mismatch")
@@ -206,7 +206,7 @@ func TestGuardStateTransitions_UpdateService_UnknownStateNoPanic(t *testing.T) {
 		State:      ResourceState(99), // illegal
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))))
 	op := dt.pendingServiceOps[uid]
 	assert.Equal(t, ResourceState(99), op.State, "unknown state must not be mutated")
 	assert.Len(t, dt.serviceUpdaterTrigger, 0, "unknown state must NOT fire trigger")
@@ -258,7 +258,7 @@ func TestGuardStateTransitions_DoubleCreate_DoesNotResetState(t *testing.T) {
 		RetryCount: 3,
 	}
 
-	dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(8080))))
 
 	op := dt.pendingServiceOps[uid]
 	assert.Equal(t, 3, op.RetryCount, "RetryCount must not be reset by duplicate AddService")
@@ -284,7 +284,7 @@ func TestGuardStateTransitions_CreateAfterDelete_BuffersRecreate(t *testing.T) {
 	}
 
 	newCfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
-	dt.UpdateService(newCfg)
+	assert.NoError(t, dt.UpdateService(newCfg))
 
 	op := dt.pendingServiceOps[uid]
 	assert.Equal(t, StateDeletionInProgress, op.State, "in-flight deletion still wins (no mid-deletion race)")
@@ -359,7 +359,7 @@ func TestUpdateService_RecreateAfterDeletionReplays(t *testing.T) {
 	}
 
 	// UpdateService with a CHANGED spec while deletion is in progress.
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))))
 
 	op := dt.pendingServiceOps[uid]
 	assert.True(t, op.RecreateAfterDeletion,
@@ -443,7 +443,7 @@ func TestUpdateService_RecreateAfterDeletionPreservesEndpoints(t *testing.T) {
 	// Service -> ClusterIP: delete (locations present -> StateDeletionPending, K8s state scrubbed).
 	dt.DeleteService(uid, true, false)
 	// Service -> LoadBalancer again while deleting: UpdateService queues the recreate.
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 	assert.True(t, dt.pendingServiceOps[uid].RecreateAfterDeletion, "the recreate must be queued")
 	assert.Len(t, dt.pendingEndpoints[uid], 1, "the engine must replay and buffer unchanged endpoints")
 

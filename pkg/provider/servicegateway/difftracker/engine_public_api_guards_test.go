@@ -37,7 +37,7 @@ import (
 // trigger. A future caller passing an unsanitized UID must not poison state.
 func TestGuardAddService_EmptyUIDIsNoOp(t *testing.T) {
 	dt := newTestDiffTracker()
-	dt.AddService(NewInboundServiceConfig("", nil))
+	assert.Error(t, dt.AddService(NewInboundServiceConfig("", nil)))
 	assert.Empty(t, dt.pendingServiceOps, "empty-UID config must not be tracked")
 	select {
 	case <-dt.serviceUpdaterTrigger:
@@ -54,7 +54,7 @@ func TestGuardAddService_IdempotentForExistingNRPLB(t *testing.T) {
 	uid := "svc-existing"
 	dt.NRPResources.LoadBalancers.Insert(uid)
 
-	dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 	_, tracked := dt.pendingServiceOps[uid]
 	assert.False(t, tracked, "AddService must be idempotent when LB exists in NRP")
 	select {
@@ -71,7 +71,7 @@ func TestGuardAddService_IdempotentForExistingNRPNAT(t *testing.T) {
 	uid := "egress-existing"
 	dt.NRPResources.NATGateways.Insert(uid)
 
-	dt.AddService(NewOutboundServiceConfig(uid, nil))
+	assert.NoError(t, dt.AddService(NewOutboundServiceConfig(uid, nil)))
 	_, tracked := dt.pendingServiceOps[uid]
 	assert.False(t, tracked, "AddService must be idempotent when NAT Gateway exists in NRP")
 }
@@ -146,7 +146,7 @@ func TestGuardUpdateEndpoints_DeletionInProgressIgnored(t *testing.T) {
 func TestGuardUpdateService_RejectsOutboundCall(t *testing.T) {
 	dt := newTestDiffTracker()
 	uid := "egress-update"
-	dt.UpdateService(NewOutboundServiceConfig(uid, nil))
+	assert.NoError(t, dt.UpdateService(NewOutboundServiceConfig(uid, nil)))
 	_, tracked := dt.pendingServiceOps[uid]
 	assert.False(t, tracked, "UpdateService must ignore outbound configs (no fall-through to AddService for NAT)")
 }
@@ -159,7 +159,7 @@ func TestGuardUpdateService_LBInNRPCreatesTrackingEntry(t *testing.T) {
 	uid := "svc-recovered"
 	dt.NRPResources.LoadBalancers.Insert(uid)
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 
 	op, tracked := dt.pendingServiceOps[uid]
 	if assert.True(t, tracked, "UpdateService must adopt the recovered LB") {

@@ -60,6 +60,9 @@ func TestPodInformerCollisionDoesNotStrandFinalizer(t *testing.T) {
 			{name: "possible outbound registration without IPs", existingFinalizer: true, noIPs: true, outboundPresent: true},
 			{name: "stale delete preserves replacement drain", existingFinalizer: true, pendingDrain: true, outboundPresent: true, staleEvent: true},
 		} {
+			if source == "Kubernetes" && tc.outboundPresent {
+				continue // A registered outbound owner takes precedence over inbound desired state.
+			}
 			t.Run(source+"/"+tc.name, func(t *testing.T) {
 				pod := newTestPod("ns", "colliding", identity, "10.0.0.1", "10.244.0.5", v1.PodRunning, nil)
 				pod.UID = "pod-uid"

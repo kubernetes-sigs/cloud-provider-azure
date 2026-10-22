@@ -436,6 +436,45 @@ func TestInitOutboundRefCount_RejectsServiceUIDEgressLabelCollision(t *testing.T
 	assert.NotContains(t, dt.GetSyncNRPNATGateways().Additions.UnsortedList(), collideID)
 }
 
+func TestInitPreservesRegisteredOutboundOwner(t *testing.T) {
+	const uid, other, hostIP, podIP = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "other-inbound", "10.0.0.1", "10.244.0.5"
+	k8s := newK8sStateForSeeders()
+	k8s.Services.Insert(uid, other)
+	k8s.Egresses.Insert(uid)
+	k8s.Nodes[hostIP] = Node{Pods: map[string]Pod{
+		podIP: {
+			InboundIdentities: utilsets.NewString(uid, other), PublicOutboundIdentity: uid,
+			OutboundPodKey: "ns/egress", OutboundPodUID: "pod-uid",
+		},
+		"10.244.0.9": {InboundIdentities: utilsets.NewString(uid)},
+	}}
+	nrp := NRPState{
+		LoadBalancers: utilsets.NewString(other), NATGateways: utilsets.NewString(uid),
+		Locations:             map[string]NRPLocation{},
+		OutboundNATGatewayIDs: map[string]string{uid: byoNATGatewayARMID(uid)},
+	}
+	ctrl := gomock.NewController(t)
+	dt, err := New(logr.Discard(), k8s, nrp, testConfig(), mock_azclient.NewMockClientFactory(ctrl), fake.NewSimpleClientset())
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.False(t, dt.K8sResources.Services.Has(uid), "new inbound desired state must yield to the registered outbound owner")
+	assert.True(t, dt.K8sResources.Services.Has(other))
+	assert.True(t, dt.K8sResources.Egresses.Has(uid))
+	member := dt.K8sResources.Nodes[hostIP].Pods[podIP]
+	assert.Equal(t, uid, member.PublicOutboundIdentity)
+	assert.Equal(t, "pod-uid", member.OutboundPodUID)
+	assert.False(t, member.InboundIdentities.Has(uid))
+	assert.True(t, member.InboundIdentities.Has(other))
+	assert.NotContains(t, dt.K8sResources.Nodes[hostIP].Pods, "10.244.0.9")
+	count, ok := dt.outboundIdentityPodRefCount.Load(uid)
+	assert.True(t, ok)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(uid))
+	assert.False(t, dt.GetSyncLoadBalancerServices().Additions.Has(uid))
+	assert.Zero(t, dt.GetSyncNRPNATGateways().Removals.Len())
+}
+
 // TestRecoverStuckFinalizers_KeepsFinalizerWhenAzureResourceExists verifies that a service whose
 // PIP/LB was created in Azure but never registered with ServiceGateway (a crash between LB-create and
 // SGW-register) keeps its cleanup finalizer during recovery. NRPResources does not list it, but the
@@ -615,27 +654,87 @@ func TestRecoverStuckFinalizers_NoIPPodUsesServiceDrainVerification(t *testing.T
 	}
 }
 
+func TestInitializeFromCluster_CompletesAfterAllAdditionsAreRejected(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	for _, scenario := range []string{"colliding egress", "rejected inbound only", "empty control"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := newOutboundMocks(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
+				Name: ptr.To(DefaultOutboundNATGatewayName),
+				Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+					ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), IsDefault: ptr.To(true),
+				},
+			}}, nil).AnyTimes()
+			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			lb.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.nat.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.pip.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			var objects []runtime.Object
+			if scenario != "empty control" {
+				service := newInboundService(uid)
+				service.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}
+				objects = append(objects, service)
+			}
+			if scenario == "colliding egress" {
+				pod := newEgressPod("collider", "default", uid, "node", "10.244.0.5", "10.0.0.1", v1.PodRunning)
+				pod.Annotations = map[string]string{consts.PodAnnotationServiceEgressGatewayResourceGroup: "byo-rg"}
+				node := &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "node"},
+					Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.1"}}},
+				}
+				objects = append(objects, pod, node)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			dt, err := InitializeFromCluster(ctx, testConfig(), m.factory, fake.NewSimpleClientset(objects...))
+			if dt != nil {
+				defer cleanupOnError(dt)
+			}
+			if !assert.NoError(t, err, "no undispatched addition may leave initialization waiting without work") {
+				return
+			}
+			assert.True(t, dt.InitialSyncDone)
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.False(t, dt.K8sResources.Egresses.Has(uid))
+			assert.Equal(t, scenario != "empty control", dt.K8sResources.Services.Has(uid))
+		})
+	}
+}
+
 func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T) {
 	const identity = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	for _, tc := range []struct {
 		name, egress                  string
 		keepIP, backend, retryRemoval bool
+		outboundOwner                 bool
 	}{
 		{name: "no-IP collision", egress: identity, backend: true},
 		{name: "retained IP", egress: identity, keepIP: true, backend: true},
 		{name: "distinct identity", egress: "other-egress", backend: true},
 		{name: "no inbound backend", egress: identity},
 		{name: "finalizer removal retry", egress: identity, backend: true, retryRemoval: true},
+		{name: "registered outbound owner survives inbound desired state", egress: identity, backend: true, outboundOwner: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := newOutboundMocks(ctrl)
 			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
 			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
-			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
+			registered := &armnetwork.ServiceGatewayService{
 				Name:       ptr.To(identity),
 				Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)},
-			}}, nil).AnyTimes()
+			}
+			var loadBalancers []*armnetwork.LoadBalancer
+			if tc.outboundOwner {
+				registered.Properties.ServiceType = ptr.To(armnetwork.ServiceTypeOutbound)
+				registered.Properties.PublicNatGatewayID = ptr.To(byoNATGatewayARMID(identity))
+			} else {
+				loadBalancers = []*armnetwork.LoadBalancer{{Name: ptr.To(identity)}}
+			}
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{registered}, nil).AnyTimes()
 			var locations []*armnetwork.ServiceGatewayAddressLocationResponse
 			if tc.backend {
 				locations = []*armnetwork.ServiceGatewayAddressLocationResponse{{
@@ -644,7 +743,7 @@ func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T
 				}}
 			}
 			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(locations, nil).AnyTimes()
-			lb.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.LoadBalancer{{Name: ptr.To(identity)}}, nil).AnyTimes()
+			lb.EXPECT().List(gomock.Any(), "rg").Return(loadBalancers, nil).AnyTimes()
 			m.nat.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 			m.pip.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 			service := &v1.Service{
@@ -676,6 +775,15 @@ func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T
 				pod.Status.HostIP, pod.Status.PodIP = "10.0.0.1", "10.244.0.5"
 			}
 			kube := fake.NewSimpleClientset(service, node, slice, pod)
+			if tc.outboundOwner {
+				active := newTestPod("ns", "active", identity, "10.0.0.1", "10.244.0.10", v1.PodRunning, nil)
+				active.Spec.NodeName = node.Name
+				active.UID = "active-uid"
+				_, err := kube.CoreV1().Pods("ns").Create(context.Background(), active, metav1.CreateOptions{})
+				if !assert.NoError(t, err) {
+					return
+				}
+			}
 			var updates atomic.Int32
 			kube.PrependReactor("update", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
 				if updates.Add(1) == 1 && tc.retryRemoval {
@@ -697,11 +805,17 @@ func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T
 				return
 			}
 			assert.False(t, hasPodFinalizer(current))
-			assert.True(t, dt.NRPResources.LoadBalancers.Has(identity))
+			assert.Equal(t, !tc.outboundOwner, dt.NRPResources.LoadBalancers.Has(identity))
 			assert.Empty(t, dt.pendingPodDeletions)
 			if tc.backend {
-				assert.True(t, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.10"].InboundIdentities.Has(identity))
+				member := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.10"]
+				assert.Equal(t, !tc.outboundOwner, member.InboundIdentities.Has(identity))
 				assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.244.0.10"].Services.Has(identity))
+				if tc.outboundOwner {
+					assert.Equal(t, identity, member.PublicOutboundIdentity)
+					assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity))
+					assert.Error(t, dt.ReconcileInboundService(service))
+				}
 			}
 			if tc.retryRemoval {
 				assert.GreaterOrEqual(t, updates.Load(), int32(2))

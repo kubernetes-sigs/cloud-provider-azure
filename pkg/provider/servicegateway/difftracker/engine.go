@@ -122,8 +122,7 @@ func (dt *DiffTracker) ReconcileInboundService(service *v1.Service) error {
 
 	// UpdateService resolves tracked vs untracked under its own lock and delegates to AddService
 	// when untracked, so the decision is not made on a stale read here.
-	dt.UpdateService(config)
-	return nil
+	return dt.UpdateService(config)
 }
 
 // DeleteInboundService translates a Kubernetes LoadBalancer Service deletion into the inbound
@@ -143,10 +142,8 @@ func (dt *DiffTracker) DeleteInboundService(service *v1.Service) error {
 	return nil
 }
 
-// AddService handles inbound creation and the startup outbound creation flow.
-// If the service already exists in NRP, it does nothing (idempotent).
-// If the service doesn't exist, it triggers service creation via XUpdater.
-func (dt *DiffTracker) AddService(config ServiceConfig) {
+// AddService queues creation unless the identity already exists or belongs to the other kind.
+func (dt *DiffTracker) AddService(config ServiceConfig) error {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
 		updateTrackedServicesMetric(dt)
@@ -159,29 +156,34 @@ func (dt *DiffTracker) AddService(config ServiceConfig) {
 	if err := config.Validate(); err != nil {
 		dt.mu.Unlock()
 		dt.logger.V(4).Info("Could not add service with invalid config", "err", err)
-		return
+		return err
 	}
 
 	serviceUID := config.UID
 	dt.logger.V(5).Info("Added service request", "service", serviceUID, "isInbound", config.IsInbound)
+	if config.IsInbound && dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
+		dt.mu.Unlock()
+		return fmt.Errorf("service gateway identity %q is owned by outbound egress; release that identity before creating an inbound service", serviceUID)
+	}
 	if !config.IsInbound && dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
 		dt.mu.Unlock()
 		dt.logger.V(2).Info("Rejected egress identity colliding with an inbound service", "service", serviceUID)
-		return
+		return fmt.Errorf("service gateway identity %q is owned by an inbound service", serviceUID)
 	}
 
 	// Check if service already exists in NRP
 	if config.IsInbound {
+		dt.K8sResources.Services.Insert(serviceUID)
 		if dt.NRPResources.LoadBalancers.Has(serviceUID) {
 			dt.mu.Unlock()
 			dt.logger.V(5).Info("Skipped existing LoadBalancer", "service", serviceUID)
-			return
+			return nil
 		}
 	} else {
 		if dt.NRPResources.NATGateways.Has(serviceUID) {
 			dt.mu.Unlock()
 			dt.logger.V(5).Info("Skipped existing NATGateway", "service", serviceUID)
-			return
+			return nil
 		}
 	}
 
@@ -191,7 +193,7 @@ func (dt *DiffTracker) AddService(config ServiceConfig) {
 		state := opState.State
 		dt.mu.Unlock()
 		dt.logger.V(5).Info("Skipped tracked service", "service", serviceUID, "state", state)
-		return
+		return nil
 	}
 
 	// Service doesn't exist - need to create it
@@ -215,6 +217,7 @@ func (dt *DiffTracker) AddService(config ServiceConfig) {
 		dt.seedInboundEndpointsFromCache(serviceUID)
 	}
 	dt.triggerServiceUpdater()
+	return nil
 }
 
 // UpdateEndpoints handles endpoint updates for inbound (Load Balancer) services.
@@ -233,6 +236,10 @@ func (dt *DiffTracker) UpdateEndpoints(serviceUID string, oldPodIPToNodeIP, newP
 func (dt *DiffTracker) updateEndpointsLocked(serviceUID string, oldPodIPToNodeIP, newPodIPToNodeIP map[string]string) {
 	if serviceUID == "" {
 		dt.logger.V(4).Info("Could not update endpoints without service")
+		return
+	}
+	if dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
+		dt.logger.V(4).Info("Skipped inbound endpoints for an outbound-owned identity", "service", serviceUID)
 		return
 	}
 
@@ -363,20 +370,6 @@ func (dt *DiffTracker) updateEndpointsLocked(serviceUID string, oldPodIPToNodeIP
 	}
 }
 
-// UpdateService handles spec updates (e.g., port changes) for an existing inbound service.
-// Behavior:
-//   - If the service is not yet tracked AND not in NRP: falls through to AddService.
-//   - If currently being created (StateNotStarted/CreationInProgress): the latest config
-//     overwrites the desired config; the in-flight creation will use the newer config when
-//     it picks up the work. (For an already-running creation goroutine, a follow-up update
-//     will be enqueued via StateUpdateInProgress on creation success.)
-//   - If StateCreated: diff the new config against LastAppliedConfig. Equal => no-op.
-//     Different => transition to StateUpdateInProgress and trigger the ServiceUpdater.
-//   - If StateUpdateInProgress: overwrite Config so the next dispatch sees the latest desired
-//     state; an in-flight updater will re-PUT with the freshest config on completion if needed.
-//   - If StateDeletionPending/InProgress: ignore — deletion wins.
-//
-// Outbound services are not currently supported by this path.
 // resetRetryStateLocked clears a transient-failure park so a fresh external intent (a spec-changing
 // UpdateService, or a DeleteService) gets a clean retry budget instead of inheriting an exhausted or
 // still-backing-off one. Without this, a service parked after maxServiceRetries transient failures
@@ -388,7 +381,9 @@ func resetRetryStateLocked(op *ServiceOperationState) {
 	op.NextRetryAt = time.Time{}
 }
 
-func (dt *DiffTracker) UpdateService(config ServiceConfig) {
+// UpdateService queues inbound creation or updates without repurposing an outbound operation.
+// Same-kind recreation waits for deletion; opposite-kind admission returns a retryable error.
+func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
 		updateTrackedServicesMetric(dt)
@@ -397,17 +392,23 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 
 	if err := config.Validate(); err != nil {
 		dt.logger.V(4).Info("Could not update service with invalid config", "err", err)
-		return
+		return err
 	}
 
 	if !config.IsInbound {
 		dt.logger.V(5).Info("Ignored unsupported outbound service update", "service", config.UID)
-		return
+		return nil
 	}
 
 	serviceUID := config.UID
 
 	dt.mu.Lock()
+
+	if dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
+		dt.mu.Unlock()
+		return fmt.Errorf("service gateway identity %q is owned by outbound egress; release that identity before creating an inbound service", serviceUID)
+	}
+	dt.K8sResources.Services.Insert(serviceUID)
 
 	opState, exists := dt.pendingServiceOps[serviceUID]
 	existsInNRP := dt.NRPResources.LoadBalancers.Has(serviceUID)
@@ -416,8 +417,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 		// Service is unknown to the engine - treat as a creation.
 		dt.mu.Unlock()
 		dt.logger.V(5).Info("Delegated untracked service update to add", "service", serviceUID)
-		dt.AddService(config)
-		return
+		return dt.AddService(config)
 	}
 
 	if !exists && existsInNRP {
@@ -439,7 +439,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 		opState.Config = config
 		dt.mu.Unlock()
 		dt.triggerServiceUpdater()
-		return
+		return nil
 	}
 
 	// opState exists - dispatch on current state.
@@ -456,7 +456,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 			if configsEqualForUpdate(&opState.Config, &config) {
 				dt.mu.Unlock()
 				dt.logger.V(5).Info("Skipped parked service with unchanged spec", "service", serviceUID)
-				return
+				return nil
 			}
 			dt.logger.V(5).Info("Reattempted service creation after terminal failure and spec change", "service", serviceUID)
 			opState.Config = config
@@ -466,7 +466,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 			opState.LastAttempt = time.Now().Format(time.RFC3339)
 			dt.mu.Unlock()
 			dt.triggerServiceUpdater()
-			return
+			return nil
 		}
 		dt.logger.V(5).Info("Overwrote desired service config", "service", serviceUID, "state", opState.State)
 		recoverPark := false
@@ -497,7 +497,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 			opState.LastAppliedConfig.InboundConfig.Equals(config.InboundConfig) {
 			dt.mu.Unlock()
 			dt.logger.V(5).Info("Skipped unchanged service config", "service", serviceUID)
-			return
+			return nil
 		}
 		dt.logger.V(5).Info("Scheduled service update", "service", serviceUID)
 		opState.Config = config
@@ -549,6 +549,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) {
 		dt.mu.Unlock()
 		dt.logger.V(4).Info("Found unknown service operation state while updating service", "state", state, "service", serviceUID)
 	}
+	return nil
 }
 
 // DeleteService handles service deletion events for inbound (Load Balancer) services.
@@ -571,7 +572,19 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan
 		return
 	}
 
+	// Delete intent clears desired state; registration/operation ownership lasts through cleanup.
+	if isInbound {
+		dt.K8sResources.Services.Delete(serviceUID)
+		dt.removeServiceFromK8sStateLocked(serviceUID, true)
+		delete(dt.pendingEndpoints, serviceUID)
+	}
+
 	dt.logger.V(5).Info("Deleted service request", "service", serviceUID, "isInbound", isInbound, "isOrphan", isOrphan)
+	if isInbound && dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
+		dt.mu.Unlock()
+		dt.logger.V(2).Info("Skipped inbound deletion of an outbound-owned identity", "service", serviceUID)
+		return
+	}
 	if !isInbound && dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
 		dt.mu.Unlock()
 		dt.logger.V(2).Info("Rejected outbound deletion of an inbound service identity", "service", serviceUID)
@@ -687,7 +700,9 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan
 
 	// Proactively remove service from K8s state to trigger location cleanup
 	// This ensures LocationsUpdater will sync the removal to NRP without waiting for EndpointSlice events
-	dt.removeServiceFromK8sStateLocked(serviceUID, isInbound)
+	if !isInbound {
+		dt.removeServiceFromK8sStateLocked(serviceUID, false)
+	}
 
 	// Check immediately if locations are already clear
 	// Will be re-checked after each location sync
@@ -1178,21 +1193,31 @@ func (dt *DiffTracker) AddPodWithUID(serviceUID, podKey, podUID, location, addre
 	dt.addPod(serviceUID, podKey, podUID, location, address)
 }
 
-// outboundIdentityConflictsWithInboundLocked reports whether an egress identity collides with a
-// desired, recovered or in-flight inbound service.
-//
-// pendingServiceOps is keyed by a bare string shared by both kinds: inbound by Service UID,
-// outbound by the egress pod label value, which is user-controlled. A pod labelled with an existing
-// Service's UID resolves to that Service's operation, where acting on it would publish the pod with
-// no NAT Gateway behind it or tear down the inbound LoadBalancer.
-// Must be called with dt.mu held once the tracker is published.
-func (dt *DiffTracker) outboundIdentityConflictsWithInboundLocked(serviceUID string) bool {
-	if (dt.K8sResources.Services != nil && dt.K8sResources.Services.Has(serviceUID)) ||
-		(dt.NRPResources.LoadBalancers != nil && dt.NRPResources.LoadBalancers.Has(serviceUID)) {
-		return true
+// Registered resources and claimed operations take precedence over opposite-kind desired state.
+func (dt *DiffTracker) serviceOwnerLocked(serviceUID string) (inbound, exists bool) {
+	if dt.NRPResources.LoadBalancers != nil && dt.NRPResources.LoadBalancers.Has(serviceUID) {
+		return true, true
 	}
-	opState, exists := dt.pendingServiceOps[serviceUID]
-	return exists && opState.Config.IsInbound
+	if (dt.NRPResources.NATGateways != nil && dt.NRPResources.NATGateways.Has(serviceUID)) ||
+		(dt.NRPResources.ReservedOutboundServices != nil && dt.NRPResources.ReservedOutboundServices.Has(serviceUID)) {
+		return false, true
+	}
+	if op := dt.pendingServiceOps[serviceUID]; op != nil {
+		return op.Config.IsInbound, true
+	}
+	return false, dt.byoNATGateways[strings.ToLower(serviceUID)] != ""
+}
+
+func (dt *DiffTracker) inboundIdentityConflictsWithOutboundLocked(serviceUID string) bool {
+	inbound, exists := dt.serviceOwnerLocked(serviceUID)
+	return exists && !inbound
+}
+
+func (dt *DiffTracker) outboundIdentityConflictsWithInboundLocked(serviceUID string) bool {
+	if inbound, exists := dt.serviceOwnerLocked(serviceUID); exists {
+		return inbound
+	}
+	return dt.K8sResources.Services != nil && dt.K8sResources.Services.Has(serviceUID)
 }
 
 func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address string) {
@@ -2347,11 +2372,8 @@ func configsEqualForUpdate(a, b *ServiceConfig) bool {
 	return true
 }
 
-// IsServiceTracked reports whether the engine has any knowledge of this service —
-// either an active operation in pendingServiceOps or an entry in NRPResources
-// indicating the LB/NAT-Gateway already exists in Azure. Callers in the cloud
-// provider use this to decide between AddService (first-time create) and
-// UpdateService (apply spec edits to an existing service).
+// IsServiceTracked includes desired-only inbound reservations so cloud-provider cleanup
+// still runs for a Service rejected before provisioning.
 func (dt *DiffTracker) IsServiceTracked(serviceUID string) bool {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -2364,5 +2386,5 @@ func (dt *DiffTracker) IsServiceTracked(serviceUID string) bool {
 	if dt.NRPResources.NATGateways != nil && dt.NRPResources.NATGateways.Has(serviceUID) {
 		return true
 	}
-	return false
+	return dt.K8sResources.Services != nil && dt.K8sResources.Services.Has(serviceUID)
 }

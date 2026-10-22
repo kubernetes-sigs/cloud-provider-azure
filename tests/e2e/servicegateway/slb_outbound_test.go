@@ -32,6 +32,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -1219,6 +1220,85 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		eventuallyManagedRegistered(cs, ns.Name, managedName, managedID)
 	})
 
+	It("should defer an inbound Service until its UID is released by BYO egress", func() {
+		service, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "ownership", Namespace: ns.Name},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeClusterIP, Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+		}, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		identity := strings.ToLower(string(service.UID))
+		byoRG := byoResourceGroup(ns.Name[len(ns.Name)-5:])
+		addresses := createBYOAddresses(cs, byoRG, identity)
+		natID := createBYONATGateway(byoRG, identity, addresses)
+		createBYOEgressPods(cs, ns.Name, identity, byoRG, 1)
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+		eventuallyBYORegistered(cs, ns.Name, byoRG, identity, natID, 3*time.Minute)
+
+		By("Retyping the same Service while outbound still owns its UID")
+		Eventually(func() error {
+			current, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
+			if getErr != nil {
+				return getErr
+			}
+			current.Spec.Type = v1.ServiceTypeLoadBalancer
+			current.Spec.Selector = map[string]string{egressLabel: identity}
+			_, updateErr := cs.CoreV1().Services(ns.Name).Update(context.TODO(), current, metav1.UpdateOptions{})
+			return updateErr
+		}, time.Minute, defaultPollInterval).Should(Succeed())
+		Eventually(func() bool {
+			return namespaceHasEventContaining(cs, ns.Name, "SyncLoadBalancerFailed", identity, "owned by outbound")
+		}, 3*time.Minute, defaultPollInterval).Should(BeTrue())
+		eventuallyBYORegistered(cs, ns.Name, byoRG, identity, natID, time.Minute)
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
+
+		By("Releasing outbound ownership and waiting for fresh inbound creation")
+		deleteEgressPods(cs, ns.Name, identity)
+		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, identity) }, 3*time.Minute, defaultPollInterval).Should(BeZero())
+		Eventually(func() string { return byoNATGatewayLink(natID) }, 3*time.Minute, defaultPollInterval).Should(BeEmpty())
+		Eventually(func() error {
+			current, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
+			if getErr != nil {
+				return getErr
+			}
+			if len(current.Status.LoadBalancer.Ingress) == 0 {
+				return fmt.Errorf("inbound Service %s is still pending", current.Name)
+			}
+			services, queryErr := queryServiceGatewayServices()
+			if queryErr != nil {
+				return queryErr
+			}
+			for _, registered := range services.Value {
+				if strings.EqualFold(registered.Name, identity) && registered.Properties.ServiceType == "Inbound" {
+					return nil
+				}
+			}
+			return fmt.Errorf("inbound Service %s is not registered", current.Name)
+		}, 5*time.Minute, defaultPollInterval).Should(Succeed())
+		expectBYOResourcesExist(natID, addresses)
+		Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})).To(Succeed())
+		Eventually(func() error { return outboundServiceGoneErr(identity) }, 3*time.Minute, defaultPollInterval).Should(Succeed())
+
+		By("Admitting fresh egress after inbound teardown releases the identity")
+		Eventually(func() error {
+			_, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
+			if apierrors.IsNotFound(getErr) {
+				return nil
+			}
+			if getErr != nil {
+				return getErr
+			}
+			return fmt.Errorf("inbound Service %s is still being deleted", service.Name)
+		}, 5*time.Minute, defaultPollInterval).Should(Succeed())
+		createBYOEgressPods(cs, ns.Name, identity, byoRG, 1)
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+		eventuallyBYORegistered(cs, ns.Name, byoRG, identity, natID, 3*time.Minute)
+		deleteEgressPods(cs, ns.Name, identity)
+		eventuallyBYOUnlinked(identity, natID)
+		expectBYOResourcesExist(natID, addresses)
+	})
+
 	It("should never take over the NAT Gateway of the default outbound service", func() {
 		defaultServiceName, defaultNATGatewayID := defaultOutboundService()
 		Expect(defaultNATGatewayID).NotTo(BeEmpty(), "the cluster must have a default outbound service")
@@ -2106,7 +2186,7 @@ func defaultOutboundService() (name, natGatewayID string) {
 	sgResponse, err := queryServiceGatewayServices()
 	Expect(err).NotTo(HaveOccurred())
 	for _, svc := range sgResponse.Value {
-		if svc.Properties.IsDefault || strings.EqualFold(svc.Name, "default-natgw") {
+		if isDefaultOutboundService(svc) {
 			return svc.Name, svc.Properties.PublicNatGatewayID
 		}
 	}

@@ -105,6 +105,12 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		locationsUpdaterTrigger: make(chan bool, 1),
 	}
 
+	for _, identity := range k8s.Services.UnsortedList() {
+		if diffTracker.inboundIdentityConflictsWithOutboundLocked(identity) {
+			k8s.Services.Delete(identity)
+			logger.V(2).Info("Deferred startup inbound service behind the outbound owner", "service", identity)
+		}
+	}
 	for _, identity := range k8s.Egresses.UnsortedList() {
 		if diffTracker.outboundIdentityConflictsWithInboundLocked(identity) {
 			k8s.Egresses.Delete(identity)
@@ -127,14 +133,25 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 	// so a later REMOVE can drive the counter to zero.
 	for _, node := range k8s.Nodes {
 		for address, pod := range node.Pods {
+			changed := false
+			if pod.InboundIdentities != nil {
+				for _, identity := range pod.InboundIdentities.UnsortedList() {
+					if diffTracker.inboundIdentityConflictsWithOutboundLocked(identity) {
+						pod.InboundIdentities.Delete(identity)
+						changed = true
+					}
+				}
+			}
 			if pod.PublicOutboundIdentity != "" && diffTracker.outboundIdentityConflictsWithInboundLocked(pod.PublicOutboundIdentity) {
 				pod.PublicOutboundIdentity, pod.OutboundPodKey, pod.OutboundPodUID = "", "", ""
+				changed = true
+			}
+			if changed {
 				if pod.HasIdentities() {
 					node.Pods[address] = pod
 				} else {
 					delete(node.Pods, address)
 				}
-				continue
 			}
 			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
 		}
