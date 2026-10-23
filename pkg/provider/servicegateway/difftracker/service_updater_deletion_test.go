@@ -51,7 +51,7 @@ func deletionTestFactory(ctrl *gomock.Controller) *mock_azclient.MockClientFacto
 	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	pip.EXPECT().Get(gomock.Any(), "rg", "uid-1-pip", nil).
-		Return(&armnetwork.PublicIPAddress{Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To("uid-1")}}, nil).AnyTimes()
+		Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To("uid-1")}}, nil).AnyTimes()
 	pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	return f
 }

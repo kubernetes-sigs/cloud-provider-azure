@@ -527,19 +527,11 @@ func TestDeletePod_BufferedDeleteWithoutIdentityCancelsByAddress(t *testing.T) {
 	assert.Empty(t, dt.pendingPods[egressUID], "an identity-less delete must still cancel the buffered entry by address")
 }
 
-// TestAddPod_ReplayOfALiveStartupPodIsNotBuffered: a pod found at start-up is live before its identity
-// is created. When a creation that does not hold the initial sync open (rejected, or parked after its
-// retries) lets start-up finish, the pod informer's initial ADD replays that pod. The replay must refresh
-// the live pod rather than buffer a copy: a later delete would cancel only the copy and leave the live
-// address (published once the identity is created) and its ref-count behind.
 func TestAddPod_ReplayOfALiveStartupPodIsNotBuffered(t *testing.T) {
 	const (
 		identity = "byo-rejected"
 		location = "10.0.0.1"
 	)
-	// startedPending returns a tracker whose identity's creation was rejected (or, when parked, ran out of
-	// retries) and that has the given start-up pods (address -> pod name), live and then replayed by the
-	// pod informer.
 	startedPending := func(parked bool, pods map[string]string) *DiffTracker {
 		dt := newTestDiffTracker()
 		dt.pendingServiceOps[identity] = &ServiceOperationState{ServiceUID: identity, Config: NewOutboundServiceConfig(identity, nil),
@@ -1810,7 +1802,6 @@ func TestInboundAdmissionAfterOutboundCleanup(t *testing.T) {
 	assert.False(t, dt.outboundServiceHasLiveOrBufferedPodLocked(uid), "outbound deletion must still drain its desired address")
 	assert.Error(t, dt.ReconcileInboundService(svc), "inbound must wait through outbound cleanup")
 
-	// Acknowledge the location/NAT deletions, then exercise the real finalizer and engine completion.
 	dt.NRPResources.Locations = map[string]NRPLocation{}
 	dt.CheckPendingServiceDeletions()
 	dt.UpdateNRPNATGateways(SyncServicesReturnType{Removals: utilsets.NewString(uid)})
@@ -1892,7 +1883,6 @@ func TestRecoveredInboundIdentityRejectsOutboundWork(t *testing.T) {
 	}
 }
 
-// An egress pod cannot attach to an inbound operation; a distinct identity is the control.
 func TestAddPod_RejectsEgressIdentityCollidingWithInboundService(t *testing.T) {
 	const inboundUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	const egressUID = "team-egress"

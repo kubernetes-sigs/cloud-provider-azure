@@ -116,11 +116,8 @@ func identityFromPublicIPName(pipName string) (identity string, ok bool) {
 // IP. It is not managed by this controller and must never be created, updated or deleted by it.
 const DefaultOutboundNATGatewayName = "default-natgw"
 
-// EgressIdentityTagKey marks the egress identity owning a managed NAT Gateway or Public IP.
-// Ownership is never inferred from an untagged resource's name.
 const EgressIdentityTagKey = "k8s-azure-egress-identity"
 
-// InboundServiceUIDTagKey identifies the Service that owns an SGW inbound Public IP.
 const InboundServiceUIDTagKey = "k8s-azure-service-uid"
 
 // IsReservedEgressIdentity reports whether name refers to a resource this controller must not
@@ -135,9 +132,6 @@ func IsReservedEgressIdentity(name string) bool {
 // Public IP name (identity+"-pip"), and is interpolated into their ARM resource IDs, so it must be
 // validated to avoid malformed ARM requests (for example a path-traversal value like "../foo") or a
 // PIP name that overflows Azure's 80-char limit, either of which causes endless create retries.
-//
-// The RP-owned default identity is never admitted to the pod-driven lifecycle. Resource ownership
-// and other Service Gateway users are checked separately before managed resources are changed.
 func IsValidEgressIdentity(name string) bool {
 	if IsReservedEgressIdentity(name) {
 		return false
@@ -146,7 +140,6 @@ func IsValidEgressIdentity(name string) bool {
 }
 
 // buildInboundServiceResources constructs the PIP, LoadBalancer, and ServicesDTO for an inbound service
-// Returns resources for createManagedPublicIP/createOrUpdateLB/updateNRPSGWServices.
 func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtConfig Config) (
 	pip armnetwork.PublicIPAddress,
 	lb armnetwork.LoadBalancer,
@@ -337,7 +330,6 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 }
 
 // buildOutboundServiceResources constructs the PIP, NAT Gateway, and ServicesDTO for an outbound service
-// Returns the resources ready to be created via createOrUpdatePIP/createOrUpdateNatGateway/updateNRPSGWServices
 func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dtConfig Config) (
 	pips []armnetwork.PublicIPAddress,
 	natGateway armnetwork.NatGateway,
@@ -416,9 +408,7 @@ func egressIdentityTags(identity string) map[string]*string {
 	return map[string]*string{EgressIdentityTagKey: to.Ptr(identity)}
 }
 
-// ownsNATGateway requires an ownership tag matching the gateway's own name.
-// Untagged legacy gateways are not adopted. Callers must also check other Service
-// Gateway users before writing or deleting the gateway.
+// Ownership does not establish exclusive use; callers must also check other Service Gateway users.
 func ownsNATGateway(natGateway *armnetwork.NatGateway) bool {
 	if natGateway == nil {
 		return false

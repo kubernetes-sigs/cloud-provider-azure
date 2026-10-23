@@ -381,8 +381,8 @@ func resetRetryStateLocked(op *ServiceOperationState) {
 	op.NextRetryAt = time.Time{}
 }
 
-// UpdateService queues inbound creation or updates without repurposing an outbound operation.
-// Same-kind recreation waits for deletion; opposite-kind admission returns a retryable error.
+// UpdateService returns retryable errors for opposite-kind admission.
+// Same-kind recreation waits for deletion.
 func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
@@ -1309,10 +1309,8 @@ func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address stri
 	switch opState.State {
 	case StateNotStarted, StateCreationInProgress:
 		if dt.outboundPodExistsLocked(serviceUID, location, address) {
-			// Found at start-up, so already live: the pod informer's initial ADD replays it once a
-			// creation that does not hold the initial sync open (rejected, or parked) lets start-up
-			// finish. Refresh it rather than buffer a copy, which a later delete would cancel instead
-			// of removing the live address.
+			// Initial informer ADDs can replay startup members. If buffered again, deletion would
+			// cancel only the duplicate buffer and leave the live address and ref-count behind.
 			if err := dt.updateK8sPodLocked(UpdatePodInputType{
 				PodOperation:           Add,
 				PublicOutboundIdentity: serviceUID,

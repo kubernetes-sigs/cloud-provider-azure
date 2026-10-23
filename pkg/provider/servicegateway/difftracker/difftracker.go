@@ -118,7 +118,6 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		}
 	}
 
-	// Recover BYO cleanup records only within the network client's subscription and outside the node RG.
 	for identity, natGatewayID := range nrp.OutboundNATGatewayIDs {
 		if diffTracker.outboundIdentityConflictsWithInboundLocked(identity) {
 			continue

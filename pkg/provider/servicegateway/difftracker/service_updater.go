@@ -507,7 +507,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	}
 
 	// Step 2: Create Public IP and capture the response to get the allocated IP address
-	pipResponse, err := s.diffTracker.createManagedPublicIP(ctx, pipResource)
+	pipResponse, err := s.diffTracker.createOrUpdateManagedPublicIP(ctx, pipResource)
 	if err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not create Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
@@ -630,7 +630,6 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 	s.logger.V(2).Info("Updated inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 }
 
-// createOutboundService provisions an egress identity: links its BYO NAT Gateway, or creates a managed one
 func (s *ServiceUpdater) createOutboundService(serviceUID string, config *OutboundConfig, correlationID string, triggeringPodNS string, triggeringPodName string) {
 	s.logger.V(5).Info("Started creating outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
 
@@ -656,7 +655,7 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 	// reuses, and the gateway is never PUT referencing an address that does not exist.
 	for i := range pipResources {
 		pipResource := pipResources[i]
-		if _, err := s.diffTracker.createManagedPublicIP(ctx, pipResource); err != nil {
+		if _, err := s.diffTracker.createOrUpdateManagedPublicIP(ctx, pipResource); err != nil {
 			httpStatus, errCode := extractAzureErrorInfo(err)
 			s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "publicIP", derefString(pipResource.Name), "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 			if isEgressRejected(err) {
@@ -813,7 +812,6 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 	}
 }
 
-// deleteOutboundService unlinks BYO gateways and deletes only owned managed resources.
 func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID string) {
 	s.logger.V(5).Info("Started deleting outbound service", "serviceUID", serviceUID, "correlationID", correlationID)
 
@@ -836,8 +834,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 	}
 	var lastErr error
 
-	// Step 1: Disassociate NAT Gateway from ServiceGateway. A gateway this identity does not own is
-	// not written at all; Step 2 still removes the identity's own registration.
+	// Keep foreign gateways untouched while still unregistering this identity.
 	if !owned {
 		s.logger.V(2).Info("Skipped disassociating a NAT Gateway not owned by this identity", "serviceUID", serviceUID)
 	} else if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
@@ -868,7 +865,6 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 		s.logger.V(5).Info("Unregistered outbound service from ServiceGateway", "serviceUID", serviceUID)
 	}
 
-	// Steps 3-4: delete only the managed NAT Gateway and Public IPs owned by this identity.
 	if !owned {
 		s.logger.V(2).Info("Kept NAT Gateway and Public IPs not owned by this identity", "serviceUID", serviceUID)
 	} else if err := s.deleteManagedOutboundResources(ctx, serviceUID, correlationID); err != nil {
@@ -878,8 +874,6 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 	s.finishOutboundDeletion(ctx, serviceUID, correlationID, lastErr)
 }
 
-// finishOutboundDeletion reports failures for retry. On success it releases last-pod finalizers
-// before forgetting the BYO record, so retries stay on the unlink-only path.
 func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID, correlationID string, lastErr error) {
 	if lastErr != nil {
 		s.logger.V(4).Info("Could not delete outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", lastErr)
@@ -892,7 +886,6 @@ func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID,
 			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		})
 
-		// Azure cleanup precedes finalizer removal; a failed removal must retain the BYO record.
 		if err := s.diffTracker.RemoveLastPodFinalizers(ctx, serviceUID); err != nil {
 			s.logger.V(4).Info("Could not clean up last-pod finalizers for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
 			s.onComplete(serviceUID, false, err)
@@ -905,7 +898,6 @@ func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID,
 	}
 }
 
-// deleteManagedOutboundResources attempts NAT and PIP deletion, returning the last error.
 func (s *ServiceUpdater) deleteManagedOutboundResources(ctx context.Context, serviceUID, correlationID string) error {
 	var lastErr error
 	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceUID); err != nil {
@@ -916,8 +908,7 @@ func (s *ServiceUpdater) deleteManagedOutboundResources(ctx context.Context, ser
 		s.logger.V(5).Info("Deleted NAT Gateway for outbound service", "serviceUID", serviceUID)
 	}
 
-	// Step 4: Check both address families, including a PIP left by a failed managed creation.
-	// A matching name alone does not establish ownership, especially after a rejected BYO creation.
+	// Also clean up owned PIPs left by a failed managed creation.
 	for _, pipName := range OutboundPublicIPNames(serviceUID) {
 		if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName, serviceUID, EgressIdentityTagKey); err != nil {
 			httpStatus, errCode := extractAzureErrorInfo(err)

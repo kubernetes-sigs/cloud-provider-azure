@@ -604,7 +604,7 @@ func newOutboundMocks(ctrl *gomock.Controller) *outboundMocks {
 func (m *outboundMocks) expectOwnedPublicIPs(identity string, calls int) {
 	for _, name := range OutboundPublicIPNames(identity) {
 		m.pip.EXPECT().Get(gomock.Any(), "rg", name, nil).
-			Return(&armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: egressIdentityTags(identity)}, nil).Times(calls)
+			Return(&armnetwork.PublicIPAddress{Name: ptr.To(name), Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity)}, nil).Times(calls)
 	}
 }
 
@@ -1561,7 +1561,6 @@ func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T
 	assert.Zero(t, run(t, false), "control: a successful disassociation counts nothing")
 }
 
-// Test BYO gateways live outside the node resource group ("rg").
 const byoNATGatewayRG = "byo-rg"
 
 func byoNATGatewayARMID(name string) string {
@@ -1756,7 +1755,7 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 		wantSuccess  bool
 		wantRecorded bool
 		wantEvent    string
-		// Event text is also matched by e2e specs.
+
 		wantEventTexts []string
 	}{
 		{name: "without the annotation its own cluster resource group NAT Gateway is reused", nodeRGExists: true, wantManaged: true, wantSuccess: true},
@@ -2216,7 +2215,6 @@ func TestServiceUpdaterCreateOutboundService_RejectsReservedOutboundService(t *t
 	}
 }
 
-// An unreadable or absent deciding pod must not trigger managed fallback.
 func TestServiceUpdaterCreateOutboundService_RetriesWithoutAMemberPod(t *testing.T) {
 	const uid = "byo-egress"
 	for _, tc := range []struct {
@@ -2427,8 +2425,7 @@ func TestServiceUpdaterCreateOutboundService_RecordsEventsOnTheDecidingPod(t *te
 	}
 }
 
-// Selection uses the first eligible member; API errors are not absence and must not
-// fall through to another member or to managed egress.
+// API read failures must not fall through to another member or to managed creation.
 func TestEgressMemberPod(t *testing.T) {
 	const identity = "egress-a"
 	member := func(name string) *v1.Pod { return egressTestPod(name, types.UID(name+"-uid"), "Egress-A", "id-"+name) }
@@ -2665,7 +2662,7 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 		noETag        bool
 		noProperties  bool
 		clearErr      error
-		// referenceCleared: a previous attempt already cleared the registration's NAT Gateway reference.
+
 		referenceCleared bool
 		sharedWith       string
 		wantNATCleared   bool
@@ -2709,7 +2706,6 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 			defer ctrl.Finish()
 			m := newOutboundMocks(ctrl)
 
-			// Casing must not prevent clearing our own reference or make it count as another user.
 			services := []*armnetwork.ServiceGatewayService{
 				{Name: ptr.To("11111111-1111-1111-1111-111111111111"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)}},
 				{Name: ptr.To(strings.ToUpper(uid)), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
@@ -2794,8 +2790,7 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 	}
 }
 
-// A delete that unlinked the gateway but could not release the last pod's finalizer is retried; the
-// retry must still take the unlink-only path, never the managed path that deletes by name.
+// A finalizer retry must retain unlink-only cleanup, never switch to managed deletion.
 func TestServiceUpdaterDeleteOutboundService_BYONATGatewayKeptUntilFinalizersReleased(t *testing.T) {
 	const (
 		uid     = "byo-finalizer"
@@ -2835,11 +2830,10 @@ func TestServiceUpdaterDeleteOutboundService_KeepsNATGatewayNotOwnedByIdentity(t
 		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
 			IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + uid)},
 	}}
-	// Legacy shape alone does not establish ownership.
 	ownAddressesOnly := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{
 		{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(uid))}}}}
 	tagged := &armnetwork.NatGateway{Name: ptr.To(uid), Tags: egressIdentityTags(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{}}
-	// Linked to our Service Gateway (for example mid-attach by the RP), yet not ours: never written.
+	// An RP-prelinked gateway is not controller-owned.
 	foreign := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{
 		ServiceGateway: &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/serviceGateways/sgw")}}}
 	userModified := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{
