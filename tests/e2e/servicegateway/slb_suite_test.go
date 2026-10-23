@@ -213,7 +213,7 @@ func isTransientAzureFailure(output string) bool {
 		"(429)",
 		"temporarily unavailable",
 		"connection reset by peer",
-		"Temporary failure in name resolution", // this runner's DNS, e.g. for management.azure.com
+		"Temporary failure in name resolution",
 		"Please run 'az login'",
 		"AADSTS700082", // expired refresh token; the next attempt re-authenticates
 	} {

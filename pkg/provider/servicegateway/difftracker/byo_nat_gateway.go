@@ -16,21 +16,8 @@ limitations under the License.
 
 package difftracker
 
-// The resource-group annotation selects a BYO NAT Gateway named after the egress identity.
-// The first eligible pod decides: triggering pod, buffered arrival order, then sorted startup
-// members. No annotation selects managed egress; an invalid BYO selection never falls back.
-// Selection is retried until a gateway may carry our link, then retained for cleanup.
-//
-// Only properties.serviceGateway changes; the gateway and its addresses remain owner-managed.
-// Link/unlink PUTs require a fetched ETag. Cleanup records survive ambiguous writes;
-// Azure's service list protects other users.
-// Every creation attempt reasserts the link, even with an existing cleanup record.
-//
-// Known limits: restart between link and registration, or reference-clear and unlink, can
-// leave a link when no pods remain. There is no startup link scan: it would race RP/owner
-// prelinking. Switching a partial managed creation to BYO can leave managed resources until
-// the identity is gone and startup orphan cleanup runs. Owner-deleted gateways on existing
-// registrations are not automatically repaired, including at restart with an empty reference.
+// Startup cleanup cannot recover a BYO link after its registration reference is lost.
+// A link scan could unlink a gateway prelinked by its owner or the RP.
 
 import (
 	"context"
@@ -61,8 +48,7 @@ const natGatewayResourceType = "Microsoft.Network/natGateways"
 
 var byoResourceGroupNameRE = regexp.MustCompile(consts.ResourceGroupNamePattern)
 
-// egressRejectedError retries admission failures with backoff without holding initial sync
-// open between attempts (see checkInitializationCompleteLocked).
+// Admission rejection retries without holding initial synchronization open between attempts.
 type egressRejectedError struct{ error }
 
 var errNoEgressMember = errors.New("no active member pod")
@@ -74,8 +60,7 @@ func isEgressRejected(err error) bool {
 	return errors.As(err, &rejected)
 }
 
-// resolveBYONATGateway returns the selected gateway (nil for managed egress) and deciding pod.
-// Explicit BYO rejection emits a Warning and never falls back to managed creation.
+// On success, a nil gateway means managed egress; the pod identifies the event recipient.
 func (s *ServiceUpdater) resolveBYONATGateway(ctx context.Context, identity, podNS, podName string) (*armnetwork.NatGateway, *v1.Pod, error) {
 	dt := s.diffTracker
 	pod, err := dt.egressMemberPod(ctx, identity, podNS, podName)
@@ -105,7 +90,6 @@ func (s *ServiceUpdater) resolveBYONATGateway(ctx context.Context, identity, pod
 		if exists {
 			return natGateway, pod, nil
 		}
-		// Its owner deleted it; resolve afresh.
 		dt.setBYONATGatewayID(identity, "")
 	}
 
@@ -137,16 +121,14 @@ func (s *ServiceUpdater) resolveBYONATGateway(ctx context.Context, identity, pod
 	return natGateway, pod, nil
 }
 
-// egressMemberPod checks the trigger, buffered arrival order, then sorted startup members.
-// API reads pick up annotation edits before informer startup. A nil client returns nil;
-// otherwise absence and read failures return errors.
+// Read pods from the API because selection also runs before informer startup.
+// Prefer the trigger, then buffered arrival order, then sorted startup members.
 func (dt *DiffTracker) egressMemberPod(ctx context.Context, identity, podNS, podName string) (*v1.Pod, error) {
 	if dt.kubeClient == nil {
 		return nil, nil
 	}
 	trigger := podNS + "/" + podName
 	if podName != "" {
-		// Most attempts end here, without scanning the identity's other pods under dt.mu.
 		if pod, err := dt.readEgressMember(ctx, identity, podNS, podName); pod != nil || err != nil {
 			return pod, err
 		}
@@ -179,8 +161,7 @@ func (dt *DiffTracker) readEgressMember(ctx context.Context, identity, namespace
 	return pod, nil
 }
 
-// egressPodKeysOf returns unique keys in buffered arrival order, then sorted startup order.
-// Only the state snapshot is taken under dt.mu; API reads occur after it is released.
+// Snapshot membership under dt.mu; callers read pods after releasing it.
 func (dt *DiffTracker) egressPodKeysOf(identity string) []string {
 	var pending, known []string
 	dt.mu.Lock()
@@ -224,7 +205,7 @@ func byoNATGatewayResourceGroupProblem(resourceGroup string, config Config) stri
 	return ""
 }
 
-// Recovered bindings still need full-ID scope validation; this is not pod annotation parsing.
+// Recovered ARM IDs must still match the network subscription and BYO scope.
 func byoNATGatewayIDProblem(id string, config Config) string {
 	parsed, err := arm.ParseResourceID(id)
 	switch {
@@ -252,7 +233,6 @@ func (s *ServiceUpdater) createBYOOutboundService(ctx context.Context, identity 
 		return
 	}
 	freshRecord := dt.setBYONATGatewayID(identity, natGatewayID)
-	// Forget a fresh record on pre-write failure unless the gateway already carried this SGW's link.
 	linkedHere := strings.EqualFold(natGatewayServiceGatewayID(natGateway), serviceGatewayID)
 	retainRecord := !freshRecord || linkedHere
 	defer func() {
@@ -297,7 +277,7 @@ func (s *ServiceUpdater) createBYOOutboundService(ctx context.Context, identity 
 	if err := dt.createOrUpdateNatGateway(linkCtx, parsed.ResourceGroupName, *natGateway); err != nil {
 		s.logger.V(4).Info("Could not link BYO NAT Gateway to Service Gateway", "serviceUID", identity, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
 		var respErr *azcore.ResponseError
-		if errors.As(err, &respErr) && isInitialNATPutResponse(respErr) &&
+		if errors.As(err, &respErr) && isResponseForMethod(respErr, http.MethodPut) &&
 			respErr.StatusCode == http.StatusPreconditionFailed && freshRecord && !linkedHere {
 			retainRecord = false
 		}
@@ -326,8 +306,6 @@ func (s *ServiceUpdater) createBYOOutboundService(ctx context.Context, identity 
 	s.logger.V(2).Info("Created outbound service with BYO NAT Gateway", "serviceUID", identity, "natGateway", natGatewayID, "correlationID", correlationID)
 }
 
-// deleteBYOOutboundService unlinks before unregistering; it never deletes owner resources.
-// Permission/lock refusals leave cleanup to the owner, while other unlink errors retry.
 func (s *ServiceUpdater) deleteBYOOutboundService(ctx context.Context, identity, natGatewayID, correlationID string) {
 	dt := s.diffTracker
 	if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
@@ -355,7 +333,7 @@ func (s *ServiceUpdater) deleteBYOOutboundService(ctx context.Context, identity,
 	s.finishOutboundDeletion(ctx, identity, correlationID, nil)
 }
 
-// otherServiceUsing returns another service using the gateway, or "" if none/the SGW is gone.
+// A missing Service Gateway has no remaining users.
 func (dt *DiffTracker) otherServiceUsing(ctx context.Context, identity, natGatewayID string) (string, error) {
 	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, dt.config.ServiceGatewayResourceName)
 	var respErr *azcore.ResponseError
@@ -370,15 +348,10 @@ func (dt *DiffTracker) otherServiceUsing(ctx context.Context, identity, natGatew
 
 const scopeLockedErrorCode = "ScopeLocked"
 
-func isInitialNATPutResponse(respErr *azcore.ResponseError) bool {
-	return respErr != nil && respErr.RawResponse != nil && respErr.RawResponse.Request != nil &&
-		respErr.RawResponse.Request.Method == http.MethodPut
-}
-
 // Only a proven initial PUT refusal can clear a record; polling/final GET errors cannot.
 // Retryable 408/409/412/429 responses are excluded, except the ScopeLocked 409.
 func isLinkRefusal(respErr *azcore.ResponseError) bool {
-	if !isInitialNATPutResponse(respErr) {
+	if !isResponseForMethod(respErr, http.MethodPut) {
 		return false
 	}
 	switch respErr.StatusCode {
@@ -395,7 +368,7 @@ func isAccessDeniedOrLocked(err error) bool {
 	return errors.As(err, &respErr) && (respErr.StatusCode == http.StatusForbidden || strings.EqualFold(respErr.ErrorCode, scopeLockedErrorCode))
 }
 
-// byoNATGatewayProblem checks SKU and linkage, not owner-managed address/IP-family configuration.
+// Public addresses and IP-family configuration remain the owner's responsibility.
 func byoNATGatewayProblem(natGateway *armnetwork.NatGateway, serviceGatewayID string) string {
 	name := derefString(natGateway.Name)
 	if natGateway.Properties == nil {
@@ -442,7 +415,6 @@ func byoOutboundServicesDTO(identity, natGatewayID string, dtConfig Config) Serv
 	return dto
 }
 
-// isClusterResourceGroup includes the network subscription, not just the resource group name.
 func isClusterResourceGroup(id *arm.ResourceID, config Config) bool {
 	return strings.EqualFold(id.ResourceGroupName, config.ResourceGroup) &&
 		strings.EqualFold(id.SubscriptionID, config.networkResourceSubscriptionID())
@@ -480,8 +452,7 @@ func (dt *DiffTracker) setBYONATGatewayID(identity, natGatewayID string) bool {
 
 var errNATGatewayNotOwned = errors.New("a NAT Gateway or Service Gateway service of that name in the cluster resource group is not managed by this controller")
 
-// clusterNATGatewayExists reports whether the cluster resource group holds a NAT Gateway named
-// identity, and returns errNATGatewayNotOwned when it does but this controller did not create it.
+// An existing gateway needs matching ownership and no other user in this Service Gateway.
 func (dt *DiffTracker) clusterNATGatewayExists(ctx context.Context, identity string) (bool, error) {
 	natGateway, exists, err := dt.getNatGateway(ctx, dt.config.ResourceGroup, identity)
 	if err != nil || !exists {
@@ -501,8 +472,7 @@ func (dt *DiffTracker) clusterNATGatewayExists(ctx context.Context, identity str
 	return true, nil
 }
 
-// ownsClusterNATGateway reports whether this controller may delete the cluster-resource-group NAT
-// Gateway named identity: it does not exist, or this controller created it and no other service uses it.
+// Absence also permits cleanup of any remaining owned Public IPs.
 func (dt *DiffTracker) ownsClusterNATGateway(ctx context.Context, identity string) (bool, error) {
 	_, err := dt.clusterNATGatewayExists(ctx, identity)
 	switch {
@@ -515,7 +485,7 @@ func (dt *DiffTracker) ownsClusterNATGateway(ctx context.Context, identity strin
 	}
 }
 
-// isReservedOutboundService protects RP-owned and inbound identities, not unrelated gateway names.
+// Reserve service identities, not the names of their referenced NAT Gateways.
 func (dt *DiffTracker) isReservedOutboundService(identity string) bool {
 	if IsReservedEgressIdentity(identity) {
 		return true

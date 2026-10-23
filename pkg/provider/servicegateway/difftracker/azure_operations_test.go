@@ -47,6 +47,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
@@ -89,11 +90,11 @@ func TestExtractResourceChildName(t *testing.T) {
 	assert.Equal(t, "", extractResourceChildName("", "backendAddressPools"))
 }
 
-func TestCreateOrUpdatePIPWithResponse_NilPip(t *testing.T) {
+func TestCreateOrUpdateManagedPublicIP_EmptyName(t *testing.T) {
 	dt := &DiffTracker{}
-	_, err := dt.createOrUpdatePIPWithResponse(context.Background(), "rg", nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "pip is nil")
+	result, err := dt.createOrUpdateManagedPublicIP(context.Background(), armnetwork.PublicIPAddress{})
+	assert.Nil(t, result)
+	assert.ErrorContains(t, err, "pip name is empty")
 }
 
 func TestUpdateServiceLoadBalancerStatus_PreservesDualStackAndHostname(t *testing.T) {
@@ -569,9 +570,9 @@ func TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer(t *testi
 	}
 }
 
-type natGatewayTransportFunc func(*http.Request) (*http.Response, error)
+type armNetworkTransportFunc func(*http.Request) (*http.Response, error)
 
-func (f natGatewayTransportFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
+func (f armNetworkTransportFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
 
 func initialNATPutError(err error) error {
 	var responseErr *azcore.ResponseError
@@ -585,14 +586,199 @@ func initialNATPutError(err error) error {
 	return &result
 }
 
-func TestInitialNATPutResponse(t *testing.T) {
-	assert.False(t, isInitialNATPutResponse(nil))
-	assert.False(t, isInitialNATPutResponse(&azcore.ResponseError{StatusCode: http.StatusForbidden}))
-	assert.False(t, isInitialNATPutResponse(&azcore.ResponseError{RawResponse: &http.Response{}}))
-	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut} {
+func TestResponseForMethod(t *testing.T) {
+	assert.False(t, isResponseForMethod(nil, http.MethodPut))
+	assert.False(t, isResponseForMethod(&azcore.ResponseError{StatusCode: http.StatusForbidden}, http.MethodPut))
+	assert.False(t, isResponseForMethod(&azcore.ResponseError{RawResponse: &http.Response{}}, http.MethodPut))
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete} {
 		err := &azcore.ResponseError{StatusCode: http.StatusForbidden,
 			RawResponse: &http.Response{Request: &http.Request{Method: method}}}
+		assert.Equal(t, method == http.MethodPut, isResponseForMethod(err, http.MethodPut))
+		assert.Equal(t, method == http.MethodDelete, isResponseForMethod(err, http.MethodDelete))
 		assert.Equal(t, method == http.MethodPut, isLinkRefusal(err))
+	}
+}
+
+func TestPublicIPConditionalDeletion(t *testing.T) {
+	const identity, pipName = "payments", "payments-pip"
+	for _, ownerTagKey := range []string{EgressIdentityTagKey, InboundServiceUIDTagKey} {
+		t.Run(ownerTagKey, func(t *testing.T) {
+			for _, tc := range []struct {
+				name                  string
+				wantGets, wantDeletes int
+				wantPolls             int
+				wantDeleted, wantGone bool
+				wantStatus            int
+				wantErrText           string
+			}{
+				{name: "unchanged", wantGets: 1, wantDeletes: 1, wantDeleted: true, wantGone: true},
+				{name: "version changed", wantGets: 2, wantDeletes: 2, wantDeleted: true, wantGone: true},
+				{name: "owner changed on retry", wantGets: 2, wantDeletes: 2, wantStatus: http.StatusPreconditionFailed},
+				{name: "owner changed", wantGets: 2, wantDeletes: 1},
+				{name: "owner removed", wantGets: 2, wantDeletes: 1},
+				{name: "replacement", wantGets: 2, wantDeletes: 1},
+				{name: "ambiguous delete with replacement", wantGets: 2, wantDeletes: 2},
+				{name: "already deleted", wantGets: 1, wantDeletes: 1, wantDeleted: true, wantGone: true},
+				{name: "two conflicts", wantGets: 2, wantDeletes: 2, wantStatus: http.StatusPreconditionFailed},
+				{name: "server retry", wantGets: 1, wantDeletes: 2, wantDeleted: true, wantGone: true},
+				{name: "server failure", wantGets: 1, wantDeletes: 4, wantStatus: http.StatusInternalServerError},
+				{name: "poll success", wantGets: 1, wantDeletes: 1, wantPolls: 1, wantDeleted: true, wantGone: true},
+				{name: "poll retry", wantGets: 1, wantDeletes: 1, wantPolls: 2, wantDeleted: true, wantGone: true},
+				{name: "poll precondition failure", wantGets: 1, wantDeletes: 1, wantPolls: 1, wantStatus: http.StatusPreconditionFailed},
+				{name: "missing etag", wantGets: 1, wantErrText: "usable ETag"},
+				{name: "wildcard etag", wantGets: 1, wantErrText: "usable ETag"},
+				{name: "etag lost on refresh", wantGets: 2, wantDeletes: 1, wantErrText: "usable ETag"},
+				{name: "refresh forbidden", wantGets: 2, wantDeletes: 1, wantStatus: http.StatusForbidden},
+				{name: "gone on refresh", wantGets: 2, wantDeletes: 1, wantGone: true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					live := &armnetwork.PublicIPAddress{
+						Name: ptr.To(pipName), Etag: ptr.To(`W/"v1"`),
+						Tags: map[string]*string{ownerTagKey: ptr.To(identity)},
+					}
+					switch tc.name {
+					case "missing etag":
+						live.Etag = nil
+					case "wildcard etag":
+						live.Etag = ptr.To("*")
+					}
+					gets, deletes, polls := 0, 0, 0
+					lastReadETag := ""
+					transport := armNetworkTransportFunc(func(req *http.Request) (*http.Response, error) {
+						status := http.StatusOK
+						headers := http.Header{"Content-Type": {"application/json"}}
+						var value any
+						if strings.HasSuffix(req.URL.Path, "/operations/pip-delete") {
+							polls++
+							assert.Equal(t, http.MethodGet, req.Method)
+							assert.Equal(t, lastReadETag, req.Header.Get("If-Match"))
+							if tc.name == "poll precondition failure" {
+								status = http.StatusPreconditionFailed
+							} else if tc.name == "poll retry" && polls == 1 {
+								status = http.StatusInternalServerError
+							} else {
+								live = nil
+								value = map[string]string{"status": "Succeeded"}
+							}
+						} else {
+							assert.Contains(t, req.URL.Path, "/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/"+pipName)
+							switch req.Method {
+							case http.MethodGet:
+								gets++
+								assert.Empty(t, req.Header.Get("If-Match"), "ownership refresh must not reuse the DELETE's precondition")
+								if tc.name == "gone on refresh" && gets == 2 {
+									live = nil
+								}
+								if tc.name == "refresh forbidden" && gets == 2 {
+									status = http.StatusForbidden
+								} else if live == nil {
+									status = http.StatusNotFound
+								} else {
+									lastReadETag = derefString(live.Etag)
+									value = live
+								}
+							case http.MethodDelete:
+								deletes++
+								assert.Equal(t, lastReadETag, req.Header.Get("If-Match"))
+								if deletes == 1 {
+									switch tc.name {
+									case "version changed", "owner changed on retry", "refresh forbidden", "gone on refresh":
+										live.Etag = ptr.To(`W/"v2"`)
+									case "owner changed":
+										live.Tags[ownerTagKey] = ptr.To("other-owner")
+										live.Etag = ptr.To(`W/"v2"`)
+									case "owner removed":
+										delete(live.Tags, ownerTagKey)
+										live.Etag = ptr.To(`W/"v2"`)
+									case "replacement", "ambiguous delete with replacement":
+										live = &armnetwork.PublicIPAddress{Name: ptr.To(pipName), Etag: ptr.To(`W/"replacement"`),
+											Tags: map[string]*string{ownerTagKey: ptr.To("other-owner")}}
+									case "already deleted":
+										live = nil
+									case "etag lost on refresh":
+										live.Etag = nil
+									}
+								}
+								if tc.name == "two conflicts" {
+									live.Etag = ptr.To(fmt.Sprintf(`W/"conflict-%d"`, deletes))
+								}
+								if tc.name == "owner changed on retry" && deletes == 2 {
+									live.Tags[ownerTagKey] = ptr.To("other-owner")
+									live.Etag = ptr.To(`W/"v3"`)
+								}
+								switch {
+								case tc.name == "server failure":
+									status = http.StatusInternalServerError
+								case (tc.name == "server retry" || tc.name == "ambiguous delete with replacement") && deletes == 1:
+									status = http.StatusInternalServerError
+								case live == nil:
+									status = http.StatusNotFound
+								case req.Header.Get("If-Match") != "" && req.Header.Get("If-Match") != derefString(live.Etag):
+									status = http.StatusPreconditionFailed
+								case strings.HasPrefix(tc.name, "poll "):
+									status = http.StatusAccepted
+									headers.Set("Azure-AsyncOperation", "https://management.azure.com/operations/pip-delete")
+								default:
+									live = nil
+									status = http.StatusNoContent
+								}
+							default:
+								t.Fatalf("unexpected request method %s", req.Method)
+							}
+						}
+						if status >= 400 {
+							value = map[string]any{"error": map[string]string{"code": http.StatusText(status), "message": "test response"}}
+						}
+						var body []byte
+						if value != nil {
+							var err error
+							body, err = json.Marshal(value)
+							if !assert.NoError(t, err) {
+								return nil, err
+							}
+						}
+						return &http.Response{StatusCode: status, Header: headers, Body: io.NopCloser(bytes.NewReader(body)), Request: req}, nil
+					})
+					client, err := publicipaddressclient.New("sub", fakeCredential{}, &arm.ClientOptions{
+						ClientOptions: azcore.ClientOptions{
+							Transport: transport,
+							Retry:     policy.RetryOptions{MaxRetries: 3, RetryDelay: time.Millisecond, MaxRetryDelay: time.Millisecond},
+						},
+					})
+					if !assert.NoError(t, err) {
+						return
+					}
+					ctrl := gomock.NewController(t)
+					defer ctrl.Finish()
+					factory := mock_azclient.NewMockClientFactory(ctrl)
+					factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+					dt := &DiffTracker{config: testConfig(), networkClientFactory: factory}
+					deleted, err := dt.deleteOwnedPublicIP(context.Background(), pipName, identity, ownerTagKey)
+					assert.Equal(t, tc.wantDeleted, deleted)
+					assert.Equal(t, tc.wantGone, live == nil)
+					assert.Equal(t, tc.wantGets, gets)
+					assert.Equal(t, tc.wantDeletes, deletes)
+					assert.Equal(t, tc.wantPolls, polls)
+					switch {
+					case tc.wantErrText != "":
+						assert.ErrorContains(t, err, tc.wantErrText)
+					case tc.wantStatus != 0:
+						var responseErr *azcore.ResponseError
+						if assert.ErrorAs(t, err, &responseErr) {
+							assert.Equal(t, tc.wantStatus, responseErr.StatusCode)
+						}
+					default:
+						assert.NoError(t, err)
+					}
+					if live != nil && (tc.name == "owner changed" || tc.name == "owner changed on retry" || tc.name == "replacement" || tc.name == "ambiguous delete with replacement") {
+						assert.Equal(t, "other-owner", derefString(live.Tags[ownerTagKey]))
+					}
+					if live != nil && tc.name == "owner removed" {
+						assert.NotContains(t, live.Tags, ownerTagKey)
+					}
+				})
+			}
+		})
 	}
 }
 
@@ -608,7 +794,7 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 				}
 				lastReadETag := ""
 				gets, puts := 0, 0
-				transport := natGatewayTransportFunc(func(req *http.Request) (*http.Response, error) {
+				transport := armNetworkTransportFunc(func(req *http.Request) (*http.Response, error) {
 					assert.Contains(t, req.URL.Path, "/resourceGroups/"+byoNATGatewayRG+"/providers/Microsoft.Network/natGateways/"+identity)
 					status := http.StatusOK
 					var body []byte
@@ -742,7 +928,7 @@ func TestBYOLinkFailureRetainsCleanupAndRequiresAnotherWrite(t *testing.T) {
 			client, err := natgatewayclient.New("sub", fakeCredential{}, &arm.ClientOptions{
 				ClientOptions: azcore.ClientOptions{
 					Retry: policy.RetryOptions{RetryDelay: time.Millisecond, MaxRetryDelay: time.Millisecond},
-					Transport: natGatewayTransportFunc(func(req *http.Request) (*http.Response, error) {
+					Transport: armNetworkTransportFunc(func(req *http.Request) (*http.Response, error) {
 						status := http.StatusOK
 						body, marshalErr := json.Marshal(live)
 						assert.NoError(t, marshalErr)
@@ -804,7 +990,7 @@ func TestBYOLinkPollingFailureRetainsAppliedLinkForDeletion(t *testing.T) {
 			live := byoNATGateway(identity)
 			linkWrites, unlinkWrites := 0, 0
 			client, err := natgatewayclient.New("sub", fakeCredential{}, &arm.ClientOptions{
-				ClientOptions: azcore.ClientOptions{Transport: natGatewayTransportFunc(func(req *http.Request) (*http.Response, error) {
+				ClientOptions: azcore.ClientOptions{Transport: armNetworkTransportFunc(func(req *http.Request) (*http.Response, error) {
 					responseStatus := http.StatusOK
 					header := http.Header{"Content-Type": {"application/json"}}
 					body, marshalErr := json.Marshal(live)
@@ -877,11 +1063,13 @@ func TestBYOLinkPollingFailureRetainsAppliedLinkForDeletion(t *testing.T) {
 	}
 }
 
-func TestWithNATGatewayETag_RejectsUnprotectedWrites(t *testing.T) {
-	for _, etag := range []*string{nil, ptr.To(""), ptr.To(" "), ptr.To("*"), ptr.To(" * ")} {
-		ctx, err := withNATGatewayETag(context.Background(), etag)
-		assert.ErrorContains(t, err, "usable ETag")
-		assert.Nil(t, ctx)
+func TestWithResourceETag_RejectsUnprotectedWrites(t *testing.T) {
+	for _, resource := range []string{"BYO NAT Gateway", "Public IP"} {
+		for _, etag := range []*string{nil, ptr.To(""), ptr.To(" "), ptr.To("*"), ptr.To(" * ")} {
+			ctx, err := withResourceETag(context.Background(), resource, etag)
+			assert.ErrorContains(t, err, resource+" was read without a usable ETag")
+			assert.Nil(t, ctx)
+		}
 	}
 }
 

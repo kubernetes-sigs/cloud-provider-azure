@@ -620,7 +620,7 @@ func recoverStuckFinalizers(
 			podIPs := PodEgressAddresses(pod)
 			nodeIP := pod.Status.HostIP
 
-			// An inbound-only mapping must not manufacture an outbound drain for a rejected pod.
+			// Inbound-only addresses do not establish an outbound drain for a rejected pod.
 			dt.mu.Lock()
 			collision := dt.outboundIdentityConflictsWithInboundLocked(egressLabel)
 			if collision {
@@ -1031,7 +1031,6 @@ func fetchServiceGatewayServices(
 			natGatewayID := derefString(service.Properties.PublicNatGatewayID)
 			if IsReservedEgressIdentity(*service.Name) || ptr.Deref(service.Properties.IsDefault, false) {
 				logger.V(4).Info("Skipped RP-owned default outbound service", "service", *service.Name)
-				// Reserve the service identity separately: its gateway's name is not a BYO identity.
 				if nrp.ReservedOutboundServices == nil {
 					nrp.ReservedOutboundServices = utilsets.NewString()
 				}
@@ -1109,8 +1108,6 @@ func fetchAzureLoadBalancers(
 	return currentLBs, nil
 }
 
-// fetchAzureNATGateways fetches NAT Gateways from Azure and records in nrp.UnmanagedNATGateways
-// those this controller did not create (see ownsNATGateway)
 func fetchAzureNATGateways(
 	ctx context.Context,
 	config Config,
@@ -1833,7 +1830,6 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		pipName := *pip.Name
 
-		// Map the address name to a candidate identity, then require its ownership tag.
 		identity, ok := identityFromPublicIPName(pipName)
 		if !ok {
 			logger.V(5).Info("Skipped Public IP with unexpected name", "publicIP", pipName)
@@ -1896,7 +1892,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 	pool := NewWorkerPool(ctx, workerPoolSize)
 	var deletedCount int32
 	for _, pip := range orphanedPIPs {
-		pip := pip // capture for closure
+		pip := pip
 		pool.Submit(func() error {
 			deleted, err := dt.deleteOwnedPublicIP(ctx, pip.name, pip.identity, pip.ownerTagKey)
 			if err != nil {

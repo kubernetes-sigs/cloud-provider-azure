@@ -210,7 +210,7 @@ func TestGuardDefaultNATGatewayPIPSurvivesOrphanSweep(t *testing.T) {
 
 	detached := func(name string) *armnetwork.PublicIPAddress {
 		identity, _ := identityFromPublicIPName(name)
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 	const managedOrphan = "33333333-3333-3333-3333-333333333333-pip"
 	mockPIP.EXPECT().Get(gomock.Any(), "rg", managedOrphan, nil).Return(detached(managedOrphan), nil).Times(1)
@@ -369,7 +369,7 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 
 	pip := func(name string) *armnetwork.PublicIPAddress {
 		identity, _ := identityFromPublicIPName(name)
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 
 	const egress = "team-egress"

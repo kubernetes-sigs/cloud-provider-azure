@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
@@ -368,7 +370,6 @@ func TestProcessK8sEndpoints_SkipsNotReadyEndpoints(t *testing.T) {
 		"an endpoint with Conditions.Ready==false must not be imported into K8s state at init")
 }
 
-// Startup rejects colliding outbound membership without dropping valid inbound membership.
 func TestInitOutboundRefCount_RejectsServiceUIDEgressLabelCollision(t *testing.T) {
 	const (
 		collideID = "collide-id" // serves as BOTH the inbound svc UID and the egress label
@@ -945,8 +946,6 @@ func TestCheckInitializationComplete_InProgressOpBlocksCompletion(t *testing.T) 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&dt.isInitializing), "isInitializing must stay set while work is pending")
 }
 
-// Rejected configurations and confirmed member absence do not hold initial sync open while waiting
-// for a retry. Read failures and dispatched retries still do.
 func TestCheckInitializationComplete_RejectedCreationDoesNotBlockCompletion(t *testing.T) {
 	const uid = "egress-rejected"
 	initializing := func(op *ServiceOperationState) *DiffTracker {
@@ -989,7 +988,6 @@ func TestCheckInitializationComplete_RejectedCreationDoesNotBlockCompletion(t *t
 			assert.True(t, op.NextRetryAt.After(time.Now()), "with backoff")
 			assert.Equal(t, tc.wantRejected, op.CreationRejected)
 
-			// Drain the startup trigger while the retry is waiting for backoff.
 			newTestServiceUpdater(dt).processBatch()
 			assert.Zero(t, atomic.LoadInt32(&dt.pendingUpdaterTriggers))
 			assert.Equal(t, tc.wantRejected, initDone(dt), "only rejected configurations and confirmed member absence may defer creation")
@@ -1420,6 +1418,7 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 	detached := func(identity, ownerTagKey string) *armnetwork.PublicIPAddress {
 		return &armnetwork.PublicIPAddress{
 			Name:       ptr.To(PublicIPName(identity)),
+			Etag:       ptr.To(`W/"pip-version"`),
 			Tags:       map[string]*string{ownerTagKey: ptr.To(identity)},
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 		}
@@ -1441,7 +1440,6 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 		"a Public IP desired by neither Kubernetes nor NRP must still be cleaned up")
 }
 
-// Only ownership-tagged orphans are swept; matching names alone must not authorize deletion.
 func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) {
 	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress) []string {
 		ctrl := gomock.NewController(t)
@@ -1476,6 +1474,7 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		identity, _ := identityFromPublicIPName(name)
 		return &armnetwork.PublicIPAddress{
 			Name:       ptr.To(name),
+			Etag:       ptr.To(`W/"pip-version"`),
 			Tags:       egressIdentityTags(identity),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 		}
@@ -1522,14 +1521,15 @@ func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
 		wantDelete bool
 		wantError  bool
 	}{
-		{name: "still owned", live: &armnetwork.PublicIPAddress{Tags: egressIdentityTags(identity)}, wantDelete: true},
+		{name: "still owned", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity)}, wantDelete: true},
+		{name: "owned without ETag", live: &armnetwork.PublicIPAddress{Tags: egressIdentityTags(identity)}, wantError: true},
 		{name: "tag removed", live: &armnetwork.PublicIPAddress{}},
 		{name: "owner changed", live: &armnetwork.PublicIPAddress{Tags: egressIdentityTags("another-identity")}},
 		{name: "owner kind changed", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To(identity)}}},
 		{name: "already absent", readErr: notFoundError()},
 		{name: "read failed", readErr: errors.New("PIP read failed"), wantError: true},
 		{name: "nil successful read", wantError: true},
-		{name: "delete failed", live: &armnetwork.PublicIPAddress{Tags: egressIdentityTags(identity)},
+		{name: "delete failed", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity)},
 			deleteErr: errors.New("PIP delete failed"), wantDelete: true, wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1549,6 +1549,51 @@ func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
 				Name: ptr.To(PublicIPName(identity)), Tags: egressIdentityTags(identity),
 			}})
 			if tc.wantError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCleanupOrphanedPublicIPs_RetriesConditionalDelete(t *testing.T) {
+	const identity = "payments"
+	conflict := &azcore.ResponseError{
+		StatusCode: http.StatusPreconditionFailed, ErrorCode: "PreconditionFailed",
+		RawResponse: &http.Response{StatusCode: http.StatusPreconditionFailed, Request: &http.Request{Method: http.MethodDelete}},
+	}
+	for _, tc := range []struct {
+		name       string
+		owner      string
+		retryError error
+	}{
+		{name: "same owner with a new version", owner: identity},
+		{name: "new owner is preserved", owner: "other-owner"},
+		{name: "second conflict is reported", owner: identity, retryError: conflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			client := mock_publicipaddressclient.NewMockInterface(ctrl)
+			factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+			pip := &armnetwork.PublicIPAddress{
+				Name: ptr.To(PublicIPName(identity)), Etag: ptr.To(`W/"v1"`), Tags: egressIdentityTags(identity),
+			}
+			fresh := &armnetwork.PublicIPAddress{
+				Name: pip.Name, Etag: ptr.To(`W/"v2"`), Tags: egressIdentityTags(tc.owner),
+			}
+			firstRead := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(pip, nil).Times(1)
+			firstDelete := client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(conflict).After(firstRead)
+			refresh := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(fresh, nil).After(firstDelete)
+			if tc.owner == identity {
+				client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(tc.retryError).After(refresh).Times(1)
+			}
+			dt := newTestDiffTracker()
+			dt.config, dt.networkClientFactory = testConfig(), factory
+			err := dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{pip})
+			if tc.retryError != nil {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
@@ -2172,7 +2217,6 @@ func TestFetchAzureNATGateways_MarksNATGatewaysNotCreatedByThisController(t *tes
 	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 	mockNAT.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.NatGateway{
 		nat("tagged", map[string]*string{EgressIdentityTagKey: ptr.To("TAGGED")}, armnetwork.NatGatewayPropertiesFormat{}),
-		// Matching address names do not establish ownership.
 		nat("untagged", nil, armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{pip("RG", "Untagged-pip")},
 			PublicIPAddressesV6: []*armnetwork.SubResource{pip("rg", "untagged-pip-v6")}}),
 		nat("no-addresses", nil, armnetwork.NatGatewayPropertiesFormat{}),
@@ -2211,7 +2255,6 @@ func TestNewTracksOnlyBYONATGateways(t *testing.T) {
 	assert.Empty(t, dt.byoNATGatewayID("othersub"), "a NAT Gateway in another subscription cannot be read or unlinked through this cluster's clients")
 }
 
-// Startup must recover the BYO ID from the registration, without ownership tags.
 func TestRestartedControllerOnlyUnlinksBYONATGateway(t *testing.T) {
 	const identity = "byo"
 	ctrl := gomock.NewController(t)
@@ -2267,7 +2310,6 @@ func TestRestartedBetweenTheTwoUnlinkStepsLeavesTheBYOLink(t *testing.T) {
 	registered := []*armnetwork.ServiceGatewayService{{Name: ptr.To(identity), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
 		ServiceType: ptr.To(armnetwork.ServiceTypeOutbound)}}}
 	m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(registered, nil).AnyTimes()
-	// Only node-RG reads are expected: the BYO gateway ID was lost.
 	m.nat.EXPECT().Get(gomock.Any(), "rg", identity, gomock.Any()).Return(nil, notFoundError()).AnyTimes()
 	m.nat.EXPECT().Delete(gomock.Any(), "rg", identity).Return(nil).AnyTimes()
 	for _, name := range OutboundPublicIPNames(identity) {

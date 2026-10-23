@@ -252,7 +252,7 @@ func TestDeleteInboundServiceLastErrMonotonic(t *testing.T) {
 	lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(errors.New("simulated-lb-delete-failure"))
 	pip.EXPECT().Get(gomock.Any(), "rg", "uid-1-pip", nil).
-		Return(&armnetwork.PublicIPAddress{Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To("uid-1")}}, nil).Times(1)
+		Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To("uid-1")}}, nil).Times(1)
 	pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
 	kube := fake.NewSimpleClientset(deletionTestService())
