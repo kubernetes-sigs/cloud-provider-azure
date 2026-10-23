@@ -48,6 +48,8 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	v1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -59,29 +61,34 @@ import (
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 )
 
-// createOrUpdatePIP creates or updates a public IP address
-func (dt *DiffTracker) createOrUpdatePIP(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) error {
-	_, err := dt.createOrUpdatePIPWithResponse(ctx, pipResourceGroup, pip)
-	return err
-}
-
-// createOrUpdatePIPWithResponse creates or updates a public IP address and returns the response
-// containing the allocated IP address. Use this when you need the IP address after PIP creation.
-func (dt *DiffTracker) createOrUpdatePIPWithResponse(ctx context.Context, pipResourceGroup string, pip *armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
-	if pip == nil {
-		return nil, fmt.Errorf("createOrUpdatePIPWithResponse: pip is nil")
-	}
+func (dt *DiffTracker) createOrUpdateManagedPublicIP(ctx context.Context, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
 	pipName := ptr.Deref(pip.Name, "")
 	if pipName == "" {
-		return nil, fmt.Errorf("createOrUpdatePIPWithResponse: pip name is empty")
+		return nil, fmt.Errorf("createOrUpdateManagedPublicIP: pip name is empty")
 	}
-	dt.logger.V(2).Info("Creating or updating public IP", "pip", pipName, "resourceGroup", pipResourceGroup)
+	existing, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
+	if err != nil {
+		if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr != nil || exists {
+			return nil, fmt.Errorf("reading Public IP %q before creation: %w", pipName, err)
+		}
+	} else {
+		if existing == nil {
+			return nil, fmt.Errorf("reading Public IP %q before creation returned no resource", pipName)
+		}
+		if identity := pip.Tags[EgressIdentityTagKey]; identity != nil && !ownsPublicIP(existing, *identity, EgressIdentityTagKey) {
+			return nil, egressRejectedError{fmt.Errorf("public IP %q is not owned by egress identity %q", pipName, *identity)}
+		}
+		pip.Tags = existing.Tags
+		pip.Etag = existing.Etag
+	}
+	dt.logger.V(2).Info("Creating or updating public IP", "pip", pipName, "resourceGroup", dt.config.ResourceGroup)
 
-	response, err := dt.networkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, pipResourceGroup, pipName, *pip)
+	response, err := dt.networkClientFactory.GetPublicIPAddressClient().CreateOrUpdate(ctx, dt.config.ResourceGroup, pipName, pip)
 	if err != nil {
 		return nil, fmt.Errorf("creating or updating public IP %q: %w", pipName, err)
 	}
@@ -89,7 +96,7 @@ func (dt *DiffTracker) createOrUpdatePIPWithResponse(ctx context.Context, pipRes
 	return response, nil
 }
 
-// deletePublicIP deletes a public IP address
+// The caller must establish ownership before deleting the address.
 func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup string, pipName string) error {
 	if pipName == "" {
 		return fmt.Errorf("deletePublicIP: pipName is empty")
@@ -102,6 +109,46 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 	}
 
 	return nil
+}
+
+// Returns true only when an owned address was deleted.
+func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName, identity, ownerTagKey string) (bool, error) {
+	if pipName == "" {
+		return false, fmt.Errorf("deleteOwnedPublicIP: pip name is empty")
+	}
+	var deleteErr error
+	// Refresh once here because startup orphan cleanup has no retry queue.
+	for attempt := 0; attempt < 2; attempt++ {
+		pip, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
+		if err != nil {
+			if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr == nil && !exists {
+				dt.logger.V(4).Info("Skipped absent Public IP", "publicIP", pipName)
+				return false, nil
+			}
+			return false, fmt.Errorf("reading Public IP %q to check ownership: %w", pipName, err)
+		}
+		if pip == nil {
+			return false, fmt.Errorf("reading Public IP %q to check ownership returned no resource", pipName)
+		}
+		if !ownsPublicIP(pip, identity, ownerTagKey) {
+			dt.logger.V(2).Info("Kept Public IP without matching ownership tag", "publicIP", pipName, "identity", identity, "ownerTag", ownerTagKey)
+			return false, nil
+		}
+		deleteCtx, err := withResourceETag(ctx, fmt.Sprintf("Public IP %q", pipName), pip.Etag)
+		if err != nil {
+			return false, err
+		}
+		deleteErr = dt.deletePublicIP(deleteCtx, dt.config.ResourceGroup, pipName)
+		if deleteErr == nil {
+			return true, nil
+		}
+		var responseErr *azcore.ResponseError
+		if !errors.As(deleteErr, &responseErr) || responseErr.StatusCode != http.StatusPreconditionFailed ||
+			!isResponseForMethod(responseErr, http.MethodDelete) {
+			return false, deleteErr
+		}
+	}
+	return false, deleteErr
 }
 
 // createOrUpdateLB creates or updates a load balancer
@@ -131,6 +178,25 @@ func (dt *DiffTracker) deleteLB(ctx context.Context, uid string) error {
 	}
 
 	return nil
+}
+
+func withNATGatewayETag(ctx context.Context, etag *string) (context.Context, error) {
+	// A retried PUT can hide an applied link behind a later 412.
+	ctx = policy.WithRetryOptions(ctx, policy.RetryOptions{MaxRetries: -1})
+	return withResourceETag(ctx, "BYO NAT Gateway", etag)
+}
+
+func withResourceETag(ctx context.Context, resource string, etag *string) (context.Context, error) {
+	version := strings.TrimSpace(ptr.Deref(etag, ""))
+	if version == "" || version == "*" {
+		return nil, fmt.Errorf("%s was read without a usable ETag", resource)
+	}
+	return policy.WithHTTPHeader(ctx, http.Header{"If-Match": {version}}), nil
+}
+
+func isResponseForMethod(respErr *azcore.ResponseError, method string) bool {
+	return respErr != nil && respErr.RawResponse != nil && respErr.RawResponse.Request != nil &&
+		respErr.RawResponse.Request.Method == method
 }
 
 // createOrUpdateNatGateway creates or updates a NAT gateway
@@ -164,20 +230,60 @@ func (dt *DiffTracker) deleteNatGateway(ctx context.Context, natGatewayResourceG
 	return nil
 }
 
+// getNatGateway reads a NAT Gateway. exists is false (with a nil error) when it is not found.
+func (dt *DiffTracker) getNatGateway(ctx context.Context, resourceGroup, name string) (natGateway *armnetwork.NatGateway, exists bool, err error) {
+	natGateway, err = dt.networkClientFactory.GetNatGatewayClient().Get(ctx, resourceGroup, name, nil)
+	if err != nil {
+		if found, cerr := errutils.CheckResourceExistsFromAzcoreError(err); cerr == nil && !found {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("getting NAT Gateway %q in resource group %q: %w", name, resourceGroup, err)
+	}
+	return natGateway, true, nil
+}
+
 // disassociateNatGatewayFromServiceGateway removes the NAT gateway association from the Service Gateway
 // This should be called before deleting the NAT gateway to properly clean up the references
 func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Context, serviceGatewayName string, natGatewayName string) error {
-	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", dt.config.ResourceGroup)
+	return dt.unlinkNatGateway(ctx, serviceGatewayName, natGatewayName, dt.config.ResourceGroup, natGatewayName)
+}
+
+// Callers must validate the ID's network subscription; the client is subscription-scoped.
+func (dt *DiffTracker) getNatGatewayByID(ctx context.Context, natGatewayID string) (natGateway *armnetwork.NatGateway, exists bool, err error) {
+	parsed, err := arm.ParseResourceID(natGatewayID)
+	if err != nil {
+		return nil, false, fmt.Errorf("parsing NAT Gateway ID %q: %w", natGatewayID, err)
+	}
+	natGateway, exists, err = dt.getNatGateway(ctx, parsed.ResourceGroupName, parsed.Name)
+	if err != nil || !exists {
+		return natGateway, exists, err
+	}
+	if natGateway == nil {
+		return nil, false, fmt.Errorf("NAT Gateway %q was read without a resource", natGatewayID)
+	}
+	result := *natGateway
+	result.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, parsed.SubscriptionID, parsed.ResourceGroupName, parsed.Name))
+	result.Name = ptr.To(parsed.Name)
+	return &result, true, nil
+}
+
+// NRP requires clearing the service reference before unlinking the gateway.
+func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName, serviceName, natGatewayResourceGroup, natGatewayName string) error {
+	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
 
 	// Step 1: clear the ServiceGateway-side reference if it still has one.
 	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, serviceGatewayName)
+	var respErr *azcore.ResponseError
+	if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
+		services, err = nil, nil
+	}
 	if err != nil {
 		return fmt.Errorf("getting Service Gateway services: %w", err)
 	}
 
 	var serviceToBeUpdated *armnetwork.ServiceGatewayService
 	for _, service := range services {
-		if service.Name != nil && strings.EqualFold(*service.Name, natGatewayName) {
+		if service.Name != nil && strings.EqualFold(*service.Name, serviceName) {
 			serviceToBeUpdated = service
 			break
 		}
@@ -204,23 +310,38 @@ func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Cont
 	// Step 2: clear the NAT-gateway-side reference if it still points back at the
 	// Service Gateway. This runs independently of Step 1 so a retry after a
 	// partial failure still reconciles the NAT gateway.
-	natGateway, err := dt.networkClientFactory.GetNatGatewayClient().Get(ctx, dt.config.ResourceGroup, natGatewayName, nil)
-	if err != nil {
-		if exists, cerr := errutils.CheckResourceExistsFromAzcoreError(err); cerr == nil && !exists {
-			return nil
-		}
-		return fmt.Errorf("getting NAT Gateway %q: %w", natGatewayName, err)
+	natGatewayID := fmt.Sprintf(consts.NatGatewayIDTemplate, dt.config.networkResourceSubscriptionID(), natGatewayResourceGroup, natGatewayName)
+	if user := otherServiceUsingNATGateway(services, serviceName, natGatewayID); user != "" {
+		dt.logger.V(2).Info("Kept NAT Gateway linked to Service Gateway because another service uses it", "natGateway", natGatewayName, "service", user)
+		return nil
 	}
-
-	if natGateway.Properties != nil && natGateway.Properties.ServiceGateway != nil {
+	natGateway, exists, err := dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	if !strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup) &&
+		(natGateway == nil || natGateway.Properties == nil) {
+		return fmt.Errorf("NAT Gateway %q was read without its properties; link state is unknown", natGatewayID)
+	}
+	if linked := natGatewayServiceGatewayID(natGateway); linked != "" && strings.EqualFold(linked, dt.config.ServiceGatewayResourceID()) {
+		updateCtx := ctx
+		if !strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup) {
+			updateCtx, err = withNATGatewayETag(ctx, natGateway.Etag)
+			if err != nil {
+				return err
+			}
+		}
 		// See above: a plain nil would be omitted from the payload rather than clearing the field.
 		natGateway.Properties.ServiceGateway = azcore.NullValue[*armnetwork.SubResource]()
-		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(ctx, dt.config.ResourceGroup, natGatewayName, *natGateway); err != nil {
+		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(updateCtx, natGatewayResourceGroup, natGatewayName, *natGateway); err != nil {
 			return fmt.Errorf("updating NAT Gateway %q to remove Service Gateway reference: %w", natGatewayName, err)
 		}
 	}
 
-	dt.logger.V(5).Info("Disassociated NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", dt.config.ResourceGroup)
+	dt.logger.V(5).Info("Disassociated NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
 	return nil
 }
 

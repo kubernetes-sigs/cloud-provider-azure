@@ -255,6 +255,11 @@ const (
 
 	// PodLabelServiceEgressGateway is the label used on the pod
 	PodLabelServiceEgressGateway = "kubernetes.azure.com/service-egress-gateway"
+	// PodAnnotationServiceEgressGatewayResourceGroup specifies the BYO NAT Gateway's resource group.
+	// The NAT Gateway name is the normalized value of PodLabelServiceEgressGateway.
+	PodAnnotationServiceEgressGatewayResourceGroup = "kubernetes.azure.com/service-egress-gateway-resource-group"
+
+	ResourceGroupNamePattern = `^[\p{L}\p{Nd}_().-]{0,89}[\p{L}\p{Nd}_()-]$` // codespell:ignore nd
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"

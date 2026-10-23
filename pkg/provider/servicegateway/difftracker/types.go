@@ -299,6 +299,12 @@ type NRPState struct {
 	// Gateway registered on the NRP side (SGW service identities, not Azure
 	// resource names).
 	NATGateways *utilsets.IgnoreCaseSet
+	// Startup snapshot with lowercase identities; live cleanup uses byoNATGateways.
+	OutboundNATGatewayIDs map[string]string
+	// Startup orphan-sweep exclusions; normal reconciliation rechecks ownership.
+	UnmanagedNATGateways *utilsets.IgnoreCaseSet
+	// RP-owned default service identities, not their referenced NAT Gateway names.
+	ReservedOutboundServices *utilsets.IgnoreCaseSet
 	// Locations is keyed by node/VM IP (e.g. "10.0.0.1"). "Location" here is
 	// an SGW concept identifying a node, not an Azure region (e.g. "eastus2").
 	Locations map[string]NRPLocation
@@ -376,6 +382,10 @@ type ServiceOperationState struct {
 	// port out of range). The dispatcher skips such entries instead of retrying
 	// forever; a later UpdateService with a changed spec clears it.
 	CreationFailedTerminal bool
+
+	// CreationRejected marks rejected egress configuration or confirmed member absence.
+	// Backoff in StateNotStarted does not block initial sync; a dispatched retry still does.
+	CreationRejected bool
 
 	// CreatedAt is when this operation was first enqueued. Never overwritten on retry.
 	// Used by the oldest-age metric to detect stuck operations.
@@ -462,6 +472,9 @@ type DiffTracker struct {
 	// the diff. An entry is cleared when that finalizer is actually removed, which is what closes
 	// the finalizers_recovery_scheduled_total / finalizers_recovered_total gap.
 	recoveredServiceFinalizers map[string]struct{}
+
+	// Selected BYO resource IDs retained through cleanup; guarded by mu.
+	byoNATGateways map[string]string
 
 	// Communication channels
 	serviceUpdaterTrigger   chan bool

@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
@@ -229,6 +230,9 @@ func InitializeFromCluster(
 		logger.V(2).Info("Triggered initial location sync", "deletions", hasDeletions, "onlyExisting", hasOnlyExistingServices, "recoveredItems", hasRecoveredItems, "existingNRPServices", hasExistingNRPServices)
 		diffTracker.triggerLocationsUpdater()
 	}
+
+	// Rejected additions can leave no work and therefore no completion callback.
+	diffTracker.checkInitializationComplete()
 
 	// Wait for all async operations to complete (service creations/deletions + location syncs + orphan deletions)
 	// WaitForInitialSync monitors:
@@ -616,6 +620,29 @@ func recoverStuckFinalizers(
 			podIPs := PodEgressAddresses(pod)
 			nodeIP := pod.Status.HostIP
 
+			// Inbound-only addresses do not establish an outbound drain for a rejected pod.
+			dt.mu.Lock()
+			collision := dt.outboundIdentityConflictsWithInboundLocked(egressLabel)
+			if collision {
+				podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+				result := dt.inboundCollisionPodDeletionLocked(egressLabel, pod.Namespace, pod.Name, string(pod.UID), podIPs)
+				if result.Enqueued {
+					dt.pendingPodDeletions[podKey].RecoveredAtStartup = true
+				} else if _, exists := dt.pendingPodDeletions[podKey]; !exists {
+					pendingPods[podKey] = &PendingPodDeletion{
+						Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID),
+						ServiceUID: egressLabel, RecoveredAtStartup: true,
+						Timestamp: time.Now().Format(time.RFC3339),
+					}
+				}
+			}
+			dt.mu.Unlock()
+			if collision {
+				podsRecovered++
+				recordFinalizerRecoveryScheduled()
+				continue
+			}
+
 			// If addresses are already cleared, retain the finalizer until the initialization
 			// locations sync proves there is no unbacked NRP mapping for this egress service.
 			if len(podIPs) == 0 || nodeIP == "" {
@@ -935,7 +962,7 @@ func buildNRPState(
 	}
 
 	// Fetch Azure NAT Gateways
-	currentNATs, err := fetchAzureNATGateways(ctx, config, networkClientFactory)
+	currentNATs, err := fetchAzureNATGateways(ctx, config, networkClientFactory, &nrp)
 	if err != nil {
 		return NRPState{}, nil, nil, nil, nil, err
 	}
@@ -1001,11 +1028,29 @@ func fetchServiceGatewayServices(
 			// HTTP 400 MultipleDefaultServicesNotAllowedInServiceGateway,
 			// then deletes the NAT GW + PIP and recreates them. Case-insensitive
 			// because Azure may normalize naming differently across endpoints.
-			if IsReservedEgressIdentity(*service.Name) {
+			natGatewayID := derefString(service.Properties.PublicNatGatewayID)
+			if IsReservedEgressIdentity(*service.Name) || ptr.Deref(service.Properties.IsDefault, false) {
 				logger.V(4).Info("Skipped RP-owned default outbound service", "service", *service.Name)
+				if nrp.ReservedOutboundServices == nil {
+					nrp.ReservedOutboundServices = utilsets.NewString()
+				}
+				nrp.ReservedOutboundServices.Insert(*service.Name)
+				if nrp.UnmanagedNATGateways == nil {
+					nrp.UnmanagedNATGateways = utilsets.NewString()
+				}
+				nrp.UnmanagedNATGateways.Insert(*service.Name)
+				if parsed, err := arm.ParseResourceID(natGatewayID); err == nil && isClusterResourceGroup(parsed, config) {
+					nrp.UnmanagedNATGateways.Insert(parsed.Name)
+				}
 				continue
 			}
 			nrp.NATGateways.Insert(*service.Name)
+			if natGatewayID != "" {
+				if nrp.OutboundNATGatewayIDs == nil {
+					nrp.OutboundNATGatewayIDs = make(map[string]string)
+				}
+				nrp.OutboundNATGatewayIDs[strings.ToLower(*service.Name)] = natGatewayID
+			}
 		}
 	}
 	logger.V(2).Info("Fetched ServiceGateway services", "services", len(servicesDTO), "loadBalancers", nrp.LoadBalancers.Len(), "natGateways", nrp.NATGateways.Len())
@@ -1063,11 +1108,11 @@ func fetchAzureLoadBalancers(
 	return currentLBs, nil
 }
 
-// fetchAzureNATGateways fetches NAT Gateways from Azure
 func fetchAzureNATGateways(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
+	nrp *NRPState,
 ) (*utilsets.IgnoreCaseSet, error) {
 	logger := log.FromContextOrBackground(ctx)
 	ngclient := networkClientFactory.GetNatGatewayClient()
@@ -1080,6 +1125,12 @@ func fetchAzureNATGateways(
 	for _, ng := range ngs {
 		if ng.Name != nil {
 			currentNATs.Insert(strings.ToLower(*ng.Name))
+			if !ownsNATGateway(ng) {
+				if nrp.UnmanagedNATGateways == nil {
+					nrp.UnmanagedNATGateways = utilsets.NewString()
+				}
+				nrp.UnmanagedNATGateways.Insert(*ng.Name)
+			}
 		}
 	}
 	logger.V(2).Info("Fetched Azure NAT gateways", "natGateways", currentNATs.Len())
@@ -1276,6 +1327,7 @@ func recoverServiceExternalIPs(ctx context.Context, diffTracker *DiffTracker, se
 //  1. Exist in Azure (currentLBsInAzure/currentNATsInAzure)
 //  2. Are NOT registered in ServiceGateway (NRPResources)
 //  3. Are NOT desired in Kubernetes (K8sResources)
+//  4. (NAT Gateways) Are NOT in NRPResources.UnmanagedNATGateways
 //
 // If a resource exists in K8s, reconcileServices will handle it - don't delete it!
 // This uses the Engine's DeleteService flow with isOrphan=true to bypass the NRP existence check.
@@ -1311,6 +1363,10 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 		for _, natName := range currentNATsInAzure.UnsortedList() {
 			// Skip the default NAT Gateway
 			if IsReservedEgressIdentity(natName) {
+				continue
+			}
+			if unmanaged := diffTracker.NRPResources.UnmanagedNATGateways; unmanaged != nil && unmanaged.Has(natName) {
+				logger.V(4).Info("Skipped NAT gateway not created by this controller", "natGateway", natName)
 				continue
 			}
 			// If NAT is desired in K8s, reconcileServices will handle it - NOT orphaned
@@ -1720,7 +1776,9 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 			}
 			config := NewInboundServiceConfig(serviceUID, inboundConfig)
 			logger.V(5).Info("Called AddService for load balancer", "serviceUID", serviceUID)
-			dt.AddService(config)
+			if err := dt.AddService(config); err != nil {
+				logger.Error(err, "Could not admit inbound service", "serviceUID", serviceUID)
+			}
 		}
 
 		// Startup must decide address families exactly as the runtime pod path does. Outbound has
@@ -1733,7 +1791,9 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 		for _, serviceUID := range natAdditions {
 			config := NewOutboundServiceConfig(serviceUID, &OutboundConfig{IPFamilies: outboundFamilies})
 			logger.V(5).Info("Called AddService for NAT gateway", "serviceUID", serviceUID)
-			dt.AddService(config)
+			if err := dt.AddService(config); err != nil {
+				logger.Error(err, "Could not admit outbound service", "serviceUID", serviceUID)
+			}
 		}
 	}
 
@@ -1742,7 +1802,7 @@ func (dt *DiffTracker) reconcileServices(syncOps *SyncDiffTrackerReturnType, ser
 
 // cleanupOrphanedPublicIPs identifies and deletes Public IPs that are not associated with any tracked service.
 // This handles PIPs that were left behind when their associated LB/NAT Gateway was deleted outside the normal flow.
-// Uses pre-fetched PIPs from initialization to avoid duplicate API calls.
+// Uses pre-fetched PIPs to select candidates, then rechecks ownership before each delete.
 // If pips is nil, falls back to fetching from Azure (for non-initialization use cases).
 func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*armnetwork.PublicIPAddress) error {
 	logger := dt.logger
@@ -1758,16 +1818,18 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		}
 	}
 
-	orphanedPIPs := []string{}
+	type orphanedPublicIP struct {
+		name, identity, ownerTagKey string
+	}
+	var orphanedPIPs []orphanedPublicIP
 	dt.mu.Lock()
 	for _, pip := range pips {
-		if pip.Name == nil {
+		if pip == nil || pip.Name == nil {
 			continue
 		}
 
 		pipName := *pip.Name
 
-		// Map the address back to its identity. Both "-pip" and "-pip-v6" are ours.
 		identity, ok := identityFromPublicIPName(pipName)
 		if !ok {
 			logger.V(5).Info("Skipped Public IP with unexpected name", "publicIP", pipName)
@@ -1786,11 +1848,15 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 			continue
 		}
 
+		ownerTagKey := EgressIdentityTagKey
+		if !ownsPublicIP(pip, identity, ownerTagKey) {
+			ownerTagKey = InboundServiceUIDTagKey
+			if !ownsPublicIP(pip, identity, ownerTagKey) {
+				logger.V(4).Info("Kept orphaned Public IP without matching ownership tag", "publicIP", pipName)
+				continue
+			}
+		}
 		serviceName := identity
-
-		// Every "*-pip" in this resource group is ours: it is the cluster's managed node resource
-		// group, so there are no customer-created addresses here to protect. Both a UUID-named
-		// inbound address and an egress address named from a pod label are swept.
 
 		// A Service or egress identity Kubernetes still wants is not an orphan, even when NRP has
 		// no record of it. That combination is exactly the crash-mid-create state: the Public IP was
@@ -1810,7 +1876,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		if !lbExists && !natExists {
 			// PIP is orphaned - not associated with any tracked service
-			orphanedPIPs = append(orphanedPIPs, pipName)
+			orphanedPIPs = append(orphanedPIPs, orphanedPublicIP{pipName, identity, ownerTagKey})
 		}
 	}
 	dt.mu.Unlock()
@@ -1825,14 +1891,17 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 	// Delete orphaned PIPs in parallel using WorkerPool
 	pool := NewWorkerPool(ctx, workerPoolSize)
 	var deletedCount int32
-	for _, pipName := range orphanedPIPs {
-		pipName := pipName // capture for closure
+	for _, pip := range orphanedPIPs {
+		pip := pip
 		pool.Submit(func() error {
-			if err := dt.deletePublicIP(ctx, dt.config.ResourceGroup, pipName); err != nil {
-				return fmt.Errorf("deleting orphaned Public IP %s: %w", pipName, err)
+			deleted, err := dt.deleteOwnedPublicIP(ctx, pip.name, pip.identity, pip.ownerTagKey)
+			if err != nil {
+				return fmt.Errorf("deleting orphaned Public IP %s: %w", pip.name, err)
 			}
-			atomic.AddInt32(&deletedCount, 1)
-			logger.V(5).Info("Deleted orphaned Public IP", "publicIP", pipName)
+			if deleted {
+				atomic.AddInt32(&deletedCount, 1)
+				logger.V(5).Info("Deleted orphaned Public IP", "publicIP", pip.name)
+			}
 			return nil
 		})
 	}

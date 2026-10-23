@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -212,6 +213,7 @@ func isTransientAzureFailure(output string) bool {
 		"(429)",
 		"temporarily unavailable",
 		"connection reset by peer",
+		"Temporary failure in name resolution",
 		"Please run 'az login'",
 		"AADSTS700082", // expired refresh token; the next attempt re-authenticates
 	} {
@@ -220,6 +222,24 @@ func isTransientAzureFailure(output string) bool {
 		}
 	}
 	return false
+}
+
+func TestIsTransientAzureFailure(t *testing.T) {
+	for _, tc := range []struct {
+		output    string
+		transient bool
+	}{
+		{"ERROR: HTTPSConnectionPool(host='management.azure.com', port=443): Max retries exceeded with url: /subscriptions/x " +
+			"(Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7cf50cc26510>: Failed to resolve " +
+			"'management.azure.com' ([Errno -3] Temporary failure in name resolution)\"))", true},
+		{"ERROR: (ServiceUnavailable) The service is temporarily unavailable.", true},
+		{"ERROR: (ResourceNotFound) The Resource 'Microsoft.Network/natGateways/x' under resource group 'rg' was not found.", false},
+		{"ERROR: (AuthorizationFailed) The client does not have authorization to perform action.", false},
+	} {
+		if got := isTransientAzureFailure(tc.output); got != tc.transient {
+			t.Errorf("isTransientAzureFailure(%q) = %v, want %v", tc.output, got, tc.transient)
+		}
+	}
 }
 
 // runAz runs an `az` command and returns its stdout, retrying transient control-plane failures.
@@ -296,27 +316,7 @@ func queryServiceGatewayAddressLocations() (ServiceGatewayAddressLocationsRespon
 // verifyServiceGatewayCleanup verifies that only the default outbound service remains in the Service Gateway
 func verifyServiceGatewayCleanup() {
 	utils.Logf("Verifying Service Gateway services only contain default outbound service")
-
-	sgResponse, err := queryServiceGatewayServices()
-	Expect(err).NotTo(HaveOccurred(), "Should be able to query Service Gateway services after cleanup")
-
-	utils.Logf("Found %d service(s) in Service Gateway after cleanup", len(sgResponse.Value))
-	foundDefault := false
-	for i := range sgResponse.Value {
-		svc := &sgResponse.Value[i]
-		utils.Logf("  Service: %s (Type: %s)", svc.Name, svc.Properties.ServiceType)
-
-		if svc.Name != "default-natgw" {
-			Fail(fmt.Sprintf("Unexpected service '%s' still exists in Service Gateway after cleanup", svc.Name))
-		}
-		foundDefault = true
-		Expect(svc.Properties.ServiceType).To(Equal("Outbound"), "Service should be the default outbound service")
-	}
-	// The loop above only rejects *extra* services, so it passes vacuously on an empty response -
-	// which is not cleanup succeeding but the cluster's default egress path having been destroyed.
-	// The default NAT gateway is not created by these tests and must outlive every one of them.
-	Expect(foundDefault).To(BeTrue(),
-		"the default outbound service 'default-natgw' is missing from the Service Gateway; cleanup must leave it in place")
+	Expect(serviceGatewayCleanupErr()).To(Succeed())
 	utils.Logf("  ✓ Only default outbound service remains in Service Gateway")
 }
 
@@ -375,10 +375,18 @@ func serviceGatewayCleanupErr() error {
 	if err != nil {
 		return fmt.Errorf("query Service Gateway services: %w", err)
 	}
+	return serviceGatewayServicesCleanupErr(sgResponse.Value)
+}
+
+func isDefaultOutboundService(service ServiceGatewayService) bool {
+	return service.Properties.ServiceType == "Outbound" &&
+		(service.Properties.IsDefault || strings.EqualFold(service.Name, "default-natgw"))
+}
+
+func serviceGatewayServicesCleanupErr(services []ServiceGatewayService) error {
 	foundDefault := false
-	for i := range sgResponse.Value {
-		svc := &sgResponse.Value[i]
-		if svc.Name != "default-natgw" {
+	for _, svc := range services {
+		if !isDefaultOutboundService(svc) || foundDefault {
 			return fmt.Errorf("unexpected service %q (type %s) still exists in Service Gateway after cleanup", svc.Name, svc.Properties.ServiceType)
 		}
 		foundDefault = true
@@ -387,9 +395,41 @@ func serviceGatewayCleanupErr() error {
 	// unexpected service because it finds no service at all. Cleanup must remove the test's
 	// services and leave the cluster-wide default outbound service untouched.
 	if !foundDefault {
-		return fmt.Errorf("the default outbound service %q is missing from the Service Gateway; cleanup must leave it in place", "default-natgw")
+		return fmt.Errorf("the default outbound service is missing from the Service Gateway; cleanup must leave it in place")
 	}
 	return nil
+}
+
+func TestServiceGatewayServicesCleanupErr(t *testing.T) {
+	service := func(name, kind string, isDefault bool) ServiceGatewayService {
+		svc := ServiceGatewayService{Name: name}
+		svc.Properties.ServiceType, svc.Properties.IsDefault = kind, isDefault
+		return svc
+	}
+	named := service("default-natgw", "Outbound", false)
+	flagged := service("custom-default", "Outbound", true)
+	for _, tc := range []struct {
+		name      string
+		services  []ServiceGatewayService
+		wantError bool
+	}{
+		{name: "named default", services: []ServiceGatewayService{named}},
+		{name: "case-insensitive name", services: []ServiceGatewayService{service("DEFAULT-NATGW", "Outbound", false)}},
+		{name: "RP default flag", services: []ServiceGatewayService{flagged}},
+		{name: "missing default", wantError: true},
+		{name: "ordinary outbound is not default", services: []ServiceGatewayService{service("custom-default", "Outbound", false)}, wantError: true},
+		{name: "inbound with reserved name", services: []ServiceGatewayService{service("default-natgw", "Inbound", false)}, wantError: true},
+		{name: "inbound with default flag", services: []ServiceGatewayService{service("custom-default", "Inbound", true)}, wantError: true},
+		{name: "extra service", services: []ServiceGatewayService{flagged, service("extra", "Outbound", false)}, wantError: true},
+		{name: "extra flagged service", services: []ServiceGatewayService{named, flagged}, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := serviceGatewayServicesCleanupErr(tc.services)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("cleanup error = %v, wantError = %t", err, tc.wantError)
+			}
+		})
+	}
 }
 
 // addressLocationsCleanupErr returns nil only when no address in the Service Gateway still

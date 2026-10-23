@@ -73,14 +73,14 @@ func TestGuardRetriesExhaustedPark_RecoveredBySpecChange(t *testing.T) {
 
 	// An unchanged-spec resync must NOT reset the park (it would defeat the backoff under a
 	// normal resync storm).
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 	op := dt.pendingServiceOps[uid]
 	assert.Equal(t, maxServiceRetries, op.RetryCount, "unchanged-spec resync must not reset the retry budget")
 	assert.True(t, op.RetriesExhausted, "unchanged-spec resync must leave the park intact")
 	assert.True(t, gatedByRetry(su, dt, uid), "the still-parked op must remain gated")
 
 	// A spec change is fresh intent: the park must be cleared and the op dispatchable again.
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))))
 	op = dt.pendingServiceOps[uid]
 	assert.Equal(t, 0, op.RetryCount, "a spec-changing resync must reset the retry budget")
 	assert.False(t, op.RetriesExhausted, "a spec-changing resync must clear the park")
@@ -134,7 +134,7 @@ func TestGuardRetriesExhaustedPark_CreateRecoversAfterCooldown(t *testing.T) {
 		NextRetryAt:      time.Now().Add(-time.Hour), // cooldown elapsed
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))) // ordinary same-spec resync
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))) // ordinary same-spec resync
 
 	op := dt.pendingServiceOps[uid]
 	assert.False(t, op.RetriesExhausted, "a same-spec resync after the cooldown must clear the park")
@@ -160,7 +160,7 @@ func TestGuardRetriesExhaustedPark_UpdateInProgressRecoversOnSpecChange(t *testi
 		NextRetryAt:      time.Now().Add(-time.Hour),
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))) // genuine spec change
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))) // genuine spec change
 
 	op := dt.pendingServiceOps[uid]
 	assert.False(t, op.RetriesExhausted, "a spec change must clear a parked updating op")
@@ -187,14 +187,14 @@ func TestGuardRetriesExhaustedPark_UpdateRecoversAfterCooldown(t *testing.T) {
 	}
 
 	// While the cooldown is pending, a same-spec resync must leave the park intact.
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 	op := dt.pendingServiceOps[uid]
 	assert.True(t, op.RetriesExhausted, "a same-spec resync within the cooldown must leave the park intact")
 	assert.True(t, gatedByRetry(su, dt, uid), "the still-parked update must remain gated")
 
 	// Once the cooldown has elapsed, a same-spec resync must re-arm it.
 	op.NextRetryAt = time.Now().Add(-time.Hour)
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 	op = dt.pendingServiceOps[uid]
 	assert.False(t, op.RetriesExhausted, "a same-spec resync after the cooldown must clear the park")
 	assert.Equal(t, 0, op.RetryCount, "the retry budget must be reset so the update can be dispatched")
@@ -413,7 +413,7 @@ func TestUpdateService_CreationFailedTerminalRecoversOnSpecChange(t *testing.T) 
 	default:
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))))
 
 	op := dt.pendingServiceOps[uid]
 	assert.False(t, op.CreationFailedTerminal,

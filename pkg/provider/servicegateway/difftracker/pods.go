@@ -303,6 +303,11 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 		dt.recordEvent(pod, v1.EventTypeWarning, reason, message)
 		return
 	}
+	if dt.isReservedOutboundService(egressName) {
+		dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayReservedEgressLabel",
+			fmt.Sprintf("Egress identity %q is reserved for an inbound or default service; choose a different value", egressName))
+		return
+	}
 	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
 
 	klog.V(2).Infof("podInformerAddPod: Pod %s added with egress %s (HostIP=%s, PodIPs=%v)",

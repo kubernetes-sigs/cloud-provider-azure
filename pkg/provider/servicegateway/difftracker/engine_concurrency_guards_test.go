@@ -56,11 +56,11 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 
 	launch(func(u int) {
 		uid := fmt.Sprintf("svc-%d", u%uids)
-		dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+		assert.NoError(t, dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 	})
 	launch(func(u int) {
 		uid := fmt.Sprintf("svc-%d", u%uids)
-		dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+		assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))))
 	})
 	launch(func(u int) {
 		uid := fmt.Sprintf("svc-%d", u%uids)
@@ -68,7 +68,7 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 	})
 	launch(func(u int) {
 		euid := fmt.Sprintf("egress-%d", u%uids)
-		dt.AddService(NewOutboundServiceConfig(euid, nil))
+		assert.NoError(t, dt.AddService(NewOutboundServiceConfig(euid, nil)))
 	})
 	launch(func(u int) {
 		euid := fmt.Sprintf("egress-%d", u%uids)
@@ -208,7 +208,7 @@ func TestGuardConcurrency_NoPanicOnDeleteServiceWhileAddService(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+			assert.NoError(t, dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 		}()
 		go func() {
 			defer wg.Done()

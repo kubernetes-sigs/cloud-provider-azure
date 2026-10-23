@@ -209,9 +209,11 @@ func TestGuardDefaultNATGatewayPIPSurvivesOrphanSweep(t *testing.T) {
 	dt.networkClientFactory = mockFactory
 
 	detached := func(name string) *armnetwork.PublicIPAddress {
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		identity, _ := identityFromPublicIPName(name)
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 	const managedOrphan = "33333333-3333-3333-3333-333333333333-pip"
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", managedOrphan, nil).Return(detached(managedOrphan), nil).Times(1)
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
 		detached(PublicIPName(DefaultOutboundNATGatewayName)),
 		detached(managedOrphan),
@@ -366,11 +368,15 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 	dt.networkClientFactory = mockFactory
 
 	pip := func(name string) *armnetwork.PublicIPAddress {
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		identity, _ := identityFromPublicIPName(name)
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 
 	const egress = "team-egress"
 	const desired = "still-wanted-egress"
+	for _, name := range OutboundPublicIPNames(egress) {
+		mockPIP.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(pip(name), nil).Times(1)
+	}
 	dt.K8sResources.Egresses = newIgnoreCaseSetFromSlice([]string{desired})
 
 	attached := pip(PublicIPName("still-in-use"))
@@ -394,4 +400,18 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 		"BUG CASE: the cluster's default egress Public IP was deleted")
 	assert.NotContains(t, deleted, PublicIPName("still-in-use"),
 		"BUG CASE: a Public IP still attached to a NAT Gateway was scheduled for deletion")
+}
+
+func TestGuardUnmanagedNATGatewayIsNeverScheduledForOrphanDeletion(t *testing.T) {
+	dt := newTestDiffTracker()
+	dt.NRPResources.UnmanagedNATGateways = utilsets.NewString("BYO-NAT")
+
+	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), utilsets.NewString("byo-nat", "real-orphan-egress"), utilsets.NewString())
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	_, scheduled := dt.pendingServiceOps["byo-nat"]
+	assert.False(t, scheduled, "a NAT Gateway not created by this controller must not be deleted")
+	_, orphanScheduled := dt.pendingServiceOps["real-orphan-egress"]
+	assert.True(t, orphanScheduled, "control: a NAT Gateway this controller created must still be swept")
 }

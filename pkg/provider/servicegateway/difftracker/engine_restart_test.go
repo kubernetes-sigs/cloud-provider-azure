@@ -134,7 +134,7 @@ func TestEngineAddService_AfterRestart(t *testing.T) {
 	// This is already the case in newTestDiffTracker()
 
 	// 3. AddService is called
-	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceUID, nil)))
 
 	// Verify service was NOT added to pendingServiceOps (already exists in NRP)
 	_, exists := dt.pendingServiceOps[serviceUID]
@@ -168,7 +168,7 @@ func TestEngineMultipleOperations_AfterRestart(t *testing.T) {
 
 	// Test 3: AddService for new service (should create)
 	newService := "new-service"
-	dt.AddService(NewInboundServiceConfig(newService, nil))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(newService, nil)))
 	opState, exists := dt.pendingServiceOps[newService]
 	assert.True(t, exists, "New service should be tracked")
 	assert.Equal(t, StateNotStarted, opState.State, "Should be in NotStarted state")

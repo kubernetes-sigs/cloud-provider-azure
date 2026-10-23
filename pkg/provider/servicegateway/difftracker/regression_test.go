@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -250,6 +251,8 @@ func TestDeleteInboundServiceLastErrMonotonic(t *testing.T) {
 	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(errors.New("simulated-lb-delete-failure"))
+	pip.EXPECT().Get(gomock.Any(), "rg", "uid-1-pip", nil).
+		Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To("uid-1")}}, nil).Times(1)
 	pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
 	kube := fake.NewSimpleClientset(deletionTestService())

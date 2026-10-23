@@ -21,6 +21,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -48,6 +50,8 @@ func deletionTestFactory(ctrl *gomock.Controller) *mock_azclient.MockClientFacto
 	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
 	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	pip.EXPECT().Get(gomock.Any(), "rg", "uid-1-pip", nil).
+		Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To("uid-1")}}, nil).AnyTimes()
 	pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	return f
 }
