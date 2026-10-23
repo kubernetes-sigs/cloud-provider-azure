@@ -19,6 +19,7 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 
+	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	utilnode "sigs.k8s.io/cloud-provider-azure/pkg/util/node"
@@ -183,7 +185,7 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 	}
 	meta.NodeAddresses = nodeAddresses
 
-	zone, err := az.GetZoneByNodeName(ctx, types.NodeName(node.Name))
+	zone, err := az.getZoneForNode(ctx, types.NodeName(node.Name))
 	if err != nil {
 		logger.Error(err, "failed to get the node zone", "node", node.Name)
 		return &cloudprovider.InstanceMetadata{}, err
@@ -192,4 +194,27 @@ func (az *Cloud) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudpro
 	meta.Region = zone.Region
 
 	return &meta, nil
+}
+
+// getZoneForNode returns the zone of the node. When instance metadata is enabled and the node
+// is the local instance, the zone is read from IMDS so that no ARM call is needed.
+func (az *Cloud) getZoneForNode(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
+	if az.UseInstanceMetadata {
+		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeDefault)
+		if err != nil {
+			return cloudprovider.Zone{}, err
+		}
+		if metadata.Compute == nil {
+			return cloudprovider.Zone{}, fmt.Errorf("failure of getting instance metadata")
+		}
+		isLocalInstance, err := az.isCurrentInstance(nodeName, metadata.Compute.Name)
+		if err != nil {
+			return cloudprovider.Zone{}, err
+		}
+		if isLocalInstance {
+			return az.getZoneFromComputeMetadata(ctx, metadata.Compute)
+		}
+	}
+
+	return az.GetZoneByNodeName(ctx, nodeName)
 }
