@@ -533,12 +533,12 @@ func TestGetZoneByNodeName(t *testing.T) {
 		expectError bool
 	}{
 		{
-			description: "ScaleSet should get faultDomain for non-zoned nodes",
+			description: "ScaleSet should return empty zone for non-zoned nodes",
 			scaleSet:    "ss",
 			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:    "vmssee6c2000000",
 			faultDomain: 3,
-			expected:    "3",
+			expected:    "",
 		},
 		{
 			description: "ScaleSet should get availability zone for zoned nodes",
@@ -606,6 +606,61 @@ func TestGetZoneByNodeName(t *testing.T) {
 			assert.Equal(t, strings.ToLower(cloud.Location), realValue.Region, test.description)
 			ctrl.Finish()
 		}
+	}
+}
+
+func TestScaleSetGetPlatformFaultDomainByNodeName(t *testing.T) {
+	testCases := []struct {
+		description string
+		scaleSet    string
+		vmList      []string
+		nodeName    string
+		faultDomain int32
+		expectedFD  string
+		expectError bool
+	}{
+		{
+			description: "ScaleSet should get faultDomain from instance view",
+			scaleSet:    "ss",
+			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
+			nodeName:    "vmssee6c2000000",
+			faultDomain: 3,
+			expectedFD:  "3",
+		},
+		{
+			description: "ScaleSet should return error for non-existent nodes",
+			scaleSet:    "ss",
+			vmList:      []string{"vmssee6c2000000", "vmssee6c2000001"},
+			nodeName:    "agente6c2000005",
+			expectError: true,
+		},
+	}
+
+	for _, test := range testCases {
+		ctrl := gomock.NewController(t)
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err, test.description)
+
+		mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+		mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		expectedScaleSet := buildTestVMSS(test.scaleSet, "vmssee6c2")
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachineScaleSet{expectedScaleSet}, nil).AnyTimes()
+
+		expectedVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, test.scaleSet, "", test.faultDomain, test.vmList, "", false)
+		mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(expectedVMs, nil).AnyTimes()
+		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+
+		fd, err := ss.GetPlatformFaultDomainByNodeName(context.TODO(), test.nodeName)
+		if test.expectError {
+			assert.Error(t, err, test.description)
+			ctrl.Finish()
+			continue
+		}
+
+		assert.NoError(t, err, test.description)
+		assert.Equal(t, test.expectedFD, fd, test.description)
+		ctrl.Finish()
 	}
 }
 
