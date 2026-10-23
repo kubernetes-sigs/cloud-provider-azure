@@ -73,14 +73,14 @@ if fipChanged && !requiresInternalLoadBalancer(service) {
 
 **Pattern (VMSS VM → VMSS):**
 ```go
-hasVMUpdates := false
+var hasVMUpdates atomic.Bool
 defer func() {
-    if hasVMUpdates {
+    if hasVMUpdates.Load() {
         _ = ss.vmssCache.Delete(consts.VMSSKey)
     }
 }()
 // ... after VM batch updates succeed:
-hasVMUpdates = true
+hasVMUpdates.Store(true)
 ```
 
 ### Strategy 3: Reactive — Invalidate cache on operation cancellation
@@ -131,9 +131,9 @@ defer runs **last** — after all per-node defers have completed.
 
 ```go
 // Registered early in the function → runs LAST (after per-node defers)
-hasVMUpdates := false
+var hasVMUpdates atomic.Bool
 defer func() {
-    if hasVMUpdates {
+    if hasVMUpdates.Load() {
         _ = ss.vmssCache.Delete(consts.VMSSKey)
     }
 }()
@@ -144,8 +144,10 @@ defer func() {
 }()
 
 // ... after batch VM updates succeed:
-hasVMUpdates = true  // Signals the early defer to clean up
+hasVMUpdates.Store(true)  // Signals the early defer to clean up
 ```
 
 If you modify these functions, ensure the VMSS cache invalidation defer remains
-registered before any per-node defers.
+registered before any per-node defers. Per-VMSS update workers run concurrently,
+so their shared invalidation flag must be atomic and derived logging contexts
+must remain local to each worker.

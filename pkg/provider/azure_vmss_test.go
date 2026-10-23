@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +33,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -47,6 +50,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachinescalesetvmclient/mock_virtualmachinescalesetvmclient"
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/virtualmachine"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/deepcopy"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -385,7 +389,7 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 		expected     *nodeIdentity
 		scaleSet     string
 		computerName string
-		expectError  bool
+		expectedErr  error
 	}{
 		{
 			description:  "ScaleSet should get node identity by node name",
@@ -412,12 +416,19 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 			expected:     &nodeIdentity{"rg", "ss", "vmssee6c2000001"},
 		},
 		{
-			description:  "ScaleSet should not get node identity for non-existing nodes",
+			description:  "ScaleSet should return InstanceNotFound when no VMSS model matches the node name",
 			vmList:       []string{"vmssee6c2000000", "vmssee6c2000001"},
 			nodeName:     "agente6c2000005",
 			scaleSet:     "ss",
 			computerName: "vmssee6c2",
-			expectError:  true,
+			expectedErr:  cloudprovider.InstanceNotFound,
+		},
+		{
+			description:  "ScaleSet should return ErrorNotVmssInstance for a non-VMSS node name",
+			nodeName:     "non-vmss-node",
+			scaleSet:     "ss",
+			computerName: "vmssee6c2",
+			expectedErr:  ErrorNotVmssInstance,
 		},
 	}
 
@@ -438,8 +449,9 @@ func TestGetNodeIdentityByNodeName(t *testing.T) {
 		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
 
 		nodeID, err := ss.getNodeIdentityByNodeName(context.TODO(), test.nodeName, azcache.CacheReadTypeDefault)
-		if test.expectError {
-			assert.Error(t, err, test.description)
+		if test.expectedErr != nil {
+			assert.ErrorIs(t, err, test.expectedErr, test.description)
+			assert.Nil(t, nodeID, test.description)
 			continue
 		}
 
@@ -1097,6 +1109,11 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 			goneVMList:        []string{"vmss-vm-000001"},
 			goneVMExpectedErr: cloudprovider.InstanceNotFound,
 		},
+		{
+			description: "getVmssVMByNodeIdentity should reject a non-VMSS node name",
+			vmList:      []string{"non-vmss-node"},
+			expectedErr: ErrorNotVmssInstance,
+		},
 	}
 
 	for _, test := range testCases {
@@ -1122,9 +1139,9 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
 				ss.ListVmssVirtualMachinesWithoutInstanceView = listVMSSVMsWithoutInstanceView
 				if ss.ListVmssVirtualMachinesWithoutInstanceView {
-					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+					mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).Times(1)
 				} else {
-					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).Times(1)
 				}
 
 				cacheKey := getVMSSVMCacheKey(ss.ResourceGroup, testVMSSName)
@@ -1143,6 +1160,10 @@ func TestGetVmssVMByNodeIdentity(t *testing.T) {
 					node := nodeIdentity{ss.ResourceGroup, testVMSSName, test.vmList[i]}
 					vm, err := ss.getVmssVMByNodeIdentity(context.TODO(), &node, azcache.CacheReadTypeDefault)
 					assert.Equal(t, test.expectedErr, err)
+					if test.expectedErr != nil {
+						assert.Nil(t, vm)
+						continue
+					}
 					assert.Equal(t, *virtualmachine.FromVirtualMachineScaleSetVM(expectedVMSSVMs[i], virtualmachine.ByVMSS(testVMSSName)), *vm)
 				}
 				for i := 0; i < len(test.goneVMList); i++ {
@@ -2609,31 +2630,36 @@ func TestGetVmssAndResourceGroupNameByVMProviderID(t *testing.T) {
 }
 
 func TestEnsureVMSSInPool(t *testing.T) {
+	const testNodeName = "vmss-vm-000000"
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	testCases := []struct {
-		description           string
-		backendPoolID         string
-		vmSetName             string
-		clusterIP             string
-		nodes                 []*v1.Node
-		os                    osVersion
-		isBasicLB             bool
-		isVMSSDeallocating    bool
-		isVMSSNilNICConfig    bool
-		expectedGetInstanceID string
-		expectedPutVMSS       bool
-		setIPv6Config         bool
-		useMultipleSLBs       bool
-		getInstanceIDErr      error
-		extendedLocation      *armcompute.ExtendedLocation
-		expectedErr           error
+		description        string
+		backendPoolID      string
+		vmSetName          string
+		clusterIP          string
+		nodes              []*v1.Node
+		os                 osVersion
+		isBasicLB          bool
+		isVMSSDeallocating bool
+		isVMSSNilNICConfig bool
+		vmResourceID       string
+		expectedPutVMSS    bool
+		setIPv6Config      bool
+		useMultipleSLBs    bool
+		vmListErr          error
+		skipVMLookup       bool
+		extendedLocation   *armcompute.ExtendedLocation
+		expectedErr        error
+		expectedLog        string
 	}{
 		{
 			description: "ensureVMSSInPool should skip the node if it isn't managed by VMSS",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "invalid/id",
 					},
@@ -2641,11 +2667,14 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			},
 			isBasicLB:       false,
 			expectedPutVMSS: false,
+			skipVMLookup:    true,
+			expectedLog:     "the provider ID of node is not the format of VMSS VM, will skip checking and continue",
 		},
 		{
 			description: "ensureVMSSInPool should skip the node if the corresponding VMSS is deallocating",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2659,6 +2688,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should skip the node if the NIC config of the corresponding VMSS is nil",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2672,6 +2702,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should skip the node if the backendpool ID has been added already",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2685,6 +2716,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should skip the node if the VMSS has been added to another LB's backendpool already",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2698,6 +2730,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should update the VMSS correctly",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2711,6 +2744,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should fail if no IPv6 network config",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2726,6 +2760,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should skip Windows 2019 VM for IPv6 backend pool",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2743,6 +2778,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should add Windows2019 VM to IPv4 backend pool even if service is IPv6",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2760,6 +2796,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should add Windows 2022 VM to IPv6 backend pool",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2777,6 +2814,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should fail if no IPv6 network config - Windows 2022",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2794,6 +2832,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should update the VMSS correctly for IPv6",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2809,6 +2848,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should work for the basic load balancer",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2823,6 +2863,7 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			description: "ensureVMSSInPool should work for multiple standard load balancers",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2834,39 +2875,82 @@ func TestEnsureVMSSInPool(t *testing.T) {
 			expectedPutVMSS: true,
 		},
 		{
-			description: "ensureVMSSInPool should get the vmss name from vm instance ID if the provider ID of the node is empty",
+			description: "ensureVMSSInPool should get the vmss name from the resolved VM if the provider ID of the node is empty",
 			nodes: []*v1.Node{
-				{},
+				{ObjectMeta: metav1.ObjectMeta{Name: testNodeName}},
 			},
-			vmSetName:             testVMSSName,
-			backendPoolID:         testLBBackendpoolID1,
-			expectedGetInstanceID: "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
-			expectedPutVMSS:       true,
+			vmSetName:       testVMSSName,
+			backendPoolID:   testLBBackendpoolID1,
+			expectedPutVMSS: true,
+			expectedLog:     "the provider ID of node is empty, will check the VM ID",
 		},
 		{
 			description: "ensureVMSSInPool should skip updating vmss if the node is not a vmss vm",
 			nodes: []*v1.Node{
-				{},
+				{ObjectMeta: metav1.ObjectMeta{Name: testNodeName}},
 			},
-			vmSetName:             testVMSSName,
-			backendPoolID:         testLBBackendpoolID1,
-			expectedGetInstanceID: "invalid",
+			vmSetName:     testVMSSName,
+			backendPoolID: testLBBackendpoolID1,
+			vmResourceID:  "invalid",
+			expectedLog:   "the instance ID of node is not the format of VMSS VM, will skip checking and continue",
 		},
 		{
-			description: "ensureVMSSInPool should report an error if failed to get instance ID",
+			description: "ensureVMSSInPool should skip non-VMSS resource IDs with matching provider IDs",
 			nodes: []*v1.Node{
-				{},
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm",
+					},
+				},
 			},
-			vmSetName:             testVMSSName,
-			backendPoolID:         testLBBackendpoolID1,
-			expectedGetInstanceID: "invalid",
-			getInstanceIDErr:      errors.New("error"),
-			expectedErr:           errors.New("error"),
+			backendPoolID: testLBBackendpoolID1,
+			vmResourceID:  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm",
+			skipVMLookup:  true,
+			expectedLog:   "the provider ID of node is not the format of VMSS VM, will skip checking and continue",
+		},
+		{
+			description: "ensureVMSSInPool should skip non-VMSS resource IDs with mismatched provider IDs",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			backendPoolID: testLBBackendpoolID1,
+			vmResourceID:  "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm",
+			expectedLog:   "the instance ID of node is not the format of VMSS VM, will skip checking and continue",
+		},
+		{
+			description: "ensureVMSSInPool should return VM lookup errors separately without updating the model",
+			nodes: []*v1.Node{
+				{ObjectMeta: metav1.ObjectMeta{Name: testNodeName}},
+			},
+			vmSetName:     testVMSSName,
+			backendPoolID: testLBBackendpoolID1,
+			vmListErr:     errors.New("error"),
+		},
+		{
+			description: "ensureVMSSInPool should preserve the provider ID VMSS name when the resolved resource ID casing differs",
+			nodes: []*v1.Node{
+				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
+					Spec: v1.NodeSpec{
+						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					},
+				},
+			},
+			backendPoolID:   testLBBackendpoolID1,
+			vmResourceID:    "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/VMSS/virtualMachines/0",
+			expectedPutVMSS: true,
 		},
 		{
 			description: "ensureVMSSInPool should propagate ExtendedLocation onto the update request when the source VMSS has one",
 			nodes: []*v1.Node{
 				{
+					ObjectMeta: metav1.ObjectMeta{Name: testNodeName},
 					Spec: v1.NodeSpec{
 						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
@@ -2886,9 +2970,26 @@ func TestEnsureVMSSInPool(t *testing.T) {
 		t.Run(test.description, func(t *testing.T) {
 			ss, err := NewTestScaleSet(ctrl)
 			assert.NoError(t, err, test.description)
+			var logOutput strings.Builder
+			logger := funcr.New(func(_, message string) {
+				logOutput.WriteString(message)
+				logOutput.WriteByte('\n')
+			}, funcr.Options{Verbosity: 4})
+			ctx := log.NewContext(context.Background(), logger)
 
 			if !test.isBasicLB {
 				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				if !test.skipVMLookup {
+					vmResourceID := test.vmResourceID
+					if vmResourceID == "" {
+						vmResourceID = fmt.Sprintf("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/%s/virtualMachines/0", testVMSSName)
+					}
+					vms, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{testNodeName}, "", test.setIPv6Config)
+					vms[0].ID = ptr.To(vmResourceID)
+					mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+					mockVMSSVMClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, testVMSSName).
+						Return(vms, test.vmListErr).Times(1)
+				}
 			}
 
 			expectedVMSS := buildTestOSSpecificVMSSWithLB(testVMSSName, "vmss-vm-", []string{testLBBackendpoolID0}, test.os, test.setIPv6Config)
@@ -2914,19 +3015,20 @@ func TestEnsureVMSSInPool(t *testing.T) {
 					return nil, nil
 				}).Times(vmssPutTimes)
 
-			expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000"}, "", test.setIPv6Config)
-			mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
-			mockVMSSVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, testVMSSName).Return(expectedVMSSVMs, nil).AnyTimes()
-
-			if test.expectedGetInstanceID != "" {
-				mockVMSet := NewMockVMSet(ctrl)
-				mockVMSet.EXPECT().GetInstanceIDByNodeName(gomock.Any(), gomock.Any()).Return(test.expectedGetInstanceID, test.getInstanceIDErr)
-				ss.VMSet = mockVMSet
-			}
-
-			err = ss.ensureVMSSInPool(context.TODO(), &v1.Service{Spec: v1.ServiceSpec{ClusterIP: test.clusterIP}}, test.nodes, test.backendPoolID, test.vmSetName)
+			_, instanceLookupErrors, err := ss.ensureVMSSInPool(ctx, &v1.Service{Spec: v1.ServiceSpec{ClusterIP: test.clusterIP}}, test.nodes, test.backendPoolID, test.vmSetName)
 			assert.Equal(t, test.expectedErr, err, test.description+errMsgSuffix)
+			if test.vmListErr != nil {
+				if assert.Len(t, instanceLookupErrors, 1) {
+					assert.ErrorIs(t, instanceLookupErrors[0], test.vmListErr)
+					assert.ErrorContains(t, instanceLookupErrors[0], fmt.Sprintf("resolve VMSS instance for node %q", testNodeName))
+				}
+			} else {
+				assert.Empty(t, instanceLookupErrors)
+			}
 			assert.Equal(t, test.extendedLocation, capturedVMSS.ExtendedLocation, test.description+errMsgSuffix)
+			if test.expectedLog != "" {
+				assert.Contains(t, logOutput.String(), test.expectedLog)
+			}
 		})
 	}
 }
@@ -2984,6 +3086,385 @@ func TestEnsureBackendPoolDeletedFromVMSetsExtendedLocation(t *testing.T) {
 	}
 }
 
+func TestEnsureHostsInPoolValidatesUniformVMSSNodeIdentity(t *testing.T) {
+	const providerIDPrefix = "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/"
+	providerID0 := providerIDPrefix + "vmss/virtualMachines/0"
+	providerID1 := providerIDPrefix + "vmss/virtualMachines/1"
+	node := func(name, providerID string) *v1.Node {
+		return &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Spec:       v1.NodeSpec{ProviderID: providerID},
+		}
+	}
+	modelLookupErr := errors.New("ARM VMSS list failed")
+	instanceLookupErr := errors.New("ARM VM list failed")
+	instanceUpdateErr := errors.New("ARM VM update failed")
+	tests := []struct {
+		name                       string
+		nodes                      []*v1.Node
+		noInstances                bool
+		instanceDeleting           bool
+		instanceAppearsOnRefresh   bool
+		instanceDeletedAfterCache  bool
+		warmCache                  bool
+		configuredResourceGroup    string
+		vmssListErr                error
+		vmListErr                  error
+		vmUpdateErr                error
+		expectedErr                error
+		expectedVMSSLists          int
+		expectedVMLists            int
+		expectedOtherVMLists       int
+		expectedUpdatedVMSSNames   []string
+		expectedUpdatedInstanceIDs map[string][]string
+	}{
+		{
+			name:        "skips model and instance updates when the VMSS has no instances",
+			nodes:       []*v1.Node{node("vmss-vm-000000", providerID0)},
+			noInstances: true, expectedVMSSLists: 1, expectedVMLists: 2,
+		},
+		{
+			name:             "skips model and instance updates when the matching instance is being deleted",
+			nodes:            []*v1.Node{node("vmss-vm-000000", providerID0)},
+			instanceDeleting: true, expectedVMSSLists: 1, expectedVMLists: 1,
+		},
+		{
+			name:              "skips model and instance updates when the node name matches no instance but the provider ID identifies an existing instance",
+			nodes:             []*v1.Node{node("vmss-vm-000009", providerID0)},
+			expectedVMSSLists: 1, expectedVMLists: 2,
+		},
+		{
+			name:              "skips model and instance updates when the provider ID is empty and the node name matches no instance",
+			nodes:             []*v1.Node{node("vmss-vm-000009", "")},
+			expectedVMSSLists: 1, expectedVMLists: 2,
+		},
+		{
+			name:              "skips model and instance updates when the node name matches an existing instance but the provider ID identifies a nonexistent instance",
+			nodes:             []*v1.Node{node("vmss-vm-000000", providerIDPrefix+"vmss/virtualMachines/9")},
+			expectedVMSSLists: 1, expectedVMLists: 1,
+		},
+		{
+			name:              "skips model and instance updates when the node name and provider ID identify different existing instances in the same VMSS",
+			nodes:             []*v1.Node{node("vmss-vm-000000", providerID1)},
+			expectedVMSSLists: 1, expectedVMLists: 1,
+		},
+		{
+			name:              "skips model and instance updates when the node name and provider ID identify existing instances in different VMSSs",
+			nodes:             []*v1.Node{node("vmss-vm-000000", providerIDPrefix+"other/virtualMachines/0")},
+			expectedVMSSLists: 1, expectedVMLists: 1,
+		},
+		{
+			name:              "skips model and instance updates when the provider ID has a different subscription",
+			nodes:             []*v1.Node{node("vmss-vm-000000", strings.Replace(providerID0, "/script/", "/other/", 1))},
+			expectedVMSSLists: 1, expectedVMLists: 1,
+		},
+		{
+			name:              "skips model and instance updates when the provider ID has a different resource group",
+			nodes:             []*v1.Node{node("vmss-vm-000000", strings.Replace(providerID0, "/rg/", "/other/", 1))},
+			expectedVMSSLists: 1, expectedVMLists: 1,
+		},
+		{
+			name:                    "skips model and instance updates when a matching provider ID resolves to a VMSS outside the configured resource group",
+			nodes:                   []*v1.Node{node("vmss-vm-000000", providerID0)},
+			warmCache:               true,
+			configuredResourceGroup: "rg-other",
+		},
+		{
+			name:                    "skips model and instance updates when the provider ID is empty and the resolved VMSS is outside the configured resource group",
+			nodes:                   []*v1.Node{node("vmss-vm-000000", "")},
+			warmCache:               true,
+			configuredResourceGroup: "rg-other",
+		},
+		{
+			name:  "skips model and instance updates without instance lookup when the provider ID is malformed",
+			nodes: []*v1.Node{node("vmss-vm-000000", "invalid/id")},
+		},
+		{
+			name:  "skips model and instance updates without instance lookup when the provider ID is all uppercase",
+			nodes: []*v1.Node{node("vmss-vm-000000", strings.ToUpper(providerID0))},
+		},
+		{
+			name:  "skips model and instance updates when the node name is empty",
+			nodes: []*v1.Node{node("", providerID0)},
+		},
+		{
+			name:  "skips model and instance updates when the node name is not a VMSS instance name",
+			nodes: []*v1.Node{node("non-vmss-node", providerID0)},
+		},
+		{
+			name:              "skips model and instance updates without listing instances when no VMSS model matches the node name",
+			nodes:             []*v1.Node{node("missing-vm-000000", providerID0)},
+			expectedVMSSLists: 2,
+		},
+		{
+			name:              "updates the model and instance when the node name and provider ID match",
+			nodes:             []*v1.Node{node("vmss-vm-000000", providerID0)},
+			expectedVMSSLists: 2, expectedVMLists: 1,
+			expectedUpdatedVMSSNames: []string{"vmss"}, expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}},
+		},
+		{
+			name:              "updates the model and instance when provider ID subscription and resource group casing differ",
+			nodes:             []*v1.Node{node("vmss-vm-000000", "azure:///subscriptions/SCRIPT/resourceGroups/RG/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0")},
+			expectedVMSSLists: 2, expectedVMLists: 1,
+			expectedUpdatedVMSSNames: []string{"vmss"}, expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}},
+		},
+		{
+			name:              "updates the model and instance using the node name when the provider ID is empty",
+			nodes:             []*v1.Node{node("vmss-vm-000000", "")},
+			expectedVMSSLists: 2, expectedVMLists: 1,
+			expectedUpdatedVMSSNames: []string{"vmss"}, expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}},
+		},
+		{
+			name: "updates only the valid node while skipping a mismatched provider ID and an unresolvable node name",
+			nodes: []*v1.Node{
+				node("vmss-vm-000000", providerID1),
+				node("vmss-vm-000009", ""),
+				node("vmss-vm-000001", providerID1),
+			},
+			expectedVMSSLists: 2, expectedVMLists: 2,
+			expectedUpdatedVMSSNames: []string{"vmss"}, expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"1"}},
+		},
+		{
+			name: "updates the model once and both instances when two valid nodes belong to the same Uniform VMSS",
+			nodes: []*v1.Node{
+				node("vmss-vm-000000", providerID0),
+				node("vmss-vm-000001", providerID1),
+			},
+			expectedVMSSLists: 2, expectedVMLists: 1,
+			expectedUpdatedVMSSNames:   []string{"vmss"},
+			expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0", "1"}},
+		},
+		{
+			name: "updates both models and instances when each valid node belongs to a different Uniform VMSS",
+			nodes: []*v1.Node{
+				node("vmss-vm-000000", providerID0),
+				node("other-vm-000000", providerIDPrefix+"other/virtualMachines/0"),
+			},
+			expectedVMSSLists: 2, expectedVMLists: 1, expectedOtherVMLists: 1,
+			expectedUpdatedVMSSNames:   []string{"vmss", "other"},
+			expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}, "other": {"0"}},
+		},
+		{
+			name:      "updates the model and instance without listing VMs when the cache is warm",
+			nodes:     []*v1.Node{node("vmss-vm-000000", providerID0)},
+			warmCache: true, expectedVMSSLists: 1,
+			expectedUpdatedVMSSNames: []string{"vmss"}, expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}},
+		},
+		{
+			name:                      "skips model and instance updates when an expired cache contains a deleted instance",
+			nodes:                     []*v1.Node{node("vmss-vm-000000", providerID0)},
+			warmCache:                 true,
+			instanceDeletedAfterCache: true,
+			expectedVMLists:           1,
+		},
+		{
+			name:                      "skips model and instance updates when the provider ID is empty and an expired cache contains a deleted instance",
+			nodes:                     []*v1.Node{node("vmss-vm-000000", "")},
+			warmCache:                 true,
+			instanceDeletedAfterCache: true,
+			expectedVMLists:           1,
+		},
+		{
+			name:                     "updates the model and instance when a cache refresh finds the initially missing instance",
+			nodes:                    []*v1.Node{node("vmss-vm-000000", providerID0)},
+			instanceAppearsOnRefresh: true, expectedVMSSLists: 2, expectedVMLists: 2,
+			expectedUpdatedVMSSNames: []string{"vmss"}, expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}},
+		},
+		{
+			name: "returns an error before any instance lookup or update when listing VMSS models fails",
+			nodes: []*v1.Node{
+				node("vmss-vm-000000", providerID0),
+				node("other-vm-000000", providerIDPrefix+"other/virtualMachines/0"),
+			},
+			vmssListErr: modelLookupErr, expectedErr: modelLookupErr, expectedVMSSLists: 1,
+		},
+		{
+			name: "updates the other VMSS model and instance when listing instances for the first node's VMSS fails",
+			nodes: []*v1.Node{
+				node("vmss-vm-000000", providerID0),
+				node("other-vm-000000", providerIDPrefix+"other/virtualMachines/0"),
+			},
+			vmListErr: instanceLookupErr, expectedErr: instanceLookupErr,
+			expectedVMSSLists: 2, expectedVMLists: 1, expectedOtherVMLists: 1,
+			expectedUpdatedVMSSNames:   []string{"other"},
+			expectedUpdatedInstanceIDs: map[string][]string{"other": {"0"}},
+		},
+		{
+			name: "updates the other VMSS model and instance when listing instances for the last node's VMSS fails",
+			nodes: []*v1.Node{
+				node("other-vm-000000", providerIDPrefix+"other/virtualMachines/0"),
+				node("vmss-vm-000000", providerID0),
+			},
+			vmListErr: instanceLookupErr, expectedErr: instanceLookupErr,
+			expectedVMSSLists: 2, expectedVMLists: 1, expectedOtherVMLists: 1,
+			expectedUpdatedVMSSNames:   []string{"other"},
+			expectedUpdatedInstanceIDs: map[string][]string{"other": {"0"}},
+		},
+		{
+			name: "returns both errors when listing instances for one VMSS and updating an instance in another VMSS fail",
+			nodes: []*v1.Node{
+				node("vmss-vm-000000", providerID0),
+				node("other-vm-000000", providerIDPrefix+"other/virtualMachines/0"),
+			},
+			vmListErr: instanceLookupErr, vmUpdateErr: instanceUpdateErr, expectedErr: instanceLookupErr,
+			expectedVMSSLists: 2, expectedVMLists: 1, expectedOtherVMLists: 1,
+			expectedUpdatedVMSSNames:   []string{"other"},
+			expectedUpdatedInstanceIDs: map[string][]string{"other": {"0"}},
+		},
+		{
+			name: "updates the shared VMSS model and cached instance when the first node triggers a failed cache refresh",
+			nodes: []*v1.Node{
+				node("vmss-vm-000009", providerIDPrefix+"vmss/virtualMachines/9"),
+				node("vmss-vm-000000", providerID0),
+			},
+			warmCache: true, vmListErr: instanceLookupErr, expectedErr: instanceLookupErr,
+			expectedVMSSLists: 1, expectedVMLists: 1,
+			expectedUpdatedVMSSNames:   []string{"vmss"},
+			expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}},
+		},
+		{
+			name: "updates the shared VMSS model and cached instance when the last node triggers a failed cache refresh",
+			nodes: []*v1.Node{
+				node("vmss-vm-000000", providerID0),
+				node("vmss-vm-000009", providerIDPrefix+"vmss/virtualMachines/9"),
+			},
+			warmCache: true, vmListErr: instanceLookupErr, expectedErr: instanceLookupErr,
+			expectedVMSSLists: 1, expectedVMLists: 1,
+			expectedUpdatedVMSSNames:   []string{"vmss"},
+			expectedUpdatedInstanceIDs: map[string][]string{"vmss": {"0"}},
+		},
+		{
+			name:      "returns VM lookup errors without updating the model or instances",
+			nodes:     []*v1.Node{node("vmss-vm-000000", providerID0)},
+			vmListErr: instanceLookupErr, expectedErr: instanceLookupErr, expectedVMSSLists: 1, expectedVMLists: 1,
+		},
+	}
+	for _, test := range tests {
+		for _, withoutInstanceView := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/withoutInstanceView=%t", test.name, withoutInstanceView), func(t *testing.T) {
+				ctrl := gomock.NewController(t)
+				ss, err := NewTestScaleSet(ctrl)
+				if !assert.NoError(t, err) {
+					return
+				}
+				ss.VMSet = ss
+				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+				ss.ListVmssVirtualMachinesWithoutInstanceView = withoutInstanceView
+				ss.nodeNames = utilsets.NewString()
+				for _, node := range test.nodes {
+					ss.nodeNames.Insert(node.Name)
+				}
+				models := []*armcompute.VirtualMachineScaleSet{
+					buildTestVMSSWithLB("vmss", "vmss-vm-", []string{testLBBackendpoolID0}, false),
+					buildTestVMSSWithLB("other", "other-vm-", []string{testLBBackendpoolID0}, false),
+				}
+				vmNames := []string{"vmss-vm-000000", "vmss-vm-000001"}
+				if test.noInstances {
+					vmNames = nil
+				}
+				vms, _, _ := buildTestVirtualMachineEnv(ss.Cloud, "vmss", "", 0, vmNames, "", false)
+				if test.instanceDeleting {
+					vms[0].Properties.ProvisioningState = ptr.To(string(consts.ProvisioningStateDeleting))
+				}
+				otherVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, "other", "", 0, []string{"other-vm-000000"}, "", false)
+				discoveryLists := 1
+				if test.warmCache {
+					discoveryLists = 0
+					ss.nonVmssUniformNodesCache.Set(consts.NonVmssUniformNodesKey, NonVmssUniformNodesEntry{
+						AvSetVMNodeNames:    utilsets.NewString(),
+						VMSSFlexVMNodeNames: utilsets.NewString(),
+						ClusterNodeNames:    ss.nodeNames,
+					})
+					modelCache := &sync.Map{}
+					for _, model := range models {
+						modelCache.Store(*model.Name, &VMSSEntry{VMSS: model, ResourceGroup: ss.ResourceGroup})
+					}
+					ss.vmssCache.Set(consts.VMSSKey, modelCache)
+					vmCache := &sync.Map{}
+					for _, vm := range vms {
+						vmCache.Store(*vm.Properties.OSProfile.ComputerName, &VMSSVirtualMachineEntry{
+							ResourceGroup: ss.ResourceGroup, VMSSName: "vmss", InstanceID: *vm.InstanceID,
+							VirtualMachine: vm,
+						})
+					}
+					cacheKey := getVMSSVMCacheKey(ss.ResourceGroup, "vmss")
+					ss.vmssVMCache.Set(cacheKey, vmCache)
+					if test.instanceDeletedAfterCache {
+						entry, exists, err := ss.vmssVMCache.GetStore().GetByKey(cacheKey)
+						if !assert.NoError(t, err) || !assert.True(t, exists) {
+							return
+						}
+						entry.(*azcache.AzureCacheEntry).CreatedOn = time.Now().Add(-24 * time.Hour)
+					}
+				}
+				if test.configuredResourceGroup != "" {
+					ss.ResourceGroup = test.configuredResourceGroup
+				}
+				mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+				mockVMClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return(nil, nil).Times(discoveryLists)
+				modelClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+				modelClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return(models, test.vmssListErr).Times(test.expectedVMSSLists)
+				for _, model := range models {
+					updateCount := 0
+					if slices.Contains(test.expectedUpdatedVMSSNames, *model.Name) {
+						updateCount = 1
+					}
+					modelClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, *model.Name, nil).
+						Return(model, nil).Times(updateCount)
+					modelClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, *model.Name, gomock.Any()).
+						DoAndReturn(func(_ context.Context, _, _ string, vmss armcompute.VirtualMachineScaleSet) (*armcompute.VirtualMachineScaleSet, error) {
+							pools := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations[0].Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools
+							assert.Contains(t, pools, &armcompute.SubResource{ID: ptr.To(testLBBackendpoolID1)})
+							return nil, nil
+						}).Times(updateCount)
+				}
+				vmClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+				vmListCalls := 0
+				listVMs := func(_ context.Context, _, _ string) ([]*armcompute.VirtualMachineScaleSetVM, error) {
+					vmListCalls++
+					if test.instanceDeletedAfterCache || (test.instanceAppearsOnRefresh && vmListCalls == 1) {
+						return nil, nil
+					}
+					return vms, test.vmListErr
+				}
+				if withoutInstanceView {
+					vmClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, "vmss").DoAndReturn(listVMs).Times(test.expectedVMLists)
+					vmClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, "other").Return(otherVMs, nil).Times(test.expectedOtherVMLists)
+				} else {
+					vmClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "vmss").DoAndReturn(listVMs).Times(test.expectedVMLists)
+					vmClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, "other").Return(otherVMs, nil).Times(test.expectedOtherVMLists)
+				}
+				for vmssName, instanceIDs := range test.expectedUpdatedInstanceIDs {
+					for _, instanceID := range instanceIDs {
+						vmClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, vmssName, instanceID, gomock.Any(), gomock.Any()).
+							DoAndReturn(func(_ context.Context, _, _, _ string, vm armcompute.VirtualMachineScaleSetVM, _ *armcompute.VirtualMachineScaleSetVMsClientBeginUpdateOptions) (*runtime.Poller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse], error) {
+								pools := vm.Properties.NetworkProfileConfiguration.NetworkInterfaceConfigurations[0].Properties.IPConfigurations[0].Properties.LoadBalancerBackendAddressPools
+								assert.Contains(t, pools, &armcompute.SubResource{ID: ptr.To(testLBBackendpoolID1)})
+								if test.vmUpdateErr != nil {
+									return nil, test.vmUpdateErr
+								}
+								return runtime.NewPoller[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse](
+									&http.Response{Header: http.Header{"Fake-Poller-Status": []string{"https://fake/operation"}}},
+									runtime.Pipeline{},
+									&runtime.NewPollerOptions[armcompute.VirtualMachineScaleSetVMsClientUpdateResponse]{
+										Handler: &vmssvmMockPutHandler{resp: &http.Response{StatusCode: http.StatusAccepted}},
+									})
+							}).Times(1)
+					}
+				}
+				err = ss.EnsureHostsInPool(context.Background(), &v1.Service{}, test.nodes, testLBBackendpoolID1, "vmss")
+				assert.ErrorIs(t, err, test.expectedErr)
+				if test.vmssListErr != nil {
+					assert.ErrorContains(t, err, fmt.Sprintf("resolve parent VMSS for node %q", test.nodes[0].Name))
+				}
+				if test.vmUpdateErr != nil {
+					assert.ErrorIs(t, err, test.vmUpdateErr)
+				}
+			})
+		}
+	}
+}
+
 func TestEnsureHostsInPool(t *testing.T) {
 
 	testCases := []struct {
@@ -3003,7 +3484,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 						Labels: map[string]string{consts.NodeLabelRole: "master"},
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
 				},
 				{
@@ -3012,7 +3493,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 						Labels: map[string]string{consts.ManagedByAzureLabel: "false"},
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1",
 					},
 				},
 				{
@@ -3020,7 +3501,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 						Name: "vmss-vm-000002",
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/2",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/2",
 					},
 				},
 			},
@@ -3036,7 +3517,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 						Name: "vmss-vm-000003",
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/3",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/3",
 					},
 				},
 			},
@@ -3057,6 +3538,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 
 				ss, err := NewTestScaleSet(ctrl)
 				assert.NoError(t, err, test.description)
+				ss.VMSet = ss
 
 				for _, node := range test.nodes {
 					if node.Labels[consts.ManagedByAzureLabel] == "false" {
@@ -3069,7 +3551,7 @@ func TestEnsureHostsInPool(t *testing.T) {
 				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
-				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).Times(test.expectedVMSSVMPutTimes)
 
 				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
 				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
@@ -3127,7 +3609,7 @@ func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
 						Name: "vmss-vm-000000",
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
 				},
 			},
@@ -3146,7 +3628,7 @@ func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
 						Name: "vmss-vm-000000",
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
 				},
 			},
@@ -3165,7 +3647,7 @@ func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
 						Name: "vmss-vm-000000",
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
 				},
 			},
@@ -3188,6 +3670,7 @@ func TestEnsureHostsInPoolEtagMismatch(t *testing.T) {
 
 				ss, err := NewTestScaleSet(ctrl)
 				assert.NoError(t, err, test.description)
+				ss.VMSet = ss
 
 				ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 				ss.ExcludeMasterFromStandardLB = ptr.To(true)
@@ -3807,7 +4290,7 @@ func TestEnsureHostsInPoolInParallel(t *testing.T) {
 						Labels: map[string]string{consts.NodeLabelRole: "master"},
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 					},
 				},
 				{
@@ -3816,7 +4299,7 @@ func TestEnsureHostsInPoolInParallel(t *testing.T) {
 						Labels: map[string]string{consts.ManagedByAzureLabel: "false"},
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/1",
 					},
 				},
 				{
@@ -3824,7 +4307,7 @@ func TestEnsureHostsInPoolInParallel(t *testing.T) {
 						Name: "vmss-vm-000002",
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/2",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/2",
 					},
 				},
 			},
@@ -3840,7 +4323,7 @@ func TestEnsureHostsInPoolInParallel(t *testing.T) {
 						Name: "vmss-vm-000003",
 					},
 					Spec: v1.NodeSpec{
-						ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/3",
+						ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/3",
 					},
 				},
 			},
@@ -3861,6 +4344,7 @@ func TestEnsureHostsInPoolInParallel(t *testing.T) {
 
 				ss, err := NewTestScaleSet(ctrl)
 				assert.NoError(t, err, test.description)
+				ss.VMSet = ss
 
 				for _, node := range test.nodes {
 					if node.Labels[consts.ManagedByAzureLabel] == "false" {
@@ -3877,7 +4361,7 @@ func TestEnsureHostsInPoolInParallel(t *testing.T) {
 				mockVMSSClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
 				mockVMSSClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return([]*armcompute.VirtualMachineScaleSet{expectedVMSS}, nil).AnyTimes()
 				mockVMSSClient.EXPECT().Get(gomock.Any(), ss.ResourceGroup, testVMSSName, nil).Return(expectedVMSS, nil).MaxTimes(1)
-				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).MaxTimes(1)
+				mockVMSSClient.EXPECT().CreateOrUpdate(gomock.Any(), ss.ResourceGroup, testVMSSName, gomock.Any()).Return(nil, nil).Times(test.expectedVMSSVMPutTimes)
 
 				expectedVMSSVMs, _, _ := buildTestVirtualMachineEnv(ss.Cloud, testVMSSName, "", 0, []string{"vmss-vm-000000", "vmss-vm-000001", "vmss-vm-000002"}, "", false)
 				mockVMSSVMClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
@@ -3938,6 +4422,51 @@ func (h *vmssvmMockPutHandler) Poll(context.Context) (*http.Response, error) {
 // with the result of the operation.
 func (h *vmssvmMockPutHandler) Result(_ context.Context, _ *armcompute.VirtualMachineScaleSetVMsClientUpdateResponse) error {
 	return nil
+}
+
+func TestEnsureBackendPoolDeletedWithSharedPoolAcrossVMSS(t *testing.T) {
+	for _, withoutInstanceView := range []bool{false, true} {
+		t.Run(fmt.Sprintf("withoutInstanceView=%t", withoutInstanceView), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			ss, err := NewTestScaleSet(ctrl)
+			if !assert.NoError(t, err) {
+				return
+			}
+			ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			ss.DisableAvailabilitySetNodes = true
+			ss.ListVmssVirtualMachinesWithoutInstanceView = withoutInstanceView
+			modelClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+			vmClient := ss.ComputeClientFactory.GetVirtualMachineScaleSetVMClient().(*mock_virtualmachinescalesetvmclient.MockInterface)
+
+			sharedPool := &armnetwork.BackendAddressPool{
+				ID:         ptr.To(testLBBackendpoolID0),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{},
+			}
+			var vmssModels []*armcompute.VirtualMachineScaleSet
+			for _, vmssName := range []string{"vmss-0", "vmss-1"} {
+				vmssModels = append(vmssModels, buildTestVMSSWithLB(vmssName, vmssName+"-vm-", []string{*sharedPool.ID}, false))
+				vms, nic, _ := buildTestVirtualMachineEnv(ss.Cloud, vmssName, "", 0, []string{vmssName + "-vm-000000"}, "Succeeded", false)
+				sharedPool.Properties.BackendIPConfigurations = append(sharedPool.Properties.BackendIPConfigurations, &armnetwork.InterfaceIPConfiguration{
+					ID: ptr.To(*nic.ID + "/ipConfigurations/ipconfig1"),
+				})
+				if withoutInstanceView {
+					vmClient.EXPECT().List(gomock.Any(), ss.ResourceGroup, vmssName).Return(vms, nil).Times(1)
+				} else {
+					vmClient.EXPECT().ListVMInstanceView(gomock.Any(), ss.ResourceGroup, vmssName).Return(vms, nil).Times(1)
+				}
+				vmClient.EXPECT().BeginUpdate(gomock.Any(), ss.ResourceGroup, vmssName, "0", gomock.Any(), gomock.Any()).
+					Return(nil, nil).Times(1)
+			}
+			modelClient.EXPECT().List(gomock.Any(), ss.ResourceGroup).Return(vmssModels, nil).Times(1)
+
+			updated, err := ss.ensureBackendPoolDeleted(context.Background(), &v1.Service{}, []string{*sharedPool.ID}, "", []*armnetwork.BackendAddressPool{sharedPool})
+			assert.NoError(t, err)
+			assert.True(t, updated)
+			_, exists, err := ss.vmssCache.GetStore().GetByKey(consts.VMSSKey)
+			assert.NoError(t, err)
+			assert.False(t, exists, "model cache must be invalidated after all per-node cleanup defers")
+		})
+	}
 }
 
 func TestEnsureBackendPoolDeletedConcurrentlyLoop(t *testing.T) {
@@ -4357,6 +4886,7 @@ func TestVMSSCacheInvalidationAfterVMUpdates(t *testing.T) {
 
 		ss, err := NewTestScaleSet(ctrl)
 		assert.NoError(t, err)
+		ss.VMSet = ss
 		ss.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 
 		// Setup minimal mocks for 1 node
@@ -4402,7 +4932,7 @@ func TestVMSSCacheInvalidationAfterVMUpdates(t *testing.T) {
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "vmss-vm-000000"},
 				Spec: v1.NodeSpec{
-					ProviderID: "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
+					ProviderID: "azure:///subscriptions/script/resourceGroups/rg/providers/Microsoft.Compute/virtualMachineScaleSets/vmss/virtualMachines/0",
 				},
 			},
 		}

@@ -1213,14 +1213,22 @@ func getVmssAndResourceGroupNameByVMID(id string) (string, string, error) {
 	return matches[1], matches[2], nil
 }
 
-func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) error {
+// ensureVMSSInPool updates VMSS models and returns validated nodes, instance
+// lookup errors, and a fatal error. Unexpected instance lookup errors are
+// collected, and the affected nodes are omitted from the returned node list.
+// Other unexpected errors, including VMSS model lookup or update failures,
+// are returned immediately.
+func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes []*v1.Node, backendPoolID string, vmSetNameOfLB string) ([]*v1.Node, []error, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("ensureVMSSInPool")
 	logger.V(2).Info("ensuring VMSS with backendPoolID", "backendPoolID", backendPoolID)
 	vmssNamesMap := make(map[string]bool)
+	validatedNodes := nodes
+	var instanceLookupErrors []error
 
 	// the single standard load balancer supports multiple vmss in its backend while
 	// multiple standard load balancers and the basic load balancer doesn't
 	if ss.UseStandardLoadBalancer() {
+		validatedNodes = make([]*v1.Node, 0, len(nodes))
 		for _, node := range nodes {
 			if ss.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
 				continue
@@ -1229,14 +1237,13 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 			shouldExcludeLoadBalancer, err := ss.ShouldNodeExcludedFromLoadBalancer(node.Name)
 			if err != nil {
 				logger.Error(err, "ShouldNodeExcludedFromLoadBalancer failed", "node", node.Name)
-				return err
+				return nil, nil, err
 			}
 			if shouldExcludeLoadBalancer {
 				logger.V(4).Info("Excluding unmanaged/external-resource-group node", "node", node.Name)
 				continue
 			}
 
-			// in this scenario the vmSetName is an empty string and the name of vmss should be obtained from the provider IDs of nodes
 			var resourceGroupName, vmssName string
 			if node.Spec.ProviderID != "" {
 				resourceGroupName, vmssName, err = getVmssAndResourceGroupNameByVMProviderID(node.Spec.ProviderID)
@@ -1246,21 +1253,46 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 				}
 			} else {
 				logger.V(4).Info("the provider ID of node is empty, will check the VM ID", "node", node.Name)
-				instanceID, err := ss.InstanceID(ctx, types.NodeName(node.Name))
-				if err != nil {
-					logger.Error(err, "Failed to get instance ID for node", "node", node.Name)
-					return err
-				}
-				resourceGroupName, vmssName, err = getVmssAndResourceGroupNameByVMID(instanceID)
-				if err != nil {
-					logger.V(4).Info("the instance ID of node is not the format of VMSS VM, will skip checking and continue", "instanceID", instanceID, "node", node.Name)
+			}
+			identity, err := ss.getNodeIdentityByNodeName(ctx, node.Name, azcache.CacheReadTypeDefault)
+			if err != nil {
+				if errors.Is(err, cloudprovider.InstanceNotFound) || errors.Is(err, ErrorNotVmssInstance) {
+					logger.V(4).Info("Skipping node because no parent VMSS could be resolved", "node", node.Name, "err", err)
 					continue
 				}
+				return nil, nil, fmt.Errorf("resolve parent VMSS for node %q: %w", node.Name, err)
+			}
+			vm, err := ss.getVmssVMByNodeIdentity(ctx, identity, azcache.CacheReadTypeDefault)
+			if err != nil {
+				if errors.Is(err, cloudprovider.InstanceNotFound) {
+					logger.V(4).Info("Skipping node because its instance was not found", "node", node.Name, "err", err)
+					continue
+				}
+				instanceLookupErrors = append(instanceLookupErrors, fmt.Errorf("resolve VMSS instance for node %q: %w", node.Name, err))
+				continue
+			}
+			vmResourceID := vm.ID
+			resolvedResourceGroupName, resolvedVMSSName, err := getVmssAndResourceGroupNameByVMID(vmResourceID)
+			if err != nil {
+				logger.V(4).Info("the instance ID of node is not the format of VMSS VM, will skip checking and continue", "vmResourceID", vmResourceID, "node", node.Name)
+				continue
+			}
+			// EnsureHostInPool selects the instance by node name. Require both identities
+			// to refer to the same VM before using the provider ID to select a VMSS model.
+			if node.Spec.ProviderID != "" && !strings.EqualFold(node.Spec.ProviderID, "azure://"+vmResourceID) {
+				logger.V(4).Info("Skipping node because its provider ID does not match the VM resource ID resolved from the node name", "node", node.Name, "providerID", node.Spec.ProviderID, "vmResourceID", vmResourceID)
+				continue
+			}
+			if node.Spec.ProviderID == "" {
+				resourceGroupName, vmssName = resolvedResourceGroupName, resolvedVMSSName
 			}
 			// only vmsses in the resource group same as it's in azure config are included
-			if strings.EqualFold(resourceGroupName, ss.ResourceGroup) {
-				vmssNamesMap[vmssName] = true
+			if !strings.EqualFold(resourceGroupName, ss.ResourceGroup) {
+				logger.V(4).Info("Skipping node because its instance is outside the configured resource group", "node", node.Name, "resourceGroup", resourceGroupName, "configuredResourceGroup", ss.ResourceGroup)
+				continue
 			}
+			validatedNodes = append(validatedNodes, node)
+			vmssNamesMap[vmssName] = true
 		}
 	} else {
 		vmssNamesMap[vmSetNameOfLB] = true
@@ -1270,7 +1302,7 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 	for vmssName := range vmssNamesMap {
 		vmss, err := ss.getVMSS(ctx, vmssName, azcache.CacheReadTypeDefault)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		// When vmss is being deleted, CreateOrUpdate API would report "the vmss is being deleted" error.
@@ -1295,12 +1327,12 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 		vmssNIC := vmss.Properties.VirtualMachineProfile.NetworkProfile.NetworkInterfaceConfigurations
 		primaryNIC, err := getPrimaryNetworkInterfaceConfiguration(vmssNIC, vmssName)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		// Find primary network interface configuration.
 		primaryIPConfig, err := getPrimaryIPConfigFromVMSSNetworkConfig(primaryNIC, backendPoolID, vmssName)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
 		loadBalancerBackendAddressPools := []*armcompute.SubResource{}
@@ -1332,11 +1364,11 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 			}
 			isSameLB, oldLBName, err := isBackendPoolOnSameLB(backendPoolID, newBackendPoolsIDs)
 			if err != nil {
-				return err
+				return nil, nil, err
 			}
 			if !isSameLB {
 				logger.V(4).Info("VMSS has already been added to LB, omit adding it to a new one", "vmss", vmssName, "LB", oldLBName)
-				return nil
+				return validatedNodes, instanceLookupErrors, nil
 			}
 		}
 
@@ -1372,10 +1404,10 @@ func (ss *ScaleSet) ensureVMSSInPool(ctx context.Context, _ *v1.Service, nodes [
 		rerr := ss.CreateOrUpdateVMSS(ss.ResourceGroup, vmssName, newVMSS)
 		if rerr != nil {
 			logger.Error(rerr, "CreateOrUpdateVMSS failed", "vmss", vmssName, "backendPoolID", backendPoolID)
-			return rerr
+			return nil, nil, rerr
 		}
 	}
-	return nil
+	return validatedNodes, instanceLookupErrors, nil
 }
 
 // isWindows2019 checks if the ImageReference on the VMSS matches a Windows Server 2019 image.
@@ -1429,9 +1461,9 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 	// Track if any VM updates happened to invalidate vmss cache after all defers run
 	// The cache invalidation must happen after all per-node defers complete,
 	// since those defers call DeleteCacheForNode which repopulates the cache.
-	hasVMUpdates := false
+	var hasVMUpdates atomic.Bool
 	defer func() {
-		if hasVMUpdates {
+		if hasVMUpdates.Load() {
 			logger.V(2).Info("invalidating vmss cache after updating vms", "reason", "vmss vms updated")
 			if err := ss.vmssCache.Delete(consts.VMSSKey); err != nil {
 				logger.Info("Failed to invalidate vmss cache", "err", err)
@@ -1441,15 +1473,14 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 
 	// Ensure the backendPoolID is also added on VMSS itself.
 	// Refer to issue kubernetes/kubernetes#80365 for detailed information
-	err := ss.ensureVMSSInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
+	validatedNodes, errors, err := ss.ensureVMSSInPool(ctx, service, nodes, backendPoolID, vmSetNameOfLB)
 	if err != nil {
 		return err
 	}
 
-	hostUpdates := make([]func() error, 0, len(nodes))
+	hostUpdates := make([]func() error, 0, len(validatedNodes))
 	nodeUpdates := make(map[vmssMetaInfo]map[string]armcompute.VirtualMachineScaleSetVM)
-	errors := make([]error, 0)
-	for _, node := range nodes {
+	for _, node := range validatedNodes {
 		localNodeName := node.Name
 
 		if ss.UseStandardLoadBalancer() && ss.ExcludeMasterNodesFromStandardLB() && isControlPlaneNode(node) {
@@ -1513,9 +1544,9 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 				logger.Error(err, "Failed to get vmss batch size")
 				return err
 			}
-			ctx = klog.NewContext(ctx, logger)
+			updateCtx := klog.NewContext(ctx, logger)
 
-			errChan := ss.UpdateVMSSVMsInBatch(ctx, meta, update, batchSize)
+			errChan := ss.UpdateVMSSVMsInBatch(updateCtx, meta, update, batchSize)
 
 			errs := make([]error, 0)
 			for err := range errChan {
@@ -1524,13 +1555,13 @@ func (ss *ScaleSet) ensureHostsInPool(ctx context.Context, service *v1.Service, 
 				}
 			}
 			// Mark that VM updates happened so the defer will invalidate the vmss cache.
-			hasVMUpdates = true
+			hasVMUpdates.Store(true)
 			return utilerrors.NewAggregate(errs)
 		})
 	}
 	errs := utilerrors.AggregateGoroutines(hostUpdates...)
 	if errs != nil {
-		return utilerrors.Flatten(errs)
+		errors = append(errors, errs)
 	}
 
 	// Fail if there are other errors.
@@ -1902,9 +1933,9 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 	// Track if any VM updates happened to invalidate vmss cache after all defers run
 	// The cache invalidation must happen after all per-node defers complete,
 	// since those defers call DeleteCacheForNode which repopulates the cache.
-	hasVMUpdates := false
+	var hasVMUpdates atomic.Bool
 	defer func() {
-		if hasVMUpdates {
+		if hasVMUpdates.Load() {
 			logger.V(2).Info("invalidating vmss cache after updating vms", "reason", "vmss vms updated")
 			if err := ss.vmssCache.Delete(consts.VMSSKey); err != nil {
 				logger.Info("Failed to invalidate vmss cache", "err", err)
@@ -2023,7 +2054,7 @@ func (ss *ScaleSet) ensureBackendPoolDeleted(ctx context.Context, service *v1.Se
 				}
 			}
 			// Mark that VM updates happened so the defer will invalidate the vmss cache.
-			hasVMUpdates = true
+			hasVMUpdates.Store(true)
 
 			err = utilerrors.NewAggregate(errs)
 			if err != nil {
