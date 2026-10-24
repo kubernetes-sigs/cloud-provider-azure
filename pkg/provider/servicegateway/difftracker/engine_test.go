@@ -19,10 +19,12 @@ package difftracker
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -626,6 +628,121 @@ func TestEngineUpdateService_NewServiceFallsThrough(t *testing.T) {
 	case <-dt.serviceUpdaterTrigger:
 	default:
 		t.Error("expected serviceUpdater trigger")
+	}
+}
+
+func TestEngineUpdateService_LockBoundaries(t *testing.T) {
+	tests := []struct {
+		name          string
+		tracked       bool
+		state         ResourceState
+		nrpHasLB      bool
+		claimOutbound bool
+		wantMessages  []string
+	}{
+		{
+			name: "new service",
+			wantMessages: []string{
+				"Delegated untracked service update to add",
+				"Added service request",
+				"Skipped endpoint cache replay because dependencies are unavailable",
+				"Sent service updater trigger",
+			},
+		},
+		{
+			name:          "outbound claims identity before delegated creation",
+			claimOutbound: true,
+			wantMessages: []string{
+				"Delegated untracked service update to add",
+				"Added service request",
+			},
+		},
+		{
+			name:     "recovered load balancer",
+			nrpHasLB: true,
+			wantMessages: []string{
+				"Created tracking entry for existing service update",
+				"Sent service updater trigger",
+			},
+		},
+		{
+			name:    "changed configuration",
+			tracked: true,
+			state:   StateCreated,
+			wantMessages: []string{
+				"Scheduled service update",
+				"Sent service updater trigger",
+			},
+		},
+		{
+			name:    "recreation during deletion",
+			tracked: true,
+			state:   StateDeletionInProgress,
+			wantMessages: []string{
+				"Skipped endpoint cache replay because dependencies are unavailable",
+				"Buffered service recreate intent during deletion",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			const uid = "svc-update-locks"
+			oldConfig := NewInboundServiceConfig(uid, makeInboundConfig(80))
+			if tt.tracked {
+				dt.pendingServiceOps[uid] = &ServiceOperationState{
+					ServiceUID:        uid,
+					Config:            oldConfig,
+					LastAppliedConfig: &oldConfig,
+					State:             tt.state,
+				}
+			}
+			if tt.nrpHasLB {
+				dt.NRPResources.LoadBalancers.Insert(uid)
+			}
+
+			lockAtMessage := map[string]bool{
+				"Delegated untracked service update to add":                          false,
+				"Added service request":                                              true,
+				"Created tracking entry for existing service update":                 true,
+				"Scheduled service update":                                           true,
+				"Skipped endpoint cache replay because dependencies are unavailable": true,
+				"Buffered service recreate intent during deletion":                   false,
+				"Sent service updater trigger":                                       false,
+			}
+			var messages []string
+			dt.logger = funcr.New(func(_, message string) {
+				for marker, wantLocked := range lockAtMessage {
+					if !strings.Contains(message, marker) {
+						continue
+					}
+					messages = append(messages, marker)
+					unlocked := dt.mu.TryLock()
+					if unlocked {
+						if tt.claimOutbound && marker == "Delegated untracked service update to add" {
+							dt.pendingServiceOps[uid] = &ServiceOperationState{
+								ServiceUID: uid,
+								Config:     NewOutboundServiceConfig(uid, &OutboundConfig{}),
+								State:      StateCreated,
+							}
+						}
+						dt.mu.Unlock()
+					}
+					assert.Equal(t, !wantLocked, unlocked, "lock state at %q", marker)
+					break
+				}
+			}, funcr.Options{Verbosity: 5})
+
+			err := dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+			if tt.claimOutbound {
+				assert.ErrorContains(t, err, "owned by outbound egress")
+				assert.False(t, dt.pendingServiceOps[uid].Config.IsInbound)
+				assert.Empty(t, dt.serviceUpdaterTrigger)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantMessages, messages)
+		})
 	}
 }
 
@@ -1739,6 +1856,119 @@ func TestInboundDesiredMembershipTracksRecreation(t *testing.T) {
 	dt.DeleteService(uid, true, false)
 	assert.False(t, dt.K8sResources.Services.Has(uid))
 	assert.False(t, dt.pendingServiceOps[uid].RecreateAfterDeletion)
+}
+
+func TestServiceIdentityTypeLocked(t *testing.T) {
+	const uid = "Identity"
+	inboundOp := &ServiceOperationState{Config: NewInboundServiceConfig(uid, makeInboundConfig(80))}
+	outboundOp := &ServiceOperationState{Config: NewOutboundServiceConfig(uid, &OutboundConfig{})}
+	tests := []struct {
+		name            string
+		nrp             NRPState
+		op              *ServiceOperationState
+		byoID           string
+		emptyBYOBinding bool
+		desiredInbound  bool
+		wantExists      bool
+		wantInbound     bool
+	}{
+		{name: "unknown identity"},
+		{name: "desired inbound alone is not an established identity", desiredInbound: true},
+		{
+			name:        "registered inbound",
+			nrp:         NRPState{LoadBalancers: utilsets.NewString(strings.ToLower(uid))},
+			wantExists:  true,
+			wantInbound: true,
+		},
+		{
+			name:           "registered outbound precedes desired inbound",
+			nrp:            NRPState{NATGateways: utilsets.NewString(strings.ToLower(uid))},
+			desiredInbound: true,
+			wantExists:     true,
+		},
+		{
+			name:           "RP-owned outbound precedes desired inbound",
+			nrp:            NRPState{ReservedOutboundServices: utilsets.NewString(strings.ToLower(uid))},
+			desiredInbound: true,
+			wantExists:     true,
+		},
+		{
+			name:        "tracked inbound",
+			op:          inboundOp,
+			wantExists:  true,
+			wantInbound: true,
+		},
+		{
+			name:           "tracked outbound precedes desired inbound",
+			op:             outboundOp,
+			desiredInbound: true,
+			wantExists:     true,
+		},
+		{
+			name:           "retained BYO binding precedes desired inbound",
+			byoID:          byoNATGatewayARMID(uid),
+			desiredInbound: true,
+			wantExists:     true,
+		},
+		{name: "empty BYO binding is not an established identity", emptyBYOBinding: true, desiredInbound: true},
+		{
+			name: "registered inbound takes precedence over all outbound sources",
+			nrp: NRPState{
+				LoadBalancers:            utilsets.NewString(uid),
+				NATGateways:              utilsets.NewString(uid),
+				ReservedOutboundServices: utilsets.NewString(uid),
+			},
+			op:          outboundOp,
+			byoID:       byoNATGatewayARMID(uid),
+			wantExists:  true,
+			wantInbound: true,
+		},
+		{
+			name:       "registered outbound precedes tracked inbound",
+			nrp:        NRPState{NATGateways: utilsets.NewString(uid)},
+			op:         inboundOp,
+			wantExists: true,
+		},
+		{
+			name:       "RP-owned outbound precedes tracked inbound",
+			nrp:        NRPState{ReservedOutboundServices: utilsets.NewString(uid)},
+			op:         inboundOp,
+			wantExists: true,
+		},
+		{
+			name:        "tracked inbound precedes retained BYO binding",
+			op:          inboundOp,
+			byoID:       byoNATGatewayARMID(uid),
+			wantExists:  true,
+			wantInbound: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			dt.NRPResources = tt.nrp
+			dt.pendingServiceOps[uid] = tt.op
+			if tt.byoID != "" || tt.emptyBYOBinding {
+				dt.byoNATGateways = map[string]string{strings.ToLower(uid): tt.byoID}
+			}
+			if tt.desiredInbound {
+				dt.K8sResources.Services.Insert(uid)
+			}
+
+			dt.mu.Lock()
+			defer dt.mu.Unlock()
+			exists, inbound := dt.serviceIdentityTypeLocked(uid)
+			assert.Equal(t, tt.wantExists, exists)
+			assert.Equal(t, tt.wantInbound, inbound)
+			assert.Equal(t, tt.wantExists && !tt.wantInbound, dt.inboundIdentityConflictsWithOutboundLocked(uid))
+			assert.Equal(t, tt.wantInbound || (!tt.wantExists && tt.desiredInbound),
+				dt.outboundIdentityConflictsWithInboundLocked(uid))
+
+			exists, inbound = dt.serviceIdentityTypeLocked("unrelated")
+			assert.False(t, exists)
+			assert.False(t, inbound)
+		})
+	}
 }
 
 func TestInboundAdmissionPreservesOutboundOwner(t *testing.T) {
