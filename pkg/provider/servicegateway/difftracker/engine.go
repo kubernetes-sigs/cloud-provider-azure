@@ -142,7 +142,9 @@ func (dt *DiffTracker) DeleteInboundService(service *v1.Service) error {
 	return nil
 }
 
-// AddService queues creation unless the identity already exists or belongs to the other kind.
+// AddService is idempotent: it does not queue creation for a service already registered in NRP
+// or tracked by the engine. Otherwise, it queues creation through ServiceUpdater.
+// It rejects identity collisions between inbound LoadBalancer and outbound egress services.
 func (dt *DiffTracker) AddService(config ServiceConfig) error {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
@@ -370,10 +372,8 @@ func (dt *DiffTracker) updateEndpointsLocked(serviceUID string, oldPodIPToNodeIP
 	}
 }
 
-// resetRetryStateLocked clears a transient-failure park so a fresh external intent (a spec-changing
-// UpdateService, or a DeleteService) gets a clean retry budget instead of inheriting an exhausted or
-// still-backing-off one. Without this, a service parked after maxServiceRetries transient failures
-// would stay stranded until the CCM process restarts. Must be called with dt.mu held.
+// resetRetryStateLocked resets the retry budget and clears backoff and creation rejection.
+// Used for fresh intent or an expired retry cooldown. Must be called with dt.mu held.
 func resetRetryStateLocked(op *ServiceOperationState) {
 	op.RetryCount = 0
 	op.RetriesExhausted = false
@@ -381,8 +381,12 @@ func resetRetryStateLocked(op *ServiceOperationState) {
 	op.NextRetryAt = time.Time{}
 }
 
-// UpdateService returns retryable errors for opposite-kind admission.
-// Same-kind recreation waits for deletion.
+// UpdateService handles spec changes (e.g., port changes) for inbound LoadBalancer services.
+// Services neither tracked nor present in NRP are delegated to AddService.
+// Created services skip unchanged configurations and queue changed ones through ServiceUpdater.
+// During creation or update, the latest desired configuration is retained for reconciliation.
+// During deletion, the configuration is saved for recreation after cleanup completes.
+// Outbound updates are ignored. Inbound requests return an error if outbound egress owns the identity.
 func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
@@ -402,152 +406,140 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 
 	serviceUID := config.UID
 
-	dt.mu.Lock()
+	var createService, seedEndpoints, triggerUpdater bool
+	err := func() error {
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
 
-	if dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
-		dt.mu.Unlock()
-		return fmt.Errorf("service gateway identity %q is owned by outbound egress; release that identity before creating an inbound service", serviceUID)
+		if dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
+			return fmt.Errorf("service gateway identity %q is owned by outbound egress; release that identity before creating an inbound service", serviceUID)
+		}
+		dt.K8sResources.Services.Insert(serviceUID)
+
+		opState, exists := dt.pendingServiceOps[serviceUID]
+		existsInNRP := dt.NRPResources.LoadBalancers.Has(serviceUID)
+
+		if !exists && !existsInNRP {
+			createService = true
+			return nil
+		}
+
+		if !exists && existsInNRP {
+			// LB exists in NRP (e.g., recovered after CCM restart) but no engine tracking entry.
+			// Create one in StateCreated so the update path can take over.
+			dt.logger.V(5).Info("Created tracking entry for existing service update", "service", serviceUID)
+			opState = &ServiceOperationState{
+				ServiceUID:    serviceUID,
+				Config:        config,
+				State:         StateCreated,
+				RetryCount:    0,
+				LastAttempt:   time.Now().Format(time.RFC3339),
+				CreatedAt:     time.Now(),
+				CorrelationID: uuid.NewString(),
+			}
+			dt.pendingServiceOps[serviceUID] = opState
+			// Force an update PUT (we have no LastAppliedConfig to compare against).
+			opState.State = StateUpdateInProgress
+			opState.Config = config
+			triggerUpdater = true
+			return nil
+		}
+
+		// opState exists - dispatch on current state.
+		switch opState.State {
+		case StateNotStarted, StateCreationInProgress:
+			// Creation hasn't reached Azure yet (or is in flight). Latest config wins; the
+			// running goroutine already captured a snapshot at dispatch time, so we also
+			// queue a follow-up update by leaving the freshly-overwritten Config; if creation
+			// completes with stale data, OnServiceCreationComplete will see Config != LastAppliedConfig
+			// and schedule an UpdateInProgress.
+			if opState.CreationFailedTerminal {
+				// Service was parked after a non-retryable creation error. Only re-attempt if
+				// the spec actually changed; a resync with the same invalid spec stays parked.
+				if configsEqualForUpdate(&opState.Config, &config) {
+					dt.logger.V(5).Info("Skipped parked service with unchanged spec", "service", serviceUID)
+					return nil
+				}
+				dt.logger.V(5).Info("Reattempted service creation after terminal failure and spec change", "service", serviceUID)
+				opState.Config = config
+				opState.CreationFailedTerminal = false
+				resetRetryStateLocked(opState)
+				opState.State = StateNotStarted
+				opState.LastAttempt = time.Now().Format(time.RFC3339)
+				triggerUpdater = true
+				return nil
+			}
+			dt.logger.V(5).Info("Overwrote desired service config", "service", serviceUID, "state", opState.State)
+			if !configsEqualForUpdate(&opState.Config, &config) {
+				// A genuine spec change is fresh intent: clear any transient-failure park so the new
+				// config starts with a clean retry budget rather than inheriting an exhausted one.
+				triggerUpdater = opState.RetriesExhausted
+				resetRetryStateLocked(opState)
+			} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
+				// A same-spec resync can also re-arm the operation after its retry cooldown.
+				triggerUpdater = true
+				resetRetryStateLocked(opState)
+			}
+			opState.Config = config
+
+		case StateCreated:
+			if opState.LastAppliedConfig != nil &&
+				opState.LastAppliedConfig.IsInbound == config.IsInbound &&
+				opState.LastAppliedConfig.InboundConfig.Equals(config.InboundConfig) {
+				dt.logger.V(5).Info("Skipped unchanged service config", "service", serviceUID)
+				return nil
+			}
+			dt.logger.V(5).Info("Scheduled service update", "service", serviceUID)
+			opState.Config = config
+			opState.State = StateUpdateInProgress
+			resetRetryStateLocked(opState)
+			opState.LastAttempt = time.Now().Format(time.RFC3339)
+			triggerUpdater = true
+
+		case StateUpdateInProgress:
+			// An updater is (or will be) processing this service. Overwrite with the latest desired
+			// config. A live in-flight worker re-checks Config on completion via OnServiceCreationComplete
+			// and reschedules if it changed; a parked op is re-armed on a spec change or after its cooldown.
+			dt.logger.V(5).Info("Overwrote desired config while service is updating", "service", serviceUID)
+			if !configsEqualForUpdate(&opState.Config, &config) {
+				triggerUpdater = opState.RetriesExhausted
+				resetRetryStateLocked(opState)
+			} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
+				triggerUpdater = true
+				resetRetryStateLocked(opState)
+			}
+			opState.Config = config
+
+		case StateDeletionPending, StateDeletionInProgress:
+			// A re-create (e.g. a LoadBalancer->ClusterIP->LoadBalancer toggle) arrived while
+			// the service is being deleted. Record the desired config and let the
+			// deletion-success path replay it as a fresh create, so it cannot race the delete.
+			//
+			// Only a live Service can ask for this: a recreate intent recorded for an object that is
+			// going away would rebuild Azure resources that nothing will ever delete again.
+			opState.Config = config
+			opState.RecreateAfterDeletion = true
+			seedEndpoints = true
+
+		default:
+			dt.logger.V(4).Info("Found unknown service operation state while updating service", "state", opState.State, "service", serviceUID)
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
-	dt.K8sResources.Services.Insert(serviceUID)
 
-	opState, exists := dt.pendingServiceOps[serviceUID]
-	existsInNRP := dt.NRPResources.LoadBalancers.Has(serviceUID)
-
-	if !exists && !existsInNRP {
-		// Service is unknown to the engine - treat as a creation.
-		dt.mu.Unlock()
+	if createService {
 		dt.logger.V(5).Info("Delegated untracked service update to add", "service", serviceUID)
 		return dt.AddService(config)
 	}
-
-	if !exists && existsInNRP {
-		// LB exists in NRP (e.g., recovered after CCM restart) but no engine tracking entry.
-		// Create one in StateCreated so the update path can take over.
-		dt.logger.V(5).Info("Created tracking entry for existing service update", "service", serviceUID)
-		opState = &ServiceOperationState{
-			ServiceUID:    serviceUID,
-			Config:        config,
-			State:         StateCreated,
-			RetryCount:    0,
-			LastAttempt:   time.Now().Format(time.RFC3339),
-			CreatedAt:     time.Now(),
-			CorrelationID: uuid.NewString(),
-		}
-		dt.pendingServiceOps[serviceUID] = opState
-		// Force an update PUT (we have no LastAppliedConfig to compare against).
-		opState.State = StateUpdateInProgress
-		opState.Config = config
-		dt.mu.Unlock()
-		dt.triggerServiceUpdater()
-		return nil
-	}
-
-	// opState exists - dispatch on current state.
-	switch opState.State {
-	case StateNotStarted, StateCreationInProgress:
-		// Creation hasn't reached Azure yet (or is in flight). Latest config wins; the
-		// running goroutine already captured a snapshot at dispatch time, so we also
-		// queue a follow-up update by leaving the freshly-overwritten Config; if creation
-		// completes with stale data, OnServiceCreationComplete will see Config != LastAppliedConfig
-		// and schedule an UpdateInProgress.
-		if opState.CreationFailedTerminal {
-			// Service was parked after a non-retryable creation error. Only re-attempt if
-			// the spec actually changed; a resync with the same invalid spec stays parked.
-			if configsEqualForUpdate(&opState.Config, &config) {
-				dt.mu.Unlock()
-				dt.logger.V(5).Info("Skipped parked service with unchanged spec", "service", serviceUID)
-				return nil
-			}
-			dt.logger.V(5).Info("Reattempted service creation after terminal failure and spec change", "service", serviceUID)
-			opState.Config = config
-			opState.CreationFailedTerminal = false
-			resetRetryStateLocked(opState)
-			opState.State = StateNotStarted
-			opState.LastAttempt = time.Now().Format(time.RFC3339)
-			dt.mu.Unlock()
-			dt.triggerServiceUpdater()
-			return nil
-		}
-		dt.logger.V(5).Info("Overwrote desired service config", "service", serviceUID, "state", opState.State)
-		recoverPark := false
-		if !configsEqualForUpdate(&opState.Config, &config) {
-			// A genuine spec change is fresh intent: clear any transient-failure park so the new
-			// config starts with a clean retry budget rather than inheriting an exhausted one.
-			recoverPark = opState.RetriesExhausted
-			resetRetryStateLocked(opState)
-		} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
-			// Same spec, but the cooldown since the op parked has elapsed: the transient outage is
-			// likely over, so re-arm it. Without this a stable Service whose create exhausted its
-			// budget would never get its load balancer or public IP until the CCM restarts. The
-			// cooldown bounds this to one retry burst per parkReArmCooldown, not a per-resync storm.
-			recoverPark = true
-			resetRetryStateLocked(opState)
-		}
-		opState.Config = config
-		dt.mu.Unlock()
-		if recoverPark {
-			// The op had stopped dispatching after exhausting its budget; nudge the updater so the
-			// recovered op is picked up promptly instead of waiting for an unrelated trigger.
-			dt.triggerServiceUpdater()
-		}
-
-	case StateCreated:
-		if opState.LastAppliedConfig != nil &&
-			opState.LastAppliedConfig.IsInbound == config.IsInbound &&
-			opState.LastAppliedConfig.InboundConfig.Equals(config.InboundConfig) {
-			dt.mu.Unlock()
-			dt.logger.V(5).Info("Skipped unchanged service config", "service", serviceUID)
-			return nil
-		}
-		dt.logger.V(5).Info("Scheduled service update", "service", serviceUID)
-		opState.Config = config
-		opState.State = StateUpdateInProgress
-		resetRetryStateLocked(opState)
-		opState.LastAttempt = time.Now().Format(time.RFC3339)
-		dt.mu.Unlock()
-		dt.triggerServiceUpdater()
-
-	case StateUpdateInProgress:
-		// An updater is (or will be) processing this service. Overwrite with the latest desired
-		// config. A live in-flight worker re-checks Config on completion via OnServiceCreationComplete
-		// and reschedules if it changed; a parked op (retries exhausted, no worker) has nothing to
-		// reschedule it, so it is re-armed here on a spec change or once the park cooldown has elapsed.
-		dt.logger.V(5).Info("Overwrote desired config while service is updating", "service", serviceUID)
-		recoverPark := false
-		if !configsEqualForUpdate(&opState.Config, &config) {
-			recoverPark = opState.RetriesExhausted
-			resetRetryStateLocked(opState)
-		} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
-			// Same spec, but the cooldown since the op parked has elapsed: re-arm so a stable Service
-			// applies the pending update instead of serving stale config until the CCM restarts.
-			recoverPark = true
-			resetRetryStateLocked(opState)
-		}
-		opState.Config = config
-		dt.mu.Unlock()
-		if recoverPark {
-			// The parked op has no worker to pick up the latest config; nudge the updater so the
-			// recovered op dispatches instead of being silently dropped.
-			dt.triggerServiceUpdater()
-		}
-
-	case StateDeletionPending, StateDeletionInProgress:
-		// A re-create (e.g. a LoadBalancer->ClusterIP->LoadBalancer toggle) arrived while
-		// the service is being deleted. Record the desired config and let the
-		// deletion-success path replay it as a fresh create, so it cannot race the delete.
-		//
-		// Only a live Service can ask for this: a recreate intent recorded for an object that is
-		// going away would rebuild Azure resources that nothing will ever delete again.
-		opState.Config = config
-		opState.RecreateAfterDeletion = true
-		dt.mu.Unlock()
+	if seedEndpoints {
 		dt.seedInboundEndpointsFromCache(serviceUID)
 		dt.logger.V(5).Info("Buffered service recreate intent during deletion", "service", serviceUID)
-
-	default:
-		state := opState.State
-		dt.mu.Unlock()
-		dt.logger.V(4).Info("Found unknown service operation state while updating service", "state", state, "service", serviceUID)
+	}
+	if triggerUpdater {
+		dt.triggerServiceUpdater()
 	}
 	return nil
 }
@@ -1193,28 +1185,31 @@ func (dt *DiffTracker) AddPodWithUID(serviceUID, podKey, podUID, location, addre
 	dt.addPod(serviceUID, podKey, podUID, location, address)
 }
 
-// Registered resources and claimed operations take precedence over opposite-kind desired state.
-func (dt *DiffTracker) serviceOwnerLocked(serviceUID string) (inbound, exists bool) {
+// serviceIdentityTypeLocked reports whether an identity is known and, if so, whether it is inbound.
+// If exists is true, inbound is true for an inbound LoadBalancer service and false for outbound egress.
+// NRP registrations and RP-owned outbound identities precede tracked operations, then retained BYO bindings.
+// A known identity need not have a created Azure resource. Must be called with dt.mu held.
+func (dt *DiffTracker) serviceIdentityTypeLocked(serviceUID string) (exists, inbound bool) {
 	if dt.NRPResources.LoadBalancers != nil && dt.NRPResources.LoadBalancers.Has(serviceUID) {
 		return true, true
 	}
 	if (dt.NRPResources.NATGateways != nil && dt.NRPResources.NATGateways.Has(serviceUID)) ||
 		(dt.NRPResources.ReservedOutboundServices != nil && dt.NRPResources.ReservedOutboundServices.Has(serviceUID)) {
-		return false, true
+		return true, false
 	}
 	if op := dt.pendingServiceOps[serviceUID]; op != nil {
-		return op.Config.IsInbound, true
+		return true, op.Config.IsInbound
 	}
-	return false, dt.byoNATGateways[strings.ToLower(serviceUID)] != ""
+	return dt.byoNATGateways[strings.ToLower(serviceUID)] != "", false
 }
 
 func (dt *DiffTracker) inboundIdentityConflictsWithOutboundLocked(serviceUID string) bool {
-	inbound, exists := dt.serviceOwnerLocked(serviceUID)
+	exists, inbound := dt.serviceIdentityTypeLocked(serviceUID)
 	return exists && !inbound
 }
 
 func (dt *DiffTracker) outboundIdentityConflictsWithInboundLocked(serviceUID string) bool {
-	if inbound, exists := dt.serviceOwnerLocked(serviceUID); exists {
+	if exists, inbound := dt.serviceIdentityTypeLocked(serviceUID); exists {
 		return inbound
 	}
 	return dt.K8sResources.Services != nil && dt.K8sResources.Services.Has(serviceUID)

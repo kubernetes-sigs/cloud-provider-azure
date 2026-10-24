@@ -77,6 +77,7 @@ func TestGuardRetriesExhaustedPark_RecoveredBySpecChange(t *testing.T) {
 	op := dt.pendingServiceOps[uid]
 	assert.Equal(t, maxServiceRetries, op.RetryCount, "unchanged-spec resync must not reset the retry budget")
 	assert.True(t, op.RetriesExhausted, "unchanged-spec resync must leave the park intact")
+	assert.Empty(t, dt.serviceUpdaterTrigger)
 	assert.True(t, gatedByRetry(su, dt, uid), "the still-parked op must remain gated")
 
 	// A spec change is fresh intent: the park must be cleared and the op dispatchable again.
@@ -85,6 +86,7 @@ func TestGuardRetriesExhaustedPark_RecoveredBySpecChange(t *testing.T) {
 	assert.Equal(t, 0, op.RetryCount, "a spec-changing resync must reset the retry budget")
 	assert.False(t, op.RetriesExhausted, "a spec-changing resync must clear the park")
 	assert.True(t, op.NextRetryAt.IsZero(), "a spec-changing resync must clear the backoff deadline")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered create must notify the updater")
 	assert.False(t, gatedByRetry(su, dt, uid), "the recovered op must no longer be gated by retryGate")
 }
 
@@ -139,6 +141,7 @@ func TestGuardRetriesExhaustedPark_CreateRecoversAfterCooldown(t *testing.T) {
 	op := dt.pendingServiceOps[uid]
 	assert.False(t, op.RetriesExhausted, "a same-spec resync after the cooldown must clear the park")
 	assert.Equal(t, 0, op.RetryCount, "the retry budget must be reset so the create can be dispatched")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered create must notify the updater")
 	assert.False(t, gatedByRetry(su, dt, uid), "the recovered create must be dispatchable")
 }
 
@@ -165,6 +168,7 @@ func TestGuardRetriesExhaustedPark_UpdateInProgressRecoversOnSpecChange(t *testi
 	op := dt.pendingServiceOps[uid]
 	assert.False(t, op.RetriesExhausted, "a spec change must clear a parked updating op")
 	assert.Equal(t, 0, op.RetryCount, "a spec change must reset the parked update retry budget")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered update must notify the updater")
 	assert.False(t, gatedByRetry(su, dt, uid), "the recovered update must be dispatchable")
 }
 
@@ -190,6 +194,7 @@ func TestGuardRetriesExhaustedPark_UpdateRecoversAfterCooldown(t *testing.T) {
 	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
 	op := dt.pendingServiceOps[uid]
 	assert.True(t, op.RetriesExhausted, "a same-spec resync within the cooldown must leave the park intact")
+	assert.Empty(t, dt.serviceUpdaterTrigger)
 	assert.True(t, gatedByRetry(su, dt, uid), "the still-parked update must remain gated")
 
 	// Once the cooldown has elapsed, a same-spec resync must re-arm it.
@@ -198,6 +203,7 @@ func TestGuardRetriesExhaustedPark_UpdateRecoversAfterCooldown(t *testing.T) {
 	op = dt.pendingServiceOps[uid]
 	assert.False(t, op.RetriesExhausted, "a same-spec resync after the cooldown must clear the park")
 	assert.Equal(t, 0, op.RetryCount, "the retry budget must be reset so the update can be dispatched")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered update must notify the updater")
 	assert.False(t, gatedByRetry(su, dt, uid), "the recovered update must be dispatchable")
 }
 
