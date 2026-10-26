@@ -47,5 +47,5 @@ golang.org/x/text v0.43.0 h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=
 golang.org/x/text v0.43.0/go.mod h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s=
 golang.org/x/tools v0.51.0 h1:k4Xc/1Om9jwkBJBo4NVLMSARBoWtK10mx+W5BnXCeAI=
 golang.org/x/tools v0.51.0/go.mod h1:9eEncMayCV6zRMGhR5eZEC2iBx98qWcF1HZ9Z7wJOoA=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.25.2 h1:sPy/9g9Xa08aRDnFvyKWeUeRqnY/Aq9dcBtZwc+KBFE=
-sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.25.2/go.mod h1:YhsO+oDFRSpL5Z9zJaFDU7LROS5POV9b+AHO9rTd4KY=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.25.3 h1:wdTp6+VRsXimZWt2PGWEORveE/wtVdetVW7LcCxLZHA=
+sigs.k8s.io/cloud-provider-azure/pkg/azclient v0.25.3/go.mod h1:rwa/uin0aYHVNYEYGmukChstpbITH8KYK8WF3ZoCMEY=
