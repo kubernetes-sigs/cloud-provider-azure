@@ -24,6 +24,7 @@ const (
 	TestSuiteLabelMultiNodePools     = "Multi-Nodepool"
 	TestSuiteLabelSingleNodePool     = "Single-Nodepool"
 	TestSuiteLabelVMSS               = "VMSS"
+	TestSuiteLabelStandaloneVM       = "Standalone-VM"
 	TestSuiteLabelVMSSScale          = "VMSS-Scale"
 	TestSuiteLabelSpotVM             = "Spot-VM"
 	TestSuiteLabelKubenet            = "Kubenet"
