@@ -1639,7 +1639,7 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldExternalV4},
 			cloudAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
 			cloudErr:         errLBMetadataUnavailable,
-			expectedErr:      "failed to initialize node at cloudprovider node0: failed to find kubelet node IP from cloud provider",
+			expectedErr:      "failed to initialize node node0 at cloudprovider: failed to find kubelet node IP from cloud provider",
 			expectedLookups:  1,
 		},
 		{
@@ -1648,7 +1648,7 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			initialAddresses: []v1.NodeAddress{lbHostname, lbNewInternalV4, lbOldExternalV4},
 			cloudAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
 			cloudErr:         errLBMetadataUnavailable,
-			expectedErr:      "failed to initialize node at cloudprovider node0: failed to find kubelet node IP from cloud provider",
+			expectedErr:      "failed to initialize node node0 at cloudprovider: failed to find kubelet node IP from cloud provider",
 			expectedLookups:  1,
 		},
 		{
@@ -1657,7 +1657,7 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4, lbOldInternalV6},
 			cloudAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
 			cloudErr:         errLBMetadataUnavailable,
-			expectedErr:      "failed to initialize node at cloudprovider node0: failed to find kubelet node IP from cloud provider",
+			expectedErr:      "failed to initialize node node0 at cloudprovider: failed to find kubelet node IP from cloud provider",
 			expectedLookups:  1,
 		},
 		{
@@ -1665,7 +1665,7 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4},
 			cloudAddresses:   []v1.NodeAddress{lbHostname, lbNewInternalV4},
 			cloudErr:         errLBUnrelated,
-			expectedErr:      "failed to initialize node at cloudprovider node0: error fetching node by name node0: unrelated failure",
+			expectedErr:      "failed to initialize node node0 at cloudprovider: error fetching node by name node0: unrelated failure",
 			expectedErrIs:    []error{errLBUnrelated},
 			expectedLookups:  1,
 		},
@@ -1673,7 +1673,7 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			desc:             "load balancer metadata error without addresses should fail initialization",
 			initialAddresses: []v1.NodeAddress{lbHostname, lbOldInternalV4},
 			cloudErr:         errLBMetadataUnavailable,
-			expectedErr:      "failed to initialize node at cloudprovider node0: error fetching node by name node0: " + lbMetadataErrMessage,
+			expectedErr:      "failed to initialize node node0 at cloudprovider: error fetching node by name node0: " + lbMetadataErrMessage,
 			expectedErrIs:    []error{providererrors.ErrLoadBalancerMetadataUnavailable, errLBTransientCause},
 			expectedLookups:  1,
 		},
@@ -1695,7 +1695,18 @@ func TestInitializeNodeWithLBMetadataStatus(t *testing.T) {
 			}
 			cnc := newLBTestController(client, mockNP)
 
-			err := cnc.handleNodeEvent(context.Background(), initialNode.DeepCopy())
+			// initializeNode panics via utilruntime.Must when cloud initialization fails.
+			var err error
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						var ok bool
+						err, ok = r.(error)
+						assert.True(t, ok, "panic value should be an error: %v", r)
+					}
+				}()
+				cnc.AddCloudNode(context.Background(), initialNode.DeepCopy())
+			}()
 			node := getLBTestNode(t, client)
 			updates, statusPatches := countLBTestActions(client)
 			if !tc.expectedInitialized {
