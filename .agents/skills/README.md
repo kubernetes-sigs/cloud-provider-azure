@@ -33,10 +33,11 @@ level small:
   from a `release-X.Y` branch
 - `create-release-note-doc-pr`: generate a documentation-site release note for
   a tag and open a documentation PR
-- `cve-remediator-v2`: raise Go modules to caller-supplied minimum fixed
-  versions from CVE/GO findings in any format per module root, sync `go.mod`/`go.sum`
-  and root `vendor/`, and audit the source module graphs without building or
-  scanning images, then run script-enforced checks and PR publication
+- `cve-remediator-v2`: fix Go-module findings from a `cve-remediation-request/1`
+  JSON request: per target branch, raise Go modules to the reported fixed
+  versions in an isolated clone, sync `go.mod`/`go.sum`, root `vendor/` and
+  licenses, and open or update the branch's labelled remediation PR, without
+  building or scanning images
 - `fix-image-cves`: scan a built image with Trivy, plan fixable Go-module and
   base-image CVE remediation, update required Go builders, and verify the fixes
 - `remediate-image-cves`: orchestrate builds, repeated CVE remediation and
