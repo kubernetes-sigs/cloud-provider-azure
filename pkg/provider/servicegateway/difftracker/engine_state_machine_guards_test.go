@@ -48,6 +48,7 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 		// (and wantConfigApplied) every row except StateCreated asserts only "state unchanged,
 		// no trigger", which is exactly what UpdateService doing nothing at all would produce.
 		wantRecreate bool
+		wantLogs     []string
 	}
 	tests := []row{
 		{
@@ -56,6 +57,7 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			nrpHasLB:    true,
 			afterState:  StateNotStarted,
 			mustTrigger: false,
+			wantLogs:    []string{"Overwrote desired service config"},
 		},
 		{
 			name:        "StateCreationInProgress -> kept (config overwritten, no trigger)",
@@ -63,6 +65,7 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			nrpHasLB:    true,
 			afterState:  StateCreationInProgress,
 			mustTrigger: false,
+			wantLogs:    []string{"Overwrote desired service config"},
 		},
 		{
 			name:        "StateCreated -> StateUpdateInProgress + trigger (config changed)",
@@ -70,6 +73,7 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			nrpHasLB:    true,
 			afterState:  StateUpdateInProgress,
 			mustTrigger: true,
+			wantLogs:    []string{"Scheduled service update", "Sent service updater trigger"},
 		},
 		{
 			name:        "StateUpdateInProgress -> kept (config overwritten, no new trigger)",
@@ -77,6 +81,7 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			nrpHasLB:    true,
 			afterState:  StateUpdateInProgress,
 			mustTrigger: false,
+			wantLogs:    []string{"Overwrote desired config while service is updating"},
 		},
 		{
 			name:         "StateDeletionPending -> kept; recreate intent buffered",
@@ -85,6 +90,10 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			afterState:   StateDeletionPending,
 			mustTrigger:  false,
 			wantRecreate: true,
+			wantLogs: []string{
+				"Skipped endpoint cache replay because dependencies are unavailable",
+				"Buffered service recreate intent during deletion",
+			},
 		},
 		{
 			name:         "StateDeletionInProgress -> kept; recreate intent buffered",
@@ -93,6 +102,10 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 			afterState:   StateDeletionInProgress,
 			mustTrigger:  false,
 			wantRecreate: true,
+			wantLogs: []string{
+				"Skipped endpoint cache replay because dependencies are unavailable",
+				"Buffered service recreate intent during deletion",
+			},
 		},
 	}
 
@@ -111,6 +124,7 @@ func TestGuardStateTransitions_UpdateServiceDispatch(t *testing.T) {
 				dt.NRPResources.LoadBalancers.Insert(uid)
 			}
 
+			defer assertUpdateServiceLocks(t, dt, tc.wantLogs...)()
 			newCfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
 			assert.NoError(t, dt.UpdateService(newCfg))
 
@@ -199,6 +213,7 @@ func TestGuardStateTransitions_DeleteServiceDispatch(t *testing.T) {
 // Unknown states in UpdateService should be handled without panic.
 func TestGuardStateTransitions_UpdateService_UnknownStateNoPanic(t *testing.T) {
 	dt := newTestDiffTracker()
+	defer assertUpdateServiceLocks(t, dt, "Found unknown service operation state while updating service")()
 	uid := "svc-bad-state"
 	dt.pendingServiceOps[uid] = &ServiceOperationState{
 		ServiceUID: uid,

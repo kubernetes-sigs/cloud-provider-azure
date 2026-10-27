@@ -22,11 +22,15 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -642,61 +646,134 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 		s.onComplete(serviceUID, false, err)
 		return
 	}
+	var servicesDTO ServicesDataDTO
+	var natGatewayID string
 	if byoNATGateway != nil {
-		s.createBYOOutboundService(ctx, serviceUID, byoNATGateway, correlationID, memberPod)
-		return
-	}
-
-	// Step 1: Build resources using shared helper
-	pipResources, natGatewayResource, servicesDTO := buildOutboundServiceResources(serviceUID, config, s.diffTracker.config)
-
-	// Step 2: Create every Public IP the NAT Gateway references. Creating them all before the
-	// gateway keeps the retry idempotent: a partial failure here leaves addresses the next attempt
-	// reuses, and the gateway is never PUT referencing an address that does not exist.
-	for i := range pipResources {
-		pipResource := pipResources[i]
-		if _, err := s.diffTracker.createOrUpdateManagedPublicIP(ctx, pipResource); err != nil {
-			httpStatus, errCode := extractAzureErrorInfo(err)
-			s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "publicIP", derefString(pipResource.Name), "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-			if isEgressRejected(err) {
-				s.diffTracker.recordEgressEvent(memberPod, v1.EventTypeWarning, egressNATGatewayRejectedReason,
-					fmt.Sprintf("Egress identity %q cannot be used: %v.", serviceUID, err))
-			}
-			s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
+		dt := s.diffTracker
+		natGatewayID = derefString(byoNATGateway.ID)
+		serviceGatewayID := dt.config.ServiceGatewayResourceID()
+		parsed, err := arm.ParseResourceID(natGatewayID)
+		if err != nil {
+			s.onComplete(serviceUID, false, fmt.Errorf("parsing NAT Gateway ID %q: %w", natGatewayID, err))
 			return
 		}
-		s.logger.V(5).Info("Created Public IP for outbound service", "serviceUID", serviceUID, "publicIP", derefString(pipResource.Name))
+		freshRecord := dt.setBYONATGatewayID(serviceUID, natGatewayID)
+		linkedHere := strings.EqualFold(natGatewayServiceGatewayID(byoNATGateway), serviceGatewayID)
+		retainRecord := !freshRecord || linkedHere
+		defer func() {
+			if !retainRecord {
+				dt.setBYONATGatewayID(serviceUID, "")
+			}
+		}()
+
+		reject := func(problem string) {
+			if byoNATGateway.Properties != nil && !linkedHere {
+				// Missing properties cannot prove an existing link is gone.
+				dt.setBYONATGatewayID(serviceUID, "")
+			}
+			dt.recordEgressEvent(memberPod, v1.EventTypeWarning, egressNATGatewayRejectedReason,
+				fmt.Sprintf("Egress identity %q cannot use NAT Gateway %q: %s.", serviceUID, natGatewayID, problem))
+			s.onComplete(serviceUID, false, egressRejectedError{fmt.Errorf("BYO NAT Gateway %q: %s", natGatewayID, problem)})
+		}
+
+		if problem := byoNATGatewayProblem(byoNATGateway, serviceGatewayID); problem != "" {
+			reject(problem)
+			return
+		}
+		user, err := dt.otherServiceUsing(ctx, serviceUID, natGatewayID)
+		if err != nil {
+			s.onComplete(serviceUID, false, err)
+			return
+		}
+		if user != "" {
+			reject(fmt.Sprintf("it is already used by Service Gateway service %q", user))
+			return
+		}
+		// Recorded IDs include ambiguous writes, so every attempt must reassert the link.
+		linkCtx, err := withNATGatewayETag(ctx, byoNATGateway.Etag)
+		if err != nil {
+			s.onComplete(serviceUID, false, err)
+			return
+		}
+		if err := s.cleanupManagedOutboundResources(ctx, serviceUID, correlationID); err != nil {
+			s.onComplete(serviceUID, false, fmt.Errorf("cleaning managed resources before BYO selection: %w", err))
+			return
+		}
+
+		// Keep the record once a write may have applied, including an ambiguous failure.
+		retainRecord = true
+		byoNATGateway.Properties.ServiceGateway = &armnetwork.SubResource{ID: to.Ptr(serviceGatewayID)}
+		if err := dt.createOrUpdateNatGateway(linkCtx, parsed.ResourceGroupName, *byoNATGateway); err != nil {
+			s.logger.V(4).Info("Could not link BYO NAT Gateway to Service Gateway", "serviceUID", serviceUID, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
+			var respErr *azcore.ResponseError
+			if errors.As(err, &respErr) && isResponseForMethod(respErr, http.MethodPut) &&
+				respErr.StatusCode == http.StatusPreconditionFailed && freshRecord && !linkedHere {
+				retainRecord = false
+			}
+			if errors.As(err, &respErr) && isLinkRefusal(respErr) {
+				problem := fmt.Sprintf("Azure refused to link it to the Service Gateway (HTTP %d %s)", respErr.StatusCode, respErr.ErrorCode)
+				if respErr.StatusCode == http.StatusForbidden {
+					problem = "access denied when linking it to the Service Gateway; grant the cluster identity write access to the NAT Gateway"
+				}
+				reject(problem)
+				return
+			}
+			s.onComplete(serviceUID, false, fmt.Errorf("failed to link NAT Gateway: %w", err))
+			return
+		}
+		servicesDTO = byoOutboundServicesDTO(serviceUID, natGatewayID, dt.config)
+	} else {
+		pipResources, natGatewayResource, managedServicesDTO := buildOutboundServiceResources(serviceUID, config, s.diffTracker.config)
+		servicesDTO = managedServicesDTO
+
+		// Create every referenced Public IP before the NAT Gateway.
+		for i := range pipResources {
+			pipResource := pipResources[i]
+			if _, err := s.diffTracker.createOrUpdateManagedPublicIP(ctx, pipResource); err != nil {
+				httpStatus, errCode := extractAzureErrorInfo(err)
+				s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "publicIP", derefString(pipResource.Name), "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+				if isEgressRejected(err) {
+					s.diffTracker.recordEgressEvent(memberPod, v1.EventTypeWarning, egressNATGatewayRejectedReason,
+						fmt.Sprintf("Egress identity %q cannot be used: %v.", serviceUID, err))
+				}
+				s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
+				return
+			}
+			s.logger.V(5).Info("Created Public IP for outbound service", "serviceUID", serviceUID, "publicIP", derefString(pipResource.Name))
+		}
+
+		if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			s.logger.V(4).Info("Could not create NAT Gateway for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			s.onComplete(serviceUID, false, fmt.Errorf("failed to create NAT Gateway: %w", err))
+			return
+		}
+		s.logger.V(5).Info("Created NAT Gateway for outbound service", "serviceUID", serviceUID)
 	}
 
-	// Step 3: Create NAT Gateway
-	if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
-		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not create NAT Gateway for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		// Don't delete PIP here - retry will use existing PIP
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to create NAT Gateway: %w", err))
-		return
-	}
-	s.logger.V(5).Info("Created NAT Gateway for outbound service", "serviceUID", serviceUID)
-
-	// Step 4: Register service with ServiceGateway API
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not register outbound service with ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		// Don't delete resources - retry will reconcile
 		s.onComplete(serviceUID, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
 		return
 	}
 	s.logger.V(5).Info("Registered outbound service with ServiceGateway", "serviceUID", serviceUID)
 
-	// Update NRPResources to reflect the sync
 	s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
 		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
 		Removals:  nil,
 	})
 
-	// Step 4: Success callback
+	if byoNATGateway != nil {
+		s.diffTracker.recordEgressEvent(memberPod, v1.EventTypeNormal, egressNATGatewayLinkedReason,
+			fmt.Sprintf("Egress identity %q uses BYO NAT Gateway %q.", serviceUID, natGatewayID))
+	}
 	s.onComplete(serviceUID, true, nil)
-	s.logger.V(2).Info("Created outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
+	if byoNATGateway != nil {
+		s.logger.V(2).Info("Created outbound service with BYO NAT Gateway", "serviceUID", serviceUID, "natGateway", natGatewayID, "correlationID", correlationID)
+	} else {
+		s.logger.V(2).Info("Created outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
+	}
 }
 
 // deleteInboundService deletes LoadBalancer resources
@@ -818,34 +895,44 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
 
-	if natGatewayID := s.diffTracker.byoNATGatewayID(serviceUID); natGatewayID != "" {
-		s.deleteBYOOutboundService(ctx, serviceUID, natGatewayID, correlationID)
-		return
-	}
-	if s.diffTracker.isReservedOutboundService(serviceUID) {
-		s.finishOutboundDeletion(ctx, serviceUID, correlationID, nil)
-		return
-	}
-	// Checked before anything changes, so a failed check retries the whole delete.
-	owned, err := s.diffTracker.ownsClusterNATGateway(ctx, serviceUID)
-	if err != nil {
-		s.finishOutboundDeletion(ctx, serviceUID, correlationID, err)
-		return
+	natGatewayID := s.diffTracker.byoNATGatewayID(serviceUID)
+	var owned bool
+	if natGatewayID != "" {
+		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
+			if err := s.diffTracker.unlinkNatGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID, parsed.ResourceGroupName, parsed.Name); err != nil {
+				// Permission or lock refusals do not block finalizer release.
+				if !isAccessDeniedOrLocked(err) {
+					s.logger.V(4).Info("Could not unlink BYO NAT Gateway", "serviceUID", serviceUID, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
+					s.onComplete(serviceUID, false, fmt.Errorf("failed to unlink NAT Gateway: %w", err))
+					return
+				}
+				recordDeleteSubstepFailure(deleteStepDisassociateNAT)
+				s.logger.Error(err, "Left the BYO NAT Gateway linked to the Service Gateway; remove the link manually", "serviceUID", serviceUID, "natGateway", natGatewayID)
+			}
+		}
+	} else {
+		if s.diffTracker.isReservedOutboundService(serviceUID) {
+			s.finishOutboundDeletion(ctx, serviceUID, correlationID, nil)
+			return
+		}
+		var err error
+		owned, err = s.diffTracker.ownsClusterNATGateway(ctx, serviceUID)
+		if err != nil {
+			s.finishOutboundDeletion(ctx, serviceUID, correlationID, err)
+			return
+		}
+
+		// Keep foreign gateways untouched while still unregistering this identity.
+		if !owned {
+			s.logger.V(2).Info("Skipped disassociating a NAT Gateway not owned by this identity", "serviceUID", serviceUID)
+		} else if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
+			recordDeleteSubstepFailure(deleteStepDisassociateNAT)
+			s.logger.Error(err, "Could not disassociate NAT Gateway from ServiceGateway; continuing with deletion", "serviceUID", serviceUID)
+		} else {
+			s.logger.V(5).Info("Disassociated NAT Gateway from ServiceGateway", "serviceUID", serviceUID)
+		}
 	}
 	var lastErr error
-
-	// Keep foreign gateways untouched while still unregistering this identity.
-	if !owned {
-		s.logger.V(2).Info("Skipped disassociating a NAT Gateway not owned by this identity", "serviceUID", serviceUID)
-	} else if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
-		// Continue: the later steps are what free the resources. Logged at error level and counted
-		// because nothing retries this step, the deletion is still recorded as a success, and the
-		// ServiceGateway keeps a stale NAT Gateway association.
-		recordDeleteSubstepFailure(deleteStepDisassociateNAT)
-		s.logger.Error(err, "Could not disassociate NAT Gateway from ServiceGateway; continuing with deletion", "serviceUID", serviceUID)
-	} else {
-		s.logger.V(5).Info("Disassociated NAT Gateway from ServiceGateway", "serviceUID", serviceUID)
-	}
 
 	// Step 2: Unregister from ServiceGateway API
 	servicesDTO := buildServiceGatewayRemovalDTO(serviceUID, false, s.diffTracker.config)
@@ -858,6 +945,10 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 		} else {
 			httpStatus, errCode := extractAzureErrorInfo(err)
 			s.logger.V(4).Info("Could not unregister outbound service from ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			if natGatewayID != "" {
+				s.onComplete(serviceUID, false, fmt.Errorf("failed to unregister from ServiceGateway: %w", err))
+				return
+			}
 			lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
 			// Continue with deletion
 		}
@@ -865,7 +956,9 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 		s.logger.V(5).Info("Unregistered outbound service from ServiceGateway", "serviceUID", serviceUID)
 	}
 
-	if !owned {
+	if natGatewayID != "" {
+		lastErr = s.cleanupManagedOutboundResources(ctx, serviceUID, correlationID)
+	} else if !owned {
 		s.logger.V(2).Info("Kept NAT Gateway and Public IPs not owned by this identity", "serviceUID", serviceUID)
 	} else if err := s.deleteManagedOutboundResources(ctx, serviceUID, correlationID); err != nil {
 		lastErr = err

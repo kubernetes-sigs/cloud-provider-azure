@@ -1572,7 +1572,7 @@ func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
 	}
 }
 
-func TestCleanupOrphanedPublicIPs_RetriesConditionalDelete(t *testing.T) {
+func TestCleanupOrphanedPublicIPs_ConflictWaitsForAnotherPass(t *testing.T) {
 	const identity = "payments-natgw"
 	conflict := &azcore.ResponseError{
 		StatusCode: http.StatusPreconditionFailed, ErrorCode: "PreconditionFailed",
@@ -1599,15 +1599,31 @@ func TestCleanupOrphanedPublicIPs_RetriesConditionalDelete(t *testing.T) {
 			fresh := &armnetwork.PublicIPAddress{
 				Name: pip.Name, Etag: ptr.To(`W/"v2"`), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(tc.managedType)},
 			}
-			firstRead := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(pip, nil).Times(1)
+			gets := 0
+			firstRead := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).
+				DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.PublicIPAddress, error) {
+					gets++
+					return pip, nil
+				}).Times(1)
 			firstDelete := client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(conflict).After(firstRead)
-			refresh := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(fresh, nil).After(firstDelete)
+			refresh := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).
+				DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.PublicIPAddress, error) {
+					gets++
+					return fresh, nil
+				}).After(firstDelete)
 			if tc.managedType == consts.ServiceGatewayManagedTagValue {
 				client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(tc.retryError).After(refresh).Times(1)
 			}
 			dt := newTestDiffTracker()
 			dt.config, dt.networkClientFactory = testConfig(), factory
 			err := dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{pip})
+			assert.Error(t, err)
+			assert.Equal(t, 1, gets, "a sweep must not perform an immediate ownership refresh")
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+
+			err = dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{pip})
+			assert.Equal(t, 2, gets)
 			if tc.retryError != nil {
 				assert.Error(t, err)
 			} else {

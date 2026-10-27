@@ -121,39 +121,29 @@ func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName string) 
 	if pipName == "" {
 		return false, fmt.Errorf("deleteOwnedPublicIP: pip name is empty")
 	}
-	var deleteErr error
-	// Refresh once here because startup orphan cleanup has no retry queue.
-	for attempt := 0; attempt < 2; attempt++ {
-		pip, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
-		if err != nil {
-			if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr == nil && !exists {
-				dt.logger.V(4).Info("Skipped absent Public IP", "publicIP", pipName)
-				return false, nil
-			}
-			return false, fmt.Errorf("reading Public IP %q to check ownership: %w", pipName, err)
-		}
-		if pip == nil {
-			return false, fmt.Errorf("reading Public IP %q to check ownership returned no resource", pipName)
-		}
-		if !ownsPublicIP(pip) {
-			dt.logger.V(2).Info("Kept Public IP without matching CCM-managed marker", "publicIP", pipName)
+	pip, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
+	if err != nil {
+		if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr == nil && !exists {
+			dt.logger.V(4).Info("Skipped absent Public IP", "publicIP", pipName)
 			return false, nil
 		}
-		deleteCtx, err := withResourceETag(ctx, fmt.Sprintf("Public IP %q", pipName), pip.Etag)
-		if err != nil {
-			return false, err
-		}
-		deleteErr = dt.deletePublicIP(deleteCtx, dt.config.ResourceGroup, pipName)
-		if deleteErr == nil {
-			return true, nil
-		}
-		var responseErr *azcore.ResponseError
-		if !errors.As(deleteErr, &responseErr) || responseErr.StatusCode != http.StatusPreconditionFailed ||
-			!isResponseForMethod(responseErr, http.MethodDelete) {
-			return false, deleteErr
-		}
+		return false, fmt.Errorf("reading Public IP %q to check ownership: %w", pipName, err)
 	}
-	return false, deleteErr
+	if pip == nil {
+		return false, fmt.Errorf("reading Public IP %q to check ownership returned no resource", pipName)
+	}
+	if !ownsPublicIP(pip) {
+		dt.logger.V(2).Info("Kept Public IP without matching CCM-managed marker", "publicIP", pipName)
+		return false, nil
+	}
+	deleteCtx, err := withResourceETag(ctx, fmt.Sprintf("Public IP %q", pipName), pip.Etag)
+	if err != nil {
+		return false, err
+	}
+	if err := dt.deletePublicIP(deleteCtx, dt.config.ResourceGroup, pipName); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // createOrUpdateLB creates or updates a load balancer

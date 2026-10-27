@@ -27,7 +27,6 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -223,94 +222,6 @@ func byoNATGatewayIDProblem(id string, config Config) string {
 	return ""
 }
 
-func (s *ServiceUpdater) createBYOOutboundService(ctx context.Context, identity string, natGateway *armnetwork.NatGateway,
-	correlationID string, pod *v1.Pod) {
-	dt := s.diffTracker
-	natGatewayID := derefString(natGateway.ID)
-	serviceGatewayID := dt.config.ServiceGatewayResourceID()
-	parsed, err := arm.ParseResourceID(natGatewayID)
-	if err != nil {
-		s.onComplete(identity, false, fmt.Errorf("parsing NAT Gateway ID %q: %w", natGatewayID, err))
-		return
-	}
-	freshRecord := dt.setBYONATGatewayID(identity, natGatewayID)
-	linkedHere := strings.EqualFold(natGatewayServiceGatewayID(natGateway), serviceGatewayID)
-	retainRecord := !freshRecord || linkedHere
-	defer func() {
-		if !retainRecord {
-			dt.setBYONATGatewayID(identity, "")
-		}
-	}()
-
-	reject := func(problem string) {
-		if natGateway.Properties != nil && !linkedHere {
-			// Missing properties cannot prove an existing link is gone.
-			dt.setBYONATGatewayID(identity, "")
-		}
-		dt.recordEgressEvent(pod, v1.EventTypeWarning, egressNATGatewayRejectedReason,
-			fmt.Sprintf("Egress identity %q cannot use NAT Gateway %q: %s.", identity, natGatewayID, problem))
-		s.onComplete(identity, false, egressRejectedError{fmt.Errorf("BYO NAT Gateway %q: %s", natGatewayID, problem)})
-	}
-
-	if problem := byoNATGatewayProblem(natGateway, serviceGatewayID); problem != "" {
-		reject(problem)
-		return
-	}
-	user, err := dt.otherServiceUsing(ctx, identity, natGatewayID)
-	if err != nil {
-		s.onComplete(identity, false, err)
-		return
-	}
-	if user != "" {
-		reject(fmt.Sprintf("it is already used by Service Gateway service %q", user))
-		return
-	}
-	// Recorded IDs include ambiguous writes, so every attempt must reassert the link.
-	linkCtx, err := withNATGatewayETag(ctx, natGateway.Etag)
-	if err != nil {
-		s.onComplete(identity, false, err)
-		return
-	}
-	if err := s.cleanupManagedOutboundResources(ctx, identity, correlationID); err != nil {
-		s.onComplete(identity, false, fmt.Errorf("cleaning managed resources before BYO selection: %w", err))
-		return
-	}
-
-	// Keep the record once a write may have applied, including an ambiguous failure.
-	retainRecord = true
-	natGateway.Properties.ServiceGateway = &armnetwork.SubResource{ID: to.Ptr(serviceGatewayID)}
-	if err := dt.createOrUpdateNatGateway(linkCtx, parsed.ResourceGroupName, *natGateway); err != nil {
-		s.logger.V(4).Info("Could not link BYO NAT Gateway to Service Gateway", "serviceUID", identity, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
-		var respErr *azcore.ResponseError
-		if errors.As(err, &respErr) && isResponseForMethod(respErr, http.MethodPut) &&
-			respErr.StatusCode == http.StatusPreconditionFailed && freshRecord && !linkedHere {
-			retainRecord = false
-		}
-		if errors.As(err, &respErr) && isLinkRefusal(respErr) {
-			problem := fmt.Sprintf("Azure refused to link it to the Service Gateway (HTTP %d %s)", respErr.StatusCode, respErr.ErrorCode)
-			if respErr.StatusCode == http.StatusForbidden {
-				problem = "access denied when linking it to the Service Gateway; grant the cluster identity write access to the NAT Gateway"
-			}
-			reject(problem)
-			return
-		}
-		s.onComplete(identity, false, fmt.Errorf("failed to link NAT Gateway: %w", err))
-		return
-	}
-
-	if err := dt.updateNRPSGWServices(ctx, dt.config.ServiceGatewayResourceName, byoOutboundServicesDTO(identity, natGatewayID, dt.config)); err != nil {
-		s.logger.V(4).Info("Could not register outbound service with ServiceGateway", "serviceUID", identity, "correlationID", correlationID, "err", err)
-		s.onComplete(identity, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
-		return
-	}
-
-	dt.UpdateNRPNATGateways(SyncServicesReturnType{Additions: newIgnoreCaseSetFromSlice([]string{identity})})
-	dt.recordEgressEvent(pod, v1.EventTypeNormal, egressNATGatewayLinkedReason,
-		fmt.Sprintf("Egress identity %q uses BYO NAT Gateway %q.", identity, natGatewayID))
-	s.onComplete(identity, true, nil)
-	s.logger.V(2).Info("Created outbound service with BYO NAT Gateway", "serviceUID", identity, "natGateway", natGatewayID, "correlationID", correlationID)
-}
-
 // Remove owned resources left by an interrupted managed creation.
 func (s *ServiceUpdater) cleanupManagedOutboundResources(ctx context.Context, identity, correlationID string) error {
 	dt := s.diffTracker
@@ -329,33 +240,6 @@ func (s *ServiceUpdater) cleanupManagedOutboundResources(ctx context.Context, id
 		return s.deleteManagedOutboundResources(ctx, identity, correlationID)
 	}
 	return s.deleteOwnedOutboundPublicIPs(ctx, identity, correlationID)
-}
-
-func (s *ServiceUpdater) deleteBYOOutboundService(ctx context.Context, identity, natGatewayID, correlationID string) {
-	dt := s.diffTracker
-	if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
-		if err := dt.unlinkNatGateway(ctx, dt.config.ServiceGatewayResourceName, identity, parsed.ResourceGroupName, parsed.Name); err != nil {
-			// Permission or lock refusals do not block finalizer release.
-			if !isAccessDeniedOrLocked(err) {
-				s.logger.V(4).Info("Could not unlink BYO NAT Gateway", "serviceUID", identity, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
-				s.onComplete(identity, false, fmt.Errorf("failed to unlink NAT Gateway: %w", err))
-				return
-			}
-			recordDeleteSubstepFailure(deleteStepDisassociateNAT)
-			s.logger.Error(err, "Left the BYO NAT Gateway linked to the Service Gateway; remove the link manually", "serviceUID", identity, "natGateway", natGatewayID)
-		}
-	}
-
-	if err := dt.updateNRPSGWServices(ctx, dt.config.ServiceGatewayResourceName, buildServiceGatewayRemovalDTO(identity, false, dt.config)); err != nil {
-		var respErr *azcore.ResponseError
-		if !errors.As(err, &respErr) || respErr.StatusCode != http.StatusNotFound {
-			s.logger.V(4).Info("Could not unregister outbound service from ServiceGateway", "serviceUID", identity, "correlationID", correlationID, "err", err)
-			s.onComplete(identity, false, fmt.Errorf("failed to unregister from ServiceGateway: %w", err))
-			return
-		}
-	}
-
-	s.finishOutboundDeletion(ctx, identity, correlationID, s.cleanupManagedOutboundResources(ctx, identity, correlationID))
 }
 
 // A missing Service Gateway has no remaining users.

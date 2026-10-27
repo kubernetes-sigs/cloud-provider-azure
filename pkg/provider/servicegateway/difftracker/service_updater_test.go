@@ -985,6 +985,108 @@ func TestServiceUpdaterCreateOutboundService_HappyPath(t *testing.T) {
 		"NRP NAT Gateway state must be recorded after a successful create")
 }
 
+func TestServiceUpdaterCreateOutboundService_CompletionOrdering(t *testing.T) {
+	boom := errors.New("ARM failure")
+	for _, tc := range []struct {
+		name        string
+		byo         bool
+		missingETag bool
+		linkErr     error
+		registerErr error
+		success     bool
+		retained    bool
+	}{
+		{name: "managed success", success: true},
+		{name: "managed registration failure", registerErr: boom},
+		{name: "BYO success", byo: true, success: true, retained: true},
+		{name: "BYO registration failure", byo: true, registerErr: boom, retained: true},
+		{name: "BYO missing ETag", byo: true, missingETag: true},
+		{name: "BYO initial conflict", byo: true, linkErr: &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed}},
+		{name: "BYO ambiguous link failure", byo: true, linkErr: boom, retained: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := "completion-order"
+			identity := outboundServiceName(raw)
+			m := newOutboundMocks(gomock.NewController(t))
+			var operationCtx context.Context
+			resourceGroup := ""
+			if tc.byo {
+				resourceGroup = byoNATGatewayRG
+				gateway := byoNATGateway(raw)
+				if tc.missingETag {
+					gateway.Etag = nil
+				}
+				m.nat.EXPECT().Get(gomock.Any(), resourceGroup, raw, nil).
+					DoAndReturn(func(ctx context.Context, _, _ string, _ *string) (*armnetwork.NatGateway, error) {
+						operationCtx = ctx
+						return gateway, nil
+					})
+				m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).Times(1)
+				if !tc.missingETag {
+					m.expectNoManagedOutboundResources(identity, 1)
+					m.nat.EXPECT().CreateOrUpdate(gomock.Any(), resourceGroup, raw, gomock.Any()).
+						Return(gateway, initialNATPutError(tc.linkErr)).Times(1)
+				}
+			} else {
+				m.nat.EXPECT().Get(gomock.Any(), "rg", identity, nil).
+					DoAndReturn(func(ctx context.Context, _, _ string, _ *string) (*armnetwork.NatGateway, error) {
+						operationCtx = ctx
+						return nil, notFoundError()
+					})
+				m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(nil, notFoundError())
+				m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(identity), gomock.Any()).
+					Return(&armnetwork.PublicIPAddress{}, nil)
+				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", identity, gomock.Any()).Return(nil, nil)
+			}
+			dt := newTestDiffTracker()
+			dt.config, dt.networkClientFactory = testConfig(), m.factory
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(raw, resourceGroup))
+			recorder := record.NewFakeRecorder(10)
+			dt.eventRecorder = recorder
+			if !tc.missingETag && tc.linkErr == nil {
+				m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+					DoAndReturn(func(context.Context, string, string, armnetwork.ServiceGatewayUpdateServicesRequest) error {
+						assert.False(t, dt.NRPResources.NATGateways.Has(identity), "registration must precede publication")
+						unlocked := dt.mu.TryLock()
+						assert.True(t, unlocked, "registration must not hold the state lock")
+						if unlocked {
+							dt.mu.Unlock()
+						}
+						return tc.registerErr
+					}).Times(1)
+			}
+			callbacks := 0
+			updater := outboundUpdater(dt, &outboundCompletion{})
+			updater.onComplete = func(uid string, success bool, err error) {
+				callbacks++
+				assert.Equal(t, identity, uid)
+				assert.Equal(t, tc.success, success)
+				assert.Equal(t, tc.success, err == nil)
+				assert.Equal(t, tc.success, dt.NRPResources.NATGateways.Has(identity))
+				assert.Equal(t, tc.byo, dt.byoNATGatewayID(identity) != "", "binding disposition follows the callback")
+				if assert.NotNil(t, operationCtx) {
+					assert.NoError(t, operationCtx.Err(), "context cancellation follows completion")
+				}
+				events := drainEvents(recorder)
+				if tc.byo && tc.success {
+					if assert.Len(t, events, 1) {
+						assert.Contains(t, events[0], egressNATGatewayLinkedReason)
+					}
+				} else {
+					assert.Empty(t, events)
+				}
+			}
+			updater.createOutboundService(identity, &OutboundConfig{}, "order", "ns", "pod")
+			assert.Equal(t, 1, callbacks)
+			assert.Equal(t, tc.retained, dt.byoNATGatewayID(identity) != "")
+			assert.Empty(t, drainEvents(recorder), "events must precede completion")
+			if assert.NotNil(t, operationCtx) {
+				assert.ErrorIs(t, operationCtx.Err(), context.Canceled)
+			}
+		})
+	}
+}
+
 // TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState covers each failing
 // provisioning step. Recording NRP state after a partial create would make the tracker believe NRP
 // holds a service it does not, and the diff would never re-create it.
