@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -45,6 +46,23 @@ type nodeForConditionPatch struct {
 
 type nodeStatusForPatch struct {
 	Conditions []v1.NodeCondition `json:"conditions"`
+}
+
+// PreserveExternalIPs returns a new slice containing all fresh addresses unchanged,
+// followed by the ExternalIP addresses from recorded that are not already present
+// in the result. Neither input is mutated.
+func PreserveExternalIPs(recorded, fresh []v1.NodeAddress) []v1.NodeAddress {
+	result := make([]v1.NodeAddress, len(fresh), len(fresh)+len(recorded))
+	copy(result, fresh)
+	for _, addr := range recorded {
+		if addr.Type != v1.NodeExternalIP {
+			continue
+		}
+		if !slices.Contains(result, addr) {
+			result = append(result, addr)
+		}
+	}
+	return result
 }
 
 // PatchNodeCIDR patches the specified node's CIDR to the given value.
