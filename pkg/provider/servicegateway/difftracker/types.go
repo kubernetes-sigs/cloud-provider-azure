@@ -232,6 +232,7 @@ func healthProbeEqual(a, b *HealthProbeConfig) bool {
 
 // ServiceConfig encapsulates all configuration needed for a service
 type ServiceConfig struct {
+	// UID is the canonical ServiceGateway service name.
 	UID            string
 	IsInbound      bool
 	InboundConfig  *InboundConfig  // nil allowed for defaults
@@ -291,19 +292,15 @@ type NRPLocation struct {
 }
 
 type NRPState struct {
-	// LoadBalancers holds the UIDs of inbound services that have a LoadBalancer
-	// registered on the NRP side. These are SGW service identities, not Azure
-	// LoadBalancer resource names.
+	// LoadBalancers holds registered canonical inbound SGW names, also used as managed LB names.
 	LoadBalancers *utilsets.IgnoreCaseSet
-	// NATGateways holds the UIDs of outbound/egress services that have a NAT
-	// Gateway registered on the NRP side (SGW service identities, not Azure
-	// resource names).
+	// NATGateways holds registered canonical outbound SGW names. BYO resource names may differ.
 	NATGateways *utilsets.IgnoreCaseSet
 	// Startup snapshot with lowercase identities; live cleanup uses byoNATGateways.
 	OutboundNATGatewayIDs map[string]string
 	// Startup orphan-sweep exclusions; normal reconciliation rechecks ownership.
 	UnmanagedNATGateways *utilsets.IgnoreCaseSet
-	// RP-owned default service identities, not their referenced NAT Gateway names.
+	// ReservedOutboundServices contains RP-owned default ServiceGateway names.
 	ReservedOutboundServices *utilsets.IgnoreCaseSet
 	// Locations is keyed by node/VM IP (e.g. "10.0.0.1"). "Location" here is
 	// an SGW concept identifying a node, not an Azure region (e.g. "eastus2").
@@ -311,10 +308,10 @@ type NRPState struct {
 }
 
 type Pod struct {
-	// InboundIdentities holds the UIDs of the inbound ServiceGateway services
+	// InboundIdentities holds the canonical names of the inbound ServiceGateway services
 	// (LoadBalancers) this pod backs. A pod may back several, hence a set.
 	InboundIdentities *utilsets.IgnoreCaseSet
-	// PublicOutboundIdentity is the UID of the single outbound/egress ServiceGateway
+	// PublicOutboundIdentity is the canonical name of the single outbound/egress ServiceGateway
 	// service (NAT Gateway) this pod uses for egress; empty if the pod has no egress.
 	PublicOutboundIdentity string
 	// OutboundPodKey is the namespace/name of the Kubernetes pod that owns this outbound address.

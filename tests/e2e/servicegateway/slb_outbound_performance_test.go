@@ -172,7 +172,7 @@ var _ = Describe("Container Load Balancer Outbound Performance Test", Label(slbT
 				if sgSvc.Properties.ServiceType == "Outbound" {
 					// Check if this is one of our egress services
 					for _, name := range egressNames {
-						if sgSvc.Name == name {
+						if sgSvc.Name == outboundServiceName(name) {
 							provisionedEgress[name] = true
 							break
 						}
@@ -386,7 +386,7 @@ var _ = Describe("Container Load Balancer Outbound Performance Test", Label(slbT
 		var addressCount int
 
 		Eventually(func() error {
-			if err := egressRegisteredErr(egressName, numPods); err != nil {
+			if err := egressPodsRegisteredErr(cs, ns.Name, egressName, numPods); err != nil {
 				return err
 			}
 			sgResponse, err := queryServiceGatewayServices()
@@ -395,12 +395,12 @@ var _ = Describe("Container Load Balancer Outbound Performance Test", Label(slbT
 			}
 			natGatewayReady = false
 			for _, sgSvc := range sgResponse.Value {
-				if sgSvc.Name == egressName && sgSvc.Properties.ServiceType == "Outbound" {
+				if sgSvc.Name == outboundServiceName(egressName) && sgSvc.Properties.ServiceType == "Outbound" {
 					natGatewayReady = true
 					break
 				}
 			}
-			count, err := countRegisteredEndpoints(egressName)
+			count, err := countRegisteredEndpoints(outboundServiceName(egressName))
 			if err != nil {
 				return err
 			}

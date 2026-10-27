@@ -39,23 +39,50 @@ const (
 	// maxEgressIdentityLength is the longest egress identity that still leaves room for the longest
 	// Public IP suffix within Azure's resource-name limit. Kubernetes caps a label value at 63, so
 	// this bound is not reachable through the pod label in practice.
-	maxEgressIdentityLength = publicIPNameMaxLength - len(publicIPNameSuffixV6)
+	maxEgressIdentityLength = publicIPNameMaxLength - len(consts.ServiceGatewayOutboundNameSuffix) - len(publicIPNameSuffixV6)
 )
 
-// egressIdentityRegex matches a valid (lowercased) Azure NAT Gateway resource name and reserves
-// enough room for the longest Public IP suffix within Azure's resource-name limit. The bound is
-// maxEgressIdentityLength; the pattern spends one character on each anchored end.
+// egressIdentityRegex validates raw labels while reserving room for the service and Public IP suffixes.
 var egressIdentityRegex = regexp.MustCompile(fmt.Sprintf(
 	`^[a-z0-9]([a-z0-9._-]{0,%d}[a-z0-9_])?$`,
 	maxEgressIdentityLength-2,
 ))
 
-// ServiceUID returns the canonical ServiceGateway identity for a Kubernetes Service.
+// ServiceUID returns the canonical inbound ServiceGateway name (<UID>-lb).
 func ServiceUID(service *v1.Service) string {
 	if service == nil {
 		return ""
 	}
-	return strings.ToLower(string(service.UID))
+	return inboundServiceName(string(service.UID))
+}
+
+func inboundServiceName(uid string) string {
+	if uid == "" {
+		return ""
+	}
+	return strings.ToLower(uid) + consts.ServiceGatewayInboundNameSuffix
+}
+
+func outboundServiceName(identity string) string {
+	if identity == "" {
+		return ""
+	}
+	return strings.ToLower(identity) + consts.ServiceGatewayOutboundNameSuffix
+}
+
+// serviceIdentity reverses a canonical SGW name at Kubernetes and BYO lookup boundaries.
+func serviceIdentity(name string) (identity string, kind ServiceType, ok bool) {
+	name = strings.ToLower(name)
+	switch {
+	case strings.HasSuffix(name, consts.ServiceGatewayInboundNameSuffix):
+		identity = strings.TrimSuffix(name, consts.ServiceGatewayInboundNameSuffix)
+		return identity, Inbound, identity != ""
+	case strings.HasSuffix(name, consts.ServiceGatewayOutboundNameSuffix):
+		identity = strings.TrimSuffix(name, consts.ServiceGatewayOutboundNameSuffix)
+		return identity, Outbound, identity != ""
+	default:
+		return "", "", false
+	}
 }
 
 // PublicIPName returns the Public IP resource name associated with a ServiceGateway identity.
@@ -76,8 +103,7 @@ func outboundWantsIPv6(config *OutboundConfig) bool {
 	return false
 }
 
-// PublicIPNameV6 returns the IPv6 Public IP resource name for an outbound identity. Egress keeps
-// the IPv4 address under PublicIPName so existing resources are untouched.
+// PublicIPNameV6 returns the IPv6 Public IP name for a canonical outbound ServiceGateway identity.
 func PublicIPNameV6(identity string) string {
 	return identity + publicIPNameSuffixV6
 }
@@ -97,18 +123,24 @@ func OutboundPublicIPNames(identity string) []string {
 	return []string{PublicIPName(identity), PublicIPNameV6(identity)}
 }
 
-// identityFromPublicIPName maps a Public IP name back to the identity that owns it. The IPv6 suffix
-// must be tested first: "<identity>-pip-v6" does not end in "-pip", so a plain "-pip" test rejects
-// every IPv6 address as unrecognized and leaks it.
+// identityFromPublicIPName extracts the canonical SGW identity from a managed Public IP name.
+// Matching the naming convention alone does not establish CCM ownership.
 func identityFromPublicIPName(pipName string) (identity string, ok bool) {
+	pipName = strings.ToLower(pipName)
+	ipv6 := false
 	switch {
 	case strings.HasSuffix(pipName, publicIPNameSuffixV6):
-		return strings.TrimSuffix(pipName, publicIPNameSuffixV6), true
+		identity, ipv6 = strings.TrimSuffix(pipName, publicIPNameSuffixV6), true
 	case strings.HasSuffix(pipName, publicIPNameSuffix):
-		return strings.TrimSuffix(pipName, publicIPNameSuffix), true
+		identity = strings.TrimSuffix(pipName, publicIPNameSuffix)
 	default:
 		return "", false
 	}
+	_, kind, valid := serviceIdentity(identity)
+	if !valid || (ipv6 && kind != Outbound) {
+		return "", false
+	}
+	return identity, true
 }
 
 // DefaultOutboundNATGatewayName is the RP-owned default outbound NAT Gateway. AKS provisions it
@@ -116,24 +148,15 @@ func identityFromPublicIPName(pipName string) (identity string, ok bool) {
 // IP. It is not managed by this controller and must never be created, updated or deleted by it.
 const DefaultOutboundNATGatewayName = "default-natgw"
 
-const EgressIdentityTagKey = "k8s-azure-egress-identity"
-
-const InboundServiceUIDTagKey = "k8s-azure-service-uid"
-
-// IsReservedEgressIdentity reports whether name refers to a resource this controller must not
-// manage. Matching is case-insensitive because the value originates from a user-controlled label and
-// Azure may normalise resource-name casing differently across endpoints.
+// IsReservedEgressIdentity checks an actual SGW/NAT name against the well-known RP-owned default.
 func IsReservedEgressIdentity(name string) bool {
 	return strings.EqualFold(name, DefaultOutboundNATGatewayName)
 }
 
-// IsValidEgressIdentity reports whether name is a safe egress identity. The identity is derived from
-// a user-controllable pod label and is used verbatim as the NAT Gateway name and as the stem of the
-// Public IP name (identity+"-pip"), and is interpolated into their ARM resource IDs, so it must be
-// validated to avoid malformed ARM requests (for example a path-traversal value like "../foo") or a
-// PIP name that overflows Azure's 80-char limit, either of which causes endless create retries.
+// IsValidEgressIdentity validates the raw pod label before canonical naming.
+// Generated SGW, NAT Gateway and Public IP names must fit Azure's limits and avoid reserved names.
 func IsValidEgressIdentity(name string) bool {
-	if IsReservedEgressIdentity(name) {
+	if IsReservedEgressIdentity(outboundServiceName(name)) {
 		return false
 	}
 	return egressIdentityRegex.MatchString(name)
@@ -181,7 +204,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
-		Tags:     map[string]*string{InboundServiceUIDTagKey: to.Ptr(serviceUID)},
+		Tags:     managedResourceTags(),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 			PublicIPAddressVersion:   to.Ptr(pipVersion),
@@ -347,7 +370,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 			},
 			Location: to.Ptr(dtConfig.Location),
-			Tags:     egressIdentityTags(serviceUID),
+			Tags:     managedResourceTags(),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 				PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				PublicIPAddressVersion:   to.Ptr(version),
@@ -377,7 +400,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 			Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
-		Tags:     egressIdentityTags(serviceUID),
+		Tags:     managedResourceTags(),
 		Properties: &armnetwork.NatGatewayPropertiesFormat{
 			ServiceGateway: &armnetwork.SubResource{
 				ID: to.Ptr(dtConfig.ServiceGatewayResourceID()),
@@ -404,25 +427,24 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 	return pips, natGateway, servicesDTO
 }
 
-func egressIdentityTags(identity string) map[string]*string {
-	return map[string]*string{EgressIdentityTagKey: to.Ptr(identity)}
+func managedResourceTags() map[string]*string {
+	return map[string]*string{consts.ServiceGatewayManagedTagKey: to.Ptr(consts.ServiceGatewayManagedTagValue)}
 }
 
-// Ownership does not establish exclusive use; callers must also check other Service Gateway users.
+// ownsNATGateway checks the CCM-managed marker, not exclusive use.
+// Callers must also check other Service Gateway users.
 func ownsNATGateway(natGateway *armnetwork.NatGateway) bool {
 	if natGateway == nil {
 		return false
 	}
-	tag, ok := natGateway.Tags[EgressIdentityTagKey]
-	return ok && tag != nil && strings.EqualFold(*tag, derefString(natGateway.Name))
+	return derefString(natGateway.Tags[consts.ServiceGatewayManagedTagKey]) == consts.ServiceGatewayManagedTagValue
 }
 
-func ownsPublicIP(pip *armnetwork.PublicIPAddress, identity, ownerTagKey string) bool {
-	if pip == nil || identity == "" {
+func ownsPublicIP(pip *armnetwork.PublicIPAddress) bool {
+	if pip == nil {
 		return false
 	}
-	owner := pip.Tags[ownerTagKey]
-	return owner != nil && strings.EqualFold(*owner, identity)
+	return derefString(pip.Tags[consts.ServiceGatewayManagedTagKey]) == consts.ServiceGatewayManagedTagValue
 }
 
 // newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings

@@ -16,9 +16,6 @@ limitations under the License.
 
 package difftracker
 
-// Startup cleanup cannot recover a BYO link after its registration reference is lost.
-// A link scan could unlink a gateway prelinked by its owner or the RP.
-
 import (
 	"context"
 	"errors"
@@ -110,13 +107,17 @@ func (s *ServiceUpdater) resolveBYONATGateway(ctx context.Context, identity, pod
 	if problem := byoNATGatewayResourceGroupProblem(resourceGroup, dt.config); problem != "" {
 		return reject(errors.New(problem))
 	}
-	natGatewayID := fmt.Sprintf(consts.NatGatewayIDTemplate, dt.config.networkResourceSubscriptionID(), resourceGroup, identity)
+	gatewayName, kind, ok := serviceIdentity(identity)
+	if !ok || kind != Outbound {
+		return reject(fmt.Errorf("invalid outbound ServiceGateway name %q", identity))
+	}
+	natGatewayID := fmt.Sprintf(consts.NatGatewayIDTemplate, dt.config.networkResourceSubscriptionID(), resourceGroup, gatewayName)
 	natGateway, exists, err := dt.getNatGatewayByID(ctx, natGatewayID)
 	if err != nil {
 		return readFailed(natGatewayID, err)
 	}
 	if !exists {
-		return reject(fmt.Errorf("NAT Gateway %q not found in resource group %q", identity, resourceGroup))
+		return reject(fmt.Errorf("NAT Gateway %q not found in resource group %q", gatewayName, resourceGroup))
 	}
 	return natGateway, pod, nil
 }
@@ -155,7 +156,7 @@ func (dt *DiffTracker) readEgressMember(ctx context.Context, identity, namespace
 	}
 	if pod.DeletionTimestamp != nil ||
 		(pod.Status.Phase != v1.PodRunning && pod.Status.Phase != v1.PodPending) ||
-		!strings.EqualFold(pod.Labels[consts.PodLabelServiceEgressGateway], identity) {
+		!strings.EqualFold(outboundServiceName(pod.Labels[consts.PodLabelServiceEgressGateway]), identity) {
 		return nil, nil
 	}
 	return pod, nil
@@ -264,10 +265,14 @@ func (s *ServiceUpdater) createBYOOutboundService(ctx context.Context, identity 
 		reject(fmt.Sprintf("it is already used by Service Gateway service %q", user))
 		return
 	}
-	// A cleanup record is not proof of a successful link; every creation attempt reasserts it.
+	// Recorded IDs include ambiguous writes, so every attempt must reassert the link.
 	linkCtx, err := withNATGatewayETag(ctx, natGateway.Etag)
 	if err != nil {
 		s.onComplete(identity, false, err)
+		return
+	}
+	if err := s.cleanupManagedOutboundResources(ctx, identity, correlationID); err != nil {
+		s.onComplete(identity, false, fmt.Errorf("cleaning managed resources before BYO selection: %w", err))
 		return
 	}
 
@@ -306,11 +311,31 @@ func (s *ServiceUpdater) createBYOOutboundService(ctx context.Context, identity 
 	s.logger.V(2).Info("Created outbound service with BYO NAT Gateway", "serviceUID", identity, "natGateway", natGatewayID, "correlationID", correlationID)
 }
 
+// Remove owned resources left by an interrupted managed creation.
+func (s *ServiceUpdater) cleanupManagedOutboundResources(ctx context.Context, identity, correlationID string) error {
+	dt := s.diffTracker
+	exists, err := dt.clusterNATGatewayExists(ctx, identity)
+	if errors.Is(err, errNATGatewayNotOwned) {
+		s.logger.V(2).Info("Kept NAT Gateway and Public IPs not owned by this identity", "serviceUID", identity)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if exists {
+		if err := dt.disassociateNatGatewayFromServiceGateway(ctx, dt.config.ServiceGatewayResourceName, identity); err != nil {
+			return err
+		}
+		return s.deleteManagedOutboundResources(ctx, identity, correlationID)
+	}
+	return s.deleteOwnedOutboundPublicIPs(ctx, identity, correlationID)
+}
+
 func (s *ServiceUpdater) deleteBYOOutboundService(ctx context.Context, identity, natGatewayID, correlationID string) {
 	dt := s.diffTracker
 	if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
 		if err := dt.unlinkNatGateway(ctx, dt.config.ServiceGatewayResourceName, identity, parsed.ResourceGroupName, parsed.Name); err != nil {
-			// Do not hold the last pod's finalizer for a permission/lock refusal.
+			// Permission or lock refusals do not block finalizer release.
 			if !isAccessDeniedOrLocked(err) {
 				s.logger.V(4).Info("Could not unlink BYO NAT Gateway", "serviceUID", identity, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
 				s.onComplete(identity, false, fmt.Errorf("failed to unlink NAT Gateway: %w", err))
@@ -330,7 +355,7 @@ func (s *ServiceUpdater) deleteBYOOutboundService(ctx context.Context, identity,
 		}
 	}
 
-	s.finishOutboundDeletion(ctx, identity, correlationID, nil)
+	s.finishOutboundDeletion(ctx, identity, correlationID, s.cleanupManagedOutboundResources(ctx, identity, correlationID))
 }
 
 // A missing Service Gateway has no remaining users.
@@ -487,11 +512,12 @@ func (dt *DiffTracker) ownsClusterNATGateway(ctx context.Context, identity strin
 
 // Reserve service identities, not the names of their referenced NAT Gateways.
 func (dt *DiffTracker) isReservedOutboundService(identity string) bool {
-	if IsReservedEgressIdentity(identity) {
-		return true
-	}
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	return dt.outboundIdentityConflictsWithInboundLocked(identity) ||
+	return dt.isReservedServiceLocked(identity)
+}
+
+func (dt *DiffTracker) isReservedServiceLocked(identity string) bool {
+	return IsReservedEgressIdentity(identity) ||
 		(dt.NRPResources.ReservedOutboundServices != nil && dt.NRPResources.ReservedOutboundServices.Has(identity))
 }

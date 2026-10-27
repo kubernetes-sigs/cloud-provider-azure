@@ -158,7 +158,7 @@ func TestColdStart_DualStackNode_EgressUsesHostIP(t *testing.T) {
 		"egress pod must be keyed under pod.Status.HostIP (runtime location key)")
 	assert.NotContains(t, []string{locationForAddr(&k8s, podIP)}, nodeV4,
 		"egress pod must NOT be keyed under the node's first (mismatched-family) InternalIP")
-	assert.True(t, k8s.Egresses.Has(egress), "egress identity must be tracked")
+	assert.True(t, k8s.Egresses.Has(outboundServiceName(egress)), "egress identity must be tracked")
 }
 
 // TestColdStart_EgressPodNoSameFamilyLocation_NotDesired verifies cold-start does not mark an egress
@@ -181,7 +181,7 @@ func TestColdStart_EgressPodNoSameFamilyLocation_NotDesired(t *testing.T) {
 	_, err := processK8sEgresses(context.Background(), kube, &k8s)
 	assert.NoError(t, err)
 
-	assert.False(t, k8s.Egresses.Has(egress),
+	assert.False(t, k8s.Egresses.Has(outboundServiceName(egress)),
 		"an egress pod with no same-family node location must not mark the NAT Gateway desired (no orphan NAT)")
 	assert.False(t, podIPTracked(&k8s, podV6),
 		"the unlocatable IPv6 PodIP must not be registered")
@@ -220,17 +220,17 @@ func TestColdStart_DualStackNode_RestartConvergence(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.K8sResources = k8s
 	// Both services already exist in NRP and are tracked StateCreated (post-create steady state).
-	dt.NRPResources.LoadBalancers.Insert(svcV4UID)
-	dt.NRPResources.LoadBalancers.Insert(svcV6UID)
-	dt.pendingServiceOps[svcV4UID] = &ServiceOperationState{ServiceUID: svcV4UID, State: StateCreated, Config: NewInboundServiceConfig(svcV4UID, nil)}
-	dt.pendingServiceOps[svcV6UID] = &ServiceOperationState{ServiceUID: svcV6UID, State: StateCreated, Config: NewInboundServiceConfig(svcV6UID, nil)}
+	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(svcV4UID))
+	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(svcV6UID))
+	dt.pendingServiceOps[inboundServiceName(svcV4UID)] = &ServiceOperationState{ServiceUID: inboundServiceName(svcV4UID), State: StateCreated, Config: NewInboundServiceConfig(inboundServiceName(svcV4UID), nil)}
+	dt.pendingServiceOps[inboundServiceName(svcV6UID)] = &ServiceOperationState{ServiceUID: inboundServiceName(svcV6UID), State: StateCreated, Config: NewInboundServiceConfig(inboundServiceName(svcV6UID), nil)}
 
 	// Reflect into NRP exactly the family-matched locations the previous run published.
 	dt.NRPResources.Locations[nodeV4] = NRPLocation{Addresses: map[string]NRPAddress{
-		podV4: {Services: newIgnoreCaseSetFromSlice([]string{svcV4UID})},
+		podV4: {Services: newIgnoreCaseSetFromSlice([]string{inboundServiceName(svcV4UID)})},
 	}}
 	dt.NRPResources.Locations[nodeV6] = NRPLocation{Addresses: map[string]NRPAddress{
-		podV6: {Services: newIgnoreCaseSetFromSlice([]string{svcV6UID})},
+		podV6: {Services: newIgnoreCaseSetFromSlice([]string{inboundServiceName(svcV6UID)})},
 	}}
 
 	sync := dt.GetSyncOperations()

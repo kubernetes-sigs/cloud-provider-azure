@@ -51,12 +51,13 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
 
 func TestConvertServiceDTOsToServiceRequests_OutboundRemovalHasNoNatGatewayID(t *testing.T) {
 	reqs, err := convertServiceDTOsToServiceRequests([]ServiceDTO{
-		{Service: "egr1", ServiceType: Outbound, IsDelete: true},
+		{Service: "egr1-natgw", ServiceType: Outbound, IsDelete: true},
 	}, Config{SubscriptionID: "sub", ResourceGroup: "rg", VNetName: "vnet"})
 	assert.NoError(t, err)
 	assert.Len(t, reqs, 1)
@@ -64,9 +65,9 @@ func TestConvertServiceDTOsToServiceRequests_OutboundRemovalHasNoNatGatewayID(t 
 }
 
 func TestConvertServiceDTOsToServiceRequests_OutboundAddHasNatGatewayID(t *testing.T) {
-	natID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/egr1"
+	natID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/egr1-natgw"
 	reqs, err := convertServiceDTOsToServiceRequests([]ServiceDTO{
-		{Service: "egr1", ServiceType: Outbound, PublicNatGateway: NatGatewayDTO{ID: natID}},
+		{Service: "egr1-natgw", ServiceType: Outbound, PublicNatGateway: NatGatewayDTO{ID: natID}},
 	}, Config{SubscriptionID: "sub", ResourceGroup: "rg", VNetName: "vnet"})
 	assert.NoError(t, err)
 	assert.Len(t, reqs, 1)
@@ -112,7 +113,7 @@ func TestUpdateServiceLoadBalancerStatus_PreservesDualStackAndHostname(t *testin
 	kubeClient := fake.NewSimpleClientset(svc)
 	dt := &DiffTracker{kubeClient: kubeClient}
 
-	err := dt.updateServiceLoadBalancerStatus(context.Background(), "uid-1", "10.0.0.1")
+	err := dt.updateServiceLoadBalancerStatus(context.Background(), inboundServiceName("uid-1"), "10.0.0.1")
 	assert.NoError(t, err)
 
 	got, err := kubeClient.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
@@ -143,7 +144,7 @@ func TestUpdateServiceLoadBalancerStatus_ReplacesStaleSameFamily(t *testing.T) {
 	kubeClient := fake.NewSimpleClientset(svc)
 	dt := &DiffTracker{kubeClient: kubeClient}
 
-	err := dt.updateServiceLoadBalancerStatus(context.Background(), "uid-2", "10.0.0.1")
+	err := dt.updateServiceLoadBalancerStatus(context.Background(), inboundServiceName("uid-2"), "10.0.0.1")
 	assert.NoError(t, err)
 
 	got, err := kubeClient.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
@@ -160,10 +161,10 @@ func TestUpdateServiceLoadBalancerStatus_ReplacesStaleSameFamily(t *testing.T) {
 // cluster resource group when it is unset.
 func TestConvertServiceDTOsToServiceRequests_VNetResourceGroup(t *testing.T) {
 	dtos := []ServiceDTO{{
-		Service:     "svc",
+		Service:     "svc-lb",
 		ServiceType: Inbound,
 		LoadBalancerBackendPools: []LoadBalancerBackendPoolDTO{
-			{ID: "/subscriptions/sub/resourceGroups/cluster-rg/providers/Microsoft.Network/loadBalancers/svc/backendAddressPools/svc"},
+			{ID: "/subscriptions/sub/resourceGroups/cluster-rg/providers/Microsoft.Network/loadBalancers/svc-lb/backendAddressPools/svc-lb"},
 		},
 	}}
 	vnetID := func(c Config) string {
@@ -197,6 +198,7 @@ func serviceListerWith(t *testing.T, svcs ...*v1.Service) corelisters.ServiceLis
 // trackService records a namespace/name for a UID so getServiceByUID can resolve it through
 // the lister, mirroring what EnsureLoadBalancer populates on the ServiceConfig.
 func (dt *DiffTracker) trackService(uid, namespace, name string) {
+	uid = inboundServiceName(uid)
 	dt.pendingServiceOps[uid] = &ServiceOperationState{
 		ServiceUID: uid,
 		Config:     ServiceConfig{UID: uid, IsInbound: true, Namespace: namespace, Name: name},
@@ -212,7 +214,7 @@ func TestGetServiceByUID_ResolvesThroughListerWithoutList(t *testing.T) {
 	dt.serviceLister = serviceListerWith(t, svc)
 	dt.trackService("uid-1", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), "uid-1")
+	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
@@ -231,7 +233,7 @@ func TestGetServiceByUID_UIDMismatchReturnsNotFound(t *testing.T) {
 	dt.serviceLister = serviceListerWith(t, current)
 	dt.trackService("uid-expected", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), "uid-expected")
+	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-expected"))
 	assert.Nil(t, got)
 	assert.True(t, apierrors.IsNotFound(err), "UID mismatch must surface as NotFound, got %v", err)
 }
@@ -243,7 +245,7 @@ func TestGetServiceByUID_NilListerFallsBackToApiserverGet(t *testing.T) {
 	dt.serviceLister = nil
 	dt.trackService("uid-1", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), "uid-1")
+	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
@@ -256,7 +258,7 @@ func TestGetServiceByUID_UnknownIdentityFallsBackToList(t *testing.T) {
 	dt.kubeClient = fake.NewSimpleClientset(svc)
 	dt.serviceLister = serviceListerWith(t) // lister present but empty
 
-	got, err := dt.getServiceByUID(context.Background(), "uid-1")
+	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
@@ -272,7 +274,7 @@ func TestGetServiceByUID_ColdListerCacheFallsBackToApiserverGet(t *testing.T) {
 	dt.serviceLister = serviceListerWith(t) // empty cache
 	dt.trackService("uid-1", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), "uid-1")
+	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
@@ -296,7 +298,7 @@ func TestUpdateServiceLoadBalancerStatus_DualStackSafeThroughLister(t *testing.T
 	dt.serviceLister = serviceListerWith(t, svc)
 	dt.trackService("uid-1", "ns", "svc")
 
-	err := dt.updateServiceLoadBalancerStatus(context.Background(), "uid-1", "10.0.0.1")
+	err := dt.updateServiceLoadBalancerStatus(context.Background(), inboundServiceName("uid-1"), "10.0.0.1")
 	assert.NoError(t, err)
 
 	got, err := dt.kubeClient.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
@@ -556,14 +558,14 @@ func TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer(t *testi
 	// No namespace/name recorded for either UID, so both reads take the List scan.
 	dt.kubeClient = serviceClientWithTypeFieldSelector(retyped, stillLB)
 
-	got, err := dt.getServiceByUID(context.Background(), "uid-retyped")
+	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-retyped"))
 	assert.NoError(t, err,
 		"a Service retyped away from LoadBalancer must still resolve: the tracker still owns its finalizer and Azure resources")
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-retyped", string(got.UID))
 	}
 
-	gotLB, err := dt.getServiceByUID(context.Background(), "uid-lb")
+	gotLB, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-lb"))
 	assert.NoError(t, err, "control: a LoadBalancer Service resolves regardless of the selector")
 	if assert.NotNil(t, gotLB) {
 		assert.Equal(t, "uid-lb", string(gotLB.UID))
@@ -600,9 +602,8 @@ func TestResponseForMethod(t *testing.T) {
 }
 
 func TestPublicIPConditionalDeletion(t *testing.T) {
-	const identity, pipName = "payments", "payments-pip"
-	for _, ownerTagKey := range []string{EgressIdentityTagKey, InboundServiceUIDTagKey} {
-		t.Run(ownerTagKey, func(t *testing.T) {
+	for _, pipName := range []string{"payments-lb-pip", "payments-natgw-pip", "payments-natgw-pip-v6"} {
+		t.Run(pipName, func(t *testing.T) {
 			for _, tc := range []struct {
 				name                  string
 				wantGets, wantDeletes int
@@ -634,7 +635,7 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 				t.Run(tc.name, func(t *testing.T) {
 					live := &armnetwork.PublicIPAddress{
 						Name: ptr.To(pipName), Etag: ptr.To(`W/"v1"`),
-						Tags: map[string]*string{ownerTagKey: ptr.To(identity)},
+						Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(consts.ServiceGatewayManagedTagValue)},
 					}
 					switch tc.name {
 					case "missing etag":
@@ -685,14 +686,14 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 									case "version changed", "owner changed on retry", "refresh forbidden", "gone on refresh":
 										live.Etag = ptr.To(`W/"v2"`)
 									case "owner changed":
-										live.Tags[ownerTagKey] = ptr.To("other-owner")
+										live.Tags[consts.ServiceGatewayManagedTagKey] = ptr.To("other-owner")
 										live.Etag = ptr.To(`W/"v2"`)
 									case "owner removed":
-										delete(live.Tags, ownerTagKey)
+										delete(live.Tags, consts.ServiceGatewayManagedTagKey)
 										live.Etag = ptr.To(`W/"v2"`)
 									case "replacement", "ambiguous delete with replacement":
 										live = &armnetwork.PublicIPAddress{Name: ptr.To(pipName), Etag: ptr.To(`W/"replacement"`),
-											Tags: map[string]*string{ownerTagKey: ptr.To("other-owner")}}
+											Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("other-owner")}}
 									case "already deleted":
 										live = nil
 									case "etag lost on refresh":
@@ -703,7 +704,7 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 									live.Etag = ptr.To(fmt.Sprintf(`W/"conflict-%d"`, deletes))
 								}
 								if tc.name == "owner changed on retry" && deletes == 2 {
-									live.Tags[ownerTagKey] = ptr.To("other-owner")
+									live.Tags[consts.ServiceGatewayManagedTagKey] = ptr.To("other-owner")
 									live.Etag = ptr.To(`W/"v3"`)
 								}
 								switch {
@@ -753,7 +754,7 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 					factory := mock_azclient.NewMockClientFactory(ctrl)
 					factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
 					dt := &DiffTracker{config: testConfig(), networkClientFactory: factory}
-					deleted, err := dt.deleteOwnedPublicIP(context.Background(), pipName, identity, ownerTagKey)
+					deleted, err := dt.deleteOwnedPublicIP(context.Background(), pipName)
 					assert.Equal(t, tc.wantDeleted, deleted)
 					assert.Equal(t, tc.wantGone, live == nil)
 					assert.Equal(t, tc.wantGets, gets)
@@ -771,10 +772,10 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 						assert.NoError(t, err)
 					}
 					if live != nil && (tc.name == "owner changed" || tc.name == "owner changed on retry" || tc.name == "replacement" || tc.name == "ambiguous delete with replacement") {
-						assert.Equal(t, "other-owner", derefString(live.Tags[ownerTagKey]))
+						assert.Equal(t, "other-owner", derefString(live.Tags[consts.ServiceGatewayManagedTagKey]))
 					}
 					if live != nil && tc.name == "owner removed" {
-						assert.NotContains(t, live.Tags, ownerTagKey)
+						assert.NotContains(t, live.Tags, consts.ServiceGatewayManagedTagKey)
 					}
 				})
 			}
@@ -784,6 +785,7 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 
 func TestBYONATGatewayConditionalWrites(t *testing.T) {
 	const identity = "conditional-nat"
+	serviceName := outboundServiceName(identity)
 	cfg := testConfig()
 	for _, unlink := range []bool{false, true} {
 		for _, conflict := range []bool{false, true} {
@@ -795,6 +797,13 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 				lastReadETag := ""
 				gets, puts := 0, 0
 				transport := armNetworkTransportFunc(func(req *http.Request) (*http.Response, error) {
+					if req.URL.Path == "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/"+serviceName {
+						assert.Equal(t, http.MethodGet, req.Method, "an unowned node-RG namesake must not be changed")
+						return &http.Response{
+							StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}},
+							Body: io.NopCloser(strings.NewReader(`{"name":"` + serviceName + `","properties":{}}`)), Request: req,
+						}, nil
+					}
 					assert.Contains(t, req.URL.Path, "/resourceGroups/"+byoNATGatewayRG+"/providers/Microsoft.Network/natGateways/"+identity)
 					status := http.StatusOK
 					var body []byte
@@ -864,18 +873,18 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 				dt.config, dt.networkClientFactory = testConfig(), factory
 				dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayRG))
 				if unlink || conflict {
-					dt.setBYONATGatewayID(identity, byoNATGatewayARMID(identity))
+					dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(identity))
 				}
 				if unlink {
-					dt.NRPResources.NATGateways.Insert(identity)
+					dt.NRPResources.NATGateways.Insert(serviceName)
 				}
 				attempt := func() (bool, error) {
 					completed := &outboundCompletion{}
 					updater := outboundUpdater(dt, completed)
 					if unlink {
-						updater.deleteOutboundService(identity, "corr")
+						updater.deleteOutboundService(serviceName, "corr")
 					} else {
-						updater.createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
+						updater.createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 					}
 					called, success, result := completed.result()
 					assert.True(t, called)
@@ -890,7 +899,7 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 					}
 					assert.False(t, isEgressRejected(err), "a stale precondition is retried, not a user configuration rejection")
 					assert.Equal(t, "owner-changed", derefString(live.Tags["owner"]))
-					assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity), "a stale retry must not forget an earlier possible link")
+					assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(serviceName), "a stale retry must not forget an earlier possible link")
 					success, err = attempt()
 				}
 				assert.True(t, success, "%v", err)
@@ -904,6 +913,7 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 
 func TestBYOLinkFailureRetainsCleanupAndRequiresAnotherWrite(t *testing.T) {
 	const identity = "link-failure"
+	serviceName := outboundServiceName(identity)
 	cfg := testConfig()
 	for _, tc := range []struct {
 		name         string
@@ -970,12 +980,12 @@ func TestBYOLinkFailureRetainsCleanupAndRequiresAnotherWrite(t *testing.T) {
 			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayRG))
 			for i := 0; i < tc.attempts; i++ {
 				result := &outboundCompletion{}
-				outboundUpdater(dt, result).createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
+				outboundUpdater(dt, result).createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 				called, success, resultErr := result.result()
 				assert.True(t, called)
 				assert.False(t, success, "a failed reassertion must not become successful registration on retry")
 				assert.Error(t, resultErr)
-				assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity), "a possibly applied link remains recorded")
+				assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(serviceName), "a possibly applied link remains recorded")
 			}
 			assert.Equal(t, tc.attempts, writes, "the controller, not SDK retries, must re-read before the next mutation")
 		})
@@ -984,6 +994,7 @@ func TestBYOLinkFailureRetainsCleanupAndRequiresAnotherWrite(t *testing.T) {
 
 func TestBYOLinkPollingFailureRetainsAppliedLinkForDeletion(t *testing.T) {
 	const identity = "poll-failure"
+	serviceName := outboundServiceName(identity)
 	cfg := testConfig()
 	for _, status := range []int{http.StatusForbidden, http.StatusNotFound, http.StatusPreconditionFailed} {
 		t.Run(fmt.Sprint(status), func(t *testing.T) {
@@ -1042,23 +1053,27 @@ func TestBYOLinkPollingFailureRetainsAppliedLinkForDeletion(t *testing.T) {
 			dt.config, dt.networkClientFactory = cfg, factory
 			dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayRG))
 			created := &outboundCompletion{}
-			outboundUpdater(dt, created).createOutboundService(identity, &OutboundConfig{}, "corr", "ns", "pod")
+			outboundUpdater(dt, created).createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 			_, success, createErr := created.result()
 			assert.False(t, success)
 			assert.Error(t, createErr)
 			assert.False(t, isEgressRejected(createErr), "a polling GET is not a refused PUT")
 			assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(live))
-			if !assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity), "an applied link must remain recorded") {
+			if !assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(serviceName), "an applied link must remain recorded") {
 				return
 			}
 			deleted := &outboundCompletion{}
-			outboundUpdater(dt, deleted).deleteOutboundService(identity, "corr")
+			dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+				ServiceUID: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateDeletionInProgress,
+			}
+			outboundUpdater(dt, deleted).deleteOutboundService(serviceName, "corr")
 			_, success, deleteErr := deleted.result()
 			assert.True(t, success, "%v", deleteErr)
 			assert.Equal(t, 1, linkWrites)
 			assert.Equal(t, 1, unlinkWrites)
 			assert.Empty(t, natGatewayServiceGatewayID(live))
-			assert.Empty(t, dt.byoNATGatewayID(identity))
+			dt.OnServiceCreationComplete(serviceName, success, deleteErr)
+			assert.Empty(t, dt.byoNATGatewayID(serviceName))
 		})
 	}
 }
@@ -1078,7 +1093,7 @@ func TestWithResourceETag_RejectsUnprotectedWrites(t *testing.T) {
 // generated marshaller, and ARM reads an absent field as "leave unchanged", so both clears become
 // no-ops that still report success.
 func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
-	const sgwName, natName = "sgw", "egress-uid"
+	const sgwName, natName = "sgw", "egress-uid-natgw"
 	sgwID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/serviceGateways/" + sgwName
 	natID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + natName
 
@@ -1170,8 +1185,8 @@ func TestIsSynchronousCompletion_RejectsErrorBearing200(t *testing.T) {
 // with gomock.Any() cannot see either.
 func TestConvertServiceDTOsToServiceRequests_MapsServiceType(t *testing.T) {
 	requests, err := convertServiceDTOsToServiceRequests([]ServiceDTO{
-		{Service: "lb-uid", ServiceType: Inbound},
-		{Service: "nat-uid", ServiceType: Outbound, PublicNatGateway: NatGatewayDTO{ID: "/nat/id"}},
+		{Service: "lb-uid-lb", ServiceType: Inbound},
+		{Service: "nat-uid-natgw", ServiceType: Outbound, PublicNatGateway: NatGatewayDTO{ID: "/nat/id"}},
 	}, testConfig())
 	assert.NoError(t, err)
 

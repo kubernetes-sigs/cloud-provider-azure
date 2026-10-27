@@ -93,13 +93,13 @@ func TestLoadBalancerCleansDesiredOnlyReservation(t *testing.T) {
 			pod.UID = "pod-uid"
 			pod.Annotations = map[string]string{consts.PodAnnotationServiceEgressGatewayResourceGroup: "byo-rg"}
 			tracker := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(svc, pod))
-			tracker.K8sResources.Services.Insert(uid)
+			tracker.K8sResources.Services.Insert(inboundServiceName(uid))
 			lb := NewLoadBalancer(nil)
 			assert.NoError(t, lb.SetTracker(tracker))
 			_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
 			assert.Error(t, err)
 			assert.Empty(t, tracker.pendingServiceOps)
-			assert.False(t, tracker.NRPResources.LoadBalancers.Has(uid))
+			assert.False(t, tracker.NRPResources.LoadBalancers.Has(inboundServiceName(uid)))
 
 			if retype {
 				svc.Spec.Type = v1.ServiceTypeClusterIP
@@ -113,10 +113,10 @@ func TestLoadBalancerCleansDesiredOnlyReservation(t *testing.T) {
 			if exists {
 				assert.NoError(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", svc))
 			}
-			assert.False(t, tracker.IsServiceTracked(uid))
+			assert.False(t, tracker.IsServiceTracked(inboundServiceName(uid)))
 			tracker.podInformerAddPod(pod)
-			if assert.Contains(t, tracker.pendingServiceOps, uid) {
-				assert.False(t, tracker.pendingServiceOps[uid].Config.IsInbound)
+			if assert.Contains(t, tracker.pendingServiceOps, outboundServiceName(uid)) {
+				assert.False(t, tracker.pendingServiceOps[outboundServiceName(uid)].Config.IsInbound)
 			}
 		})
 	}

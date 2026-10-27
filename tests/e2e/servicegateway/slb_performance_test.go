@@ -177,8 +177,10 @@ var _ = Describe("Container Load Balancer Performance Test", Label(slbTestLabel,
 			// Count provisioned
 			uidMutex.Lock()
 			for _, sgSvc := range sgResponse.Value {
-				if _, exists := serviceUIDs[sgSvc.Name]; exists {
-					serviceUIDs[sgSvc.Name] = true
+				for uid := range serviceUIDs {
+					if sgSvc.Name == inboundServiceName(uid) {
+						serviceUIDs[uid] = true
+					}
 				}
 			}
 

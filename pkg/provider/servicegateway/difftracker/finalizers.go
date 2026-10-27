@@ -476,6 +476,19 @@ func (dt *DiffTracker) HasPendingPodDeletion(namespace, name, uid string) bool {
 	return ok && (uid == "" || existing.UID == uid)
 }
 
+// Reserved resources stay untouched, but an earlier pod drain can still own its finalizer.
+func (dt *DiffTracker) reservedPodFinalizerDecisionLocked(namespace, name, uid string) DeletePodResult {
+	result := DeletePodResult{}
+	if namespace == "" || name == "" {
+		return result
+	}
+	if pending := dt.pendingPodDeletions[namespace+"/"+name]; pending != nil && (uid == "" || pending.UID == uid) {
+		result.IsLastPod, result.Enqueued = pending.IsLastPod, true
+	}
+	result.setFinalizerDecision()
+	return result
+}
+
 // CheckPendingPodDeletions checks pending pod deletions and removes finalizers for non-last pods
 // whose addresses have been synced to NRP.
 // For non-last pods (isLastPod=false): remove finalizer immediately after location sync
