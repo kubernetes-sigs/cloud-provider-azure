@@ -27,14 +27,15 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// serviceUIDOfEndpointSlice returns the owning Service UID of an EndpointSlice, if any.
+// serviceUIDOfEndpointSlice returns the owning Service's canonical inbound SGW name, if any.
 func serviceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) (uid string, loaded bool) {
 	if es == nil {
 		return "", false
 	}
 	for _, owner := range es.OwnerReferences {
 		if owner.Kind == "Service" {
-			return string(owner.UID), true
+			uid := inboundServiceName(string(owner.UID))
+			return uid, uid != ""
 		}
 	}
 	return "", false

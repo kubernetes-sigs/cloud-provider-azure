@@ -142,7 +142,7 @@ var _ = Describe("SLB - Service Type Transition", Label(slbTestLabel), func() {
 		utils.Logf("LoadBalancer service created with UID: %s", serviceUID)
 
 		By("Waiting for Azure to provision the LoadBalancer")
-		eventuallyServiceReconciled(serviceUID, numPods, provisionTimeout)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, provisionTimeout)
 
 		By("Verifying both ServiceGateway and LoadBalancer finalizers are present")
 		Eventually(func() ([]string, error) {
@@ -203,7 +203,7 @@ var _ = Describe("SLB - Service Type Transition", Label(slbTestLabel), func() {
 		utils.Logf("Service type changed back to LoadBalancer")
 
 		By("Waiting for Azure to re-provision the LoadBalancer against the same UID")
-		eventuallyServiceReconciled(serviceUID, numPods, provisionTimeout)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, provisionTimeout)
 
 		By("Verifying the cleanup finalizers are re-added")
 		Eventually(func() ([]string, error) {
@@ -262,7 +262,7 @@ var _ = Describe("SLB - Service Type Transition", Label(slbTestLabel), func() {
 		created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		serviceUID := string(created.UID)
-		eventuallyServiceReconciled(serviceUID, numPods, provisionTimeout)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, provisionTimeout)
 
 		By("Flipping LoadBalancer->ClusterIP and immediately back to LoadBalancer (no settle wait)")
 		Eventually(func() error {
@@ -293,7 +293,7 @@ var _ = Describe("SLB - Service Type Transition", Label(slbTestLabel), func() {
 		utils.Logf("Rapid toggle applied; verifying the recreated LoadBalancer keeps its backend pods")
 
 		By("Verifying the recreated LoadBalancer registers all backend pods (not an empty pool)")
-		eventuallyServiceReconciled(serviceUID, numPods, provisionTimeout)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, provisionTimeout)
 
 		By("Verifying the recreated LoadBalancer regained both cleanup finalizers")
 		Eventually(func() ([]string, error) {

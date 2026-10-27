@@ -284,8 +284,12 @@ func createTestService(name string, ports []servicePort) *v1.Service {
 
 // newK8sStateForSeeders returns an empty K8sState suitable for the processK8s* seeders.
 func newK8sStateForSeeders(trackedServices ...string) K8sState {
+	services := utilsets.NewString()
+	for _, uid := range trackedServices {
+		services.Insert(inboundServiceName(uid))
+	}
 	return K8sState{
-		Services: utilsets.NewString(trackedServices...),
+		Services: services,
 		Egresses: utilsets.NewString(),
 		Nodes:    make(map[string]Node),
 	}
@@ -370,9 +374,9 @@ func TestProcessK8sEndpoints_SkipsNotReadyEndpoints(t *testing.T) {
 		"an endpoint with Conditions.Ready==false must not be imported into K8s state at init")
 }
 
-func TestInitOutboundRefCount_RejectsServiceUIDEgressLabelCollision(t *testing.T) {
+func TestInitOutboundRefCount_AllowsSameRawServiceUIDAndEgressLabel(t *testing.T) {
 	const (
-		collideID = "collide-id" // serves as BOTH the inbound svc UID and the egress label
+		collideID = "collide-id"
 		nodeName  = "node-1"
 		nodeIP    = "10.0.0.21"
 		podIP     = "10.244.3.3"
@@ -392,13 +396,13 @@ func TestInitOutboundRefCount_RejectsServiceUIDEgressLabelCollision(t *testing.T
 
 	k8s := newK8sStateForSeeders()
 
-	// Build the cold-start K8s state: inbound LB service + colliding egress pod.
+	// The same raw identity must seed separate inbound and outbound state.
 	_, _, err := processK8sServices(context.Background(), kube, &k8s)
 	assert.NoError(t, err)
 	_, err = processK8sEgresses(context.Background(), kube, &k8s)
 	assert.NoError(t, err)
 	member := k8s.Nodes[nodeIP].Pods[podIP]
-	member.InboundIdentities = utilsets.NewString(collideID)
+	member.InboundIdentities = utilsets.NewString(inboundServiceName(collideID))
 	k8s.Nodes[nodeIP].Pods[podIP] = member
 
 	ctrl := gomock.NewController(t)
@@ -420,59 +424,61 @@ func TestInitOutboundRefCount_RejectsServiceUIDEgressLabelCollision(t *testing.T
 		t.FailNow()
 	}
 
-	_, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(collideID))
-	assert.False(t, ok, "colliding labels must not seed outbound lifetime state")
-	assert.False(t, dt.K8sResources.Egresses.Has(collideID))
+	count, ok := dt.outboundIdentityPodRefCount.Load(outboundServiceName(collideID))
+	assert.True(t, ok)
+	assert.Equal(t, 1, count)
+	assert.True(t, dt.K8sResources.Egresses.Has(outboundServiceName(collideID)))
 	member = dt.K8sResources.Nodes[nodeIP].Pods[podIP]
-	assert.Empty(t, member.PublicOutboundIdentity)
-	assert.Empty(t, member.OutboundPodKey)
-	assert.Empty(t, member.OutboundPodUID)
-	assert.True(t, member.InboundIdentities.Has(collideID), "inbound membership must survive")
-	v, ok := dt.outboundIdentityPodRefCount.Load("ordinary-egress")
+	assert.Equal(t, outboundServiceName(collideID), member.PublicOutboundIdentity)
+	assert.Equal(t, "default/pod-collide", member.OutboundPodKey)
+	assert.True(t, member.InboundIdentities.Has(inboundServiceName(collideID)), "inbound membership must survive")
+	v, ok := dt.outboundIdentityPodRefCount.Load(outboundServiceName("ordinary-egress"))
 	assert.True(t, ok)
 	assert.Equal(t, 1, v, "ordinary egress pods still seed their ref-count")
-	res := dt.DeletePod(collideID, nodeIP, []string{podIP}, "default", "pod-collide", "")
-	assert.False(t, res.IsLastPod)
+	res := dt.DeletePod(outboundServiceName(collideID), nodeIP, []string{podIP}, "default", "pod-collide", "")
+	assert.True(t, res.IsLastPod)
 	assert.True(t, podIPTracked(&dt.K8sResources, podIP), "an egress delete must leave inbound membership intact")
-	assert.NotContains(t, dt.GetSyncNRPNATGateways().Additions.UnsortedList(), collideID)
+	assert.True(t, dt.K8sResources.Services.Has(inboundServiceName(collideID)))
+	assert.Contains(t, dt.pendingServiceDeletions, outboundServiceName(collideID))
 }
 
 func TestInitPreservesRegisteredOutboundOwner(t *testing.T) {
 	const uid, other, hostIP, podIP = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "other-inbound", "10.0.0.1", "10.244.0.5"
+	inboundName, outboundName, otherName := inboundServiceName(uid), outboundServiceName(uid), inboundServiceName(other)
 	k8s := newK8sStateForSeeders()
-	k8s.Services.Insert(uid, other)
-	k8s.Egresses.Insert(uid)
+	k8s.Services.Insert(inboundName, otherName)
+	k8s.Egresses.Insert(outboundName)
 	k8s.Nodes[hostIP] = Node{Pods: map[string]Pod{
 		podIP: {
-			InboundIdentities: utilsets.NewString(uid, other), PublicOutboundIdentity: uid,
+			InboundIdentities: utilsets.NewString(inboundName, otherName), PublicOutboundIdentity: outboundName,
 			OutboundPodKey: "ns/egress", OutboundPodUID: "pod-uid",
 		},
-		"10.244.0.9": {InboundIdentities: utilsets.NewString(uid)},
+		"10.244.0.9": {InboundIdentities: utilsets.NewString(inboundName)},
 	}}
 	nrp := NRPState{
-		LoadBalancers: utilsets.NewString(other), NATGateways: utilsets.NewString(uid),
+		LoadBalancers: utilsets.NewString(otherName), NATGateways: utilsets.NewString(outboundName),
 		Locations:             map[string]NRPLocation{},
-		OutboundNATGatewayIDs: map[string]string{uid: byoNATGatewayARMID(uid)},
+		OutboundNATGatewayIDs: map[string]string{outboundName: byoNATGatewayARMID(uid)},
 	}
 	ctrl := gomock.NewController(t)
 	dt, err := New(logr.Discard(), k8s, nrp, testConfig(), mock_azclient.NewMockClientFactory(ctrl), fake.NewSimpleClientset())
 	if !assert.NoError(t, err) {
 		return
 	}
-	assert.False(t, dt.K8sResources.Services.Has(uid), "new inbound desired state must yield to the registered outbound owner")
-	assert.True(t, dt.K8sResources.Services.Has(other))
-	assert.True(t, dt.K8sResources.Egresses.Has(uid))
+	assert.True(t, dt.K8sResources.Services.Has(inboundName), "inbound desired state is independent of outbound registration")
+	assert.True(t, dt.K8sResources.Services.Has(otherName))
+	assert.True(t, dt.K8sResources.Egresses.Has(outboundName))
 	member := dt.K8sResources.Nodes[hostIP].Pods[podIP]
-	assert.Equal(t, uid, member.PublicOutboundIdentity)
+	assert.Equal(t, outboundName, member.PublicOutboundIdentity)
 	assert.Equal(t, "pod-uid", member.OutboundPodUID)
-	assert.False(t, member.InboundIdentities.Has(uid))
-	assert.True(t, member.InboundIdentities.Has(other))
-	assert.NotContains(t, dt.K8sResources.Nodes[hostIP].Pods, "10.244.0.9")
-	count, ok := dt.outboundIdentityPodRefCount.Load(uid)
+	assert.True(t, member.InboundIdentities.Has(inboundName))
+	assert.True(t, member.InboundIdentities.Has(otherName))
+	assert.Contains(t, dt.K8sResources.Nodes[hostIP].Pods, "10.244.0.9")
+	count, ok := dt.outboundIdentityPodRefCount.Load(outboundName)
 	assert.True(t, ok)
 	assert.Equal(t, 1, count)
-	assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(uid))
-	assert.False(t, dt.GetSyncLoadBalancerServices().Additions.Has(uid))
+	assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(outboundName))
+	assert.True(t, dt.GetSyncLoadBalancerServices().Additions.Has(inboundName))
 	assert.Zero(t, dt.GetSyncNRPNATGateways().Removals.Len())
 }
 
@@ -499,7 +505,7 @@ func TestRecoverStuckFinalizers_KeepsFinalizerWhenAzureResourceExists(t *testing
 	services := &v1.ServiceList{Items: []v1.Service{*svc}}
 
 	// A real Azure LB exists for the UID even though it is absent from NRPResources.
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(uid), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(inboundServiceName(uid)), nil)
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "svc-crash", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -529,8 +535,8 @@ func TestRecoverStuckFinalizers_KeepsFinalizerWhenOnlyPIPExists(t *testing.T) {
 	// The PIP exists in Azure but its static address has not been allocated yet (nil IPAddress) - the
 	// crash-after-PIP-create window. Existence must still be recognized (by name, via
 	// pipNamesInAzureFromList) so the Service finalizer is preserved for orphan cleanup.
-	azurePIPs := []*armnetwork.PublicIPAddress{{Name: ptr.To(uid + "-pip")}}
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), utilsets.NewString(), pipNamesInAzureFromList(azurePIPs))
+	azurePIPs := []*armnetwork.PublicIPAddress{{Name: ptr.To(PublicIPName(inboundServiceName(uid)))}}
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), pipNamesInAzureFromList(azurePIPs))
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "svc-pip", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -577,7 +583,7 @@ func TestRecoverStuckFinalizers_RemovesFinalizerWhenNoAzureResource(t *testing.T
 	dt.kubeClient = kube
 	services := &v1.ServiceList{Items: []v1.Service{*svc}}
 
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), nil)
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "svc-clean", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -608,13 +614,13 @@ func TestRecoverStuckFinalizers_SeedsAllDualStackAddresses(t *testing.T) {
 	dt.kubeClient = kube
 
 	egressPods := &v1.PodList{Items: []v1.Pod{*pod}}
-	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), nil)
 
 	entry := dt.pendingPodDeletions["default/ds-terminating"]
 	if assert.NotNil(t, entry, "a Terminating dual-stack egress pod must be seeded for drain-gated finalizer removal") {
 		assert.ElementsMatch(t, []string{v4, v6}, entry.Addresses,
 			"recovery must seed every IP family so the finalizer waits for both to drain")
-		assert.Equal(t, "corp-egress", entry.ServiceUID)
+		assert.Equal(t, outboundServiceName("corp-egress"), entry.ServiceUID)
 	}
 }
 
@@ -641,7 +647,7 @@ func TestRecoverStuckFinalizers_NoIPPodUsesServiceDrainVerification(t *testing.T
 	}
 
 	egressPods := &v1.PodList{Items: []v1.Pod{*pod}}
-	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), nil)
 
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "no-ip-terminating", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -651,13 +657,13 @@ func TestRecoverStuckFinalizers_NoIPPodUsesServiceDrainVerification(t *testing.T
 	if assert.NotNil(t, entry) {
 		assert.True(t, entry.VerifyServiceDrain)
 		assert.Empty(t, entry.Addresses)
-		assert.Equal(t, "corp-egress", entry.ServiceUID)
+		assert.Equal(t, outboundServiceName("corp-egress"), entry.ServiceUID)
 	}
 }
 
 func TestInitializeFromCluster_CompletesAfterAllAdditionsAreRejected(t *testing.T) {
 	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-	for _, scenario := range []string{"colliding egress", "rejected inbound only", "empty control"} {
+	for _, scenario := range []string{"reserved egress", "rejected inbound only", "empty control"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := newOutboundMocks(ctrl)
@@ -679,8 +685,8 @@ func TestInitializeFromCluster_CompletesAfterAllAdditionsAreRejected(t *testing.
 				service.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}
 				objects = append(objects, service)
 			}
-			if scenario == "colliding egress" {
-				pod := newEgressPod("collider", "default", uid, "node", "10.244.0.5", "10.0.0.1", v1.PodRunning)
+			if scenario == "reserved egress" {
+				pod := newEgressPod("reserved", "default", "default", "node", "10.244.0.5", "10.0.0.1", v1.PodRunning)
 				pod.Annotations = map[string]string{consts.PodAnnotationServiceEgressGatewayResourceGroup: "byo-rg"}
 				node := &v1.Node{
 					ObjectMeta: metav1.ObjectMeta{Name: "node"},
@@ -699,25 +705,26 @@ func TestInitializeFromCluster_CompletesAfterAllAdditionsAreRejected(t *testing.
 			}
 			assert.True(t, dt.InitialSyncDone)
 			assert.Empty(t, dt.pendingServiceOps)
-			assert.False(t, dt.K8sResources.Egresses.Has(uid))
-			assert.Equal(t, scenario != "empty control", dt.K8sResources.Services.Has(uid))
+			assert.False(t, dt.K8sResources.Egresses.Has(outboundServiceName("default")))
+			assert.Equal(t, scenario != "empty control", dt.K8sResources.Services.Has(inboundServiceName(uid)))
 		})
 	}
 }
 
-func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T) {
+func TestInitializeFromCluster_SeparatesInboundAndOutboundPodFinalizers(t *testing.T) {
 	const identity = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, outboundName := inboundServiceName(identity), outboundServiceName(identity)
 	for _, tc := range []struct {
 		name, egress                  string
 		keepIP, backend, retryRemoval bool
 		outboundOwner                 bool
 	}{
-		{name: "no-IP collision", egress: identity, backend: true},
+		{name: "same raw identity without IPs", egress: identity, backend: true},
 		{name: "retained IP", egress: identity, keepIP: true, backend: true},
 		{name: "distinct identity", egress: "other-egress", backend: true},
 		{name: "no inbound backend", egress: identity},
 		{name: "finalizer removal retry", egress: identity, backend: true, retryRemoval: true},
-		{name: "registered outbound owner survives inbound desired state", egress: identity, backend: true, outboundOwner: true},
+		{name: "registered inbound and outbound both survive", egress: identity, backend: true, outboundOwner: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -725,22 +732,28 @@ func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T
 			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
 			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
 			registered := &armnetwork.ServiceGatewayService{
-				Name:       ptr.To(identity),
+				Name:       ptr.To(inboundName),
 				Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)},
 			}
-			var loadBalancers []*armnetwork.LoadBalancer
+			loadBalancers := []*armnetwork.LoadBalancer{{Name: ptr.To(inboundName)}}
+			registeredServices := []*armnetwork.ServiceGatewayService{registered}
+			serviceNames := []*string{ptr.To(inboundName)}
 			if tc.outboundOwner {
-				registered.Properties.ServiceType = ptr.To(armnetwork.ServiceTypeOutbound)
-				registered.Properties.PublicNatGatewayID = ptr.To(byoNATGatewayARMID(identity))
-			} else {
-				loadBalancers = []*armnetwork.LoadBalancer{{Name: ptr.To(identity)}}
+				registeredServices = append(registeredServices, &armnetwork.ServiceGatewayService{
+					Name: ptr.To(outboundName),
+					Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+						ServiceType:        ptr.To(armnetwork.ServiceTypeOutbound),
+						PublicNatGatewayID: ptr.To(byoNATGatewayARMID(identity)),
+					},
+				})
+				serviceNames = append(serviceNames, ptr.To(outboundName))
 			}
-			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{registered}, nil).AnyTimes()
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(registeredServices, nil).AnyTimes()
 			var locations []*armnetwork.ServiceGatewayAddressLocationResponse
 			if tc.backend {
 				locations = []*armnetwork.ServiceGatewayAddressLocationResponse{{
 					AddressLocation: ptr.To("10.0.0.1"),
-					Addresses:       []*armnetwork.ServiceGatewayAddress{{Address: ptr.To("10.244.0.10"), Services: []*string{ptr.To(identity)}}},
+					Addresses:       []*armnetwork.ServiceGatewayAddress{{Address: ptr.To("10.244.0.10"), Services: serviceNames}},
 				}}
 			}
 			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(locations, nil).AnyTimes()
@@ -806,16 +819,15 @@ func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T
 				return
 			}
 			assert.False(t, hasPodFinalizer(current))
-			assert.Equal(t, !tc.outboundOwner, dt.NRPResources.LoadBalancers.Has(identity))
+			assert.True(t, dt.NRPResources.LoadBalancers.Has(inboundName))
 			assert.Empty(t, dt.pendingPodDeletions)
 			if tc.backend {
 				member := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.10"]
-				assert.Equal(t, !tc.outboundOwner, member.InboundIdentities.Has(identity))
-				assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.244.0.10"].Services.Has(identity))
+				assert.True(t, member.InboundIdentities.Has(inboundName))
+				assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.244.0.10"].Services.Has(inboundName))
 				if tc.outboundOwner {
-					assert.Equal(t, identity, member.PublicOutboundIdentity)
-					assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(identity))
-					assert.Error(t, dt.ReconcileInboundService(service))
+					assert.Equal(t, outboundName, member.PublicOutboundIdentity)
+					assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(outboundName))
 				}
 			}
 			if tc.retryRemoval {
@@ -825,7 +837,7 @@ func TestInitializeFromCluster_ReleasesInboundCollisionPodFinalizer(t *testing.T
 	}
 }
 
-func TestRecoverStuckFinalizers_CollisionPreservesOutboundDrain(t *testing.T) {
+func TestRecoverStuckFinalizers_PreservesExistingOutboundDrain(t *testing.T) {
 	const identity = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	for _, existing := range []bool{false, true} {
 		t.Run(fmt.Sprintf("existing=%t", existing), func(t *testing.T) {
@@ -835,24 +847,24 @@ func TestRecoverStuckFinalizers_CollisionPreservesOutboundDrain(t *testing.T) {
 			kube := fake.NewSimpleClientset(pod)
 			dt := newTestDiffTracker()
 			dt.kubeClient = kube
-			dt.NRPResources.LoadBalancers.Insert(identity)
+			dt.NRPResources.LoadBalancers.Insert(inboundServiceName(identity))
 			prior := &PendingPodDeletion{
 				Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID),
-				ServiceUID: "previous-egress", Addresses: []string{"10.244.0.5"}, IsLastPod: true,
+				ServiceUID: outboundServiceName("previous-egress"), Addresses: []string{"10.244.0.5"}, IsLastPod: true,
 			}
 			if existing {
 				dt.pendingPodDeletions["ns/colliding"] = prior
 			} else {
-				dt.NRPResources.NATGateways.Insert(identity)
+				dt.NRPResources.NATGateways.Insert(outboundServiceName(identity))
 			}
-			recoverStuckFinalizers(context.Background(), dt, nil, &v1.PodList{Items: []v1.Pod{*pod}}, nil, nil, nil, nil)
+			recoverStuckFinalizers(context.Background(), dt, nil, &v1.PodList{Items: []v1.Pod{*pod}}, nil, nil, nil)
 			pending := dt.pendingPodDeletions["ns/colliding"]
 			if assert.NotNil(t, pending) {
 				assert.Equal(t, string(pod.UID), pending.UID)
 				assert.True(t, pending.RecoveredAtStartup)
 				if existing {
 					assert.Same(t, prior, pending)
-					assert.Equal(t, "previous-egress", pending.ServiceUID)
+					assert.Equal(t, outboundServiceName("previous-egress"), pending.ServiceUID)
 					assert.True(t, pending.IsLastPod)
 					assert.Equal(t, []string{"10.244.0.5"}, pending.Addresses)
 				} else {
@@ -1374,10 +1386,13 @@ func TestCleanupOrphanedPublicIPs_KeepsUnownedPublicIPs(t *testing.T) {
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
 		nil,
 		{},
-		{Name: ptr.To("payments-pip")},
-		{Name: ptr.To("payments-pip-v6")},
-		{Name: ptr.To("11111111-1111-1111-1111-111111111111-pip")},
-		{Name: ptr.To("wrong-owner-pip"), Tags: egressIdentityTags("another-identity")},
+		{Name: ptr.To("payments-natgw-pip")},
+		{Name: ptr.To("payments-natgw-pip-v6")},
+		{Name: ptr.To("11111111-1111-1111-1111-111111111111-lb-pip")},
+		{Name: ptr.To("old-outbound-natgw-pip"), Tags: map[string]*string{"k8s-azure-egress-identity": ptr.To("old-outbound")}},
+		{Name: ptr.To("old-inbound-lb-pip"), Tags: map[string]*string{"k8s-azure-service-uid": ptr.To("old-inbound")}},
+		{Name: ptr.To("unknown-marker-natgw-pip"), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown")}},
+		{Name: ptr.To("uppercase-natgw-pip"), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("TRUE")}},
 	}))
 }
 
@@ -1385,9 +1400,9 @@ func TestCleanupOrphanedPublicIPs_KeepsUnownedPublicIPs(t *testing.T) {
 // even if admission or exhausted retries prevent it from reaching NRP during initialization.
 func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *testing.T) {
 	const (
-		desiredUID = "11111111-1111-1111-1111-111111111111"
-		egressUID  = "team-egress"
-		orphanUID  = "22222222-2222-2222-2222-222222222222"
+		desiredUID = "11111111-1111-1111-1111-111111111111-lb"
+		egressUID  = "team-egress-natgw"
+		orphanUID  = "22222222-2222-2222-2222-222222222222-lb"
 	)
 
 	ctrl := gomock.NewController(t)
@@ -1415,20 +1430,20 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 	dt.K8sResources.Services.Insert(desiredUID)
 	dt.K8sResources.Egresses.Insert(egressUID)
 
-	detached := func(identity, ownerTagKey string) *armnetwork.PublicIPAddress {
+	detached := func(identity string) *armnetwork.PublicIPAddress {
 		return &armnetwork.PublicIPAddress{
 			Name:       ptr.To(PublicIPName(identity)),
 			Etag:       ptr.To(`W/"pip-version"`),
-			Tags:       map[string]*string{ownerTagKey: ptr.To(identity)},
+			Tags:       managedResourceTags(),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 		}
 	}
-	orphan := detached(orphanUID, InboundServiceUIDTagKey)
+	orphan := detached(orphanUID)
 	mockPIP.EXPECT().Get(gomock.Any(), "rg", PublicIPName(orphanUID), nil).Return(orphan, nil).Times(1)
 
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
-		detached(desiredUID, InboundServiceUIDTagKey),
-		detached(egressUID, EgressIdentityTagKey),
+		detached(desiredUID),
+		detached(egressUID),
 		orphan,
 	}))
 
@@ -1471,48 +1486,47 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 	}
 
 	detached := func(name string) *armnetwork.PublicIPAddress {
-		identity, _ := identityFromPublicIPName(name)
 		return &armnetwork.PublicIPAddress{
 			Name:       ptr.To(name),
 			Etag:       ptr.To(`W/"pip-version"`),
-			Tags:       egressIdentityTags(identity),
+			Tags:       managedResourceTags(),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 		}
 	}
 
-	const managedOrphan = "22222222-2222-2222-2222-222222222222-pip"
+	const managedOrphan = "22222222-2222-2222-2222-222222222222-lb-pip"
 	inbound := detached(managedOrphan)
-	inbound.Tags = map[string]*string{InboundServiceUIDTagKey: ptr.To("22222222-2222-2222-2222-222222222222")}
-	attached := detached("attached-pip")
+	inbound.Tags = map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(consts.ServiceGatewayManagedTagValue)}
+	attached := detached("attached-natgw-pip")
 	attached.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/ipConfigurations/attached")}
 
 	deleted := run(t, []*armnetwork.PublicIPAddress{
-		detached("team-egress-pip"),
-		detached("team-egress-pip-v6"),
+		detached("team-egress-natgw-pip"),
+		detached("team-egress-natgw-pip-v6"),
 		inbound,
 		detached(PublicIPName(DefaultOutboundNATGatewayName)),
 		detached(PublicIPNameV6(DefaultOutboundNATGatewayName)),
 		detached("not-one-of-ours"),
 		{Name: ptr.To("legacy-pip")},
-		{Name: ptr.To("foreign-pip-v6"), Tags: egressIdentityTags("another-identity")},
+		{Name: ptr.To("foreign-natgw-pip-v6"), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown")}},
 		attached,
 	})
 
 	assert.Contains(t, deleted, managedOrphan,
 		"a managed Service address desired by neither Kubernetes nor NRP must be cleaned up")
-	assert.Contains(t, deleted, "team-egress-pip",
+	assert.Contains(t, deleted, "team-egress-natgw-pip",
 		"an unused egress address is a leak: its NAT Gateway is already gone, so nothing else deletes it")
-	assert.Contains(t, deleted, "team-egress-pip-v6",
+	assert.Contains(t, deleted, "team-egress-natgw-pip-v6",
 		"the IPv6 half of an egress identity leaks the same way as the IPv4 half")
 	assert.NotContains(t, deleted, PublicIPName(DefaultOutboundNATGatewayName),
 		"the cluster's default egress address is RP-owned and must never be deleted")
 	assert.NotContains(t, deleted, "not-one-of-ours",
 		"a name that does not follow the controller's convention must be left alone")
-	assert.ElementsMatch(t, []string{"team-egress-pip", "team-egress-pip-v6", managedOrphan}, deleted)
+	assert.ElementsMatch(t, []string{"team-egress-natgw-pip", "team-egress-natgw-pip-v6", managedOrphan}, deleted)
 }
 
 func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
-	const identity = "payments"
+	const identity = "payments-natgw"
 	for _, tc := range []struct {
 		name       string
 		live       *armnetwork.PublicIPAddress
@@ -1521,15 +1535,16 @@ func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
 		wantDelete bool
 		wantError  bool
 	}{
-		{name: "still owned", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity)}, wantDelete: true},
-		{name: "owned without ETag", live: &armnetwork.PublicIPAddress{Tags: egressIdentityTags(identity)}, wantError: true},
+		{name: "still owned", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: managedResourceTags()}, wantDelete: true},
+		{name: "owned without ETag", live: &armnetwork.PublicIPAddress{Tags: managedResourceTags()}, wantError: true},
 		{name: "tag removed", live: &armnetwork.PublicIPAddress{}},
-		{name: "owner changed", live: &armnetwork.PublicIPAddress{Tags: egressIdentityTags("another-identity")}},
-		{name: "owner kind changed", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{InboundServiceUIDTagKey: ptr.To(identity)}}},
+		{name: "marker changed", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown")}}},
+		{name: "marker revoked", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("false")}}},
+		{name: "only old identity tag remains", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{"k8s-azure-egress-identity": ptr.To(identity)}}},
 		{name: "already absent", readErr: notFoundError()},
 		{name: "read failed", readErr: errors.New("PIP read failed"), wantError: true},
 		{name: "nil successful read", wantError: true},
-		{name: "delete failed", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: egressIdentityTags(identity)},
+		{name: "delete failed", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: managedResourceTags()},
 			deleteErr: errors.New("PIP delete failed"), wantDelete: true, wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1546,7 +1561,7 @@ func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
 			dt.config = testConfig()
 			dt.networkClientFactory = factory
 			err := dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{{
-				Name: ptr.To(PublicIPName(identity)), Tags: egressIdentityTags(identity),
+				Name: ptr.To(PublicIPName(identity)), Tags: managedResourceTags(),
 			}})
 			if tc.wantError {
 				assert.Error(t, err)
@@ -1558,19 +1573,19 @@ func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
 }
 
 func TestCleanupOrphanedPublicIPs_RetriesConditionalDelete(t *testing.T) {
-	const identity = "payments"
+	const identity = "payments-natgw"
 	conflict := &azcore.ResponseError{
 		StatusCode: http.StatusPreconditionFailed, ErrorCode: "PreconditionFailed",
 		RawResponse: &http.Response{StatusCode: http.StatusPreconditionFailed, Request: &http.Request{Method: http.MethodDelete}},
 	}
 	for _, tc := range []struct {
-		name       string
-		owner      string
-		retryError error
+		name        string
+		managedType string
+		retryError  error
 	}{
-		{name: "same owner with a new version", owner: identity},
-		{name: "new owner is preserved", owner: "other-owner"},
-		{name: "second conflict is reported", owner: identity, retryError: conflict},
+		{name: "same marker with a new version", managedType: consts.ServiceGatewayManagedTagValue},
+		{name: "revoked marker is preserved", managedType: "false"},
+		{name: "second conflict is reported", managedType: consts.ServiceGatewayManagedTagValue, retryError: conflict},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -1579,15 +1594,15 @@ func TestCleanupOrphanedPublicIPs_RetriesConditionalDelete(t *testing.T) {
 			client := mock_publicipaddressclient.NewMockInterface(ctrl)
 			factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
 			pip := &armnetwork.PublicIPAddress{
-				Name: ptr.To(PublicIPName(identity)), Etag: ptr.To(`W/"v1"`), Tags: egressIdentityTags(identity),
+				Name: ptr.To(PublicIPName(identity)), Etag: ptr.To(`W/"v1"`), Tags: managedResourceTags(),
 			}
 			fresh := &armnetwork.PublicIPAddress{
-				Name: pip.Name, Etag: ptr.To(`W/"v2"`), Tags: egressIdentityTags(tc.owner),
+				Name: pip.Name, Etag: ptr.To(`W/"v2"`), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(tc.managedType)},
 			}
 			firstRead := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(pip, nil).Times(1)
 			firstDelete := client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(conflict).After(firstRead)
 			refresh := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(fresh, nil).After(firstDelete)
-			if tc.owner == identity {
+			if tc.managedType == consts.ServiceGatewayManagedTagValue {
 				client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(tc.retryError).After(refresh).Times(1)
 			}
 			dt := newTestDiffTracker()
@@ -1641,7 +1656,7 @@ func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing
 		// Its LoadBalancer still exists in Azure, so recovery must defer to the diff.
 		recoverStuckFinalizers(context.Background(), dt,
 			&v1.ServiceList{Items: []v1.Service{*svcScheduled}}, nil, nil,
-			utilsets.NewString(strings.ToLower(string(svcScheduled.UID))), utilsets.NewString(), utilsets.NewString())
+			utilsets.NewString(ServiceUID(svcScheduled)), utilsets.NewString())
 		r1, s1, _ := read()
 		assert.Equal(t, float64(0), r1-r0, "the finalizer is still on the Service; it was not recovered")
 		assert.Equal(t, float64(1), s1-s0, "handing it to the diff must be counted as scheduled work")
@@ -1658,7 +1673,7 @@ func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing
 		// No Azure resource anywhere, so recovery takes the direct-removal path -- which fails.
 		recoverStuckFinalizers(context.Background(), failing,
 			&v1.ServiceList{Items: []v1.Service{*svcScheduled}}, nil, nil,
-			utilsets.NewString(), utilsets.NewString(), utilsets.NewString())
+			utilsets.NewString(), utilsets.NewString())
 		r1, _, f1 := read()
 		assert.Equal(t, float64(1), f1-f0, "a forgotten Service finalizer removal must be counted")
 		assert.Equal(t, float64(0), r1-r0, "a failed removal must not be reported as a recovery")
@@ -1690,7 +1705,7 @@ func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *te
 	services := &v1.ServiceList{Items: []v1.Service{*retyped, *stillLB}}
 
 	// No Azure resource exists for either, so recovery should strip both finalizers directly.
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), nil)
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "was-lb", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -1735,18 +1750,18 @@ func TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway(t *testing.
 	_, serviceUIDToService, err := processK8sServices(context.Background(), kube, k8s)
 	assert.NoError(t, err)
 
-	assert.True(t, k8s.Services.Has("uid-owned"), "control: a Service ServiceGateway owns must stay desired")
-	assert.Contains(t, serviceUIDToService, "uid-owned")
+	assert.True(t, k8s.Services.Has(inboundServiceName("uid-owned")), "control: a Service ServiceGateway owns must stay desired")
+	assert.Contains(t, serviceUIDToService, inboundServiceName("uid-owned"))
 
-	assert.False(t, k8s.Services.Has("uid-foreign"),
+	assert.False(t, k8s.Services.Has(inboundServiceName("uid-foreign")),
 		"a Service claimed by another LoadBalancerClass must not be desired, or ServiceGateway keeps syncing it forever")
 
 	// An admission rejection is a mutated spec on a Service that may already be serving. Excluding
 	// it would make the diff read it as removed and destroy its live LoadBalancer and Public IP on
 	// the next restart, which is not what the runtime path does with the same Service.
-	assert.True(t, k8s.Services.Has("uid-internal"),
+	assert.True(t, k8s.Services.Has(inboundServiceName("uid-internal")),
 		"a Service inbound admission rejects must stay desired so its live Azure resources are not deleted")
-	assert.Contains(t, serviceUIDToService, "uid-internal",
+	assert.Contains(t, serviceUIDToService, inboundServiceName("uid-internal"),
 		"reconcileServices needs the Service object to re-apply admission and decline to provision it")
 }
 
@@ -1779,8 +1794,8 @@ func TestProcessK8sServices_ForeignServiceBecomesRemoval(t *testing.T) {
 // TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively pins how NRP service types are
 // parsed. A service dropped here is absent from NRPState while still present in Azure, which is what
 // scheduleOrphanedResourceDeletions treats as an orphan, so an unrecognized type costs the live
-// resource. InboundOutbound counts as both, casing must not matter, and a genuinely unknown type
-// fails initialization rather than proceeding on a partial view.
+// resource. Canonical names must match the service type; unknown or inconsistent data fails
+// initialization rather than proceeding on a partial view.
 func TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively(t *testing.T) {
 	svc := func(name, serviceType string) *armnetwork.ServiceGatewayService {
 		return &armnetwork.ServiceGatewayService{
@@ -1795,12 +1810,20 @@ func TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively(t *test
 		wantLB, wantNAT []string
 		wantErr         bool
 	}{
-		{"canonical", []*armnetwork.ServiceGatewayService{svc("lb", "Inbound"), svc("nat", "Outbound")},
-			[]string{"lb"}, []string{"nat"}, false},
-		{"lowercase", []*armnetwork.ServiceGatewayService{svc("lb", "inbound"), svc("nat", "outbound")},
-			[]string{"lb"}, []string{"nat"}, false},
-		{"inbound outbound counts as both", []*armnetwork.ServiceGatewayService{svc("both", "InboundOutbound")},
-			[]string{"both"}, []string{"both"}, false},
+		{"canonical", []*armnetwork.ServiceGatewayService{svc("svc-lb", "Inbound"), svc("svc-natgw", "Outbound")},
+			[]string{"svc-lb"}, []string{"svc-natgw"}, false},
+		{"lowercase type", []*armnetwork.ServiceGatewayService{svc("svc-lb", "inbound"), svc("svc-natgw", "outbound")},
+			[]string{"svc-lb"}, []string{"svc-natgw"}, false},
+		{"mixed case name", []*armnetwork.ServiceGatewayService{svc("SVC-LB", "Inbound"), svc("SVC-NATGW", "Outbound")},
+			[]string{"svc-lb"}, []string{"svc-natgw"}, false},
+		{"ambiguous non-default type", []*armnetwork.ServiceGatewayService{svc("svc-lb", "InboundOutbound")},
+			nil, nil, true},
+		{"wrong name kind", []*armnetwork.ServiceGatewayService{svc("svc-lb", "Outbound")},
+			nil, nil, true},
+		{"old name is unsupported", []*armnetwork.ServiceGatewayService{svc("old-name", "Inbound")},
+			nil, nil, true},
+		{"combined RP default remains protected", []*armnetwork.ServiceGatewayService{svc(DefaultOutboundNATGatewayName, "InboundOutbound")},
+			[]string{DefaultOutboundNATGatewayName}, nil, false},
 		{"unknown type fails initialization", []*armnetwork.ServiceGatewayService{svc("weird", "Sideways")},
 			nil, nil, true},
 	}
@@ -1855,11 +1878,11 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(uid))
 
 	recoverServiceExternalIPs(context.Background(), dt,
-		map[string]*v1.Service{uid: svc},
-		map[string]string{strings.ToLower(PublicIPName(uid)): "20.30.40.50"})
+		map[string]*v1.Service{inboundServiceName(uid): svc},
+		map[string]string{PublicIPName(inboundServiceName(uid)): "20.30.40.50"})
 
 	assert.Greater(t, atomic.LoadInt32(&patches), int32(1),
 		"a transient failure must be retried, not swallowed")
@@ -1876,19 +1899,20 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 // own "kubernetes" LoadBalancers among them.
 func TestScheduleOrphanedResourceDeletions_SkipsNonUUIDLoadBalancers(t *testing.T) {
 	const orphanUUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	orphanName := inboundServiceName(orphanUUID)
 	dt := newTestDiffTracker()
 
-	azureLBs := utilsets.NewString("kubernetes", "kubernetes-internal", "customer-lb", orphanUUID)
+	azureLBs := utilsets.NewString("kubernetes", "kubernetes-internal", "customer-lb", orphanUUID, orphanName)
 	scheduleOrphanedResourceDeletions(dt, azureLBs, utilsets.NewString(), utilsets.NewString())
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	for _, name := range []string{"kubernetes", "kubernetes-internal", "customer-lb"} {
+	for _, name := range []string{"kubernetes", "kubernetes-internal", "customer-lb", orphanUUID} {
 		_, scheduled := dt.pendingServiceOps[name]
 		assert.False(t, scheduled, "%q is not a managed LoadBalancer and must never be scheduled for deletion", name)
 	}
-	_, scheduled := dt.pendingServiceOps[orphanUUID]
-	assert.True(t, scheduled, "control: a genuine UUID-named orphan must still be collected")
+	_, scheduled := dt.pendingServiceOps[orphanName]
+	assert.True(t, scheduled, "control: a canonical inbound orphan must still be collected")
 }
 
 // TestParseLocationAddresses_ReadsAddressesAndServices pins that the startup NRP snapshot is
@@ -2183,15 +2207,15 @@ func TestFetchServiceGatewayServices_RecordsNATGatewaysAndSkipsDefault(t *testin
 	mockSGW.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*armnetwork.ServiceGatewayService{
 		outbound("custom-default", natID("rg", "byo-nat"), true),
 		outbound("default-natgw", natID("vnet-rg", "corp-nat"), true),
-		outbound("egress-a", natID("rg", "egress-a"), false),
-		outbound("Byo", natID("vnet-rg", "byo"), false),
+		outbound("egress-a-natgw", natID("rg", "egress-a-natgw"), false),
+		outbound("Byo-natgw", natID("vnet-rg", "byo"), false),
 	}, nil)
 
 	nrp := &NRPState{LoadBalancers: utilsets.NewString(), NATGateways: utilsets.NewString()}
 	assert.NoError(t, fetchServiceGatewayServices(context.Background(), testConfig(), mockFactory, nrp))
 
-	assert.ElementsMatch(t, []string{"egress-a", "byo"}, nrp.NATGateways.UnsortedList(), "a service flagged isDefault is RP-owned whatever its name")
-	assert.Equal(t, map[string]string{"egress-a": natID("rg", "egress-a"), "byo": natID("vnet-rg", "byo")}, nrp.OutboundNATGatewayIDs)
+	assert.ElementsMatch(t, []string{"egress-a-natgw", "byo-natgw"}, nrp.NATGateways.UnsortedList(), "a service flagged isDefault is RP-owned whatever its name")
+	assert.Equal(t, map[string]string{"egress-a-natgw": natID("rg", "egress-a-natgw"), "byo-natgw": natID("vnet-rg", "byo")}, nrp.OutboundNATGatewayIDs)
 	if assert.NotNil(t, nrp.ReservedOutboundServices) {
 		assert.ElementsMatch(t, []string{"custom-default", "default-natgw"}, nrp.ReservedOutboundServices.UnsortedList())
 		assert.False(t, nrp.ReservedOutboundServices.Has("byo-nat"), "the gateway's name is not a reserved service identity")
@@ -2216,21 +2240,24 @@ func TestFetchAzureNATGateways_MarksNATGatewaysNotCreatedByThisController(t *tes
 	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 	mockNAT.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.NatGateway{
-		nat("tagged", map[string]*string{EgressIdentityTagKey: ptr.To("TAGGED")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("tagged", managedResourceTags(), armnetwork.NatGatewayPropertiesFormat{}),
 		nat("untagged", nil, armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{pip("RG", "Untagged-pip")},
 			PublicIPAddressesV6: []*armnetwork.SubResource{pip("rg", "untagged-pip-v6")}}),
 		nat("no-addresses", nil, armnetwork.NatGatewayPropertiesFormat{}),
-		nat("other-identity", map[string]*string{EgressIdentityTagKey: ptr.To("x")}, armnetwork.NatGatewayPropertiesFormat{}),
-		nat("empty-tag", map[string]*string{EgressIdentityTagKey: nil}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("unknown-marker", map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("x")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("empty-tag", map[string]*string{consts.ServiceGatewayManagedTagKey: nil}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("old-identity", map[string]*string{"k8s-azure-egress-identity": ptr.To("old-identity")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("uppercase", map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("OUTBOUND")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("inbound", map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("inbound")}, armnetwork.NatGatewayPropertiesFormat{}),
 		nat("foreign-address", nil, armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{pip("rg", "corp-ip")}}),
 	}, nil)
 
 	nrp := &NRPState{}
 	names, err := fetchAzureNATGateways(context.Background(), cfg, mockFactory, nrp)
 	assert.NoError(t, err)
-	assert.Equal(t, 6, names.Len(), "every NAT Gateway still counts as existing")
+	assert.Equal(t, 9, names.Len(), "every NAT Gateway still counts as existing")
 	if assert.NotNil(t, nrp.UnmanagedNATGateways) {
-		assert.ElementsMatch(t, []string{"untagged", "no-addresses", "other-identity", "empty-tag", "foreign-address"},
+		assert.ElementsMatch(t, []string{"untagged", "no-addresses", "unknown-marker", "empty-tag", "old-identity", "uppercase", "inbound", "foreign-address"},
 			nrp.UnmanagedNATGateways.UnsortedList())
 	}
 }
@@ -2253,15 +2280,19 @@ func TestNewTracksOnlyBYONATGateways(t *testing.T) {
 	assert.Empty(t, dt.byoNATGatewayID("managed"))
 	assert.Equal(t, nrp.OutboundNATGatewayIDs["byo"], dt.byoNATGatewayID("BYO"))
 	assert.Empty(t, dt.byoNATGatewayID("othersub"), "a NAT Gateway in another subscription cannot be read or unlinked through this cluster's clients")
+	assert.Nil(t, dt.NRPResources.OutboundNATGatewayIDs)
+	assert.Len(t, nrp.OutboundNATGatewayIDs, 3, "the caller's startup snapshot must not be mutated")
 }
 
 func TestRestartedControllerOnlyUnlinksBYONATGateway(t *testing.T) {
 	const identity = "byo"
+	serviceName := outboundServiceName(identity)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := newOutboundMocks(ctrl)
+	m.expectNoManagedOutboundResources(serviceName, 1)
 	cfg := testConfig()
-	registered := []*armnetwork.ServiceGatewayService{{Name: ptr.To(identity), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+	registered := []*armnetwork.ServiceGatewayService{{Name: ptr.To(serviceName), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
 		ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), PublicNatGatewayID: ptr.To(byoNATGatewayARMID(identity))}}}
 	m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(registered, nil).Times(2)
 	linked := byoNATGateway(identity)
@@ -2289,20 +2320,20 @@ func TestRestartedControllerOnlyUnlinksBYONATGateway(t *testing.T) {
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
 	// No Delete expectations: deleting the BYO NAT Gateway or Public IPs fails the test.
 
-	dt.pendingServiceOps[identity] = &ServiceOperationState{ServiceUID: identity, Config: NewOutboundServiceConfig(identity, nil), State: StateDeletionInProgress}
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceUID: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateDeletionInProgress}
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).deleteOutboundService(identity, "corr")
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 	_, success, completionErr := got.result()
 	assert.True(t, success, "%v", completionErr)
 	assert.True(t, cleared, "the BYO NAT Gateway must be unlinked")
-	assert.Empty(t, dt.byoNATGatewayID(identity))
+	dt.OnServiceCreationComplete(serviceName, success, completionErr)
+	assert.Empty(t, dt.byoNATGatewayID(serviceName))
 }
 
-// After reference-clear, restart cannot recover the BYO gateway ID; the owner must clear
-// the leftover link. This test records that known limitation.
+// Recovery cannot resolve the BYO NAT Gateway after its registration reference is cleared.
 func TestRestartedBetweenTheTwoUnlinkStepsLeavesTheBYOLink(t *testing.T) {
-	const identity = "byo"
+	const identity = "byo-natgw"
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := newOutboundMocks(ctrl)

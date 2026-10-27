@@ -142,7 +142,7 @@ var _ = Describe("SLB - Multi-Port Service", Label(slbTestLabel), func() {
 
 		By("Waiting for the service to be reconciled with all pods registered")
 		Eventually(func() error {
-			return serviceReconciledErr(serviceUID, numPods)
+			return servicePodsReconciledErr(cs, ns.Name, serviceUID, numPods)
 		}, 90*time.Second, 10*time.Second).Should(Succeed(),
 			"multi-port service should be reconciled in Azure and the Service Gateway")
 
@@ -232,7 +232,7 @@ var _ = Describe("SLB - Multi-Port Service", Label(slbTestLabel), func() {
 
 		By("Waiting for the service to be reconciled")
 		Eventually(func() error {
-			return serviceReconciledErr(serviceUID, numPods)
+			return servicePodsReconciledErr(cs, ns.Name, serviceUID, numPods)
 		}, 90*time.Second, 10*time.Second).Should(Succeed(),
 			"TCP+UDP service should be reconciled in Azure and the Service Gateway")
 

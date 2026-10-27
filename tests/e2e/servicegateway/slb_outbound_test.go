@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	clientset "k8s.io/client-go/kubernetes"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
@@ -137,12 +138,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure to provision NAT Gateway and PIP")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != numPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", numPods, len(want))
+			if podCount != numPods {
+				return fmt.Errorf("expected %d active egress pods, got %d", numPods, podCount)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -156,7 +157,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		var natGatewayID string
 
 		for _, svc := range sgResponse.Value {
-			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 				outboundServiceFound = true
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				utils.Logf("Found outbound service '%s' in Service Gateway", egressName)
@@ -173,6 +174,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		// Format: /subscriptions/.../resourceGroups/.../providers/Microsoft.Network/natGateways/<name>
 		parts := strings.Split(natGatewayID, "/")
 		natGatewayName := parts[len(parts)-1]
+		Expect(natGatewayName).To(Equal(outboundServiceName(egressName)))
 
 		// Fetch with `az rest` at the ServiceGateway API version. `az network nat gateway show`
 		// deserializes an NRP-managed NAT gateway's properties as EMPTY, so every assertion below
@@ -211,9 +213,15 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		utils.Logf("  Public IPs: %d", len(props.PublicIPAddresses))
 		Expect(props.PublicIPAddresses).NotTo(BeEmpty(), "NAT Gateway should have at least one Public IP")
 		utils.Logf("  Public IP ID: %s", props.PublicIPAddresses[0].ID)
+		Expect(resourceNameFromID(props.PublicIPAddresses[0].ID)).To(Equal(PublicIPNameForEgress(egressName)))
+		pipOutput, err := runAz("rest", "--method", "get", "--url", armURL(props.PublicIPAddresses[0].ID), "--query", "tags", "-o", "json")
+		Expect(err).NotTo(HaveOccurred())
+		var pipTags map[string]string
+		Expect(json.Unmarshal(pipOutput, &pipTags)).To(Succeed())
+		Expect(pipTags).To(HaveKeyWithValue(consts.ServiceGatewayManagedTagKey, consts.ServiceGatewayManagedTagValue))
 
-		Expect(natGateway.Tags).To(HaveKeyWithValue("k8s-azure-egress-identity", egressName),
-			"a managed NAT Gateway must carry its egress identity tag, which orphan cleanup relies on")
+		Expect(natGateway.Tags).To(HaveKeyWithValue(consts.ServiceGatewayManagedTagKey, consts.ServiceGatewayManagedTagValue),
+			"a managed NAT Gateway must carry the CCM managed marker used by orphan cleanup")
 
 		utils.Logf("  Service Gateway: %s", props.ServiceGateway.ID)
 		Expect(props.ServiceGateway.ID).To(ContainSubstring(serviceGatewayName),
@@ -227,7 +235,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponse.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						registeredPods++
 					}
 				}
@@ -235,7 +243,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("Registered %d pod IPs for egress gateway '%s'", registeredPods, egressName)
-		Expect(registeredPods).To(Equal(numPods), fmt.Sprintf("Expected %d pod IPs, got %d", numPods, registeredPods))
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, numPods)).To(Succeed())
 
 		utils.Logf("\n✓ Outbound NAT Gateway test passed: %d pods", numPods)
 	})
@@ -247,7 +255,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			targetPort     = 8080
 		)
 
-		egressGateways := []string{"egress-alpha", "egress-beta", "egress-gamma"}
+		egressGateways := []string{"egress-alpha", "egress-beta-natgw", "egress-gamma-lb"}
 		totalPods := len(egressGateways) * podsPerGateway
 
 		By(fmt.Sprintf("Creating %d egress gateways with %d pods each (%d total)", len(egressGateways), podsPerGateway, totalPods))
@@ -286,12 +294,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		By("Waiting for Azure to provision all NAT Gateways")
 		Eventually(func() error {
 			for _, egressName := range egressGateways {
-				want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+				want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 				if err != nil {
 					return err
 				}
-				if len(want) != podsPerGateway {
-					return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, podsPerGateway, len(want))
+				if podCount != podsPerGateway {
+					return fmt.Errorf("egress %s: expected %d active pods, got %d", egressName, podsPerGateway, podCount)
 				}
 				if err := egressRegisteredMatchErr(egressName, want); err != nil {
 					return err
@@ -309,7 +317,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, svc := range sgResponse.Value {
 			if svc.Properties.ServiceType == "Outbound" {
 				for _, expectedGateway := range egressGateways {
-					if svc.Name == expectedGateway {
+					if svc.Name == outboundServiceName(expectedGateway) {
 						foundGateways[expectedGateway] = svc.Properties.PublicNatGatewayID
 						utils.Logf("Found egress gateway '%s' with NAT Gateway: %s", expectedGateway, svc.Properties.PublicNatGatewayID)
 						break
@@ -329,7 +337,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
 					for _, gateway := range egressGateways {
-						if svcName == gateway {
+						if svcName == outboundServiceName(gateway) {
 							gatewayPodCounts[gateway]++
 						}
 					}
@@ -340,7 +348,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, gateway := range egressGateways {
 			count := gatewayPodCounts[gateway]
 			utils.Logf("Egress gateway '%s': %d pod IPs registered", gateway, count)
-			Expect(count).To(Equal(podsPerGateway), fmt.Sprintf("Gateway '%s' should have %d pods, got %d", gateway, podsPerGateway, count))
+			Expect(egressPodsRegisteredErr(cs, ns.Name, gateway, podsPerGateway)).To(Succeed())
 		}
 
 		utils.Logf("\n✓ Multiple egress gateways test passed: %d gateways, %d total pods", len(egressGateways), totalPods)
@@ -387,12 +395,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for NAT Gateway provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != initialPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", initialPods, len(want))
+			if podCount != initialPods {
+				return fmt.Errorf("expected %d active egress pods, got %d", initialPods, podCount)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -406,7 +414,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponse.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						initialRegistered++
 					}
 				}
@@ -414,7 +422,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("Initial state: %d pod IPs registered", initialRegistered)
-		Expect(initialRegistered).To(Equal(initialPods))
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, initialPods)).To(Succeed())
 
 		By(fmt.Sprintf("Scaling up: creating %d additional pods", finalPods-initialPods))
 
@@ -448,12 +456,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Address Locations update")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != finalPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", finalPods, len(want))
+			if podCount != finalPods {
+				return fmt.Errorf("expected %d active egress pods, got %d", finalPods, podCount)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -467,7 +475,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponseFinal.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						finalRegistered++
 					}
 				}
@@ -475,7 +483,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("After scaling: %d pod IPs registered", finalRegistered)
-		Expect(finalRegistered).To(Equal(finalPods), fmt.Sprintf("Expected %d pod IPs, got %d", finalPods, finalRegistered))
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, finalPods)).To(Succeed())
 
 		utils.Logf("\n✓ Egress scaling test passed: %d → %d pods", initialPods, finalPods)
 	})
@@ -521,12 +529,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for NAT Gateway provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != initialPods {
-				return fmt.Errorf("expected %d live egress pod IPs, got %d", initialPods, len(want))
+			if podCount != initialPods {
+				return fmt.Errorf("expected %d active egress pods, got %d", initialPods, podCount)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -540,7 +548,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponse.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						initialRegistered++
 					}
 				}
@@ -548,7 +556,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("Initial state: %d pod IPs registered", initialRegistered)
-		Expect(initialRegistered).To(Equal(initialPods))
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, initialPods)).To(Succeed())
 
 		By(fmt.Sprintf("Deleting %d pods (keeping %d)", initialPods-remainPods, remainPods))
 
@@ -566,12 +574,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		// draining the survivors and leaving the deleted pods registered yields the same number
 		// while blackholing every live pod's egress traffic.
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != remainPods {
-				return fmt.Errorf("expected %d surviving egress pod IPs, got %d", remainPods, len(want))
+			if podCount != remainPods {
+				return fmt.Errorf("expected %d surviving egress pods, got %d", remainPods, podCount)
 			}
 			return egressRegisteredMatchErr(egressName, want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
@@ -585,7 +593,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponseFinal.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						finalRegistered++
 					}
 				}
@@ -593,7 +601,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 
 		utils.Logf("After deletion: %d pod IPs registered", finalRegistered)
-		Expect(finalRegistered).To(Equal(remainPods), fmt.Sprintf("Expected %d pod IPs after cleanup, got %d", remainPods, finalRegistered))
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, remainPods)).To(Succeed())
 
 		utils.Logf("\n✓ Egress deletion test passed: %d → %d pods", initialPods, remainPods)
 	})
@@ -691,17 +699,17 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != egressPods {
-				return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, egressPods, len(want))
+			if podCount != egressPods {
+				return fmt.Errorf("egress %s: expected %d active pods, got %d", egressName, egressPods, podCount)
 			}
 			if err := egressRegisteredMatchErr(egressName, want); err != nil {
 				return err
 			}
-			if err := serviceReconciledErr(serviceUID, inboundPods); err != nil {
+			if err := servicePodsReconciledErr(cs, ns.Name, serviceUID, inboundPods); err != nil {
 				return err
 			}
 			return nil
@@ -716,11 +724,11 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		foundInbound := false
 
 		for _, svc := range sgResponse.Value {
-			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 				foundOutbound = true
 				utils.Logf("Found outbound service: %s", egressName)
 			}
-			if svc.Properties.ServiceType == "Inbound" && svc.Name == serviceUID {
+			if svc.Properties.ServiceType == "Inbound" && svc.Name == inboundServiceName(serviceUID) {
 				foundInbound = true
 				utils.Logf("Found inbound service: %s", serviceUID)
 			}
@@ -739,10 +747,10 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponse.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						egressCount++
 					}
-					if svcName == serviceUID {
+					if svcName == inboundServiceName(serviceUID) {
 						inboundCount++
 					}
 				}
@@ -752,8 +760,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		utils.Logf("Egress pods: %d registered", egressCount)
 		utils.Logf("Inbound pods: %d registered", inboundCount)
 
-		Expect(egressCount).To(Equal(egressPods), fmt.Sprintf("Expected %d egress pods, got %d", egressPods, egressCount))
-		Expect(inboundCount).To(Equal(inboundPods), fmt.Sprintf("Expected %d inbound pods, got %d", inboundPods, inboundCount))
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, egressPods)).To(Succeed())
+		Expect(servicePodsReconciledErr(cs, ns.Name, serviceUID, inboundPods)).To(Succeed())
 
 		utils.Logf("\n✓ Mixed inbound+outbound test passed: %d egress + %d inbound = %d total pods", egressPods, inboundPods, egressPods+inboundPods)
 	})
@@ -832,17 +840,17 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		By("Waiting for Azure provisioning")
 		Eventually(func() error {
-			want, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			want, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 			if err != nil {
 				return err
 			}
-			if len(want) != dualPods {
-				return fmt.Errorf("egress %s: expected %d live pod IPs, got %d", egressName, dualPods, len(want))
+			if podCount != dualPods {
+				return fmt.Errorf("egress %s: expected %d active pods, got %d", egressName, dualPods, podCount)
 			}
 			if err := egressRegisteredMatchErr(egressName, want); err != nil {
 				return err
 			}
-			if err := serviceReconciledErr(serviceUID, dualPods); err != nil {
+			if err := servicePodsReconciledErr(cs, ns.Name, serviceUID, dualPods); err != nil {
 				return err
 			}
 			return nil
@@ -857,11 +865,11 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		foundInbound := false
 
 		for _, svc := range sgResponse.Value {
-			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 				foundOutbound = true
 				utils.Logf("Found outbound service (NAT Gateway): %s", egressName)
 			}
-			if svc.Properties.ServiceType == "Inbound" && svc.Name == serviceUID {
+			if svc.Properties.ServiceType == "Inbound" && svc.Name == inboundServiceName(serviceUID) {
 				foundInbound = true
 				utils.Logf("Found inbound service (LB): %s", serviceUID)
 			}
@@ -881,10 +889,10 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponse.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						egressPodIPs[addr.Address] = true
 					}
-					if svcName == serviceUID {
+					if svcName == inboundServiceName(serviceUID) {
 						inboundPodIPs[addr.Address] = true
 					}
 				}
@@ -896,14 +904,21 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		// Counting registrations cannot distinguish a correct registration from a stale or foreign
 		// address: two wrong pod IPs satisfy a count of two just as well as the two right ones.
-		// The dual-traffic pods carry both labels, so the same live IP set must appear under the
-		// inbound service and the egress gateway.
-		wantIPs, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+		// The dual-traffic pods carry both labels. Egress uses every eligible family; inbound
+		// uses only the families served by the Service.
+		wantIPs, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(wantIPs).To(HaveLen(dualPods), "expected %d live dual-traffic pod IPs", dualPods)
+		Expect(podCount).To(Equal(dualPods))
+		wantInbound, inboundPodCount, err := livePodIPsForSelector(cs, ns.Name, createdService.Spec.Selector, createdService.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(inboundPodCount).To(Equal(dualPods))
 		wantList := make([]string, 0, len(wantIPs))
 		for ip := range wantIPs {
 			wantList = append(wantList, ip)
+		}
+		wantInboundList := make([]string, 0, len(wantInbound))
+		for ip := range wantInbound {
+			wantInboundList = append(wantInboundList, ip)
 		}
 		egressList := make([]string, 0, len(egressPodIPs))
 		for ip := range egressPodIPs {
@@ -915,8 +930,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		}
 		Expect(egressList).To(ConsistOf(wantList),
 			"the outbound service must register exactly the live dual-traffic pod IPs")
-		Expect(inboundList).To(ConsistOf(wantList),
-			"the inbound service must register exactly the live dual-traffic pod IPs")
+		Expect(inboundList).To(ConsistOf(wantInboundList),
+			"the inbound service must register exactly the eligible addresses of its served families")
 
 		By("Verifying the SAME pod IPs are in both services")
 		dualRegisteredCount := 0
@@ -927,7 +942,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			}
 		}
 
-		Expect(dualRegisteredCount).To(Equal(dualPods), fmt.Sprintf("Expected %d pods in both services, got %d", dualPods, dualRegisteredCount))
+		Expect(dualRegisteredCount).To(Equal(len(wantInbound)),
+			"every inbound address of a dual-traffic pod must also be registered for egress")
 
 		By("Deleting half of the dual-traffic pods")
 		podsToDelete := dualPods / 2
@@ -939,6 +955,17 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		By("Waiting for deletion to propagate")
 		expectedRemaining := dualPods - podsToDelete
 		Eventually(func() error {
+			wantEgress, podCount, err := livePodIPsWithLabel(cs, ns.Name, egressLabel, egressName)
+			if err != nil {
+				return err
+			}
+			wantInbound, inboundPodCount, err := livePodIPsForSelector(cs, ns.Name, createdService.Spec.Selector, createdService.Spec.IPFamilies)
+			if err != nil {
+				return err
+			}
+			if podCount != expectedRemaining || inboundPodCount != expectedRemaining {
+				return fmt.Errorf("remaining pods: outbound=%d inbound=%d, want %d", podCount, inboundPodCount, expectedRemaining)
+			}
 			alResponse, err := queryServiceGatewayAddressLocations()
 			if err != nil {
 				return fmt.Errorf("query Service Gateway address locations: %w", err)
@@ -953,11 +980,11 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			for _, location := range alResponse.Value {
 				for _, addr := range location.Addresses {
 					for _, svcName := range addr.Services {
-						if svcName == egressName {
+						if svcName == outboundServiceName(egressName) {
 							remainingEgress++
 							remainingEgressIPs[addr.Address] = true
 						}
-						if svcName == serviceUID {
+						if svcName == inboundServiceName(serviceUID) {
 							remainingInbound++
 							remainingInboundIPs[addr.Address] = true
 						}
@@ -971,16 +998,19 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 				}
 			}
 
-			if remainingEgress != expectedRemaining {
-				return fmt.Errorf("got %d pods in outbound after deletion, want %d", remainingEgress, expectedRemaining)
+			if remainingEgress != len(wantEgress) {
+				return fmt.Errorf("got %d outbound addresses after deletion, want %d", remainingEgress, len(wantEgress))
 			}
-			if remainingInbound != expectedRemaining {
-				return fmt.Errorf("got %d pods in inbound after deletion, want %d", remainingInbound, expectedRemaining)
+			if remainingInbound != len(wantInbound) {
+				return fmt.Errorf("got %d inbound addresses after deletion, want %d", remainingInbound, len(wantInbound))
 			}
-			if remainingDual != expectedRemaining {
-				return fmt.Errorf("got %d pods in both services after deletion, want %d", remainingDual, expectedRemaining)
+			if remainingDual != len(wantInbound) {
+				return fmt.Errorf("got %d addresses in both services after deletion, want %d", remainingDual, len(wantInbound))
 			}
-			return nil
+			if err := registeredAddressesMatchErr(outboundServiceName(egressName), wantEgress); err != nil {
+				return err
+			}
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), wantInbound)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"remaining dual-traffic pods should stay registered in both services after deletion")
 
@@ -997,11 +1027,11 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		for _, location := range alResponse.Value {
 			for _, addr := range location.Addresses {
 				for _, svcName := range addr.Services {
-					if svcName == egressName {
+					if svcName == outboundServiceName(egressName) {
 						remainingEgress++
 						remainingEgressIPs[addr.Address] = true
 					}
-					if svcName == serviceUID {
+					if svcName == inboundServiceName(serviceUID) {
 						remainingInbound++
 						remainingInboundIPs[addr.Address] = true
 					}
@@ -1017,9 +1047,9 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 
 		utils.Logf("After deletion: %d pods in outbound, %d pods in inbound, %d in both", remainingEgress, remainingInbound, remainingDual)
 
-		Expect(remainingEgress).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in outbound after deletion, got %d", expectedRemaining, remainingEgress))
-		Expect(remainingInbound).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in inbound after deletion, got %d", expectedRemaining, remainingInbound))
-		Expect(remainingDual).To(Equal(expectedRemaining), fmt.Sprintf("Expected %d pods in both services after deletion, got %d", expectedRemaining, remainingDual))
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, expectedRemaining)).To(Succeed())
+		Expect(servicePodsReconciledErr(cs, ns.Name, serviceUID, expectedRemaining)).To(Succeed())
+		Expect(remainingDual).To(Equal(remainingInbound))
 
 		utils.Logf("\n✓ Dual inbound+outbound pod test passed: %d pods with both LB and NAT Gateway", dualPods)
 	})
@@ -1027,7 +1057,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 	It("should require the same-named BYO NAT Gateway in the annotated resource group and only unlink it on deletion", func() {
 		suffix := ns.Name[len(ns.Name)-5:]
 		byoRG := byoResourceGroup(suffix)
-		egressName := "byo-egress-" + suffix
+		egressName := "byo-egress-" + suffix + "-natgw"
 		otherGateway := createBYONATGateway(byoRG, "other-"+suffix, byoAddresses{})
 		By("Rejecting the missing same-named gateway rather than using another gateway or creating one")
 		createBYOEgressPods(cs, ns.Name, egressName, byoRG, 2)
@@ -1047,7 +1077,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		eventuallyBYORegistered(cs, ns.Name, byoRG, egressName, natGatewayID, 3*time.Minute)
 		Expect(strings.ToLower(byoNATGatewayLink(natGatewayID))).To(Equal(strings.ToLower(serviceGatewayResourceID())), "the BYO NAT Gateway must be linked to the Service Gateway")
 		eventuallyNamespaceEvent(cs, ns.Name, "ServiceGatewayEgressNATGatewayLinked", time.Minute)
-		out, err := runAz("network", "nat", "gateway", "show", "-g", resourceGroupName, "-n", egressName)
+		out, err := runAz("network", "nat", "gateway", "show", "-g", resourceGroupName, "-n", outboundServiceName(egressName))
 		Expect(err).To(HaveOccurred(), "no managed NAT Gateway may be created for an identity served by a BYO NAT Gateway")
 		Expect(string(out)).To(ContainSubstring("ResourceNotFound"))
 
@@ -1190,7 +1220,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		byoName, managedName := "byo-mix-"+suffix, "managed-mix-"+suffix
 		addresses := createBYOAddresses(cs, byoRG, byoName)
 		natGatewayID := createBYONATGateway(byoRG, byoName, addresses)
-		managedID := byoNATGatewayARMID(resourceGroupName, managedName)
+		managedID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(managedName))
 
 		By("Creating pods for both identities")
 		createBYOEgressPods(cs, ns.Name, byoName, byoRG, 1)
@@ -1200,7 +1230,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		eventuallyManagedRegistered(cs, ns.Name, managedName, managedID)
 		out, err := runAz("rest", "--method", "get", "--url", armURL(managedID), "--query", "tags", "-o", "json")
 		Expect(err).NotTo(HaveOccurred(), string(out))
-		Expect(string(out)).To(ContainSubstring(fmt.Sprintf(`"k8s-azure-egress-identity": %q`, managedName)))
+		Expect(string(out)).To(ContainSubstring(fmt.Sprintf(`%q: %q`, consts.ServiceGatewayManagedTagKey, consts.ServiceGatewayManagedTagValue)))
 
 		By("Scaling the BYO identity up to 3 pods and down to 1")
 		createBYOEgressPodsFrom(cs, ns.Name, byoName, byoRG, 1, 2)
@@ -1219,13 +1249,13 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		eventuallyManagedRegistered(cs, ns.Name, managedName, managedID)
 	})
 
-	It("should defer an inbound Service until its UID is released by BYO egress", func() {
+	It("should keep inbound and BYO egress with the same raw identity independent", func() {
 		service, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{Name: "ownership", Namespace: ns.Name},
 			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeClusterIP, Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		identity := strings.ToLower(string(service.UID))
+		identity := string(service.UID)
 		byoRG := byoResourceGroup(ns.Name[len(ns.Name)-5:])
 		addresses := createBYOAddresses(cs, byoRG, identity)
 		natID := createBYONATGateway(byoRG, identity, addresses)
@@ -1233,7 +1263,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, identity, natID, 3*time.Minute)
 
-		By("Retyping the same Service while outbound still owns its UID")
+		By("Retyping the Service while BYO egress uses the same raw identity")
 		Eventually(func() error {
 			current, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
 			if getErr != nil {
@@ -1241,45 +1271,54 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			}
 			current.Spec.Type = v1.ServiceTypeLoadBalancer
 			current.Spec.Selector = map[string]string{egressLabel: identity}
+			current.Spec.Ports[0].TargetPort = intstr.FromInt(8080)
 			_, updateErr := cs.CoreV1().Services(ns.Name).Update(context.TODO(), current, metav1.UpdateOptions{})
 			return updateErr
 		}, time.Minute, defaultPollInterval).Should(Succeed())
-		Eventually(func() bool {
-			return namespaceHasEventContaining(cs, ns.Name, "SyncLoadBalancerFailed", identity, "owned by outbound")
-		}, 3*time.Minute, defaultPollInterval).Should(BeTrue())
-		eventuallyBYORegistered(cs, ns.Name, byoRG, identity, natID, time.Minute)
-		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
+		inboundRegistered := func() error {
+			want, podCount, listErr := livePodIPsForSelector(cs, ns.Name, map[string]string{egressLabel: identity}, service.Spec.IPFamilies)
+			if listErr != nil {
+				return listErr
+			}
+			if podCount != 1 {
+				return fmt.Errorf("expected one Ready dual-traffic pod, got %d", podCount)
+			}
+			return serviceReconciledMatchErr(identity, want)
+		}
+		Eventually(func() error {
+			if err := inboundRegistered(); err != nil {
+				return err
+			}
+			return byoRegisteredErr(cs, ns.Name, identity, natID)
+		}, 5*time.Minute, defaultPollInterval).Should(Succeed())
+		service, err = utils.WaitServiceExposure(cs, ns.Name, service.Name, nil)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(service.Status.LoadBalancer.Ingress).To(BeEmpty())
+		Expect(string(service.UID)).To(Equal(identity))
+		pod, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), egressPodName(identity, 0), metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pod.Labels[egressLabel]).To(Equal(identity))
+		services, err := queryServiceGatewayServices()
+		Expect(err).NotTo(HaveOccurred())
+		for _, registered := range services.Value {
+			Expect(registered.Name).NotTo(Equal(identity), "the raw identity must not be registered")
+		}
 
-		By("Releasing outbound ownership and waiting for fresh inbound creation")
+		By("Removing BYO egress without deleting the inbound resources")
 		deleteEgressPods(cs, ns.Name, identity)
 		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, identity) }, 3*time.Minute, defaultPollInterval).Should(BeZero())
-		Eventually(func() string { return byoNATGatewayLink(natID) }, 3*time.Minute, defaultPollInterval).Should(BeEmpty())
-		Eventually(func() error {
-			current, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
-			if getErr != nil {
-				return getErr
-			}
-			if len(current.Status.LoadBalancer.Ingress) == 0 {
-				return fmt.Errorf("inbound Service %s is still pending", current.Name)
-			}
-			services, queryErr := queryServiceGatewayServices()
-			if queryErr != nil {
-				return queryErr
-			}
-			for _, registered := range services.Value {
-				if strings.EqualFold(registered.Name, identity) && registered.Properties.ServiceType == "Inbound" {
-					return nil
-				}
-			}
-			return fmt.Errorf("inbound Service %s is not registered", current.Name)
-		}, 5*time.Minute, defaultPollInterval).Should(Succeed())
+		eventuallyBYOUnlinked(identity, natID)
+		eventuallyServiceReconciled(cs, ns.Name, identity, 0, 3*time.Minute)
 		expectBYOResourcesExist(natID, addresses)
-		Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})).To(Succeed())
-		Eventually(func() error { return outboundServiceGoneErr(identity) }, 3*time.Minute, defaultPollInterval).Should(Succeed())
 
-		By("Admitting fresh egress after inbound teardown releases the identity")
+		By("Recreating BYO egress while inbound remains registered")
+		createBYOEgressPods(cs, ns.Name, identity, byoRG, 1)
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+		eventuallyBYORegistered(cs, ns.Name, byoRG, identity, natID, 3*time.Minute)
+		Eventually(inboundRegistered, 3*time.Minute, defaultPollInterval).Should(Succeed())
+
+		By("Deleting inbound while BYO egress remains registered")
+		Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})).To(Succeed())
+		eventuallyServiceDeleted(identity, 5*time.Minute)
 		Eventually(func() error {
 			_, getErr := cs.CoreV1().Services(ns.Name).Get(context.TODO(), service.Name, metav1.GetOptions{})
 			if apierrors.IsNotFound(getErr) {
@@ -1290,8 +1329,6 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			}
 			return fmt.Errorf("inbound Service %s is still being deleted", service.Name)
 		}, 5*time.Minute, defaultPollInterval).Should(Succeed())
-		createBYOEgressPods(cs, ns.Name, identity, byoRG, 1)
-		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyBYORegistered(cs, ns.Name, byoRG, identity, natID, 3*time.Minute)
 		deleteEgressPods(cs, ns.Name, identity)
 		eventuallyBYOUnlinked(identity, natID)
@@ -1304,7 +1341,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		defaultName := strings.ToLower(resourceNameFromID(defaultNATGatewayID))
 		defaultRG := resourceGroupFromID(defaultNATGatewayID)
 		defaultLink := byoNATGatewayLink(defaultNATGatewayID)
-		reservedIdentity := defaultName == "default-natgw" || strings.EqualFold(defaultName, defaultServiceName)
+		reservedIdentity := outboundServiceName(defaultName) == "default-natgw" || strings.EqualFold(outboundServiceName(defaultName), defaultServiceName)
 		if len(validation.IsValidLabelValue(defaultName)) != 0 {
 			Skip("the default gateway name cannot be expressed as an egress label")
 		}
@@ -1315,21 +1352,11 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		if reservedIdentity {
 			eventuallyNamespaceEvent(cs, ns.Name, "ServiceGatewayReservedEgressLabel", time.Minute)
 		} else {
-			eventuallyRejected(cs, ns.Name, defaultRG, fmt.Sprintf("Egress identity %q", byoName))
+			eventuallyRejected(cs, ns.Name, defaultRG, fmt.Sprintf("Egress identity %q", outboundServiceName(byoName)))
 			Expect(outboundServiceGoneErr(byoName)).To(Succeed(), "no additional identity may use the default gateway")
 		}
 		deleteEgressPods(cs, ns.Name, byoName)
 		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, byoName) }, 2*time.Minute, defaultPollInterval).Should(BeZero())
-
-		if strings.EqualFold(defaultRG, resourceGroupName) && !reservedIdentity {
-			By(fmt.Sprintf("Creating egress pods named after the default outbound NAT Gateway %q: rejected", defaultName))
-			clearNamespaceEvents(cs, ns.Name)
-			createEgressPods(cs, ns.Name, defaultName, 1)
-			Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-			eventuallyRejected(cs, ns.Name, defaultRG, fmt.Sprintf("Egress identity %q", defaultName))
-			Expect(outboundServiceGoneErr(defaultName)).To(Succeed(), "the identity must not be registered")
-			deleteEgressPods(cs, ns.Name, defaultName)
-		}
 
 		By("Checking the default outbound service and its NAT Gateway are untouched")
 		Consistently(func() error {
@@ -1347,11 +1374,11 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		foreignName := "foreign-" + ns.Name[len(ns.Name)-5:]
 
 		By("Creating an untagged NAT Gateway in the cluster resource group")
-		foreignID := byoNATGatewayARMID(resourceGroupName, foreignName)
+		foreignID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(foreignName))
 		DeferCleanup(deleteBYOResource, foreignID)
 		putBYOResource(foreignID, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"}}`, clusterLocation()))
 		snapshot := natGatewayTagsAndLink(foreignID)
-		Expect(snapshot).NotTo(ContainSubstring("k8s-azure-egress-identity"))
+		Expect(snapshot).NotTo(ContainSubstring(consts.ServiceGatewayManagedTagKey))
 		expectUnchanged := func() {
 			Consistently(func() (string, error) {
 				_, err := runAz("rest", "--method", "get", "--url", armURL(foreignID))
@@ -1365,7 +1392,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		By("Creating egress pods named after it while the controller is running: rejected by the live ownership check")
 		createEgressPods(cs, ns.Name, foreignName, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyRejected(cs, ns.Name, resourceGroupName, fmt.Sprintf("Egress identity %q", foreignName))
+		eventuallyRejected(cs, ns.Name, resourceGroupName, fmt.Sprintf("Egress identity %q", outboundServiceName(foreignName)))
 		Expect(outboundServiceGoneErr(foreignName)).To(Succeed(), "a rejected identity must not be registered")
 		deleteEgressPods(cs, ns.Name, foreignName)
 		expectUnchanged()
@@ -1393,7 +1420,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		clearNamespaceEvents(cs, ns.Name)
 		createEgressPods(cs, ns.Name, foreignName, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyRejected(cs, ns.Name, resourceGroupName, fmt.Sprintf("Egress identity %q", foreignName))
+		eventuallyRejected(cs, ns.Name, resourceGroupName, fmt.Sprintf("Egress identity %q", outboundServiceName(foreignName)))
 		deleteEgressPods(cs, ns.Name, foreignName)
 		expectUnchanged()
 		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, foreignName) }, 2*time.Minute, defaultPollInterval).Should(BeZero())
@@ -1476,17 +1503,28 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		expectBYOResourcesExist(natGatewayID, addresses)
 	})
 
-	It("should reject the reserved default-natgw label and leave the default outbound service alone", func() {
+	It("should reject the raw default label but manage the raw default-natgw label independently", func() {
 		defaultNATGatewayID := defaultOutboundNATGatewayID()
 		Expect(defaultNATGatewayID).NotTo(BeEmpty(), "the cluster must have a default outbound service")
 
-		By("Creating an egress pod labelled default-natgw")
-		createEgressPods(cs, ns.Name, "default-natgw", 1)
+		By("Creating an egress pod labelled default, whose canonical name is reserved")
+		createEgressPods(cs, ns.Name, "default", 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		eventuallyNamespaceEvent(cs, ns.Name, "ServiceGatewayReservedEgressLabel", 2*time.Minute)
 
-		By("Deleting the pod: the default outbound service must be unchanged")
+		deleteEgressPods(cs, ns.Name, "default")
+		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, "default") }, 2*time.Minute, defaultPollInterval).Should(BeZero())
+
+		By("Creating an egress pod labelled default-natgw, whose canonical name is not reserved")
+		createEgressPods(cs, ns.Name, "default-natgw", 1)
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+		managedID := byoNATGatewayARMID(resourceGroupName, outboundServiceName("default-natgw"))
+		Expect(strings.EqualFold(managedID, defaultNATGatewayID)).To(BeFalse())
+		eventuallyManagedRegistered(cs, ns.Name, "default-natgw", managedID)
+
+		By("Deleting the managed egress pod without touching the default outbound service")
 		deleteEgressPods(cs, ns.Name, "default-natgw")
+		Eventually(func() error { return egressOutboundGoneErr("default-natgw") }, 6*time.Minute, defaultPollInterval).Should(Succeed())
 		Consistently(func() string { return defaultOutboundNATGatewayID() }, time.Minute, defaultPollInterval).
 			Should(Equal(defaultNATGatewayID), "the default outbound service must keep its NAT Gateway")
 	})
@@ -1550,12 +1588,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 	It("should reuse and later delete a tagged managed NAT Gateway already in the cluster resource group", func() {
 		egressName := "managed-tagged-" + ns.Name[len(ns.Name)-5:]
 
-		By("Creating a NAT Gateway and Public IP tagged for the identity in the cluster resource group")
-		pipID := createClusterPublicIP(PublicIPNameForEgress(egressName), egressName)
-		natGatewayID := byoNATGatewayARMID(resourceGroupName, egressName)
+		By("Creating a NAT Gateway and Public IP with the CCM managed marker in the cluster resource group")
+		pipID := createClusterPublicIP(PublicIPNameForEgress(egressName), true)
+		natGatewayID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(egressName))
 		DeferCleanup(deleteBYOResource, natGatewayID)
-		putBYOResource(natGatewayID, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"tags":{"k8s-azure-egress-identity":%q},"properties":{"publicIpAddresses":[{"id":%q}]}}`,
-			clusterLocation(), egressName, pipID))
+		putBYOResource(natGatewayID, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"tags":{%q:%q},"properties":{"publicIpAddresses":[{"id":%q}]}}`,
+			clusterLocation(), consts.ServiceGatewayManagedTagKey, consts.ServiceGatewayManagedTagValue, pipID))
 
 		By("Creating egress pods: the identity must use it as its managed NAT Gateway")
 		createEgressPods(cs, ns.Name, egressName, 1)
@@ -1567,12 +1605,12 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		eventuallyResourcesDeleted(natGatewayID, pipID)
 	})
 
-	It("should never adopt an untagged NAT Gateway, even one shaped as this controller created them before tagging", func() {
+	It("should never adopt an untagged NAT Gateway with canonical managed resource names", func() {
 		egressName := "managed-pretag-" + ns.Name[len(ns.Name)-5:]
 
-		By("Creating an untagged NAT Gateway whose only Public IP is its own <name>-pip, as older controllers did")
-		pipID := createClusterPublicIP(PublicIPNameForEgress(egressName), "")
-		natGatewayID := byoNATGatewayARMID(resourceGroupName, egressName)
+		By("Creating an untagged NAT Gateway and Public IP with canonical managed names")
+		pipID := createClusterPublicIP(PublicIPNameForEgress(egressName), false)
+		natGatewayID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(egressName))
 		DeferCleanup(deleteBYOResource, natGatewayID)
 		putBYOResource(natGatewayID, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"properties":{"publicIpAddresses":[{"id":%q}]}}`, clusterLocation(), pipID))
 		snapshot := natGatewayTagsAndLink(natGatewayID)
@@ -1580,7 +1618,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		By("Creating egress pods named after it: rejected, and it is neither tagged, linked nor deleted")
 		createEgressPods(cs, ns.Name, egressName, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyRejected(cs, ns.Name, resourceGroupName, fmt.Sprintf("Egress identity %q", egressName))
+		eventuallyRejected(cs, ns.Name, resourceGroupName, fmt.Sprintf("Egress identity %q", outboundServiceName(egressName)))
 		Expect(outboundServiceGoneErr(egressName)).To(Succeed(), "a rejected identity must not be registered")
 		deleteEgressPods(cs, ns.Name, egressName)
 		Consistently(func() (string, error) {
@@ -1599,7 +1637,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		firstID := createBYONATGateway(byoRG, first, firstAddresses)
 		secondAddresses := createBYOAddresses(cs, byoRG, second)
 		secondID := createBYONATGateway(byoRG, second, secondAddresses)
-		managedID := byoNATGatewayARMID(resourceGroupName, managedName)
+		managedID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(managedName))
 
 		createBYOEgressPods(cs, ns.Name, first, byoRG, 1)
 		createBYOEgressPods(cs, ns.Name, second, byoRG, 1)
@@ -1682,14 +1720,14 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		suffix := ns.Name[len(ns.Name)-5:]
 		tagged, preTag, foreign := "orphan-tagged-"+suffix, "orphan-pretag-"+suffix, "orphan-foreign-"+suffix
 
-		By("Creating unreferenced NAT Gateways in the cluster resource group: tagged, untagged as created before tagging, and foreign")
-		taggedPIP := createClusterPublicIP(PublicIPNameForEgress(tagged), tagged)
-		taggedID := byoNATGatewayARMID(resourceGroupName, tagged)
+		By("Creating tagged, untagged and foreign unreferenced NAT Gateways in the cluster resource group")
+		taggedPIP := createClusterPublicIP(PublicIPNameForEgress(tagged), true)
+		taggedID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(tagged))
 		DeferCleanup(deleteBYOResource, taggedID)
-		putBYOResource(taggedID, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"tags":{"k8s-azure-egress-identity":%q},"properties":{"publicIpAddresses":[{"id":%q}]}}`,
-			clusterLocation(), tagged, taggedPIP))
-		preTagPIP := createClusterPublicIP(PublicIPNameForEgress(preTag), "")
-		preTagID := byoNATGatewayARMID(resourceGroupName, preTag)
+		putBYOResource(taggedID, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"tags":{%q:%q},"properties":{"publicIpAddresses":[{"id":%q}]}}`,
+			clusterLocation(), consts.ServiceGatewayManagedTagKey, consts.ServiceGatewayManagedTagValue, taggedPIP))
+		preTagPIP := createClusterPublicIP(PublicIPNameForEgress(preTag), false)
+		preTagID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(preTag))
 		DeferCleanup(deleteBYOResource, preTagID)
 		putBYOResource(preTagID, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"properties":{"publicIpAddresses":[{"id":%q}]}}`, clusterLocation(), preTagPIP))
 		preTagSnapshot := natGatewayTagsAndLink(preTagID)
@@ -1713,7 +1751,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			}
 			return []string{natGatewayTagsAndLink(foreignID), natGatewayTagsAndLink(preTagID)}, nil
 		}, 2*time.Minute, defaultPollInterval).Should(Equal([]string{foreignSnapshot, preTagSnapshot}),
-			"an untagged NAT Gateway, also one shaped as created before tagging, must never be swept or changed")
+			"an untagged NAT Gateway, including one with canonical managed names, must never be swept or changed")
 	})
 
 	It("should handle missing write access to BYO NAT Gateways without holding pods", func() {
@@ -1754,7 +1792,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			denied := false
 			Eventually(func() bool {
 				denied = namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayEgressNATGatewayRejected",
-					fmt.Sprintf("Egress identity %q cannot use NAT Gateway", name), "access denied when linking")
+					fmt.Sprintf("Egress identity %q cannot use NAT Gateway", outboundServiceName(name)), "access denied when linking")
 				return denied || byoRegisteredErr(cs, ns.Name, name, id) == nil
 			}, 3*time.Minute, defaultPollInterval).Should(BeTrue())
 			if !denied {
@@ -1796,7 +1834,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			probe := fmt.Sprintf("byo-noread-probe-%s-%d", suffix, attempt)
 			createBYOEgressPods(cs, ns.Name, probe, byoRG, 1)
 			Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-			rejected := fmt.Sprintf("Egress identity %q cannot be used", probe)
+			rejected := fmt.Sprintf("Egress identity %q cannot be used", outboundServiceName(probe))
 			denied := false
 			Eventually(func() bool {
 				denied = namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayEgressNATGatewayRejected", rejected, "access denied when reading")
@@ -1813,7 +1851,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 		Eventually(func() bool {
 			return namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayEgressNATGatewayRejected",
-				fmt.Sprintf("Egress identity %q cannot be used", egressName), "access denied when reading")
+				fmt.Sprintf("Egress identity %q cannot be used", outboundServiceName(egressName)), "access denied when reading")
 		}, 3*time.Minute, defaultPollInterval).Should(BeTrue())
 		Expect(outboundServiceGoneErr(egressName)).To(Succeed(), "an identity whose NAT Gateway may not be read must not be registered")
 		expectNoManagedNATGateway(egressName)
@@ -1832,20 +1870,25 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 // livePodIPsWithLabel returns the address set the pods carrying labelKey=labelValue should have
 // registered. Egress specs compare against this set rather than a count: after a partial deletion
 // only the set can distinguish the surviving pods from the deleted ones.
-func livePodIPsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue string) (map[string]struct{}, error) {
+func livePodIPsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue string) (map[string]struct{}, int, error) {
 	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: labels.SelectorFromSet(map[string]string{labelKey: labelValue}).String(),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	ready := make([]v1.Pod, 0, len(pods.Items))
 	for i := range pods.Items {
-		if pods.Items[i].DeletionTimestamp == nil {
+		if pods.Items[i].DeletionTimestamp == nil &&
+			(pods.Items[i].Status.Phase == v1.PodRunning || pods.Items[i].Status.Phase == v1.PodPending) {
 			ready = append(ready, pods.Items[i])
 		}
 	}
-	return podIPSet(ready), nil
+	addresses, err := egressPodIPSet(ready)
+	if err == nil && len(ready) > 0 && len(addresses) == 0 {
+		err = fmt.Errorf("no eligible egress addresses for %d active pods in namespace %s", len(ready), namespace)
+	}
+	return addresses, len(ready), err
 }
 
 // byoResourceAPIVersion supports StandardV2 NAT Gateways and Public IPs.
@@ -2077,7 +2120,7 @@ func outboundServiceUsesNATGatewayErr(egressName, natGatewayID string) error {
 		return err
 	}
 	for _, svc := range sgResponse.Value {
-		if svc.Name == egressName {
+		if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
 			if !strings.EqualFold(svc.Properties.PublicNatGatewayID, natGatewayID) {
 				return fmt.Errorf("egress %s uses NAT Gateway %q, want %q", egressName, svc.Properties.PublicNatGatewayID, natGatewayID)
 			}
@@ -2093,7 +2136,7 @@ func outboundServiceGoneErr(egressName string) error {
 		return err
 	}
 	for _, svc := range sgResponse.Value {
-		if svc.Name == egressName {
+		if svc.Name == outboundServiceName(egressName) {
 			return fmt.Errorf("egress %s is still registered", egressName)
 		}
 	}
@@ -2134,9 +2177,12 @@ func eventuallyBYORegistered(cs clientset.Interface, namespace, byoRG, egressNam
 }
 
 func byoRegisteredErr(cs clientset.Interface, namespace, egressName, natGatewayID string) error {
-	want, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
+	want, podCount, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
 	if err != nil {
 		return err
+	}
+	if podCount == 0 {
+		return fmt.Errorf("egress %s has no active pods", egressName)
 	}
 	if err := egressRegisteredMatchErr(egressName, want); err != nil {
 		return err
@@ -2153,8 +2199,13 @@ func byoRegisteredErr(cs clientset.Interface, namespace, egressName, natGatewayI
 func expectBYOResourcesExist(natGatewayID string, addresses byoAddresses) {
 	for _, id := range []string{natGatewayID, addresses.ipv4, addresses.ipv6} {
 		if id != "" {
-			_, err := runAz("rest", "--method", "get", "--url", armURL(id))
+			out, err := runAz("rest", "--method", "get", "--url", armURL(id))
 			Expect(err).NotTo(HaveOccurred(), "BYO resource %s must survive the identity's deletion", id)
+			var resource struct {
+				Tags map[string]string `json:"tags"`
+			}
+			Expect(json.Unmarshal(out, &resource)).To(Succeed())
+			Expect(resource.Tags).NotTo(HaveKey(consts.ServiceGatewayManagedTagKey), "BYO resources must not receive the CCM managed marker")
 		}
 	}
 }
@@ -2227,9 +2278,12 @@ func eventuallyBYOUnlinked(egressName, natGatewayID string) {
 
 func eventuallyManagedRegistered(cs clientset.Interface, namespace, egressName, natGatewayID string) {
 	Eventually(func() error {
-		want, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
+		want, podCount, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
 		if err != nil {
 			return err
+		}
+		if podCount == 0 {
+			return fmt.Errorf("egress %s has no active pods", egressName)
 		}
 		if err := egressRegisteredMatchErr(egressName, want); err != nil {
 			return err
@@ -2264,7 +2318,7 @@ func clearNamespaceEvents(cs clientset.Interface, namespace string) {
 }
 
 func expectNoManagedNATGateway(egressName string) {
-	out, err := runAz("network", "nat", "gateway", "show", "-g", resourceGroupName, "-n", egressName)
+	out, err := runAz("network", "nat", "gateway", "show", "-g", resourceGroupName, "-n", outboundServiceName(egressName))
 	Expect(err).To(HaveOccurred(), "no managed NAT Gateway may be created for %s", egressName)
 	Expect(string(out)).To(ContainSubstring("ResourceNotFound"))
 }
@@ -2379,12 +2433,12 @@ func relabelEgressPod(cs clientset.Interface, namespace, podName, egressName, re
 	Expect(err).NotTo(HaveOccurred())
 }
 
-// An empty egressIdentity creates an unowned PIP fixture.
-func createClusterPublicIP(name, egressIdentity string) string {
+// createClusterPublicIP creates a PIP fixture, optionally marked as CCM-managed.
+func createClusterPublicIP(name string, managed bool) string {
 	id := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s", subscriptionID, resourceGroupName, name)
 	tags := "{}"
-	if egressIdentity != "" {
-		tags = fmt.Sprintf(`{"k8s-azure-egress-identity":%q}`, egressIdentity)
+	if managed {
+		tags = fmt.Sprintf(`{%q:%q}`, consts.ServiceGatewayManagedTagKey, consts.ServiceGatewayManagedTagValue)
 	}
 	DeferCleanup(deleteBYOResource, id)
 	putBYOResource(id, fmt.Sprintf(`{"location":%q,"sku":{"name":"StandardV2"},"tags":%s,"properties":{"publicIPAllocationMethod":"Static","publicIPAddressVersion":"IPv4"}}`,
@@ -2393,7 +2447,7 @@ func createClusterPublicIP(name, egressIdentity string) string {
 }
 
 func PublicIPNameForEgress(egressName string) string {
-	return egressName + "-pip"
+	return outboundServiceName(egressName) + "-pip"
 }
 
 func eventuallyResourcesDeleted(ids ...string) {

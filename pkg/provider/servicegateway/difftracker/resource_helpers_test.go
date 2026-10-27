@@ -34,9 +34,36 @@ import (
 func TestServiceGatewayResourceNaming(t *testing.T) {
 	service := &v1.Service{ObjectMeta: metav1.ObjectMeta{UID: "SERVICE-UID"}}
 
-	assert.Equal(t, "service-uid", ServiceUID(service))
+	assert.Equal(t, "service-uid-lb", ServiceUID(service))
 	assert.Empty(t, ServiceUID(nil))
-	assert.Equal(t, "service-uid-pip", PublicIPName(ServiceUID(service)))
+	assert.Equal(t, "service-uid-lb-pip", PublicIPName(ServiceUID(service)))
+	assert.Equal(t, "payments-natgw", outboundServiceName("PAYMENTS"))
+	assert.Equal(t, "payments-natgw-natgw", outboundServiceName("payments-natgw"))
+	assert.Equal(t, "payments-lb-natgw", outboundServiceName("payments-lb"))
+	assert.Empty(t, inboundServiceName(""))
+	assert.Empty(t, outboundServiceName(""))
+	for _, tc := range []struct {
+		name     string
+		identity string
+		kind     ServiceType
+	}{
+		{"service-uid-lb", "service-uid", Inbound},
+		{"payments-natgw", "payments", Outbound},
+		{"payments-lb-natgw", "payments-lb", Outbound},
+		{"payments-natgw-natgw", "payments-natgw", Outbound},
+	} {
+		identity, kind, ok := serviceIdentity(tc.name)
+		assert.True(t, ok)
+		assert.Equal(t, tc.identity, identity)
+		assert.Equal(t, tc.kind, kind)
+		fromPIP, ok := identityFromPublicIPName(tc.name + "-pip")
+		assert.True(t, ok)
+		assert.Equal(t, tc.name, fromPIP)
+	}
+	for _, oldName := range []string{"service-uid-pip", "payments-pip-v6", "service-uid-lb-pip-v6", "-lb-pip", "-natgw-pip"} {
+		_, ok := identityFromPublicIPName(oldName)
+		assert.False(t, ok, oldName)
+	}
 }
 
 func TestExtractInboundConfigFromService_NilService(t *testing.T) {
@@ -316,27 +343,28 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 		ServiceGatewayResourceName:    "test-sgw",
 	}
 
-	pip, lb, servicesDTO, err := buildInboundServiceResources("service-uid-123", config, dtConfig)
+	pip, lb, servicesDTO, err := buildInboundServiceResources("service-uid-123-lb", config, dtConfig)
 	assert.NoError(t, err)
 
 	// Verify PIP
 	assert.NotNil(t, pip.Name)
-	assert.Equal(t, "service-uid-123-pip", *pip.Name)
-	assert.Equal(t, "service-uid-123", derefString(pip.Tags[InboundServiceUIDTagKey]))
+	assert.Equal(t, "service-uid-123-lb-pip", *pip.Name)
+	assert.Equal(t, map[string]*string{"k8s-azure-ccm-managed": ptr.To("true")}, pip.Tags)
+	assert.Empty(t, lb.Tags)
 	assert.Contains(t, *pip.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.PublicIPAddressSKUNameStandardV2, *pip.SKU.Name)
 	assert.Equal(t, "eastus", *pip.Location)
 
 	// Verify LoadBalancer
 	assert.NotNil(t, lb.Name)
-	assert.Equal(t, "service-uid-123", *lb.Name)
+	assert.Equal(t, "service-uid-123-lb", *lb.Name)
 	assert.Contains(t, *lb.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, "Service", string(*lb.SKU.Name))
 	assert.Equal(t, "eastus", *lb.Location)
 
 	// Verify backend pool
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
-	assert.Equal(t, "service-uid-123", *lb.Properties.BackendAddressPools[0].Name)
+	assert.Equal(t, "service-uid-123-lb", *lb.Properties.BackendAddressPools[0].Name)
 
 	// Verify LB rules
 	assert.Len(t, lb.Properties.LoadBalancingRules, 2)
@@ -358,7 +386,7 @@ func TestBuildInboundServiceResources_WithConfig(t *testing.T) {
 	// Verify ServicesDTO
 	assert.Len(t, servicesDTO.Services, 1)
 	assert.Contains(t, servicesDTO.Services[0].LoadBalancerBackendPools[0].ID, "/subscriptions/network-sub/")
-	assert.Contains(t, servicesDTO.Services[0].Service, "service-uid-123")
+	assert.Contains(t, servicesDTO.Services[0].Service, "service-uid-123-lb")
 	assert.Equal(t, Inbound, servicesDTO.Services[0].ServiceType)
 }
 
@@ -370,12 +398,12 @@ func TestBuildInboundServiceResources_NilConfig(t *testing.T) {
 		ServiceGatewayResourceName: "test-sgw",
 	}
 
-	pip, lb, servicesDTO, err := buildInboundServiceResources("service-uid-123", nil, dtConfig)
+	pip, lb, servicesDTO, err := buildInboundServiceResources("service-uid-123-lb", nil, dtConfig)
 	assert.NoError(t, err)
 
 	// Should still create LB, just without rules
 	assert.NotNil(t, lb.Name)
-	assert.Equal(t, "service-uid-123", *lb.Name)
+	assert.Equal(t, "service-uid-123-lb", *lb.Name)
 
 	// Should have backend pool but no rules
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
@@ -383,7 +411,8 @@ func TestBuildInboundServiceResources_NilConfig(t *testing.T) {
 
 	// PIP should still be created
 	assert.NotNil(t, pip.Name)
-	assert.Equal(t, "service-uid-123", derefString(pip.Tags[InboundServiceUIDTagKey]))
+	assert.Equal(t, map[string]*string{"k8s-azure-ccm-managed": ptr.To("true")}, pip.Tags)
+	assert.Empty(t, lb.Tags)
 
 	// ServicesDTO should still be valid
 	assert.Len(t, servicesDTO.Services, 1)
@@ -429,19 +458,19 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 		ServiceGatewayResourceName:    "test-sgw",
 	}
 
-	pips, natGw, servicesDTO := buildOutboundServiceResources("egress-uid-456", nil, dtConfig)
+	pips, natGw, servicesDTO := buildOutboundServiceResources("egress-uid-456-natgw", nil, dtConfig)
 	pip := pips[0]
 
 	// Verify PIP
 	assert.NotNil(t, pip.Name)
-	assert.Equal(t, "egress-uid-456-pip", *pip.Name)
+	assert.Equal(t, "egress-uid-456-natgw-pip", *pip.Name)
 	assert.Contains(t, *pip.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.PublicIPAddressSKUNameStandardV2, *pip.SKU.Name)
 	assert.Equal(t, "centralus", *pip.Location)
 
 	// Verify NAT Gateway
 	assert.NotNil(t, natGw.Name)
-	assert.Equal(t, "egress-uid-456", *natGw.Name)
+	assert.Equal(t, "egress-uid-456-natgw", *natGw.Name)
 	assert.Contains(t, *natGw.ID, "/subscriptions/network-sub/")
 	assert.Equal(t, armnetwork.NatGatewaySKUNameStandardV2, *natGw.SKU.Name)
 	assert.Equal(t, "centralus", *natGw.Location)
@@ -452,15 +481,16 @@ func TestBuildOutboundServiceResources_Basic(t *testing.T) {
 
 	// Verify NAT Gateway has PIP reference
 	assert.Len(t, natGw.Properties.PublicIPAddresses, 1)
-	assert.Contains(t, *natGw.Properties.PublicIPAddresses[0].ID, "egress-uid-456-pip")
+	assert.Contains(t, *natGw.Properties.PublicIPAddresses[0].ID, "egress-uid-456-natgw-pip")
 
-	assert.Equal(t, "egress-uid-456", *natGw.Tags[EgressIdentityTagKey])
-	assert.Equal(t, "egress-uid-456", *pip.Tags[EgressIdentityTagKey])
+	expectedTags := map[string]*string{"k8s-azure-ccm-managed": ptr.To("true")}
+	assert.Equal(t, expectedTags, natGw.Tags)
+	assert.Equal(t, expectedTags, pip.Tags)
 
 	// Verify ServicesDTO
 	assert.Len(t, servicesDTO.Services, 1)
 	assert.Contains(t, servicesDTO.Services[0].PublicNatGateway.ID, "/subscriptions/network-sub/")
-	assert.Contains(t, servicesDTO.Services[0].Service, "egress-uid-456")
+	assert.Contains(t, servicesDTO.Services[0].Service, "egress-uid-456-natgw")
 	assert.Equal(t, Outbound, servicesDTO.Services[0].ServiceType)
 }
 
@@ -802,23 +832,23 @@ func TestIsValidEgressIdentity(t *testing.T) {
 		"my_egress.gw-1",
 		"a",
 		"e0",
-		strings.Repeat("a", 73), // max length (reserves 7 chars for the "-pip-v6" suffix)
+		strings.Repeat("a", maxEgressIdentityLength),
 	}
 	for _, n := range valid {
 		assert.True(t, IsValidEgressIdentity(n), "expected %q to be a valid egress identity", n)
 	}
 
 	invalid := []string{
-		"",                      // empty
-		"../hijacked-nat",       // path traversal
-		"egress/gateway",        // slash
-		"-leading-hyphen",       // must start with an alphanumeric
-		".leading-dot",          // must start with an alphanumeric
-		"trailing-dot.",         // must end with an alphanumeric or underscore
-		"trailing-hyphen-",      // must end with an alphanumeric or underscore
-		"has space",             // whitespace
-		"UPPER",                 // callers lowercase first; raw uppercase is rejected
-		strings.Repeat("a", 74), // exceeds 73: the IPv6 PIP name would overflow Azure's 80-char limit
+		"",                 // empty
+		"../hijacked-nat",  // path traversal
+		"egress/gateway",   // slash
+		"-leading-hyphen",  // must start with an alphanumeric
+		".leading-dot",     // must start with an alphanumeric
+		"trailing-dot.",    // must end with an alphanumeric or underscore
+		"trailing-hyphen-", // must end with an alphanumeric or underscore
+		"has space",        // whitespace
+		"UPPER",            // callers lowercase first; raw uppercase is rejected
+		strings.Repeat("a", maxEgressIdentityLength+1),
 		strings.Repeat("a", 81), // too long
 	}
 	for _, n := range invalid {
@@ -826,7 +856,7 @@ func TestIsValidEgressIdentity(t *testing.T) {
 	}
 
 	// A max-length egress identity must yield BOTH Public IP names within Azure's 80-char limit.
-	for _, pipName := range OutboundPublicIPNames(strings.Repeat("a", 73)) {
+	for _, pipName := range OutboundPublicIPNames(outboundServiceName(strings.Repeat("a", maxEgressIdentityLength))) {
 		assert.LessOrEqual(t, len(pipName), 80,
 			"PIP name %q derived from a max-length egress identity must fit Azure's 80-char publicIPAddresses limit", pipName)
 	}
@@ -1020,15 +1050,15 @@ func TestAdmitInboundService_AdmitsBothExternalTrafficPolicies(t *testing.T) {
 // TestIsValidEgressIdentity_RejectsReservedNames pins the reserved-name guard at the shared
 // chokepoint used by both the pod informer and startup egress discovery.
 func TestIsValidEgressIdentity_RejectsReservedNames(t *testing.T) {
-	for _, name := range []string{"default-natgw", "Default-NatGW", "DEFAULT-NATGW"} {
-		assert.True(t, IsReservedEgressIdentity(name), "%q must be recognised as reserved", name)
-		assert.False(t, IsValidEgressIdentity(name),
-			"%q names the RP-owned default gateway and must not be usable as an egress identity", name)
+	for _, name := range []string{"default", "Default", "DEFAULT"} {
+		assert.True(t, IsReservedEgressIdentity(outboundServiceName(name)), "%q generates a reserved name", name)
+		assert.False(t, IsValidEgressIdentity(strings.ToLower(name)),
+			"%q generates the RP-owned default gateway name", name)
 	}
 
 	// Controls: shape-valid identities that merely resemble the reserved name stay usable.
-	for _, name := range []string{"team-egress", "default-natgw2", "my-default-natgw", "default-natgateway"} {
-		assert.False(t, IsReservedEgressIdentity(name), "%q must not be treated as reserved", name)
+	for _, name := range []string{"team-egress", "default-natgw", "default-natgw2", "my-default-natgw", "default-natgateway"} {
+		assert.False(t, IsReservedEgressIdentity(outboundServiceName(name)), "%q must not generate a reserved name", name)
 		assert.True(t, IsValidEgressIdentity(name), "%q must remain a usable egress identity", name)
 	}
 }
@@ -1072,7 +1102,7 @@ func TestIdleTimeout_AdmissionAndBuildAgree(t *testing.T) {
 // NAT Gateway list. An IPv6 pod address registered against a gateway with no V6 public path has no
 // egress at all, and there is no outbound update path to correct it later.
 func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
-	const uid = "team-egress"
+	const uid = "team-egress-natgw"
 	dtConfig := testConfig()
 
 	versions := func(pips []armnetwork.PublicIPAddress) map[string]string {
@@ -1101,11 +1131,16 @@ func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
 		}, dtConfig)
 
 		assert.Equal(t, map[string]string{
-			"team-egress-pip":    "IPv4",
-			"team-egress-pip-v6": "IPv6",
+			"team-egress-natgw-pip":    "IPv4",
+			"team-egress-natgw-pip-v6": "IPv6",
 		}, versions(pips))
-		assert.Equal(t, []string{"team-egress-pip"}, refNames(natGw.Properties.PublicIPAddresses))
-		assert.Equal(t, []string{"team-egress-pip-v6"}, refNames(natGw.Properties.PublicIPAddressesV6),
+		expectedTags := map[string]*string{"k8s-azure-ccm-managed": ptr.To("true")}
+		assert.Equal(t, expectedTags, natGw.Tags)
+		for _, pip := range pips {
+			assert.Equal(t, expectedTags, pip.Tags)
+		}
+		assert.Equal(t, []string{"team-egress-natgw-pip"}, refNames(natGw.Properties.PublicIPAddresses))
+		assert.Equal(t, []string{"team-egress-natgw-pip-v6"}, refNames(natGw.Properties.PublicIPAddressesV6),
 			"the IPv6 address must be attached to the V6 list; the V4 list is a different field")
 	})
 
@@ -1114,8 +1149,8 @@ func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
 			IPFamilies: []string{"IPv4"},
 		}, dtConfig)
 
-		assert.Equal(t, map[string]string{"team-egress-pip": "IPv4"}, versions(pips))
-		assert.Equal(t, []string{"team-egress-pip"}, refNames(natGw.Properties.PublicIPAddresses))
+		assert.Equal(t, map[string]string{"team-egress-natgw-pip": "IPv4"}, versions(pips))
+		assert.Equal(t, []string{"team-egress-natgw-pip"}, refNames(natGw.Properties.PublicIPAddresses))
 		assert.Empty(t, natGw.Properties.PublicIPAddressesV6,
 			"an IPv4-only cluster must not be charged for an unused IPv6 address")
 	})
@@ -1123,9 +1158,39 @@ func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
 	t.Run("a nil config stays IPv4-only", func(t *testing.T) {
 		pips, natGw, _ := buildOutboundServiceResources(uid, nil, dtConfig)
 
-		assert.Equal(t, map[string]string{"team-egress-pip": "IPv4"}, versions(pips))
+		assert.Equal(t, map[string]string{"team-egress-natgw-pip": "IPv4"}, versions(pips))
 		assert.Empty(t, natGw.Properties.PublicIPAddressesV6)
 	})
+}
+
+func TestManagedResourceOwnership(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		tags        map[string]*string
+		wantManaged bool
+	}{
+		{name: "no tags"},
+		{name: "nil marker", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: nil}},
+		{name: "empty marker", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("")}},
+		{name: "managed", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("true")}, wantManaged: true},
+		{name: "false", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("false")}},
+		{name: "old inbound", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("inbound")}},
+		{name: "old outbound", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("outbound")}},
+		{name: "uppercase", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("TRUE")}},
+		{name: "mixed case", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("True")}},
+		{name: "whitespace", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("true ")}},
+		{name: "unknown type", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("managed")}},
+		{name: "identity instead of type", tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("payments")}},
+		{name: "old identity tags", tags: map[string]*string{
+			"k8s-azure-egress-identity": ptr.To("payments"), "k8s-azure-service-uid": ptr.To("payments")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.wantManaged, ownsNATGateway(&armnetwork.NatGateway{Name: ptr.To("payments-natgw"), Tags: tc.tags}))
+			pip := &armnetwork.PublicIPAddress{Name: ptr.To("payments-pip"), Tags: tc.tags}
+			assert.Equal(t, tc.wantManaged, ownsPublicIP(pip))
+		})
+	}
+	assert.False(t, ownsNATGateway(nil))
 }
 
 func TestBYONATGatewayHelpers(t *testing.T) {

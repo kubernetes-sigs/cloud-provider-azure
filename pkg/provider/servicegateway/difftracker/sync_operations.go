@@ -51,7 +51,7 @@ func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
 
 // getSyncLoadBalancerServicesLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncLoadBalancerServicesLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.logger, dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
+	return dt.getSyncServicesLocked(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
 }
 
 func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
@@ -63,10 +63,14 @@ func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
 
 // getSyncNRPNATGatewaysLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncNRPNATGatewaysLocked() SyncServicesReturnType {
-	result := GetServicesToSync(dt.logger, dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+	return dt.getSyncServicesLocked(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+}
+
+func (dt *DiffTracker) getSyncServicesLocked(desired, registered *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+	result := GetServicesToSync(dt.logger, desired, registered)
 	for _, identities := range []*utilsets.IgnoreCaseSet{result.Additions, result.Removals} {
 		for _, identity := range identities.UnsortedList() {
-			if dt.outboundIdentityConflictsWithInboundLocked(identity) {
+			if dt.isReservedServiceLocked(identity) {
 				identities.Delete(identity)
 			}
 		}

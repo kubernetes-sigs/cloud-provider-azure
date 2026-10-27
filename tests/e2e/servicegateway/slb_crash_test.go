@@ -544,7 +544,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 			}
 
 			for _, svc := range sgResponse.Value {
-				if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+				if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 					natGatewayID = svc.Properties.PublicNatGatewayID
 					utils.Logf("Found outbound service '%s' with NAT Gateway: %s", egressName, natGatewayID)
 					if natGatewayID == "" {
@@ -569,22 +569,14 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 			}
 
 			for _, svc := range sgResponse.Value {
-				if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+				if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 					recoveredNatGatewayID := svc.Properties.PublicNatGatewayID
 					utils.Logf("Outbound service still exists after recovery with NAT Gateway: %s", recoveredNatGatewayID)
 					if recoveredNatGatewayID != natGatewayID {
 						return fmt.Errorf("NAT Gateway ID after recovery = %q, want %q", recoveredNatGatewayID, natGatewayID)
 					}
 
-					registeredPods, err := countRegisteredEndpoints(egressName)
-					if err != nil {
-						return err
-					}
-					utils.Logf("Registered %d pod IPs for egress gateway after recovery", registeredPods)
-					if registeredPods != numPods {
-						return fmt.Errorf("registered pod count after recovery = %d, want %d", registeredPods, numPods)
-					}
-					return nil
+					return egressPodsRegisteredErr(cs, ns.Name, egressName, numPods)
 				}
 			}
 			return fmt.Errorf("outbound service %s should still exist after CCM recovery", egressName)
@@ -624,7 +616,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		}
 
 		By("Waiting for the NAT gateway to provision and pods to register")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressPodsRegistered(cs, ns.Name, egressName, numPods, waitTime)
 
 		// Delete the egress pods, then immediately crash CCM so the in-flight pod-deletion tracking
 		// (the in-memory pendingPodDeletions) is lost. On recovery those pods are mid-deletion but no
@@ -760,15 +752,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		By("Waiting for CCM to reconcile")
 		expectedPods := initialPods + additionalPods
 		Eventually(func() error {
-			registeredPods, err := countRegisteredEndpoints(egressName)
-			if err != nil {
-				return err
-			}
-			utils.Logf("Expected %d pods, found %d registered", expectedPods, registeredPods)
-			if registeredPods != expectedPods {
-				return fmt.Errorf("registered pod count after recovery = %d, want %d", registeredPods, expectedPods)
-			}
-			return nil
+			return egressPodsRegisteredErr(cs, ns.Name, egressName, expectedPods)
 		}, 60*time.Second, 10*time.Second).Should(Succeed(),
 			"all pods should be registered after CCM recovery")
 	})
@@ -823,7 +807,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 			for _, svc := range sgResponse.Value {
 				if svc.Properties.ServiceType == "Outbound" {
 					for _, egressName := range egressGateways {
-						if svc.Name == egressName {
+						if svc.Name == outboundServiceName(egressName) {
 							natGatewayIDs[egressName] = svc.Properties.PublicNatGatewayID
 							utils.Logf("Found egress gateway '%s' with NAT Gateway: %s", egressName, svc.Properties.PublicNatGatewayID)
 						}
@@ -860,7 +844,7 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 				for _, svc := range sgResponse.Value {
 					if svc.Properties.ServiceType == "Outbound" {
 						for egressName, expectedNatID := range natGatewayIDs {
-							if svc.Name == egressName {
+							if svc.Name == outboundServiceName(egressName) {
 								foundGateways++
 								if svc.Properties.PublicNatGatewayID != expectedNatID {
 									return fmt.Errorf("NAT Gateway ID for %s after crash %d = %q, want %q", egressName, i, svc.Properties.PublicNatGatewayID, expectedNatID)
@@ -886,14 +870,14 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 			for _, location := range alResponse.Value {
 				for _, addr := range location.Addresses {
 					for _, svcName := range addr.Services {
-						if svcName == egressName {
+						if svcName == outboundServiceName(egressName) {
 							registeredPods++
 						}
 					}
 				}
 			}
-			utils.Logf("Egress gateway '%s' has %d registered pods", egressName, registeredPods)
-			Expect(registeredPods).To(Equal(podsPerGateway), "All pods should be registered for %s", egressName)
+			utils.Logf("Egress gateway '%s' has %d registered addresses", egressName, registeredPods)
+			Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, podsPerGateway)).To(Succeed())
 		}
 	})
 })

@@ -231,7 +231,7 @@ func TestGuardLocationsUpdaterReschedulesOnReadyFinalizerRemovalFailure(t *testi
 // through the inbound orphan-delete path. deleteInboundService then deletes the PIP and removes the
 // stuck Service finalizer, so the Service no longer strands in Terminating after a restart.
 func TestGuardOrphanCleanup_PIPOnlyServiceScheduledForDeletion(t *testing.T) {
-	uid := "11111111-1111-1111-1111-111111111111" // must be a valid service UUID
+	uid := inboundServiceName("11111111-1111-1111-1111-111111111111")
 	dt := newTestDiffTracker()
 
 	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), utilsets.NewString(), utilsets.NewString(uid+"-pip"))
@@ -250,9 +250,9 @@ func TestGuardOrphanCleanup_PIPOnlyServiceScheduledForDeletion(t *testing.T) {
 // LoadBalancer, must not be scheduled by the PIP path, and an orphaned LB is scheduled exactly once
 // via the LB path (its PIP is deleted there, not double-scheduled).
 func TestGuardOrphanCleanup_PIPNotScheduledWhenDesiredOrHasLB(t *testing.T) {
-	uidDesired := "22222222-2222-2222-2222-222222222222"
-	uidHasLB := "33333333-3333-3333-3333-333333333333"
-	uidHasNRPLB := "44444444-4444-4444-4444-444444444444"
+	uidDesired := inboundServiceName("22222222-2222-2222-2222-222222222222")
+	uidHasLB := inboundServiceName("33333333-3333-3333-3333-333333333333")
+	uidHasNRPLB := inboundServiceName("44444444-4444-4444-4444-444444444444")
 
 	dt := newTestDiffTracker()
 	dt.K8sResources.Services.Insert(uidDesired)       // desired in K8s -> reconcileServices owns it

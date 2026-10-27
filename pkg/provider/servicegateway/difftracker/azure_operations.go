@@ -71,6 +71,11 @@ func (dt *DiffTracker) createOrUpdateManagedPublicIP(ctx context.Context, pip ar
 	if pipName == "" {
 		return nil, fmt.Errorf("createOrUpdateManagedPublicIP: pip name is empty")
 	}
+	serviceName, valid := identityFromPublicIPName(pipName)
+	if !valid {
+		return nil, fmt.Errorf("createOrUpdateManagedPublicIP: invalid managed Public IP name %q", pipName)
+	}
+	_, kind, _ := serviceIdentity(serviceName)
 	existing, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
 	if err != nil {
 		if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr != nil || exists {
@@ -80,8 +85,8 @@ func (dt *DiffTracker) createOrUpdateManagedPublicIP(ctx context.Context, pip ar
 		if existing == nil {
 			return nil, fmt.Errorf("reading Public IP %q before creation returned no resource", pipName)
 		}
-		if identity := pip.Tags[EgressIdentityTagKey]; identity != nil && !ownsPublicIP(existing, *identity, EgressIdentityTagKey) {
-			return nil, egressRejectedError{fmt.Errorf("public IP %q is not owned by egress identity %q", pipName, *identity)}
+		if kind == Outbound && !ownsPublicIP(existing) {
+			return nil, egressRejectedError{fmt.Errorf("public IP %q is not marked as CCM-managed", pipName)}
 		}
 		pip.Tags = existing.Tags
 		pip.Etag = existing.Etag
@@ -112,7 +117,7 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 }
 
 // Returns true only when an owned address was deleted.
-func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName, identity, ownerTagKey string) (bool, error) {
+func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName string) (bool, error) {
 	if pipName == "" {
 		return false, fmt.Errorf("deleteOwnedPublicIP: pip name is empty")
 	}
@@ -130,8 +135,8 @@ func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName, identit
 		if pip == nil {
 			return false, fmt.Errorf("reading Public IP %q to check ownership returned no resource", pipName)
 		}
-		if !ownsPublicIP(pip, identity, ownerTagKey) {
-			dt.logger.V(2).Info("Kept Public IP without matching ownership tag", "publicIP", pipName, "identity", identity, "ownerTag", ownerTagKey)
+		if !ownsPublicIP(pip) {
+			dt.logger.V(2).Info("Kept Public IP without matching CCM-managed marker", "publicIP", pipName)
 			return false, nil
 		}
 		deleteCtx, err := withResourceETag(ctx, fmt.Sprintf("Public IP %q", pipName), pip.Etag)
@@ -390,9 +395,9 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 	return nil
 }
 
-// getServiceByUID returns the Service whose UID matches uid. It resolves the Service by its
-// recorded namespace/name through the cached serviceLister, an O(1) read backed by the shared
-// informer, keeping the UID as a consistency check so a recreated Service that reuses the same
+// getServiceByUID resolves a canonical inbound SGW name to its Kubernetes Service. It resolves
+// the recorded namespace/name through the cached serviceLister, an O(1) read backed by the shared
+// informer, checking the decoded Kubernetes UID so a recreated Service that reuses the same
 // namespace/name is never mistaken for the original. It falls back to a direct apiserver Get when
 // the lister is unset or its cache has not yet observed the object, and to a UID scan when the
 // namespace/name are unknown (e.g. entries recovered from NRP without a Service object).
@@ -402,12 +407,16 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 // apply their own type and deletion checks.
 func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
 	namespace, name, lister := dt.serviceIdentityForUID(uid)
+	rawUID, kind, ok := serviceIdentity(uid)
+	if !ok || kind != Inbound {
+		return nil, fmt.Errorf("getServiceByUID: invalid inbound ServiceGateway name %q", uid)
+	}
 
 	if namespace != "" && name != "" {
 		svc, err := dt.getServiceByNamespaceName(ctx, lister, namespace, name)
 		switch {
 		case err == nil:
-			if string(svc.UID) == uid {
+			if string(svc.UID) == rawUID {
 				return svc, nil
 			}
 			// A different Service now occupies this namespace/name; the original is gone.
@@ -421,10 +430,10 @@ func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Ser
 		}
 	}
 
-	return dt.getServiceByUIDViaList(ctx, uid)
+	return dt.getServiceByUIDViaList(ctx, rawUID)
 }
 
-// serviceIdentityForUID returns the namespace/name recorded for a service UID together with the
+// serviceIdentityForUID returns the namespace/name recorded for a canonical SGW identity together with the
 // current serviceLister, read under mu.
 func (dt *DiffTracker) serviceIdentityForUID(uid string) (namespace, name string, lister corelisters.ServiceLister) {
 	dt.mu.Lock()

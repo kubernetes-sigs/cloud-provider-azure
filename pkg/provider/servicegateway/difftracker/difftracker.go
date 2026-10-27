@@ -106,20 +106,20 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 	}
 
 	for _, identity := range k8s.Services.UnsortedList() {
-		if diffTracker.inboundIdentityConflictsWithOutboundLocked(identity) {
+		if diffTracker.isReservedServiceLocked(identity) {
 			k8s.Services.Delete(identity)
-			logger.V(2).Info("Deferred startup inbound service behind the outbound owner", "service", identity)
+			logger.V(2).Info("Excluded reserved service from startup inbound state", "service", identity)
 		}
 	}
 	for _, identity := range k8s.Egresses.UnsortedList() {
-		if diffTracker.outboundIdentityConflictsWithInboundLocked(identity) {
+		if diffTracker.isReservedServiceLocked(identity) {
 			k8s.Egresses.Delete(identity)
-			logger.V(2).Info("Rejected startup egress identity colliding with an inbound service", "service", identity)
+			logger.V(2).Info("Excluded reserved service from startup egress state", "service", identity)
 		}
 	}
 
 	for identity, natGatewayID := range nrp.OutboundNATGatewayIDs {
-		if diffTracker.outboundIdentityConflictsWithInboundLocked(identity) {
+		if diffTracker.isReservedServiceLocked(identity) {
 			continue
 		}
 		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil && byoNATGatewayIDProblem(natGatewayID, config) == "" {
@@ -127,6 +127,7 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 				parsed.SubscriptionID, parsed.ResourceGroupName, parsed.Name)
 		}
 	}
+	diffTracker.NRPResources.OutboundNATGatewayIDs = nil
 
 	// Seed the outbound ref-counter from egress pods already in the initial state
 	// so a later REMOVE can drive the counter to zero.
@@ -135,13 +136,13 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 			changed := false
 			if pod.InboundIdentities != nil {
 				for _, identity := range pod.InboundIdentities.UnsortedList() {
-					if diffTracker.inboundIdentityConflictsWithOutboundLocked(identity) {
+					if diffTracker.isReservedServiceLocked(identity) {
 						pod.InboundIdentities.Delete(identity)
 						changed = true
 					}
 				}
 			}
-			if pod.PublicOutboundIdentity != "" && diffTracker.outboundIdentityConflictsWithInboundLocked(pod.PublicOutboundIdentity) {
+			if pod.PublicOutboundIdentity != "" && diffTracker.isReservedServiceLocked(pod.PublicOutboundIdentity) {
 				pod.PublicOutboundIdentity, pod.OutboundPodKey, pod.OutboundPodUID = "", "", ""
 				changed = true
 			}

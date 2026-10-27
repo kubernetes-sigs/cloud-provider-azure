@@ -758,7 +758,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 
 	// Step 4: Delete Public IP
 	_, pipName, _ := buildInboundResourceNames(serviceUID)
-	if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName, serviceUID, InboundServiceUIDTagKey); err != nil {
+	if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
 		s.logger.V(4).Info("Could not delete Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
@@ -892,8 +892,6 @@ func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceUID,
 			return
 		}
 
-		// Forgotten last: a retried delete must still take the BYO (unlink-only) path.
-		s.diffTracker.setBYONATGatewayID(serviceUID, "")
 		s.onComplete(serviceUID, true, nil)
 	}
 }
@@ -908,9 +906,17 @@ func (s *ServiceUpdater) deleteManagedOutboundResources(ctx context.Context, ser
 		s.logger.V(5).Info("Deleted NAT Gateway for outbound service", "serviceUID", serviceUID)
 	}
 
+	if err := s.deleteOwnedOutboundPublicIPs(ctx, serviceUID, correlationID); err != nil {
+		lastErr = err
+	}
+	return lastErr
+}
+
+func (s *ServiceUpdater) deleteOwnedOutboundPublicIPs(ctx context.Context, serviceUID, correlationID string) error {
+	var lastErr error
 	// Also clean up owned PIPs left by a failed managed creation.
 	for _, pipName := range OutboundPublicIPNames(serviceUID) {
-		if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName, serviceUID, EgressIdentityTagKey); err != nil {
+		if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName); err != nil {
 			httpStatus, errCode := extractAzureErrorInfo(err)
 			s.logger.V(4).Info("Could not delete Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 			lastErr = fmt.Errorf("failed to delete Public IP: %w", err)

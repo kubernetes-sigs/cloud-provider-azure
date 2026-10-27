@@ -142,9 +142,8 @@ func (dt *DiffTracker) DeleteInboundService(service *v1.Service) error {
 	return nil
 }
 
-// AddService is idempotent: it does not queue creation for a service already registered in NRP
-// or tracked by the engine. Otherwise, it queues creation through ServiceUpdater.
-// It rejects identity collisions between inbound LoadBalancer and outbound egress services.
+// AddService queues creation for services not already tracked or registered in NRP.
+// RP-owned default service names are reserved.
 func (dt *DiffTracker) AddService(config ServiceConfig) error {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
@@ -163,14 +162,9 @@ func (dt *DiffTracker) AddService(config ServiceConfig) error {
 
 	serviceUID := config.UID
 	dt.logger.V(5).Info("Added service request", "service", serviceUID, "isInbound", config.IsInbound)
-	if config.IsInbound && dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
+	if dt.isReservedServiceLocked(serviceUID) {
 		dt.mu.Unlock()
-		return fmt.Errorf("service gateway identity %q is owned by outbound egress; release that identity before creating an inbound service", serviceUID)
-	}
-	if !config.IsInbound && dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
-		dt.mu.Unlock()
-		dt.logger.V(2).Info("Rejected egress identity colliding with an inbound service", "service", serviceUID)
-		return fmt.Errorf("service gateway identity %q is owned by an inbound service", serviceUID)
+		return fmt.Errorf("ServiceGateway service name %q is reserved", serviceUID)
 	}
 
 	// Check if service already exists in NRP
@@ -240,8 +234,8 @@ func (dt *DiffTracker) updateEndpointsLocked(serviceUID string, oldPodIPToNodeIP
 		dt.logger.V(4).Info("Could not update endpoints without service")
 		return
 	}
-	if dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
-		dt.logger.V(4).Info("Skipped inbound endpoints for an outbound-owned identity", "service", serviceUID)
+	if dt.isReservedServiceLocked(serviceUID) {
+		dt.logger.V(4).Info("Skipped endpoints for a reserved service", "service", serviceUID)
 		return
 	}
 
@@ -372,8 +366,7 @@ func (dt *DiffTracker) updateEndpointsLocked(serviceUID string, oldPodIPToNodeIP
 	}
 }
 
-// resetRetryStateLocked resets the retry budget and clears backoff and creation rejection.
-// Used for fresh intent or an expired retry cooldown. Must be called with dt.mu held.
+// resetRetryStateLocked clears retry and rejection state. Requires dt.mu.
 func resetRetryStateLocked(op *ServiceOperationState) {
 	op.RetryCount = 0
 	op.RetriesExhausted = false
@@ -381,12 +374,9 @@ func resetRetryStateLocked(op *ServiceOperationState) {
 	op.NextRetryAt = time.Time{}
 }
 
-// UpdateService handles spec changes (e.g., port changes) for inbound LoadBalancer services.
-// Services neither tracked nor present in NRP are delegated to AddService.
-// Created services skip unchanged configurations and queue changed ones through ServiceUpdater.
-// During creation or update, the latest desired configuration is retained for reconciliation.
-// During deletion, the configuration is saved for recreation after cleanup completes.
-// Outbound updates are ignored. Inbound requests return an error if outbound egress owns the identity.
+// UpdateService reconciles inbound configuration changes through ServiceUpdater.
+// In-flight changes are retained for reconciliation or post-deletion recreation.
+// Outbound updates are ignored. Requests for RP-owned default names return an error.
 func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 	defer func() {
 		updatePendingServiceOperationsMetric(dt)
@@ -411,8 +401,8 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 		dt.mu.Lock()
 		defer dt.mu.Unlock()
 
-		if dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
-			return fmt.Errorf("service gateway identity %q is owned by outbound egress; release that identity before creating an inbound service", serviceUID)
+		if dt.isReservedServiceLocked(serviceUID) {
+			return fmt.Errorf("ServiceGateway service name %q is reserved", serviceUID)
 		}
 		dt.K8sResources.Services.Insert(serviceUID)
 
@@ -425,8 +415,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 		}
 
 		if !exists && existsInNRP {
-			// LB exists in NRP (e.g., recovered after CCM restart) but no engine tracking entry.
-			// Create one in StateCreated so the update path can take over.
+			// Recover tracking for an existing NRP load balancer.
 			dt.logger.V(5).Info("Created tracking entry for existing service update", "service", serviceUID)
 			opState = &ServiceOperationState{
 				ServiceUID:    serviceUID,
@@ -438,24 +427,18 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 				CorrelationID: uuid.NewString(),
 			}
 			dt.pendingServiceOps[serviceUID] = opState
-			// Force an update PUT (we have no LastAppliedConfig to compare against).
+			// Without LastAppliedConfig, reconciliation must issue an update.
 			opState.State = StateUpdateInProgress
 			opState.Config = config
 			triggerUpdater = true
 			return nil
 		}
 
-		// opState exists - dispatch on current state.
 		switch opState.State {
 		case StateNotStarted, StateCreationInProgress:
-			// Creation hasn't reached Azure yet (or is in flight). Latest config wins; the
-			// running goroutine already captured a snapshot at dispatch time, so we also
-			// queue a follow-up update by leaving the freshly-overwritten Config; if creation
-			// completes with stale data, OnServiceCreationComplete will see Config != LastAppliedConfig
-			// and schedule an UpdateInProgress.
+			// The worker uses its dispatch snapshot; completion reconciles later config changes.
 			if opState.CreationFailedTerminal {
-				// Service was parked after a non-retryable creation error. Only re-attempt if
-				// the spec actually changed; a resync with the same invalid spec stays parked.
+				// A terminal creation failure stays parked until the configuration changes.
 				if configsEqualForUpdate(&opState.Config, &config) {
 					dt.logger.V(5).Info("Skipped parked service with unchanged spec", "service", serviceUID)
 					return nil
@@ -471,8 +454,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 			}
 			dt.logger.V(5).Info("Overwrote desired service config", "service", serviceUID, "state", opState.State)
 			if !configsEqualForUpdate(&opState.Config, &config) {
-				// A genuine spec change is fresh intent: clear any transient-failure park so the new
-				// config starts with a clean retry budget rather than inheriting an exhausted one.
+				// A changed configuration resets the retry budget.
 				triggerUpdater = opState.RetriesExhausted
 				resetRetryStateLocked(opState)
 			} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
@@ -497,9 +479,8 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 			triggerUpdater = true
 
 		case StateUpdateInProgress:
-			// An updater is (or will be) processing this service. Overwrite with the latest desired
-			// config. A live in-flight worker re-checks Config on completion via OnServiceCreationComplete
-			// and reschedules if it changed; a parked op is re-armed on a spec change or after its cooldown.
+			// Completion reconciles changes to the in-flight configuration.
+			// Parked updates resume on configuration change or cooldown expiry.
 			dt.logger.V(5).Info("Overwrote desired config while service is updating", "service", serviceUID)
 			if !configsEqualForUpdate(&opState.Config, &config) {
 				triggerUpdater = opState.RetriesExhausted
@@ -511,12 +492,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 			opState.Config = config
 
 		case StateDeletionPending, StateDeletionInProgress:
-			// A re-create (e.g. a LoadBalancer->ClusterIP->LoadBalancer toggle) arrived while
-			// the service is being deleted. Record the desired config and let the
-			// deletion-success path replay it as a fresh create, so it cannot race the delete.
-			//
-			// Only a live Service can ask for this: a recreate intent recorded for an object that is
-			// going away would rebuild Azure resources that nothing will ever delete again.
+			// Defer recreation until deletion completes.
 			opState.Config = config
 			opState.RecreateAfterDeletion = true
 			seedEndpoints = true
@@ -564,7 +540,7 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan
 		return
 	}
 
-	// Delete intent clears desired state; registration/operation ownership lasts through cleanup.
+	// Clear desired state without releasing ownership before cleanup.
 	if isInbound {
 		dt.K8sResources.Services.Delete(serviceUID)
 		dt.removeServiceFromK8sStateLocked(serviceUID, true)
@@ -572,14 +548,9 @@ func (dt *DiffTracker) DeleteService(serviceUID string, isInbound bool, isOrphan
 	}
 
 	dt.logger.V(5).Info("Deleted service request", "service", serviceUID, "isInbound", isInbound, "isOrphan", isOrphan)
-	if isInbound && dt.inboundIdentityConflictsWithOutboundLocked(serviceUID) {
+	if dt.isReservedServiceLocked(serviceUID) {
 		dt.mu.Unlock()
-		dt.logger.V(2).Info("Skipped inbound deletion of an outbound-owned identity", "service", serviceUID)
-		return
-	}
-	if !isInbound && dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
-		dt.mu.Unlock()
-		dt.logger.V(2).Info("Rejected outbound deletion of an inbound service identity", "service", serviceUID)
+		dt.logger.V(2).Info("Skipped deletion of a reserved service", "service", serviceUID)
 		return
 	}
 
@@ -967,6 +938,11 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceUID string, success bool
 				return
 			}
 
+			// Retire the BYO binding only after checking for late finalizer work.
+			if !opState.Config.IsInbound {
+				delete(dt.byoNATGateways, strings.ToLower(serviceUID))
+			}
+
 			// If pods arrived while the deletion was in flight (buffered by the
 			// StateDeletionInProgress branch of AddPod), or a re-create was requested
 			// during deletion, the service must be re-created rather than torn down —
@@ -1185,36 +1161,6 @@ func (dt *DiffTracker) AddPodWithUID(serviceUID, podKey, podUID, location, addre
 	dt.addPod(serviceUID, podKey, podUID, location, address)
 }
 
-// serviceIdentityTypeLocked reports whether an identity is known and, if so, whether it is inbound.
-// If exists is true, inbound is true for an inbound LoadBalancer service and false for outbound egress.
-// NRP registrations and RP-owned outbound identities precede tracked operations, then retained BYO bindings.
-// A known identity need not have a created Azure resource. Must be called with dt.mu held.
-func (dt *DiffTracker) serviceIdentityTypeLocked(serviceUID string) (exists, inbound bool) {
-	if dt.NRPResources.LoadBalancers != nil && dt.NRPResources.LoadBalancers.Has(serviceUID) {
-		return true, true
-	}
-	if (dt.NRPResources.NATGateways != nil && dt.NRPResources.NATGateways.Has(serviceUID)) ||
-		(dt.NRPResources.ReservedOutboundServices != nil && dt.NRPResources.ReservedOutboundServices.Has(serviceUID)) {
-		return true, false
-	}
-	if op := dt.pendingServiceOps[serviceUID]; op != nil {
-		return true, op.Config.IsInbound
-	}
-	return dt.byoNATGateways[strings.ToLower(serviceUID)] != "", false
-}
-
-func (dt *DiffTracker) inboundIdentityConflictsWithOutboundLocked(serviceUID string) bool {
-	exists, inbound := dt.serviceIdentityTypeLocked(serviceUID)
-	return exists && !inbound
-}
-
-func (dt *DiffTracker) outboundIdentityConflictsWithInboundLocked(serviceUID string) bool {
-	if exists, inbound := dt.serviceIdentityTypeLocked(serviceUID); exists {
-		return inbound
-	}
-	return dt.K8sResources.Services != nil && dt.K8sResources.Services.Has(serviceUID)
-}
-
 func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address string) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -1224,8 +1170,8 @@ func (dt *DiffTracker) addPod(serviceUID, podKey, podUID, location, address stri
 		return
 	}
 
-	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
-		dt.logger.V(2).Info("Rejected egress pod whose identity collides with an inbound service",
+	if dt.isReservedServiceLocked(serviceUID) {
+		dt.logger.V(2).Info("Rejected egress pod for a reserved service",
 			"service", serviceUID, "pod", podKey)
 		return
 	}
@@ -1627,14 +1573,10 @@ func (dt *DiffTracker) deletePod(serviceUID, location string, addresses []string
 		return result
 	}
 
-	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
-		dt.logger.V(2).Info("Rejected egress pod deletion whose identity collides with an inbound service",
+	if dt.isReservedServiceLocked(serviceUID) {
+		dt.logger.V(2).Info("Skipped egress pod deletion for a reserved service",
 			"service", serviceUID, "location", location)
-		result = dt.inboundCollisionPodDeletionLocked(serviceUID, namespace, name, uid, addresses)
-		if result.Enqueued {
-			dt.triggerLocationsUpdater()
-		}
-		return result
+		return dt.reservedPodFinalizerDecisionLocked(namespace, name, uid)
 	}
 
 	dt.logger.V(5).Info("Deleted pod request", "service", serviceUID, "location", location, "addresses", addresses, "namespace", namespace, "name", name)
@@ -1714,37 +1656,6 @@ func (dt *DiffTracker) deletePod(serviceUID, location string, addresses []string
 	return result
 }
 
-// A rejected pod has no outbound drain, but an earlier pending drain or uncertain state must survive.
-// Callers schedule the sync; startup recovery must not trigger it yet.
-func (dt *DiffTracker) inboundCollisionPodDeletionLocked(serviceUID, namespace, name, uid string, addresses []string) DeletePodResult {
-	result := DeletePodResult{}
-	if namespace == "" || name == "" {
-		return result
-	}
-	podKey := namespace + "/" + name
-	if existing, ok := dt.pendingPodDeletions[podKey]; ok {
-		if uid == "" || existing.UID == uid {
-			result.IsLastPod, result.Enqueued = existing.IsLastPod, true
-		}
-		result.setFinalizerDecision()
-		return result
-	}
-	op, tracked := dt.pendingServiceOps[serviceUID]
-	mayHaveOutboundState := (tracked && !op.Config.IsInbound && op.State != StateNotStarted) ||
-		dt.NRPResources.NATGateways.Has(serviceUID) || dt.byoNATGateways[strings.ToLower(serviceUID)] != "" ||
-		dt.outboundServiceHasLiveOrBufferedPodLocked(serviceUID)
-	if mayHaveOutboundState {
-		dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
-			Namespace: namespace, Name: name, UID: uid, ServiceUID: serviceUID,
-			Addresses: append([]string(nil), addresses...), VerifyServiceDrain: len(addresses) == 0,
-			Timestamp: time.Now().Format(time.RFC3339),
-		}
-		result.Enqueued = true
-	}
-	result.setFinalizerDecision()
-	return result
-}
-
 // DeletePodWithoutAddresses handles a terminating egress pod first observed after its PodIPs/HostIP
 // were cleared. The exact old address set is unavailable, so release is gated on a service-level NRP
 // verification rather than inferred from missing pod status. Buffered entries for the same pod are
@@ -1758,13 +1669,9 @@ func (dt *DiffTracker) DeletePodWithoutAddresses(serviceUID, namespace, name, ui
 		dt.logger.V(4).Info("Could not delete no-IP pod with invalid parameters", "service", serviceUID, "namespace", namespace, "name", name)
 		return result
 	}
-	if dt.outboundIdentityConflictsWithInboundLocked(serviceUID) {
-		dt.logger.V(2).Info("Rejected no-IP egress pod deletion colliding with an inbound service", "service", serviceUID)
-		result = dt.inboundCollisionPodDeletionLocked(serviceUID, namespace, name, uid, nil)
-		if result.Enqueued {
-			dt.triggerLocationsUpdater()
-		}
-		return result
+	if dt.isReservedServiceLocked(serviceUID) {
+		dt.logger.V(2).Info("Skipped no-IP egress pod deletion for a reserved service", "service", serviceUID)
+		return dt.reservedPodFinalizerDecisionLocked(namespace, name, uid)
 	}
 
 	podKey := fmt.Sprintf("%s/%s", namespace, name)
@@ -2319,8 +2226,7 @@ func (dt *DiffTracker) checkInitializationCompleteLocked() {
 	// StateCreated ops remain tracked for runtime operations. Parked ops (CreationFailedTerminal or
 	// RetriesExhausted) self-heal in the background and must not hold initial sync open, or a single
 	// un-provisionable service would block cloud-provider init, which waits on a no-timeout context.
-	// Rejected egress configurations and identities with no remaining members also retry in the
-	// background; only a dispatched retry holds initialization open.
+	// Only dispatched retries of rejected or memberless egress identities block initialization.
 	pendingOps := 0
 	for _, opState := range dt.pendingServiceOps {
 		deferredCreation := opState.CreationRejected && opState.State == StateNotStarted
@@ -2365,8 +2271,7 @@ func configsEqualForUpdate(a, b *ServiceConfig) bool {
 	return true
 }
 
-// IsServiceTracked includes desired-only inbound reservations so cloud-provider cleanup
-// still runs for a Service rejected before provisioning.
+// IsServiceTracked includes desired inbound identities so rejected Services still receive cleanup.
 func (dt *DiffTracker) IsServiceTracked(serviceUID string) bool {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()

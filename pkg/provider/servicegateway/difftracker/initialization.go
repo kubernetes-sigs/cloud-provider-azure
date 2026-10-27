@@ -172,7 +172,7 @@ func InitializeFromCluster(
 	// Recover resources stuck with finalizers from a previous crash
 	// This must happen BEFORE informers start to avoid race conditions
 	// Reuse lists from buildK8sState (avoids duplicate API calls)
-	recoverStuckFinalizers(ctx, diffTracker, serviceList, egressPodList, endpointSliceList, currentLoadBalancersInNRP, currentNATGatewaysInNRP, pipNamesInAzure)
+	recoverStuckFinalizers(ctx, diffTracker, serviceList, egressPodList, endpointSliceList, currentLoadBalancersInNRP, pipNamesInAzure)
 
 	// Counter already initialized from K8s state during buildK8sState
 	// After initialization sync completes, NRP will match K8s, so counter reflects final state
@@ -481,7 +481,7 @@ func (dt *DiffTracker) outboundIPFamilies() []string {
 // 2. Trigger LocationsUpdater to sync their addresses out of NRP
 //
 // Recovery strategy:
-//   - For Services: The diff mechanism handles LB/NAT deletion (not in K8s.Services → marked for removal)
+//   - For Services: The diff mechanism handles LB deletion (not in K8s.Services → marked for removal)
 //     Just log for visibility; no explicit pendingServiceDeletions needed as GetSyncOperations will handle it
 //   - For Pods with valid addresses: Track in pendingPodDeletions (don't call DeletePod - counters are clean)
 //   - For Pods with missing addresses: Track a service-level NRP verification before removal
@@ -497,7 +497,6 @@ func recoverStuckFinalizers(
 	egressPods *v1.PodList,
 	endpointSlices *discoveryv1.EndpointSliceList,
 	currentLBsInAzure *utilsets.IgnoreCaseSet,
-	currentNATsInAzure *utilsets.IgnoreCaseSet,
 	azurePIPNames *utilsets.IgnoreCaseSet,
 ) {
 	logger := log.FromContextOrBackground(ctx)
@@ -518,7 +517,7 @@ func recoverStuckFinalizers(
 	//   blocking deletion and can be removed.
 	// - "Exists" must be judged against actual Azure state, not just ServiceGateway registration: a
 	//   crash after the PIP/LB were created but before SGW registration leaves a real resource that is
-	//   absent from NRPResources. We therefore also consult the Azure LB/NAT/PIP enumeration below so
+	//   absent from NRPResources. We therefore also consult the Azure LB/PIP enumeration below so
 	//   the finalizer (the only anchor to those resources) is not stripped before their cleanup runs.
 	//
 	// Two cases for stuck services:
@@ -542,21 +541,18 @@ func recoverStuckFinalizers(
 				continue
 			}
 
-			uid := strings.ToLower(string(svc.UID))
+			uid := ServiceUID(svc)
 
 			// Check whether a real Azure resource exists for this service. NRPResources only reflects
 			// services that completed ServiceGateway registration (Step 4 of creation), so a crash
 			// after the PIP/LB were created but before registration leaves the resource present in
-			// Azure yet absent from NRPResources. Also consult the actual Azure LB/NAT/PIP enumeration
+			// Azure yet absent from NRPResources. Also consult the actual Azure LB/PIP enumeration
 			// so we do not strip the finalizer before the resource's cleanup is scheduled. PIP existence
 			// is checked by name (not the allocated-IP map) so an address-less PIP still counts.
-			// Only the IPv4 name is considered: this loop walks Kubernetes Services, which are always
-			// inbound and never own an IPv6 Public IP, so accepting that name here could only match a
-			// customer resource and strand the Service in Terminating.
+			// Inbound uses <UID>-lb-pip for either single-stack family; -pip-v6 is outbound-only.
 			pipExistsInAzure := azurePIPNames != nil && azurePIPNames.Has(uid+publicIPNameSuffix)
-			hasAzureResource := dt.NRPResources.LoadBalancers.Has(uid) || dt.NRPResources.NATGateways.Has(uid) ||
+			hasAzureResource := dt.NRPResources.LoadBalancers.Has(uid) ||
 				(currentLBsInAzure != nil && currentLBsInAzure.Has(uid)) ||
-				(currentNATsInAzure != nil && currentNATsInAzure.Has(uid)) ||
 				pipExistsInAzure
 
 			if hasAzureResource {
@@ -600,7 +596,7 @@ func recoverStuckFinalizers(
 			}
 
 			// This pod was mid-deletion when we crashed - re-trigger cleanup
-			egressLabel := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
+			egressLabel := outboundServiceName(pod.Labels[consts.PodLabelServiceEgressGateway])
 			if egressLabel == "" {
 				// No egress label = nothing to track, just remove finalizer directly
 				logger.V(4).Info("Removed pod finalizer with missing egress label", "namespace", pod.Namespace, "pod", pod.Name)
@@ -619,29 +615,6 @@ func recoverStuckFinalizers(
 			// the finalizer until every address leaves NRP (checked across all node locations).
 			podIPs := PodEgressAddresses(pod)
 			nodeIP := pod.Status.HostIP
-
-			// Inbound-only addresses do not establish an outbound drain for a rejected pod.
-			dt.mu.Lock()
-			collision := dt.outboundIdentityConflictsWithInboundLocked(egressLabel)
-			if collision {
-				podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
-				result := dt.inboundCollisionPodDeletionLocked(egressLabel, pod.Namespace, pod.Name, string(pod.UID), podIPs)
-				if result.Enqueued {
-					dt.pendingPodDeletions[podKey].RecoveredAtStartup = true
-				} else if _, exists := dt.pendingPodDeletions[podKey]; !exists {
-					pendingPods[podKey] = &PendingPodDeletion{
-						Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID),
-						ServiceUID: egressLabel, RecoveredAtStartup: true,
-						Timestamp: time.Now().Format(time.RFC3339),
-					}
-				}
-			}
-			dt.mu.Unlock()
-			if collision {
-				podsRecovered++
-				recordFinalizerRecoveryScheduled()
-				continue
-			}
 
 			// If addresses are already cleared, retain the finalizer until the initialization
 			// locations sync proves there is no unbacked NRP mapping for this egress service.
@@ -706,6 +679,12 @@ func recoverStuckFinalizers(
 	if len(pendingPods) > 0 {
 		dt.mu.Lock()
 		for key, val := range pendingPods {
+			if existing := dt.pendingPodDeletions[key]; existing != nil {
+				if existing.UID == val.UID {
+					existing.RecoveredAtStartup = true
+				}
+				continue
+			}
 			dt.pendingPodDeletions[key] = val
 		}
 		dt.mu.Unlock()
@@ -905,6 +884,7 @@ func processK8sEgresses(
 		if len(validAddrs) == 0 {
 			continue
 		}
+		serviceName := outboundServiceName(egressVal)
 
 		// Seed each address under its same-family node location (see PodNodeLocationsByFamily). Mark the
 		// egress desired only once at least one address maps to a same-family location, matching the
@@ -919,11 +899,11 @@ func processK8sEgresses(
 				continue
 			}
 			ensureNodeExists(k8s, nodeIP)
-			addOutboundIdentityToPod(k8s, nodeIP, podIP, egressVal, fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), string(pod.UID))
+			addOutboundIdentityToPod(k8s, nodeIP, podIP, serviceName, fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), string(pod.UID))
 			seeded = true
 		}
 		if seeded {
-			k8s.Egresses.Insert(egressVal)
+			k8s.Egresses.Insert(serviceName)
 		}
 	}
 	logger.V(2).Info("Processed Kubernetes egress services", "egresses", k8s.Egresses.Len())
@@ -1015,6 +995,12 @@ func fetchServiceGatewayServices(
 		if !isInbound && !isOutbound {
 			return fmt.Errorf("ServiceGateway service %q has unrecognized service type %q; refusing to "+
 				"initialize with an incomplete NRP view", *service.Name, serviceType)
+		}
+		if !IsReservedEgressIdentity(*service.Name) && !ptr.Deref(service.Properties.IsDefault, false) {
+			_, kind, valid := serviceIdentity(*service.Name)
+			if !valid || (kind == Inbound && (!isInbound || isOutbound)) || (kind == Outbound && (!isOutbound || isInbound)) {
+				return fmt.Errorf("ServiceGateway service %q does not match the %q naming convention", *service.Name, serviceType)
+			}
 		}
 
 		if isInbound {
@@ -1341,9 +1327,9 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	// Find orphaned LBs: exist in Azure but not in ServiceGateway AND not in K8s
 	if currentLBsInAzure != nil {
 		for _, lbName := range currentLBsInAzure.UnsortedList() {
-			// Only consider UUID-named LBs (our managed LBs have UUID names)
-			if !isValidServiceUUID(lbName) {
-				logger.V(5).Info("Skipped non-UUID load balancer", "loadBalancer", lbName)
+			rawUID, kind, valid := serviceIdentity(lbName)
+			if !valid || kind != Inbound || !isValidServiceUUID(rawUID) {
+				logger.V(5).Info("Skipped load balancer outside the managed naming convention", "loadBalancer", lbName)
 				continue
 			}
 			// If LB is desired in K8s, reconcileServices will handle it - NOT orphaned
@@ -1361,6 +1347,9 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	// Find orphaned NAT Gateways: exist in Azure but not in ServiceGateway AND not in K8s
 	if currentNATsInAzure != nil {
 		for _, natName := range currentNATsInAzure.UnsortedList() {
+			if _, kind, valid := serviceIdentity(natName); !valid || kind != Outbound {
+				continue
+			}
 			// Skip the default NAT Gateway
 			if IsReservedEgressIdentity(natName) {
 				continue
@@ -1382,7 +1371,7 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	}
 
 	// Find orphaned PIP-ONLY services: a "<uid>-pip" Public IP exists in Azure with NO associated
-	// LoadBalancer or NAT Gateway anywhere (NRP or Azure) and the service is not desired in K8s.
+	// LoadBalancer anywhere (NRP or Azure) and the service is not desired in K8s.
 	// This is the crash-after-PIP-before-LB case: recoverStuckFinalizers KEEPS the stuck Service's
 	// finalizer because the PIP exists, expecting orphan cleanup to delete the resource AND remove
 	// the finalizer. cleanupOrphanedPublicIPs deletes the PIP but does NOT remove the finalizer, so
@@ -1392,25 +1381,24 @@ func scheduleOrphanedResourceDeletions(diffTracker *DiffTracker, currentLBsInAzu
 	orphanLBSet := utilsets.NewString(orphanedLBs...)
 	for _, pipName := range pipNamesInAzure.UnsortedList() {
 		pipName = strings.ToLower(pipName)
-		if !strings.HasSuffix(pipName, "-pip") || IsReservedEgressIdentity(strings.TrimSuffix(pipName, "-pip")) {
+		uid, valid := identityFromPublicIPName(pipName)
+		if !valid || IsReservedEgressIdentity(uid) {
 			continue
 		}
-		uid := strings.TrimSuffix(pipName, "-pip")
-		// Only our managed UUID-named services own a "<uid>-pip".
-		if !isValidServiceUUID(uid) {
+		rawUID, kind, _ := serviceIdentity(uid)
+		if kind != Inbound || !isValidServiceUUID(rawUID) {
 			continue
 		}
-		// Desired in K8s (inbound or egress) → reconcileServices re-creates idempotently; not orphaned.
-		if diffTracker.K8sResources.Services.Has(uid) || diffTracker.K8sResources.Egresses.Has(uid) {
+		// Desired in K8s → reconcileServices re-creates idempotently; not orphaned.
+		if diffTracker.K8sResources.Services.Has(uid) {
 			continue
 		}
-		// Has an LB/NAT registered in NRP or present in Azure → not PIP-only (handled elsewhere,
+		// Has an LB registered in NRP or present in Azure → not PIP-only (handled elsewhere,
 		// and those deletion paths delete the PIP themselves).
-		if diffTracker.NRPResources.LoadBalancers.Has(uid) || diffTracker.NRPResources.NATGateways.Has(uid) {
+		if diffTracker.NRPResources.LoadBalancers.Has(uid) {
 			continue
 		}
-		if (currentLBsInAzure != nil && currentLBsInAzure.Has(uid)) ||
-			(currentNATsInAzure != nil && currentNATsInAzure.Has(uid)) {
+		if currentLBsInAzure != nil && currentLBsInAzure.Has(uid) {
 			continue
 		}
 		// Already scheduled as an orphaned LB (its deletion deletes the PIP too) → don't double-schedule.
@@ -1471,7 +1459,7 @@ func cleanupOrphanedPIPs(ctx context.Context, diffTracker *DiffTracker, azurePIP
 func extractServiceUIDFromEndpointSlice(endpointSlice *discoveryv1.EndpointSlice) string {
 	for _, ownerRef := range endpointSlice.OwnerReferences {
 		if ownerRef.Kind == "Service" {
-			return string(ownerRef.UID)
+			return inboundServiceName(string(ownerRef.UID))
 		}
 	}
 	return ""
@@ -1818,10 +1806,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 		}
 	}
 
-	type orphanedPublicIP struct {
-		name, identity, ownerTagKey string
-	}
-	var orphanedPIPs []orphanedPublicIP
+	var orphanedPIPs []string
 	dt.mu.Lock()
 	for _, pip := range pips {
 		if pip == nil || pip.Name == nil {
@@ -1848,13 +1833,9 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 			continue
 		}
 
-		ownerTagKey := EgressIdentityTagKey
-		if !ownsPublicIP(pip, identity, ownerTagKey) {
-			ownerTagKey = InboundServiceUIDTagKey
-			if !ownsPublicIP(pip, identity, ownerTagKey) {
-				logger.V(4).Info("Kept orphaned Public IP without matching ownership tag", "publicIP", pipName)
-				continue
-			}
+		if !ownsPublicIP(pip) {
+			logger.V(4).Info("Kept orphaned Public IP without matching CCM-managed marker", "publicIP", pipName)
+			continue
 		}
 		serviceName := identity
 
@@ -1876,7 +1857,7 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 
 		if !lbExists && !natExists {
 			// PIP is orphaned - not associated with any tracked service
-			orphanedPIPs = append(orphanedPIPs, orphanedPublicIP{pipName, identity, ownerTagKey})
+			orphanedPIPs = append(orphanedPIPs, pipName)
 		}
 	}
 	dt.mu.Unlock()
@@ -1891,16 +1872,16 @@ func (dt *DiffTracker) cleanupOrphanedPublicIPs(ctx context.Context, pips []*arm
 	// Delete orphaned PIPs in parallel using WorkerPool
 	pool := NewWorkerPool(ctx, workerPoolSize)
 	var deletedCount int32
-	for _, pip := range orphanedPIPs {
-		pip := pip
+	for _, pipName := range orphanedPIPs {
+		pipName := pipName
 		pool.Submit(func() error {
-			deleted, err := dt.deleteOwnedPublicIP(ctx, pip.name, pip.identity, pip.ownerTagKey)
+			deleted, err := dt.deleteOwnedPublicIP(ctx, pipName)
 			if err != nil {
-				return fmt.Errorf("deleting orphaned Public IP %s: %w", pip.name, err)
+				return fmt.Errorf("deleting orphaned Public IP %s: %w", pipName, err)
 			}
 			if deleted {
 				atomic.AddInt32(&deletedCount, 1)
-				logger.V(5).Info("Deleted orphaned Public IP", "publicIP", pip.name)
+				logger.V(5).Info("Deleted orphaned Public IP", "publicIP", pipName)
 			}
 			return nil
 		})
