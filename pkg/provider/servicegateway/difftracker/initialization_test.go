@@ -2300,6 +2300,341 @@ func TestNewTracksOnlyBYONATGateways(t *testing.T) {
 	assert.Len(t, nrp.OutboundNATGatewayIDs, 3, "the caller's startup snapshot must not be mutated")
 }
 
+func TestRecoverUnregisteredBYOLinks(t *testing.T) {
+	cfg := testConfig()
+	boom := errors.New("ARM unavailable")
+	linked := byoNATGateway("recovery")
+	linked.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+	unlinked := byoNATGateway("recovery")
+	foreign := byoNATGateway("recovery")
+	foreign.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("another-service-gateway")}
+	unknown := byoNATGateway("recovery")
+	unknown.Properties = nil
+
+	for _, tc := range []struct {
+		name        string
+		raw         string
+		groups      []string
+		gateway     *armnetwork.NatGateway
+		readErr     error
+		active      bool
+		registered  bool
+		noFinalizer bool
+		wantReads   int
+		wantTarget  bool
+		wantErr     string
+	}{
+		{name: "linked departed member", groups: []string{byoNATGatewayRG}, gateway: linked, wantReads: 1, wantTarget: true},
+		{name: "same target is read once", groups: []string{byoNATGatewayRG, byoNATGatewayRG}, gateway: linked, wantReads: 1, wantTarget: true},
+		{name: "suffix-bearing raw label remains distinct", raw: "default-natgw", groups: []string{byoNATGatewayRG}, gateway: linked, wantReads: 1, wantTarget: true},
+		{name: "active member without addresses keeps the gateway", groups: []string{byoNATGatewayRG}, active: true},
+		{name: "registered identity is not rediscovered", groups: []string{byoNATGatewayRG}, registered: true},
+		{name: "reserved identity", raw: "default", groups: []string{byoNATGatewayRG}},
+		{name: "no finalizer means no cleanup claim", groups: []string{byoNATGatewayRG}, noFinalizer: true},
+		{name: "managed selection", groups: []string{""}},
+		{name: "invalid group", groups: []string{"invalid/rg"}},
+		{name: "node group is not BYO", groups: []string{"RG"}},
+		{name: "gateway already gone", groups: []string{byoNATGatewayRG}, readErr: notFoundError(), wantReads: 1},
+		{name: "no backlink", groups: []string{byoNATGatewayRG}, gateway: unlinked, wantReads: 1},
+		{name: "another gateway's backlink", groups: []string{byoNATGatewayRG}, gateway: foreign, wantReads: 1},
+		{name: "read failure keeps recovery incomplete", groups: []string{byoNATGatewayRG}, readErr: boom, wantReads: 1, wantErr: "ARM unavailable"},
+		{name: "unreadable properties keep recovery incomplete", groups: []string{byoNATGatewayRG}, gateway: unknown, wantReads: 1, wantErr: "cleanup link state is unknown"},
+		{name: "permission refusal permits manual cleanup", groups: []string{byoNATGatewayRG}, readErr: &azcore.ResponseError{StatusCode: http.StatusForbidden}, wantReads: 1},
+		{name: "conflicting linked targets are not guessed", groups: []string{byoNATGatewayRG, "another-rg"}, gateway: linked, wantReads: 2, wantErr: "conflicting unregistered BYO cleanup targets"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := tc.raw
+			if raw == "" {
+				raw = "recovery"
+			}
+			identity := outboundServiceName(raw)
+			pods := &v1.PodList{}
+			for i, group := range tc.groups {
+				pod := egressTestPod(fmt.Sprintf("departed-%d", i), types.UID(fmt.Sprintf("uid-%d", i)), raw, group)
+				pod.DeletionTimestamp = ptr.To(metav1.Now())
+				if !tc.noFinalizer {
+					pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+				}
+				pods.Items = append(pods.Items, *pod)
+			}
+			if tc.active {
+				pods.Items = append(pods.Items, *egressTestPod("active", "active-uid", strings.ToUpper(raw), byoNATGatewayRG))
+			}
+			m := newOutboundMocks(gomock.NewController(t))
+			if tc.wantReads > 0 {
+				m.nat.EXPECT().Get(gomock.Any(), gomock.Any(), raw, nil).
+					DoAndReturn(func(_ context.Context, group, _ string, _ *string) (*armnetwork.NatGateway, error) {
+						if tc.readErr != nil {
+							return nil, tc.readErr
+						}
+						result := *tc.gateway
+						result.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", group, raw))
+						result.Name = ptr.To(raw)
+						return &result, nil
+					}).Times(tc.wantReads)
+			}
+			dt := newTestDiffTracker()
+			dt.config, dt.networkClientFactory = cfg, m.factory
+			if tc.registered {
+				dt.NRPResources.NATGateways.Insert(identity)
+			}
+			recovered, err := dt.recoverUnregisteredBYOLinks(context.Background(), pods)
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
+				assert.Empty(t, recovered)
+			} else {
+				assert.NoError(t, err)
+				if tc.wantTarget {
+					assert.Equal(t, []string{identity}, recovered)
+					assert.Equal(t, fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", byoNATGatewayRG, raw), dt.byoNATGatewayID(identity))
+				} else {
+					assert.Empty(t, recovered)
+					assert.Empty(t, dt.byoNATGatewayID(identity))
+				}
+			}
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+			assert.Empty(t, dt.locationsUpdaterTrigger)
+		})
+	}
+}
+
+func TestRecoverStuckFinalizers_UnregisteredBYOLinkOwnsFinalizer(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		registered bool
+		noIPs      bool
+		live       bool
+		completed  bool
+	}{
+		{name: "unregistered"},
+		{name: "unregistered without addresses", noIPs: true},
+		{name: "completed unregistered member", completed: true},
+		{name: "registered control", registered: true},
+		{name: "live member is not recovered", live: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := byoPod("recovery", byoNATGatewayRG)
+			identity := outboundServiceName("recovery")
+			pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+			pod.Status.HostIP, pod.Status.PodIP = "10.0.0.1", "10.244.0.9"
+			if tc.noIPs {
+				pod.Status.HostIP, pod.Status.PodIP = "", ""
+			}
+			if tc.completed {
+				pod.Status.Phase = v1.PodSucceeded
+			} else if !tc.live {
+				pod.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			dt := newTestDiffTracker()
+			dt.kubeClient = fake.NewSimpleClientset(pod)
+			dt.setBYONATGatewayID(identity, byoNATGatewayARMID("recovery"))
+			if tc.registered {
+				dt.NRPResources.NATGateways.Insert(identity)
+			}
+			recoverStuckFinalizers(context.Background(), dt, nil, &v1.PodList{Items: []v1.Pod{*pod}}, nil, nil, nil)
+			pending := dt.pendingPodDeletions["ns/pod"]
+			if tc.live {
+				assert.Nil(t, pending)
+			} else if assert.NotNil(t, pending) {
+				assert.Equal(t, !tc.registered, pending.IsLastPod)
+				assert.Equal(t, tc.noIPs, pending.VerifyServiceDrain)
+				assert.True(t, pending.RecoveredAtStartup)
+				assert.Equal(t, string(pod.UID), pending.UID)
+			}
+		})
+	}
+}
+
+func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		registered     bool
+		noAddresses    bool
+		completed      bool
+		dualStack      bool
+		failUnlinkOnce bool
+		recoveryErr    error
+		noProperties   bool
+	}{
+		{name: "successful link before failed registration"},
+		{name: "addresses already cleared", noAddresses: true},
+		{name: "completed member", completed: true},
+		{name: "dual-stack member", dualStack: true},
+		{name: "transient unlink is retried before release", failUnlinkOnce: true},
+		{name: "registered restart control", registered: true},
+		{name: "failed discovery keeps the finalizer", recoveryErr: errors.New("discovery unavailable")},
+		{name: "unknown link state keeps the finalizer", noProperties: true},
+		{name: "permission refusal permits manual repair", recoveryErr: &azcore.ResponseError{StatusCode: http.StatusForbidden}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			const raw = "startup-egress"
+			identity := outboundServiceName(raw)
+			cfg := testConfig()
+			pod := byoPod(raw, byoNATGatewayRG)
+			pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+			pod.Spec.NodeName = "node"
+			pod.Status.Phase = v1.PodRunning
+			pod.Status.HostIP, pod.Status.PodIP = "10.0.0.1", "10.244.0.9"
+			pod.Status.HostIPs = []v1.HostIP{{IP: pod.Status.HostIP}}
+			pod.Status.PodIPs = []v1.PodIP{{IP: pod.Status.PodIP}}
+			node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node"},
+				Status: v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: pod.Status.HostIP}}}}
+			if tc.dualStack {
+				pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: "fd00::1"})
+				pod.Status.PodIPs = append(pod.Status.PodIPs, v1.PodIP{IP: "fd01::9"})
+				node.Status.Addresses = append(node.Status.Addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: "fd00::1"})
+			}
+			kube := fake.NewSimpleClientset(pod, node)
+			ctrl := gomock.NewController(t)
+			m := newOutboundMocks(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			lb.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.nat.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.pip.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			m.nat.EXPECT().Get(gomock.Any(), "rg", identity, nil).Return(nil, notFoundError()).AnyTimes()
+			for _, name := range OutboundPublicIPNames(identity) {
+				m.pip.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(nil, notFoundError()).AnyTimes()
+			}
+			var mu sync.Mutex
+			gateway := byoNATGateway(raw)
+			var registration *armnetwork.ServiceGatewayService
+			unlinkAttempts := 0
+			recovering := false
+			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, raw, nil).
+				DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.NatGateway, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					if recovering && tc.recoveryErr != nil {
+						return nil, tc.recoveryErr
+					}
+					result := *gateway
+					properties := *gateway.Properties
+					result.Properties = &properties
+					if recovering && tc.noProperties {
+						result.Properties = nil
+					}
+					return &result, nil
+				}).AnyTimes()
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, raw, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, value armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					if natGatewayServiceGatewayID(&value) == "" {
+						unlinkAttempts++
+						if !tc.registered {
+							current, err := kube.CoreV1().Pods("ns").Get(ctx, "pod", metav1.GetOptions{})
+							assert.NoError(t, err)
+							if current != nil {
+								assert.True(t, hasPodFinalizer(current), "unlink must finish before finalizer release")
+							}
+						}
+						if tc.failUnlinkOnce && unlinkAttempts == 1 {
+							return nil, errors.New("temporary unlink failure")
+						}
+					}
+					gateway = &value
+					return &value, nil
+				}).AnyTimes()
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").
+				DoAndReturn(func(context.Context, string, string) ([]*armnetwork.ServiceGatewayService, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					if registration == nil {
+						return nil, nil
+					}
+					result := *registration
+					properties := *registration.Properties
+					result.Properties = &properties
+					return []*armnetwork.ServiceGatewayService{&result}, nil
+				}).AnyTimes()
+			registrationFailure := errors.New("registration did not apply")
+			m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateServicesRequest) error {
+					mu.Lock()
+					defer mu.Unlock()
+					entry := request.ServiceRequests[0]
+					if ptr.Deref(entry.IsDelete, false) {
+						registration = nil
+						return nil
+					}
+					if derefString(entry.Service.Properties.PublicNatGatewayID) != "" && !tc.registered {
+						return registrationFailure
+					}
+					registration = entry.Service
+					return nil
+				}).AnyTimes()
+			before := newTestDiffTracker()
+			before.config, before.kubeClient, before.networkClientFactory = cfg, kube, m.factory
+			completion := &outboundCompletion{}
+			outboundUpdater(before, completion).createOutboundService(identity, &OutboundConfig{}, "create", "ns", "pod")
+			called, success, err := completion.result()
+			assert.True(t, called)
+			assert.Equal(t, tc.registered, success)
+			if tc.registered {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, registrationFailure)
+			}
+			assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(gateway))
+			assert.Equal(t, byoNATGatewayARMID(raw), before.byoNATGatewayID(identity))
+			if tc.completed {
+				pod.Status.Phase = v1.PodSucceeded
+			} else {
+				pod.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			if tc.noAddresses {
+				pod.Status.HostIP, pod.Status.PodIP = "", ""
+				pod.Status.HostIPs, pod.Status.PodIPs = nil, nil
+			}
+			if _, err := kube.CoreV1().Pods("ns").Update(ctx, pod, metav1.UpdateOptions{}); !assert.NoError(t, err) {
+				return
+			}
+			mu.Lock()
+			recovering = true
+			mu.Unlock()
+			restarted, err := InitializeFromCluster(ctx, cfg, m.factory, kube)
+			if restarted != nil {
+				defer cleanupOnError(restarted)
+			}
+			if tc.noProperties || (tc.recoveryErr != nil && !isAccessDeniedOrLocked(tc.recoveryErr)) {
+				assert.Error(t, err)
+				current, getErr := kube.CoreV1().Pods("ns").Get(ctx, "pod", metav1.GetOptions{})
+				assert.NoError(t, getErr)
+				assert.True(t, hasPodFinalizer(current))
+				mu.Lock()
+				assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(gateway))
+				assert.Zero(t, unlinkAttempts)
+				mu.Unlock()
+				return
+			}
+			if !assert.NoError(t, err) {
+				return
+			}
+			current, err := kube.CoreV1().Pods("ns").Get(ctx, "pod", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(current))
+			mu.Lock()
+			if tc.recoveryErr != nil {
+				assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(gateway))
+				assert.Zero(t, unlinkAttempts)
+			} else {
+				assert.Empty(t, natGatewayServiceGatewayID(gateway))
+				assert.Equal(t, 1+wantedCalls(tc.failUnlinkOnce), unlinkAttempts)
+			}
+			mu.Unlock()
+			assert.Empty(t, restarted.pendingServiceOps)
+			assert.Empty(t, restarted.pendingPodDeletions)
+			assert.Empty(t, restarted.byoNATGatewayID(identity))
+			assert.True(t, restarted.InitialSyncDone)
+		})
+	}
+}
+
 func TestRestartedControllerOnlyUnlinksBYONATGateway(t *testing.T) {
 	const identity = "byo"
 	serviceName := outboundServiceName(identity)

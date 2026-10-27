@@ -122,7 +122,7 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		if diffTracker.isReservedServiceLocked(identity) {
 			continue
 		}
-		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil && byoNATGatewayIDProblem(natGatewayID, config) == "" {
+		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil && validateBYONATGatewayID(natGatewayID, config) == "" {
 			diffTracker.byoNATGateways[strings.ToLower(identity)] = fmt.Sprintf(consts.NatGatewayIDTemplate,
 				parsed.SubscriptionID, parsed.ResourceGroupName, parsed.Name)
 		}

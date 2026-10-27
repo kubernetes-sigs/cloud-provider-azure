@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -321,34 +322,53 @@ func TestPodInformerAddPod_FinalizerAddFailureRegistersAndAlerts(t *testing.T) {
 // valid Azure resource name (e.g. a path-traversal value) is NOT registered with the engine and a
 // warning Event is emitted, so the label can never be interpolated raw into a NAT Gateway ARM ID.
 func TestPodInformerAddPod_RejectsInvalidEgressLabel(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	for _, tc := range []struct {
+		label    string
+		reserved bool
+	}{
+		{label: "../hijacked-nat"},
+		{label: "trailing-dot."},
+		{label: "trailing-hyphen-"},
+		{label: strings.Repeat("a", maxEgressIdentityLength+1)},
+		{label: "trailing-dot.", reserved: true},
+	} {
+		t.Run(fmt.Sprintf("%s/reserved=%t", tc.label, tc.reserved), func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "evil-egress",
-			Namespace: "default",
-			Labels:    map[string]string{consts.PodLabelServiceEgressGateway: "../hijacked-nat"},
-		},
-		Status: v1.PodStatus{Phase: v1.PodRunning, HostIP: "10.0.0.1", PodIP: "10.244.0.1"},
-	}
-	kube := fake.NewSimpleClientset(pod)
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "evil-egress",
+					Namespace: "default",
+					Labels:    map[string]string{consts.PodLabelServiceEgressGateway: tc.label},
+				},
+				Status: v1.PodStatus{Phase: v1.PodRunning, HostIP: "10.0.0.1", PodIP: "10.244.0.1"},
+			}
+			kube := fake.NewSimpleClientset(pod)
 
-	dt := newProviderDiffTracker(t, ctrl, kube)
-	rec := record.NewFakeRecorder(10)
-	dt.eventRecorder = rec
+			dt := newProviderDiffTracker(t, ctrl, kube)
+			if tc.reserved {
+				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(outboundServiceName(tc.label))
+			}
+			rec := record.NewFakeRecorder(10)
+			dt.eventRecorder = rec
+			beforeActions := len(kube.Actions())
 
-	dt.podInformerAddPod(pod)
+			dt.podInformerAddPod(pod)
 
-	assert.False(t, dt.IsServiceTracked(outboundServiceName("../hijacked-nat")),
-		"a pod with an invalid egress label must not be registered with the engine")
+			assert.False(t, dt.IsServiceTracked(outboundServiceName(tc.label)),
+				"a pod with an invalid egress label must not be registered with the engine")
+			assert.Len(t, kube.Actions(), beforeActions, "invalid labels must be rejected before finalizer writes")
 
-	select {
-	case ev := <-rec.Events:
-		assert.Contains(t, ev, "ServiceGatewayInvalidEgressLabel",
-			"a warning Event must be emitted for an invalid egress gateway label")
-	default:
-		t.Fatal("expected a ServiceGatewayInvalidEgressLabel warning Event")
+			select {
+			case ev := <-rec.Events:
+				assert.Contains(t, ev, "ServiceGatewayInvalidEgressLabel",
+					"a warning Event must be emitted for an invalid egress gateway label")
+			default:
+				t.Fatal("expected a ServiceGatewayInvalidEgressLabel warning Event")
+			}
+			assert.Empty(t, rec.Events)
+		})
 	}
 }
 
@@ -790,39 +810,40 @@ func TestPodInformerRemovePod_NoIPDeleteWaitsForUnbackedNRPAddress(t *testing.T)
 	defer ctrl.Finish()
 
 	const (
-		egress      = "egress-svc"
+		rawEgress   = "egress-svc"
 		oldAddress  = "10.244.0.1"
 		liveAddress = "10.244.0.2"
 		location    = "10.0.0.1"
 	)
+	egress := outboundServiceName(rawEgress)
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "deleted", Namespace: "default", UID: types.UID("deleted-uid"),
-			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: egress},
+			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: rawEgress},
 			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
 		},
 		Status: v1.PodStatus{Phase: v1.PodFailed},
 	}
 	kube := fake.NewSimpleClientset(pod)
 	dt := newProviderDiffTracker(t, ctrl, kube)
-	dt.pendingServiceOps[outboundServiceName(egress)] = &ServiceOperationState{
-		ServiceUID: outboundServiceName(egress),
-		Config:     NewOutboundServiceConfig(outboundServiceName(egress), nil),
+	dt.pendingServiceOps[egress] = &ServiceOperationState{
+		ServiceUID: egress,
+		Config:     NewOutboundServiceConfig(egress, nil),
 		State:      StateCreated,
 	}
 	dt.K8sResources.Nodes[location] = Node{
 		Pods: map[string]Pod{
 			liveAddress: {
 				InboundIdentities:      utilsets.NewString(),
-				PublicOutboundIdentity: outboundServiceName(egress),
+				PublicOutboundIdentity: egress,
 			},
 		},
 	}
-	dt.NRPResources.NATGateways.Insert(outboundServiceName(egress))
+	dt.NRPResources.NATGateways.Insert(egress)
 	dt.NRPResources.Locations[location] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			oldAddress:  {Services: utilsets.NewString(outboundServiceName(egress))},
-			liveAddress: {Services: utilsets.NewString(outboundServiceName(egress))},
+			oldAddress:  {Services: utilsets.NewString(egress)},
+			liveAddress: {Services: utilsets.NewString(egress)},
 		},
 	}
 
@@ -856,36 +877,37 @@ func TestPodInformerRemovePod_NoIPLastPodWaitsForServiceDeletion(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	const egress = "egress-svc"
+	const rawEgress = "egress-svc"
+	egress := outboundServiceName(rawEgress)
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "deleted", Namespace: "default", UID: types.UID("deleted-uid"),
-			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: egress},
+			Labels:     map[string]string{consts.PodLabelServiceEgressGateway: rawEgress},
 			Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
 		},
 		Status: v1.PodStatus{Phase: v1.PodFailed},
 	}
 	kube := fake.NewSimpleClientset(pod)
 	dt := newProviderDiffTracker(t, ctrl, kube)
-	dt.pendingServiceOps[outboundServiceName(egress)] = &ServiceOperationState{
-		ServiceUID: outboundServiceName(egress),
-		Config:     NewOutboundServiceConfig(outboundServiceName(egress), nil),
+	dt.pendingServiceOps[egress] = &ServiceOperationState{
+		ServiceUID: egress,
+		Config:     NewOutboundServiceConfig(egress, nil),
 		State:      StateCreated,
 	}
 	dt.K8sResources.Nodes["10.0.0.1"] = Node{
 		Pods: map[string]Pod{
 			"10.244.0.1": {
 				InboundIdentities:      utilsets.NewString(),
-				PublicOutboundIdentity: outboundServiceName(egress),
+				PublicOutboundIdentity: egress,
 				OutboundPodKey:         "default/deleted",
 			},
 		},
 	}
-	dt.outboundIdentityPodRefCount.Store(outboundServiceName(egress), 1)
-	dt.NRPResources.NATGateways.Insert(outboundServiceName(egress))
+	dt.outboundIdentityPodRefCount.Store(egress, 1)
+	dt.NRPResources.NATGateways.Insert(egress)
 	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			"10.244.0.1": {Services: utilsets.NewString(outboundServiceName(egress))},
+			"10.244.0.1": {Services: utilsets.NewString(egress)},
 		},
 	}
 
@@ -903,9 +925,9 @@ func TestPodInformerRemovePod_NoIPLastPodWaitsForServiceDeletion(t *testing.T) {
 	}
 	assert.NotContains(t, dt.K8sResources.Nodes, "10.0.0.1",
 		"the deleted pod's stale desired address must be removed before NRP verification")
-	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[outboundServiceName(egress)].State)
+	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[egress].State)
 
-	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), outboundServiceName(egress)))
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), egress))
 	got, err = kube.CoreV1().Pods("default").Get(context.Background(), "deleted", metav1.GetOptions{})
 	assert.NoError(t, err)
 	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
@@ -1510,8 +1532,18 @@ func TestPodInformerRemovePod_ReservedFinalizerDecision(t *testing.T) {
 // deliberately excluded from NRP state at startup, so the pod-add path always concludes it must be
 // created, and the pod informer watches every namespace filtered only by this label.
 func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
-	for _, label := range []string{"default", "Default", "DEFAULT"} {
-		t.Run(label, func(t *testing.T) {
+	for _, tc := range []struct {
+		label      string
+		nrpDefault bool
+	}{
+		{label: "default"},
+		{label: "Default"},
+		{label: "DEFAULT"},
+		{label: "custom-egress", nrpDefault: true},
+		{label: "CUSTOM-EGRESS", nrpDefault: true},
+		{label: "default-natgw", nrpDefault: true},
+	} {
+		t.Run(tc.label, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
@@ -1520,12 +1552,65 @@ func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
 					Name:      "evil-pod",
 					Namespace: "attacker-ns",
 					UID:       types.UID("pod-uid"),
-					Labels:    map[string]string{consts.PodLabelServiceEgressGateway: label},
+					Labels:    map[string]string{consts.PodLabelServiceEgressGateway: tc.label},
 				},
 				Status: v1.PodStatus{
 					Phase:  v1.PodRunning,
 					HostIP: "10.0.0.1",
 					PodIP:  "10.244.0.9",
+					PodIPs: []v1.PodIP{{IP: "10.244.0.9"}},
+				},
+				Spec: v1.PodSpec{NodeName: "node-1"},
+			}
+
+			kube := fake.NewSimpleClientset(pod)
+			dt := newProviderDiffTracker(t, ctrl, kube)
+			serviceName := outboundServiceName(tc.label)
+			if tc.nrpDefault {
+				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(strings.ToUpper(serviceName))
+			}
+			rec := record.NewFakeRecorder(10)
+			dt.eventRecorder = rec
+			beforeActions := len(kube.Actions())
+
+			dt.podInformerAddPod(pod)
+
+			assert.False(t, dt.IsServiceTracked(serviceName),
+				"a pod must never make the controller manage a default outbound service")
+			dt.mu.Lock()
+			opCount := len(dt.pendingServiceOps)
+			dt.mu.Unlock()
+			assert.Zero(t, opCount, "no Azure operation may be scheduled for a reserved egress identity")
+			assert.Len(t, kube.Actions(), beforeActions, "reserved labels must be rejected before finalizer writes")
+
+			select {
+			case ev := <-rec.Events:
+				assert.Contains(t, ev, "ServiceGatewayReservedEgressLabel",
+					"the user must be told the label is reserved, not merely malformed")
+				assert.Contains(t, ev, fmt.Sprintf("Egress service name %q is reserved for a default service", serviceName))
+			default:
+				t.Fatal("expected a ServiceGatewayReservedEgressLabel warning Event")
+			}
+			assert.Empty(t, rec.Events)
+		})
+	}
+}
+
+// TestPodInformerAddPod_AcceptsOrdinaryEgressLabel is the control: the reserved-name guard must not
+// reject ordinary egress identities.
+func TestPodInformerAddPod_AcceptsOrdinaryEgressLabel(t *testing.T) {
+	for _, label := range []string{"team-egress", "TEAM-EGRESS", "default-natgw", "DEFAULT-NATGW", strings.Repeat("a", maxEgressIdentityLength)} {
+		t.Run(label, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "app-pod", Namespace: "team-ns", UID: types.UID("pod-uid"),
+					Labels: map[string]string{consts.PodLabelServiceEgressGateway: label},
+				},
+				Status: v1.PodStatus{
+					Phase: v1.PodRunning, HostIP: "10.0.0.1", PodIP: "10.244.0.9",
 					PodIPs: []v1.PodIP{{IP: "10.244.0.9"}},
 				},
 				Spec: v1.PodSpec{NodeName: "node-1"},
@@ -1537,49 +1622,12 @@ func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
 
 			dt.podInformerAddPod(pod)
 
-			assert.False(t, dt.IsServiceTracked(DefaultOutboundNATGatewayName),
-				"a pod must never make the controller manage the default outbound NAT Gateway")
-			dt.mu.Lock()
-			opCount := len(dt.pendingServiceOps)
-			dt.mu.Unlock()
-			assert.Zero(t, opCount, "no Azure operation may be scheduled for a reserved egress identity")
-
-			select {
-			case ev := <-rec.Events:
-				assert.Contains(t, ev, "ServiceGatewayReservedEgressLabel",
-					"the user must be told the label is reserved, not merely malformed")
-			default:
-				t.Fatal("expected a ServiceGatewayReservedEgressLabel warning Event")
-			}
+			assert.True(t, dt.IsServiceTracked(outboundServiceName(label)),
+				"an ordinary egress identity must still be registered")
+			assert.Equal(t, label, pod.Labels[consts.PodLabelServiceEgressGateway])
+			assert.Empty(t, rec.Events)
 		})
 	}
-}
-
-// TestPodInformerAddPod_AcceptsOrdinaryEgressLabel is the control: the reserved-name guard must not
-// reject ordinary egress identities.
-func TestPodInformerAddPod_AcceptsOrdinaryEgressLabel(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "app-pod", Namespace: "team-ns", UID: types.UID("pod-uid"),
-			Labels: map[string]string{consts.PodLabelServiceEgressGateway: "team-egress"},
-		},
-		Status: v1.PodStatus{
-			Phase: v1.PodRunning, HostIP: "10.0.0.1", PodIP: "10.244.0.9",
-			PodIPs: []v1.PodIP{{IP: "10.244.0.9"}},
-		},
-		Spec: v1.PodSpec{NodeName: "node-1"},
-	}
-
-	dt := newProviderDiffTracker(t, ctrl, fake.NewSimpleClientset(pod))
-	dt.eventRecorder = record.NewFakeRecorder(10)
-
-	dt.podInformerAddPod(pod)
-
-	assert.True(t, dt.IsServiceTracked(outboundServiceName("team-egress")),
-		"an ordinary egress identity must still be registered")
 }
 
 // TestPodInformerRemovePod_CountsForgottenFinalizerRemoval pins that a failed direct finalizer

@@ -228,21 +228,6 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			"NAT Gateway should be associated with the Service Gateway")
 
 		By("Verifying pod IPs registered in Address Locations")
-		alResponse, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		registeredPods := 0
-		for _, location := range alResponse.Value {
-			for _, addr := range location.Addresses {
-				for _, svcName := range addr.Services {
-					if svcName == outboundServiceName(egressName) {
-						registeredPods++
-					}
-				}
-			}
-		}
-
-		utils.Logf("Registered %d pod IPs for egress gateway '%s'", registeredPods, egressName)
 		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, numPods)).To(Succeed())
 
 		utils.Logf("\n✓ Outbound NAT Gateway test passed: %d pods", numPods)
@@ -329,25 +314,7 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		Expect(len(foundGateways)).To(Equal(len(egressGateways)), fmt.Sprintf("Expected %d egress gateways, found %d", len(egressGateways), len(foundGateways)))
 
 		By("Verifying pod IPs for each egress gateway")
-		alResponse, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		gatewayPodCounts := make(map[string]int)
-		for _, location := range alResponse.Value {
-			for _, addr := range location.Addresses {
-				for _, svcName := range addr.Services {
-					for _, gateway := range egressGateways {
-						if svcName == outboundServiceName(gateway) {
-							gatewayPodCounts[gateway]++
-						}
-					}
-				}
-			}
-		}
-
 		for _, gateway := range egressGateways {
-			count := gatewayPodCounts[gateway]
-			utils.Logf("Egress gateway '%s': %d pod IPs registered", gateway, count)
 			Expect(egressPodsRegisteredErr(cs, ns.Name, gateway, podsPerGateway)).To(Succeed())
 		}
 
@@ -407,21 +374,6 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			"egress service should be registered with initial pod IPs")
 
 		By("Verifying initial state")
-		alResponse, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		initialRegistered := 0
-		for _, location := range alResponse.Value {
-			for _, addr := range location.Addresses {
-				for _, svcName := range addr.Services {
-					if svcName == outboundServiceName(egressName) {
-						initialRegistered++
-					}
-				}
-			}
-		}
-
-		utils.Logf("Initial state: %d pod IPs registered", initialRegistered)
 		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, initialPods)).To(Succeed())
 
 		By(fmt.Sprintf("Scaling up: creating %d additional pods", finalPods-initialPods))
@@ -468,21 +420,6 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			"egress service should be updated with scaled pod IPs")
 
 		By("Verifying scaled state")
-		alResponseFinal, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		finalRegistered := 0
-		for _, location := range alResponseFinal.Value {
-			for _, addr := range location.Addresses {
-				for _, svcName := range addr.Services {
-					if svcName == outboundServiceName(egressName) {
-						finalRegistered++
-					}
-				}
-			}
-		}
-
-		utils.Logf("After scaling: %d pod IPs registered", finalRegistered)
 		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, finalPods)).To(Succeed())
 
 		utils.Logf("\n✓ Egress scaling test passed: %d → %d pods", initialPods, finalPods)
@@ -541,21 +478,6 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			"egress service should be registered with initial pod IPs")
 
 		By("Verifying initial state")
-		alResponse, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		initialRegistered := 0
-		for _, location := range alResponse.Value {
-			for _, addr := range location.Addresses {
-				for _, svcName := range addr.Services {
-					if svcName == outboundServiceName(egressName) {
-						initialRegistered++
-					}
-				}
-			}
-		}
-
-		utils.Logf("Initial state: %d pod IPs registered", initialRegistered)
 		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, initialPods)).To(Succeed())
 
 		By(fmt.Sprintf("Deleting %d pods (keeping %d)", initialPods-remainPods, remainPods))
@@ -586,21 +508,6 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 			"exactly the surviving egress pods' IPs must remain registered after deletion")
 
 		By("Verifying cleanup")
-		alResponseFinal, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		finalRegistered := 0
-		for _, location := range alResponseFinal.Value {
-			for _, addr := range location.Addresses {
-				for _, svcName := range addr.Services {
-					if svcName == outboundServiceName(egressName) {
-						finalRegistered++
-					}
-				}
-			}
-		}
-
-		utils.Logf("After deletion: %d pod IPs registered", finalRegistered)
 		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, remainPods)).To(Succeed())
 
 		utils.Logf("\n✓ Egress deletion test passed: %d → %d pods", initialPods, remainPods)
@@ -738,28 +645,6 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		Expect(foundInbound).To(BeTrue(), "Inbound service should exist")
 
 		By("Verifying Address Locations for both services")
-		alResponse, err := queryServiceGatewayAddressLocations()
-		Expect(err).NotTo(HaveOccurred())
-
-		egressCount := 0
-		inboundCount := 0
-
-		for _, location := range alResponse.Value {
-			for _, addr := range location.Addresses {
-				for _, svcName := range addr.Services {
-					if svcName == outboundServiceName(egressName) {
-						egressCount++
-					}
-					if svcName == inboundServiceName(serviceUID) {
-						inboundCount++
-					}
-				}
-			}
-		}
-
-		utils.Logf("Egress pods: %d registered", egressCount)
-		utils.Logf("Inbound pods: %d registered", inboundCount)
-
 		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, egressPods)).To(Succeed())
 		Expect(servicePodsReconciledErr(cs, ns.Name, serviceUID, inboundPods)).To(Succeed())
 

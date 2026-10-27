@@ -661,9 +661,7 @@ func TestUpdateNRPSGWAddressLocations_Mock(t *testing.T) {
 	})
 }
 
-func TestDisassociateNatGatewayFromServiceGateway_Mock(t *testing.T) {
-	// Simplest reconcile path: no matching SGW service to clear, and the NAT
-	// gateway is already gone (404) -> method returns nil.
+func TestUnlinkNatGateway_Mock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
@@ -672,11 +670,13 @@ func TestDisassociateNatGatewayFromServiceGateway_Mock(t *testing.T) {
 	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
 	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 
-	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{}, nil)
 	mockNAT.EXPECT().Get(gomock.Any(), "rg", "svc-natgw", gomock.Any()).Return(nil, notFoundError())
 
 	dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-	assert.NoError(t, dt.disassociateNatGatewayFromServiceGateway(context.Background(), "sgw", "svc-natgw"))
+	exists, canManage, err := dt.unlinkNatGateway(context.Background(), "sgw", "svc-natgw", "rg", "svc-natgw")
+	assert.NoError(t, err)
+	assert.False(t, exists)
+	assert.True(t, canManage)
 }
 
 func TestConvertServicesUpdateActionToARM(t *testing.T) {

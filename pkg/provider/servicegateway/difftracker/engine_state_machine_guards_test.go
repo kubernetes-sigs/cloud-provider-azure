@@ -414,13 +414,14 @@ func TestUpdateService_RecreateAfterDeletionReplays(t *testing.T) {
 // promotePendingEndpointsLocked then restores it when the recreate completes.
 func TestUpdateService_RecreateAfterDeletionPreservesEndpoints(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-recreate-endpoints"
+	rawUID := "svc-recreate-endpoints"
+	uid := inboundServiceName(rawUID)
 	const node, addr = "10.0.0.2", "10.244.0.2"
 	dt.ReconcileEndpointSlice(nil, &discovery_v1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "eps1",
 			Namespace:       "test",
-			OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID(uid)}},
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID(rawUID)}},
 		},
 		AddressType: discovery_v1.AddressTypeIPv4,
 		Endpoints: []discovery_v1.Endpoint{{
@@ -436,42 +437,42 @@ func TestUpdateService_RecreateAfterDeletionPreservesEndpoints(t *testing.T) {
 		}},
 	})
 
-	cfg := NewInboundServiceConfig(inboundServiceName(uid), makeInboundConfig(80))
+	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
 	applied := cfg
-	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(uid))
-	dt.pendingServiceOps[inboundServiceName(uid)] = &ServiceOperationState{
-		ServiceUID:        inboundServiceName(uid),
+	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.pendingServiceOps[uid] = &ServiceOperationState{
+		ServiceUID:        uid,
 		Config:            cfg,
 		LastAppliedConfig: &applied,
 		State:             StateCreated,
 	}
 	// One live endpoint backing the service, present in both K8s and NRP.
 	pod := newPod()
-	pod.InboundIdentities.Insert(inboundServiceName(uid))
+	pod.InboundIdentities.Insert(uid)
 	n := newNode()
 	n.Pods[addr] = pod
 	dt.K8sResources.Nodes[node] = n
 	dt.NRPResources.Locations[node] = NRPLocation{
-		Addresses: map[string]NRPAddress{addr: {Services: utilsets.NewString(inboundServiceName(uid))}},
+		Addresses: map[string]NRPAddress{addr: {Services: utilsets.NewString(uid)}},
 	}
 
 	// Service -> ClusterIP: delete (locations present -> StateDeletionPending, K8s state scrubbed).
-	dt.DeleteService(inboundServiceName(uid), true, false)
+	dt.DeleteService(uid, true, false)
 	// Service -> LoadBalancer again while deleting: UpdateService queues the recreate.
-	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(inboundServiceName(uid), makeInboundConfig(80))))
-	assert.True(t, dt.pendingServiceOps[inboundServiceName(uid)].RecreateAfterDeletion, "the recreate must be queued")
-	assert.Len(t, dt.pendingEndpoints[inboundServiceName(uid)], 1, "the engine must replay and buffer unchanged endpoints")
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
+	assert.True(t, dt.pendingServiceOps[uid].RecreateAfterDeletion, "the recreate must be queued")
+	assert.Len(t, dt.pendingEndpoints[uid], 1, "the engine must replay and buffer unchanged endpoints")
 
 	// Locations drain; CheckPendingServiceDeletions promotes the op and the delete dispatches.
 	delete(dt.NRPResources.Locations, node)
 	dt.CheckPendingServiceDeletions()
 	// Delete completes -> deletion-success replays the create (StateNotStarted).
-	dt.OnServiceCreationComplete(inboundServiceName(uid), true, nil)
+	dt.OnServiceCreationComplete(uid, true, nil)
 	// Create dispatch + success -> promotePendingEndpointsLocked replays the buffered endpoints.
 	dt.mu.Lock()
-	dt.pendingServiceOps[inboundServiceName(uid)].State = StateCreationInProgress
+	dt.pendingServiceOps[uid].State = StateCreationInProgress
 	dt.mu.Unlock()
-	dt.OnServiceCreationComplete(inboundServiceName(uid), true, nil)
+	dt.OnServiceCreationComplete(uid, true, nil)
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -483,7 +484,7 @@ func TestUpdateService_RecreateAfterDeletionPreservesEndpoints(t *testing.T) {
 	if !assert.True(t, ok, "the recreated service must retain its backing pod address") {
 		return
 	}
-	assert.True(t, p.InboundIdentities.Has(inboundServiceName(uid)),
+	assert.True(t, p.InboundIdentities.Has(uid),
 		"the recreated service's backend identity must be preserved, not dropped on recreate")
 }
 

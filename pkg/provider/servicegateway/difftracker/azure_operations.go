@@ -66,6 +66,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
 )
 
+// createOrUpdateManagedPublicIP creates or updates a Public IP and returns the Azure response.
 func (dt *DiffTracker) createOrUpdateManagedPublicIP(ctx context.Context, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
 	pipName := ptr.Deref(pip.Name, "")
 	if pipName == "" {
@@ -116,7 +117,7 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 	return nil
 }
 
-// Returns true only when an owned address was deleted.
+// deleteOwnedPublicIP returns true only when an owned address was deleted.
 func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName string) (bool, error) {
 	if pipName == "" {
 		return false, fmt.Errorf("deleteOwnedPublicIP: pip name is empty")
@@ -237,34 +238,36 @@ func (dt *DiffTracker) getNatGateway(ctx context.Context, resourceGroup, name st
 	return natGateway, true, nil
 }
 
-// disassociateNatGatewayFromServiceGateway removes the NAT gateway association from the Service Gateway
-// This should be called before deleting the NAT gateway to properly clean up the references
-func (dt *DiffTracker) disassociateNatGatewayFromServiceGateway(ctx context.Context, serviceGatewayName string, natGatewayName string) error {
-	return dt.unlinkNatGateway(ctx, serviceGatewayName, natGatewayName, dt.config.ResourceGroup, natGatewayName)
-}
-
+// getNatGatewayByID reads a NAT Gateway by ARM ID.
 // Callers must validate the ID's network subscription; the client is subscription-scoped.
 func (dt *DiffTracker) getNatGatewayByID(ctx context.Context, natGatewayID string) (natGateway *armnetwork.NatGateway, exists bool, err error) {
 	parsed, err := arm.ParseResourceID(natGatewayID)
 	if err != nil {
 		return nil, false, fmt.Errorf("parsing NAT Gateway ID %q: %w", natGatewayID, err)
 	}
-	natGateway, exists, err = dt.getNatGateway(ctx, parsed.ResourceGroupName, parsed.Name)
-	if err != nil || !exists {
-		return natGateway, exists, err
-	}
-	if natGateway == nil {
-		return nil, false, fmt.Errorf("NAT Gateway %q was read without a resource", natGatewayID)
-	}
-	result := *natGateway
-	result.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, parsed.SubscriptionID, parsed.ResourceGroupName, parsed.Name))
-	result.Name = ptr.To(parsed.Name)
-	return &result, true, nil
+	return dt.getNatGateway(ctx, parsed.ResourceGroupName, parsed.Name)
 }
 
-// NRP requires clearing the service reference before unlinking the gateway.
-func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName, serviceName, natGatewayResourceGroup, natGatewayName string) error {
+// unlinkNatGateway clears service references before unlinking the gateway.
+// For managed gateways, canManage distinguishes preflight errors from write errors
+// so callers retain their existing cleanup policy without repeating the reads.
+func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName, serviceName, natGatewayResourceGroup, natGatewayName string) (exists, canManage bool, err error) {
 	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
+
+	managed := strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup)
+	var natGateway *armnetwork.NatGateway
+	if managed {
+		natGateway, exists, err = dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
+		if err != nil {
+			return false, false, err
+		}
+		if !exists {
+			return false, true, nil
+		}
+		if !ownsNATGateway(natGateway) {
+			return true, false, nil
+		}
+	}
 
 	// Step 1: clear the ServiceGateway-side reference if it still has one.
 	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, serviceGatewayName)
@@ -273,8 +276,14 @@ func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName,
 		services, err = nil, nil
 	}
 	if err != nil {
-		return fmt.Errorf("getting Service Gateway services: %w", err)
+		return exists, false, fmt.Errorf("getting Service Gateway services: %w", err)
 	}
+	natGatewayID := fmt.Sprintf(consts.NatGatewayIDTemplate, dt.config.networkResourceSubscriptionID(), natGatewayResourceGroup, natGatewayName)
+	user := otherServiceUsingNATGateway(services, serviceName, natGatewayID)
+	if managed && user != "" {
+		return true, false, nil
+	}
+	canManage = true
 
 	var serviceToBeUpdated *armnetwork.ServiceGatewayService
 	for _, service := range services {
@@ -298,46 +307,46 @@ func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName,
 			},
 		}
 		if err := dt.updateNRPServices(ctx, serviceGatewayName, updateServicesRequest); err != nil {
-			return fmt.Errorf("updating Service Gateway to disassociate NAT Gateway %q: %w", natGatewayName, err)
+			return exists, canManage, fmt.Errorf("updating Service Gateway to disassociate NAT Gateway %q: %w", natGatewayName, err)
 		}
 	}
 
 	// Step 2: clear the NAT-gateway-side reference if it still points back at the
 	// Service Gateway. This runs independently of Step 1 so a retry after a
 	// partial failure still reconciles the NAT gateway.
-	natGatewayID := fmt.Sprintf(consts.NatGatewayIDTemplate, dt.config.networkResourceSubscriptionID(), natGatewayResourceGroup, natGatewayName)
-	if user := otherServiceUsingNATGateway(services, serviceName, natGatewayID); user != "" {
+	if user != "" {
 		dt.logger.V(2).Info("Kept NAT Gateway linked to Service Gateway because another service uses it", "natGateway", natGatewayName, "service", user)
-		return nil
+		return false, false, nil
 	}
-	natGateway, exists, err := dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return nil
-	}
-	if !strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup) &&
-		(natGateway == nil || natGateway.Properties == nil) {
-		return fmt.Errorf("NAT Gateway %q was read without its properties; link state is unknown", natGatewayID)
+	if !managed {
+		natGateway, exists, err = dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
+		if err != nil {
+			return false, false, err
+		}
+		if !exists {
+			return false, true, nil
+		}
+		if natGateway == nil || natGateway.Properties == nil {
+			return true, false, fmt.Errorf("NAT Gateway %q was read without its properties; link state is unknown", natGatewayID)
+		}
 	}
 	if linked := natGatewayServiceGatewayID(natGateway); linked != "" && strings.EqualFold(linked, dt.config.ServiceGatewayResourceID()) {
 		updateCtx := ctx
-		if !strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup) {
+		if !managed {
 			updateCtx, err = withNATGatewayETag(ctx, natGateway.Etag)
 			if err != nil {
-				return err
+				return exists, canManage, err
 			}
 		}
 		// See above: a plain nil would be omitted from the payload rather than clearing the field.
 		natGateway.Properties.ServiceGateway = azcore.NullValue[*armnetwork.SubResource]()
 		if _, err := dt.networkClientFactory.GetNatGatewayClient().CreateOrUpdate(updateCtx, natGatewayResourceGroup, natGatewayName, *natGateway); err != nil {
-			return fmt.Errorf("updating NAT Gateway %q to remove Service Gateway reference: %w", natGatewayName, err)
+			return exists, canManage, fmt.Errorf("updating NAT Gateway %q to remove Service Gateway reference: %w", natGatewayName, err)
 		}
 	}
 
 	dt.logger.V(5).Info("Disassociated NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
-	return nil
+	return exists, canManage, nil
 }
 
 // updateNRPSGWServices updates services in the Service Gateway

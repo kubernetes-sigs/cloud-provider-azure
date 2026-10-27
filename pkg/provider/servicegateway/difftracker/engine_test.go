@@ -642,11 +642,11 @@ func assertUpdateServiceLocks(t *testing.T, dt *DiffTracker, wantMessages ...str
 		"Buffered service recreate intent during deletion":                    false,
 		"Sent service updater trigger":                                        false,
 		"Overwrote desired service config":                                    true,
-		"Skipped unchanged service config":                                    false,
-		"Skipped parked service with unchanged spec":                          false,
+		"Skipped unchanged service config":                                    true,
+		"Skipped parked service with unchanged spec":                          true,
 		"Reattempted service creation after terminal failure and spec change": true,
 		"Overwrote desired config while service is updating":                  true,
-		"Found unknown service operation state while updating service":        false,
+		"Found unknown service operation state while updating service":        true,
 	}
 	var messages []string
 	dt.logger = funcr.New(func(_, message string) {
@@ -672,6 +672,25 @@ func assertUpdateServiceLocks(t *testing.T, dt *DiffTracker, wantMessages ...str
 		}
 		dt.mu.Unlock()
 	}
+}
+
+func TestEngineUpdateService_ReleasesLockOnPanic(t *testing.T) {
+	dt := newTestDiffTracker()
+	uid := inboundServiceName("svc-update-panic")
+	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.logger = funcr.New(func(_, message string) {
+		if strings.Contains(message, "Created tracking entry for existing service update") {
+			panic("test logger panic")
+		}
+	}, funcr.Options{Verbosity: 5})
+
+	assert.PanicsWithValue(t, "test logger panic", func() {
+		_ = dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	})
+	if !dt.mu.TryLock() {
+		t.Fatal("UpdateService must release its state lock when unwinding a panic")
+	}
+	dt.mu.Unlock()
 }
 
 // TestEngineUpdateService_NoOpWhenConfigUnchanged verifies that an UpdateService call
