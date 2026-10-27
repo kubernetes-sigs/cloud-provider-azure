@@ -96,6 +96,7 @@ func TestGetSyncNRPNATGateways(t *testing.T) {
 		name              string
 		k8sEgresses       []string
 		nrpNATGateways    []string
+		reservedServices  []string
 		expectedAdditions []string
 		expectedRemovals  []string
 	}{
@@ -134,6 +135,25 @@ func TestGetSyncNRPNATGateways(t *testing.T) {
 			expectedAdditions: []string{"egress3", "egress5"},
 			expectedRemovals:  []string{"egress2", "egress4"},
 		},
+		{
+			name:              "reserved additions and removals are excluded",
+			k8sEgresses:       []string{"DEFAULT-NATGW", "rp-added", "default-natgw-natgw"},
+			nrpNATGateways:    []string{"rp-removed", "ordinary-natgw"},
+			reservedServices:  []string{"RP-ADDED", "RP-REMOVED", "absent"},
+			expectedAdditions: []string{"default-natgw-natgw"},
+			expectedRemovals:  []string{"ordinary-natgw"},
+		},
+		{
+			name:             "default removal is excluded with nil reservations",
+			nrpNATGateways:   []string{"DEFAULT-NATGW", "default-natgw-natgw"},
+			expectedRemovals: []string{"default-natgw-natgw"},
+		},
+		{
+			name:              "empty reservations preserve ordinary changes",
+			k8sEgresses:       []string{"ordinary-natgw"},
+			reservedServices:  []string{},
+			expectedAdditions: []string{"ordinary-natgw"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -147,9 +167,14 @@ func TestGetSyncNRPNATGateways(t *testing.T) {
 					NATGateways: utilsets.NewString(tt.nrpNATGateways...),
 				},
 			}
+			if tt.reservedServices != nil {
+				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(tt.reservedServices...)
+			}
 
 			// Call the function being tested
 			result := dt.GetSyncNRPNATGateways()
+			assert.ElementsMatch(t, utilsets.NewString(tt.k8sEgresses...).UnsortedList(), dt.K8sResources.Egresses.UnsortedList())
+			assert.ElementsMatch(t, utilsets.NewString(tt.nrpNATGateways...).UnsortedList(), dt.NRPResources.NATGateways.UnsortedList())
 
 			// Check additions
 			assert.Equal(t, len(tt.expectedAdditions), result.Additions.Len(),

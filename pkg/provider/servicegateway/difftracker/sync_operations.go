@@ -68,12 +68,11 @@ func (dt *DiffTracker) getSyncNRPNATGatewaysLocked() SyncServicesReturnType {
 
 func (dt *DiffTracker) getSyncServicesLocked(desired, registered *utilsets.IgnoreCaseSet) SyncServicesReturnType {
 	result := GetServicesToSync(dt.logger, desired, registered)
-	for _, identities := range []*utilsets.IgnoreCaseSet{result.Additions, result.Removals} {
-		for _, identity := range identities.UnsortedList() {
-			if dt.isReservedServiceLocked(identity) {
-				identities.Delete(identity)
-			}
-		}
+	result.Additions.Delete(DefaultOutboundNATGatewayName)
+	result.Removals.Delete(DefaultOutboundNATGatewayName)
+	for _, identity := range dt.NRPResources.ReservedOutboundServices.UnsortedList() {
+		result.Additions.Delete(identity)
+		result.Removals.Delete(identity)
 	}
 	return result
 }

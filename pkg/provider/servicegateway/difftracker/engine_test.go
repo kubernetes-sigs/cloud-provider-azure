@@ -631,114 +631,46 @@ func TestEngineUpdateService_NewServiceFallsThrough(t *testing.T) {
 	}
 }
 
-func TestEngineUpdateService_LockBoundaries(t *testing.T) {
-	tests := []struct {
-		name         string
-		tracked      bool
-		state        ResourceState
-		nrpHasLB     bool
-		reserveName  bool
-		wantMessages []string
-	}{
-		{
-			name: "new service",
-			wantMessages: []string{
-				"Delegated untracked service update to add",
-				"Added service request",
-				"Skipped endpoint cache replay because dependencies are unavailable",
-				"Sent service updater trigger",
-			},
-		},
-		{
-			name:        "RP reserves name before delegated creation",
-			reserveName: true,
-			wantMessages: []string{
-				"Delegated untracked service update to add",
-				"Added service request",
-			},
-		},
-		{
-			name:     "recovered load balancer",
-			nrpHasLB: true,
-			wantMessages: []string{
-				"Created tracking entry for existing service update",
-				"Sent service updater trigger",
-			},
-		},
-		{
-			name:    "changed configuration",
-			tracked: true,
-			state:   StateCreated,
-			wantMessages: []string{
-				"Scheduled service update",
-				"Sent service updater trigger",
-			},
-		},
-		{
-			name:    "recreation during deletion",
-			tracked: true,
-			state:   StateDeletionInProgress,
-			wantMessages: []string{
-				"Skipped endpoint cache replay because dependencies are unavailable",
-				"Buffered service recreate intent during deletion",
-			},
-		},
+func assertUpdateServiceLocks(t *testing.T, dt *DiffTracker, wantMessages ...string) func() {
+	t.Helper()
+	lockAtMessage := map[string]bool{
+		"Delegated untracked service update to add":                           false,
+		"Added service request":                                               true,
+		"Created tracking entry for existing service update":                  true,
+		"Scheduled service update":                                            true,
+		"Skipped endpoint cache replay because dependencies are unavailable":  true,
+		"Buffered service recreate intent during deletion":                    false,
+		"Sent service updater trigger":                                        false,
+		"Overwrote desired service config":                                    true,
+		"Skipped unchanged service config":                                    false,
+		"Skipped parked service with unchanged spec":                          false,
+		"Reattempted service creation after terminal failure and spec change": true,
+		"Overwrote desired config while service is updating":                  true,
+		"Found unknown service operation state while updating service":        false,
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dt := newTestDiffTracker()
-			const uid = "svc-update-locks-lb"
-			oldConfig := NewInboundServiceConfig(uid, makeInboundConfig(80))
-			if tt.tracked {
-				dt.pendingServiceOps[uid] = &ServiceOperationState{
-					ServiceUID:        uid,
-					Config:            oldConfig,
-					LastAppliedConfig: &oldConfig,
-					State:             tt.state,
-				}
+	var messages []string
+	dt.logger = funcr.New(func(_, message string) {
+		for marker, wantLocked := range lockAtMessage {
+			if !strings.Contains(message, marker) {
+				continue
 			}
-			if tt.nrpHasLB {
-				dt.NRPResources.LoadBalancers.Insert(uid)
+			messages = append(messages, marker)
+			unlocked := dt.mu.TryLock()
+			if unlocked {
+				dt.mu.Unlock()
 			}
-
-			lockAtMessage := map[string]bool{
-				"Delegated untracked service update to add":                          false,
-				"Added service request":                                              true,
-				"Created tracking entry for existing service update":                 true,
-				"Scheduled service update":                                           true,
-				"Skipped endpoint cache replay because dependencies are unavailable": true,
-				"Buffered service recreate intent during deletion":                   false,
-				"Sent service updater trigger":                                       false,
-			}
-			var messages []string
-			dt.logger = funcr.New(func(_, message string) {
-				for marker, wantLocked := range lockAtMessage {
-					if !strings.Contains(message, marker) {
-						continue
-					}
-					messages = append(messages, marker)
-					unlocked := dt.mu.TryLock()
-					if unlocked {
-						if tt.reserveName && marker == "Delegated untracked service update to add" {
-							dt.NRPResources.ReservedOutboundServices = utilsets.NewString(uid)
-						}
-						dt.mu.Unlock()
-					}
-					assert.Equal(t, !wantLocked, unlocked, "lock state at %q", marker)
-					break
-				}
-			}, funcr.Options{Verbosity: 5})
-
-			err := dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
-			if tt.reserveName {
-				assert.ErrorContains(t, err, "reserved")
-				assert.NotContains(t, dt.pendingServiceOps, uid)
-				assert.Empty(t, dt.serviceUpdaterTrigger)
-			} else {
-				assert.NoError(t, err)
-			}
-			assert.Equal(t, tt.wantMessages, messages)
-		})
+			assert.Equal(t, !wantLocked, unlocked, "lock state at %q", marker)
+			break
+		}
+	}, funcr.Options{Verbosity: 5})
+	return func() {
+		t.Helper()
+		assert.Equal(t, wantMessages, messages)
+		if !dt.mu.TryLock() {
+			t.Error("UpdateService must return without holding its state lock")
+			return
+		}
+		dt.mu.Unlock()
 	}
 }
 
@@ -2409,19 +2341,49 @@ func TestPublicEntryPointsAlwaysReleaseLock(t *testing.T) {
 			assert.NoError(t, dt.UpdateService(NewOutboundServiceConfig(uid, nil)))
 		}},
 		{"UpdateService untracked delegates to add", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt,
+				"Delegated untracked service update to add", "Added service request",
+				"Skipped endpoint cache replay because dependencies are unavailable", "Sent service updater trigger")()
 			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
+		{"UpdateService name reserved before delegated add", func(dt *DiffTracker) {
+			dt.logger = funcr.New(func(_, message string) {
+				if strings.Contains(message, "Delegated untracked service update to add") {
+					if !dt.mu.TryLock() {
+						t.Error("delegation must release the state lock")
+						return
+					}
+					dt.NRPResources.ReservedOutboundServices = utilsets.NewString(uid)
+					dt.mu.Unlock()
+				}
+			}, funcr.Options{Verbosity: 5})
+			assert.ErrorContains(t, dt.UpdateService(inbound()), "reserved")
+			assert.NotContains(t, dt.pendingServiceOps, uid)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+		}},
+		{"UpdateService reserved name", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt)()
+			dt.NRPResources.ReservedOutboundServices = utilsets.NewString(uid)
+			assert.ErrorContains(t, dt.UpdateService(inbound()), "reserved")
+			assert.NotContains(t, dt.pendingServiceOps, uid)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+		}},
 		{"UpdateService untracked but in NRP", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt,
+				"Created tracking entry for existing service update", "Sent service updater trigger")()
 			dt.NRPResources.LoadBalancers.Insert(uid)
 			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
 		{"UpdateService parked with unchanged spec", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt, "Skipped parked service with unchanged spec")()
 			dt.pendingServiceOps[uid] = &ServiceOperationState{
 				ServiceUID: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
 			}
 			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
 		{"UpdateService parked with changed spec", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt,
+				"Reattempted service creation after terminal failure and spec change", "Sent service updater trigger")()
 			dt.pendingServiceOps[uid] = &ServiceOperationState{
 				ServiceUID: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
 			}
@@ -2432,6 +2394,7 @@ func TestPublicEntryPointsAlwaysReleaseLock(t *testing.T) {
 			assert.NoError(t, dt.UpdateService(changed))
 		}},
 		{"UpdateService created and unchanged", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt, "Skipped unchanged service config")()
 			applied := inbound()
 			dt.pendingServiceOps[uid] = &ServiceOperationState{
 				ServiceUID: uid, Config: applied, LastAppliedConfig: &applied, State: StateCreated,
@@ -2439,6 +2402,8 @@ func TestPublicEntryPointsAlwaysReleaseLock(t *testing.T) {
 			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
 		{"UpdateService while deleting", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt,
+				"Skipped endpoint cache replay because dependencies are unavailable", "Buffered service recreate intent during deletion")()
 			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateDeletionInProgress}
 			assert.NoError(t, dt.UpdateService(inbound()))
 		}},

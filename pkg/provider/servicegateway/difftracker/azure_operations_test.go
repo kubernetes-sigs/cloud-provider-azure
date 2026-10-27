@@ -611,16 +611,18 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 				wantDeleted, wantGone bool
 				wantStatus            int
 				wantErrText           string
+				callerRetries         bool
 			}{
 				{name: "unchanged", wantGets: 1, wantDeletes: 1, wantDeleted: true, wantGone: true},
-				{name: "version changed", wantGets: 2, wantDeletes: 2, wantDeleted: true, wantGone: true},
-				{name: "owner changed on retry", wantGets: 2, wantDeletes: 2, wantStatus: http.StatusPreconditionFailed},
-				{name: "owner changed", wantGets: 2, wantDeletes: 1},
-				{name: "owner removed", wantGets: 2, wantDeletes: 1},
-				{name: "replacement", wantGets: 2, wantDeletes: 1},
-				{name: "ambiguous delete with replacement", wantGets: 2, wantDeletes: 2},
+				{name: "stale version is returned", wantGets: 1, wantDeletes: 1, wantStatus: http.StatusPreconditionFailed},
+				{name: "version changed", callerRetries: true, wantGets: 2, wantDeletes: 2, wantDeleted: true, wantGone: true},
+				{name: "owner changed on retry", callerRetries: true, wantGets: 2, wantDeletes: 2, wantStatus: http.StatusPreconditionFailed},
+				{name: "owner changed", callerRetries: true, wantGets: 2, wantDeletes: 1},
+				{name: "owner removed", callerRetries: true, wantGets: 2, wantDeletes: 1},
+				{name: "replacement", callerRetries: true, wantGets: 2, wantDeletes: 1},
+				{name: "ambiguous delete with replacement", callerRetries: true, wantGets: 2, wantDeletes: 2},
 				{name: "already deleted", wantGets: 1, wantDeletes: 1, wantDeleted: true, wantGone: true},
-				{name: "two conflicts", wantGets: 2, wantDeletes: 2, wantStatus: http.StatusPreconditionFailed},
+				{name: "two conflicts", callerRetries: true, wantGets: 2, wantDeletes: 2, wantStatus: http.StatusPreconditionFailed},
 				{name: "server retry", wantGets: 1, wantDeletes: 2, wantDeleted: true, wantGone: true},
 				{name: "server failure", wantGets: 1, wantDeletes: 4, wantStatus: http.StatusInternalServerError},
 				{name: "poll success", wantGets: 1, wantDeletes: 1, wantPolls: 1, wantDeleted: true, wantGone: true},
@@ -628,9 +630,9 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 				{name: "poll precondition failure", wantGets: 1, wantDeletes: 1, wantPolls: 1, wantStatus: http.StatusPreconditionFailed},
 				{name: "missing etag", wantGets: 1, wantErrText: "usable ETag"},
 				{name: "wildcard etag", wantGets: 1, wantErrText: "usable ETag"},
-				{name: "etag lost on refresh", wantGets: 2, wantDeletes: 1, wantErrText: "usable ETag"},
-				{name: "refresh forbidden", wantGets: 2, wantDeletes: 1, wantStatus: http.StatusForbidden},
-				{name: "gone on refresh", wantGets: 2, wantDeletes: 1, wantGone: true},
+				{name: "etag lost on refresh", callerRetries: true, wantGets: 2, wantDeletes: 1, wantErrText: "usable ETag"},
+				{name: "refresh forbidden", callerRetries: true, wantGets: 2, wantDeletes: 1, wantStatus: http.StatusForbidden},
+				{name: "gone on refresh", callerRetries: true, wantGets: 2, wantDeletes: 1, wantGone: true},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
 					live := &armnetwork.PublicIPAddress{
@@ -683,7 +685,7 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 								assert.Equal(t, lastReadETag, req.Header.Get("If-Match"))
 								if deletes == 1 {
 									switch tc.name {
-									case "version changed", "owner changed on retry", "refresh forbidden", "gone on refresh":
+									case "stale version is returned", "version changed", "owner changed on retry", "refresh forbidden", "gone on refresh":
 										live.Etag = ptr.To(`W/"v2"`)
 									case "owner changed":
 										live.Tags[consts.ServiceGatewayManagedTagKey] = ptr.To("other-owner")
@@ -755,6 +757,16 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 					factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
 					dt := &DiffTracker{config: testConfig(), networkClientFactory: factory}
 					deleted, err := dt.deleteOwnedPublicIP(context.Background(), pipName)
+					if tc.callerRetries {
+						assert.False(t, deleted)
+						assert.Equal(t, 1, gets, "a helper call must not refresh after a conflict")
+						var responseErr *azcore.ResponseError
+						if !assert.ErrorAs(t, err, &responseErr) {
+							return
+						}
+						assert.Equal(t, http.StatusPreconditionFailed, responseErr.StatusCode)
+						deleted, err = dt.deleteOwnedPublicIP(context.Background(), pipName)
+					}
 					assert.Equal(t, tc.wantDeleted, deleted)
 					assert.Equal(t, tc.wantGone, live == nil)
 					assert.Equal(t, tc.wantGets, gets)

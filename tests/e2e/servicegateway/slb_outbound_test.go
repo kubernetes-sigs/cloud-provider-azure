@@ -2114,17 +2114,24 @@ func createEgressPodsWith(cs clientset.Interface, namespace, egressName string, 
 	}
 }
 
-func outboundServiceUsesNATGatewayErr(egressName, natGatewayID string) error {
+func outboundServiceUsesNATGatewayErr(cs clientset.Interface, namespace, egressName, natGatewayID string) error {
+	want, podCount, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
+	if err != nil {
+		return err
+	}
+	if podCount == 0 {
+		return fmt.Errorf("egress %s has no active pods", egressName)
+	}
 	sgResponse, err := queryServiceGatewayServices()
 	if err != nil {
 		return err
 	}
 	for _, svc := range sgResponse.Value {
 		if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
-			if !strings.EqualFold(svc.Properties.PublicNatGatewayID, natGatewayID) {
+			if svc.Properties.PublicNatGatewayID == "" || !strings.EqualFold(svc.Properties.PublicNatGatewayID, natGatewayID) {
 				return fmt.Errorf("egress %s uses NAT Gateway %q, want %q", egressName, svc.Properties.PublicNatGatewayID, natGatewayID)
 			}
-			return nil
+			return registeredAddressesMatchErr(outboundServiceName(egressName), want)
 		}
 	}
 	return fmt.Errorf("egress %s is not registered", egressName)
@@ -2177,17 +2184,7 @@ func eventuallyBYORegistered(cs clientset.Interface, namespace, byoRG, egressNam
 }
 
 func byoRegisteredErr(cs clientset.Interface, namespace, egressName, natGatewayID string) error {
-	want, podCount, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
-	if err != nil {
-		return err
-	}
-	if podCount == 0 {
-		return fmt.Errorf("egress %s has no active pods", egressName)
-	}
-	if err := egressRegisteredMatchErr(egressName, want); err != nil {
-		return err
-	}
-	if err := outboundServiceUsesNATGatewayErr(egressName, natGatewayID); err != nil {
+	if err := outboundServiceUsesNATGatewayErr(cs, namespace, egressName, natGatewayID); err != nil {
 		return err
 	}
 	if link := byoNATGatewayLink(natGatewayID); !strings.EqualFold(link, serviceGatewayResourceID()) {
@@ -2278,17 +2275,7 @@ func eventuallyBYOUnlinked(egressName, natGatewayID string) {
 
 func eventuallyManagedRegistered(cs clientset.Interface, namespace, egressName, natGatewayID string) {
 	Eventually(func() error {
-		want, podCount, err := livePodIPsWithLabel(cs, namespace, egressLabel, egressName)
-		if err != nil {
-			return err
-		}
-		if podCount == 0 {
-			return fmt.Errorf("egress %s has no active pods", egressName)
-		}
-		if err := egressRegisteredMatchErr(egressName, want); err != nil {
-			return err
-		}
-		return outboundServiceUsesNATGatewayErr(egressName, natGatewayID)
+		return outboundServiceUsesNATGatewayErr(cs, namespace, egressName, natGatewayID)
 	}, 3*time.Minute, defaultPollInterval).Should(Succeed(), "the managed identity must get a NAT Gateway in the cluster resource group")
 }
 
