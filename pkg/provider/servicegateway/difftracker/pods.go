@@ -288,19 +288,13 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 	}
 
 	egressLabel := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
-	if !IsValidEgressIdentity(egressLabel) {
-		// The label is encoded into the NAT Gateway name/ARM resource ID; an invalid value would produce
-		// malformed ARM requests (endless retries), and a reserved value would make this
-		// controller manage a resource it does not own.
-		reason, message := "ServiceGatewayInvalidEgressLabel",
-			fmt.Sprintf("Invalid egress gateway label %q: must be a valid Azure resource name (alphanumerics, '-', '_', '.'; start alphanumeric; 1-%d chars)", egressLabel, maxEgressIdentityLength)
-		if IsReservedEgressIdentity(outboundServiceName(egressLabel)) {
-			reason, message = "ServiceGatewayReservedEgressLabel",
-				fmt.Sprintf("Egress gateway label %q generates a reserved default gateway name; choose a different value", egressLabel)
-		}
+	if !egressIdentityRegex.MatchString(egressLabel) {
+		// The label is encoded into the NAT Gateway name/ARM resource ID; an invalid value
+		// would produce malformed ARM requests (endless retries).
 		klog.Warningf("podInformerAddPod: pod %s/%s has an unusable egress gateway label %q; skipping egress registration",
 			pod.Namespace, pod.Name, egressLabel)
-		dt.recordEvent(pod, v1.EventTypeWarning, reason, message)
+		dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayInvalidEgressLabel",
+			fmt.Sprintf("Invalid egress gateway label %q: must be a valid Azure resource name (alphanumerics, '-', '_', '.'; start alphanumeric; 1-%d chars)", egressLabel, maxEgressIdentityLength))
 		return
 	}
 	egressName := outboundServiceName(egressLabel)

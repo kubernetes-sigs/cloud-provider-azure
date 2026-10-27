@@ -396,127 +396,141 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 
 	serviceUID := config.UID
 
-	dt.mu.Lock()
+	var createService, seedEndpoints, triggerUpdater bool
+	err := func() error {
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
 
-	if dt.isReservedServiceLocked(serviceUID) {
-		dt.mu.Unlock()
-		return fmt.Errorf("ServiceGateway service name %q is reserved", serviceUID)
+		if dt.isReservedServiceLocked(serviceUID) {
+			return fmt.Errorf("ServiceGateway service name %q is reserved", serviceUID)
+		}
+		dt.K8sResources.Services.Insert(serviceUID)
+
+		opState, exists := dt.pendingServiceOps[serviceUID]
+		existsInNRP := dt.NRPResources.LoadBalancers.Has(serviceUID)
+
+		if !exists && !existsInNRP {
+			createService = true
+			return nil
+		}
+
+		if !exists && existsInNRP {
+			// LB exists in NRP (e.g., recovered after CCM restart) but no engine tracking entry.
+			// Create one in StateCreated so the update path can take over.
+			dt.logger.V(5).Info("Created tracking entry for existing service update", "service", serviceUID)
+			opState = &ServiceOperationState{
+				ServiceUID:    serviceUID,
+				Config:        config,
+				State:         StateCreated,
+				RetryCount:    0,
+				LastAttempt:   time.Now().Format(time.RFC3339),
+				CreatedAt:     time.Now(),
+				CorrelationID: uuid.NewString(),
+			}
+			dt.pendingServiceOps[serviceUID] = opState
+			// Force an update PUT (we have no LastAppliedConfig to compare against).
+			opState.State = StateUpdateInProgress
+			opState.Config = config
+			triggerUpdater = true
+			return nil
+		}
+
+		switch opState.State {
+		case StateNotStarted, StateCreationInProgress:
+			// Creation is pending or in flight. Latest config wins; the
+			// running goroutine already captured a snapshot at dispatch time, so we also
+			// queue a follow-up update by leaving the freshly-overwritten Config; if creation
+			// completes with stale data, OnServiceCreationComplete will see Config != LastAppliedConfig
+			// and schedule an UpdateInProgress.
+			if opState.CreationFailedTerminal {
+				// Service was parked after a non-retryable creation error. Only re-attempt if
+				// the spec actually changed; a resync with the same invalid spec stays parked.
+				if configsEqualForUpdate(&opState.Config, &config) {
+					dt.logger.V(5).Info("Skipped parked service with unchanged spec", "service", serviceUID)
+					return nil
+				}
+				dt.logger.V(5).Info("Reattempted service creation after terminal failure and spec change", "service", serviceUID)
+				opState.Config = config
+				opState.CreationFailedTerminal = false
+				resetRetryStateLocked(opState)
+				opState.State = StateNotStarted
+				opState.LastAttempt = time.Now().Format(time.RFC3339)
+				triggerUpdater = true
+				return nil
+			}
+			dt.logger.V(5).Info("Overwrote desired service config", "service", serviceUID, "state", opState.State)
+			if !configsEqualForUpdate(&opState.Config, &config) {
+				// A genuine spec change is fresh intent: clear any transient-failure park so the new
+				// config starts with a clean retry budget rather than inheriting an exhausted one.
+				triggerUpdater = opState.RetriesExhausted
+				resetRetryStateLocked(opState)
+			} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
+				// Same spec, but the cooldown since the op parked has elapsed: re-arm it.
+				// The cooldown bounds this to one retry burst per parkReArmCooldown, not a per-resync storm.
+				triggerUpdater = true
+				resetRetryStateLocked(opState)
+			}
+			opState.Config = config
+
+		case StateCreated:
+			if opState.LastAppliedConfig != nil &&
+				opState.LastAppliedConfig.IsInbound == config.IsInbound &&
+				opState.LastAppliedConfig.InboundConfig.Equals(config.InboundConfig) {
+				dt.logger.V(5).Info("Skipped unchanged service config", "service", serviceUID)
+				return nil
+			}
+			dt.logger.V(5).Info("Scheduled service update", "service", serviceUID)
+			opState.Config = config
+			opState.State = StateUpdateInProgress
+			resetRetryStateLocked(opState)
+			opState.LastAttempt = time.Now().Format(time.RFC3339)
+			triggerUpdater = true
+
+		case StateUpdateInProgress:
+			// An updater is (or will be) processing this service. Overwrite with the latest desired
+			// config. A live in-flight worker re-checks Config on completion via OnServiceCreationComplete
+			// and reschedules if it changed; a parked op (retries exhausted, no worker) has nothing to
+			// reschedule it, so it is re-armed here on a spec change or once the park cooldown has elapsed.
+			dt.logger.V(5).Info("Overwrote desired config while service is updating", "service", serviceUID)
+			if !configsEqualForUpdate(&opState.Config, &config) {
+				triggerUpdater = opState.RetriesExhausted
+				resetRetryStateLocked(opState)
+			} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
+				// Same spec, but the cooldown since the op parked has elapsed: re-arm so a stable Service
+				// applies the pending update instead of serving stale config until the CCM restarts.
+				triggerUpdater = true
+				resetRetryStateLocked(opState)
+			}
+			opState.Config = config
+
+		case StateDeletionPending, StateDeletionInProgress:
+			// A re-create (e.g. a LoadBalancer->ClusterIP->LoadBalancer toggle) arrived while
+			// the service is being deleted. Record the desired config and let the
+			// deletion-success path replay it as a fresh create, so it cannot race the delete.
+			opState.Config = config
+			opState.RecreateAfterDeletion = true
+			seedEndpoints = true
+
+		default:
+			state := opState.State
+			dt.logger.V(4).Info("Found unknown service operation state while updating service", "state", state, "service", serviceUID)
+		}
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
-	dt.K8sResources.Services.Insert(serviceUID)
 
-	opState, exists := dt.pendingServiceOps[serviceUID]
-	existsInNRP := dt.NRPResources.LoadBalancers.Has(serviceUID)
-
-	if !exists && !existsInNRP {
-		dt.mu.Unlock()
+	if createService {
 		dt.logger.V(5).Info("Delegated untracked service update to add", "service", serviceUID)
 		return dt.AddService(config)
 	}
-
-	if !exists && existsInNRP {
-		// Recover tracking for an existing NRP load balancer.
-		dt.logger.V(5).Info("Created tracking entry for existing service update", "service", serviceUID)
-		opState = &ServiceOperationState{
-			ServiceUID:    serviceUID,
-			Config:        config,
-			State:         StateCreated,
-			RetryCount:    0,
-			LastAttempt:   time.Now().Format(time.RFC3339),
-			CreatedAt:     time.Now(),
-			CorrelationID: uuid.NewString(),
-		}
-		dt.pendingServiceOps[serviceUID] = opState
-		// Without LastAppliedConfig, reconciliation must issue an update.
-		opState.State = StateUpdateInProgress
-		opState.Config = config
-		dt.mu.Unlock()
-		dt.triggerServiceUpdater()
-		return nil
-	}
-
-	switch opState.State {
-	case StateNotStarted, StateCreationInProgress:
-		// The worker uses its dispatch snapshot; completion reconciles later config changes.
-		if opState.CreationFailedTerminal {
-			// A terminal creation failure stays parked until the configuration changes.
-			if configsEqualForUpdate(&opState.Config, &config) {
-				dt.mu.Unlock()
-				dt.logger.V(5).Info("Skipped parked service with unchanged spec", "service", serviceUID)
-				return nil
-			}
-			dt.logger.V(5).Info("Reattempted service creation after terminal failure and spec change", "service", serviceUID)
-			opState.Config = config
-			opState.CreationFailedTerminal = false
-			resetRetryStateLocked(opState)
-			opState.State = StateNotStarted
-			opState.LastAttempt = time.Now().Format(time.RFC3339)
-			dt.mu.Unlock()
-			dt.triggerServiceUpdater()
-			return nil
-		}
-		dt.logger.V(5).Info("Overwrote desired service config", "service", serviceUID, "state", opState.State)
-		recoverPark := false
-		if !configsEqualForUpdate(&opState.Config, &config) {
-			// A changed configuration resets the retry budget.
-			recoverPark = opState.RetriesExhausted
-			resetRetryStateLocked(opState)
-		} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
-			// A same-spec resync can also re-arm the operation after its retry cooldown.
-			recoverPark = true
-			resetRetryStateLocked(opState)
-		}
-		opState.Config = config
-		dt.mu.Unlock()
-		if recoverPark {
-			dt.triggerServiceUpdater()
-		}
-
-	case StateCreated:
-		if opState.LastAppliedConfig != nil &&
-			opState.LastAppliedConfig.IsInbound == config.IsInbound &&
-			opState.LastAppliedConfig.InboundConfig.Equals(config.InboundConfig) {
-			dt.mu.Unlock()
-			dt.logger.V(5).Info("Skipped unchanged service config", "service", serviceUID)
-			return nil
-		}
-		dt.logger.V(5).Info("Scheduled service update", "service", serviceUID)
-		opState.Config = config
-		opState.State = StateUpdateInProgress
-		resetRetryStateLocked(opState)
-		opState.LastAttempt = time.Now().Format(time.RFC3339)
-		dt.mu.Unlock()
-		dt.triggerServiceUpdater()
-
-	case StateUpdateInProgress:
-		// Completion reconciles changes to the in-flight configuration.
-		// Parked updates resume on configuration change or cooldown expiry.
-		dt.logger.V(5).Info("Overwrote desired config while service is updating", "service", serviceUID)
-		recoverPark := false
-		if !configsEqualForUpdate(&opState.Config, &config) {
-			recoverPark = opState.RetriesExhausted
-			resetRetryStateLocked(opState)
-		} else if opState.RetriesExhausted && time.Now().After(opState.NextRetryAt) {
-			recoverPark = true
-			resetRetryStateLocked(opState)
-		}
-		opState.Config = config
-		dt.mu.Unlock()
-		if recoverPark {
-			dt.triggerServiceUpdater()
-		}
-
-	case StateDeletionPending, StateDeletionInProgress:
-		// Defer recreation until deletion completes.
-		opState.Config = config
-		opState.RecreateAfterDeletion = true
-		dt.mu.Unlock()
+	if seedEndpoints {
 		dt.seedInboundEndpointsFromCache(serviceUID)
 		dt.logger.V(5).Info("Buffered service recreate intent during deletion", "service", serviceUID)
-
-	default:
-		state := opState.State
-		dt.mu.Unlock()
-		dt.logger.V(4).Info("Found unknown service operation state while updating service", "state", state, "service", serviceUID)
+	}
+	if triggerUpdater {
+		dt.triggerServiceUpdater()
 	}
 	return nil
 }

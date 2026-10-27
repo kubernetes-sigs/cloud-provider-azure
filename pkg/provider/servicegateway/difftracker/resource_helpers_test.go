@@ -1047,8 +1047,8 @@ func TestAdmitInboundService_AdmitsBothExternalTrafficPolicies(t *testing.T) {
 	}
 }
 
-// TestIsValidEgressIdentity_RejectsReservedNames pins the reserved-name guard at the shared
-// chokepoint used by both the pod informer and startup egress discovery.
+// TestIsValidEgressIdentity_RejectsReservedNames pins the built-in reserved-name check
+// used during startup egress discovery.
 func TestIsValidEgressIdentity_RejectsReservedNames(t *testing.T) {
 	for _, name := range []string{"default", "Default", "DEFAULT"} {
 		assert.True(t, IsReservedEgressIdentity(outboundServiceName(name)), "%q generates a reserved name", name)
@@ -1234,7 +1234,7 @@ func TestBYONATGatewayHelpers(t *testing.T) {
 		assert.Empty(t, otherServiceUsingNATGateway(services, "self", ""), "an unknown ID must not match services without a NAT Gateway")
 	})
 
-	t.Run("BYO NAT Gateway problems", func(t *testing.T) {
+	t.Run("BYO NAT Gateway validation", func(t *testing.T) {
 		sgwID := cfg.ServiceGatewayResourceID()
 		gw := func(mutate func(*armnetwork.NatGateway)) *armnetwork.NatGateway {
 			n := &armnetwork.NatGateway{
@@ -1247,17 +1247,17 @@ func TestBYONATGatewayHelpers(t *testing.T) {
 			}
 			return n
 		}
-		assert.Empty(t, byoNATGatewayProblem(gw(nil), sgwID))
-		assert.Empty(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) {
+		assert.Empty(t, validateBYONATGateway(gw(nil), sgwID))
+		assert.Empty(t, validateBYONATGateway(gw(func(n *armnetwork.NatGateway) {
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(sgwID)}
 		}), sgwID))
-		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) { n.SKU = nil }), sgwID), "SKU")
-		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) {
+		assert.Contains(t, validateBYONATGateway(gw(func(n *armnetwork.NatGateway) { n.SKU = nil }), sgwID), "SKU")
+		assert.Contains(t, validateBYONATGateway(gw(func(n *armnetwork.NatGateway) {
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("other")}
 		}), sgwID), "already linked")
-		assert.Empty(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) { n.Properties = &armnetwork.NatGatewayPropertiesFormat{} }), sgwID),
+		assert.Empty(t, validateBYONATGateway(gw(func(n *armnetwork.NatGateway) { n.Properties = &armnetwork.NatGatewayPropertiesFormat{} }), sgwID),
 			"a NAT Gateway without addresses is its owner's to complete")
-		assert.Contains(t, byoNATGatewayProblem(gw(func(n *armnetwork.NatGateway) { n.Properties = nil }), sgwID), "without its properties",
+		assert.Contains(t, validateBYONATGateway(gw(func(n *armnetwork.NatGateway) { n.Properties = nil }), sgwID), "without its properties",
 			"a gateway read without its properties cannot be linked without writing over what it has")
 	})
 }

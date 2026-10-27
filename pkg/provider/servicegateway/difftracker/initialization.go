@@ -162,6 +162,11 @@ func InitializeFromCluster(
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
 	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
 
+	unregisteredBYO, err := diffTracker.recoverUnregisteredBYOLinks(ctx, egressPodList)
+	if err != nil {
+		return nil, fmt.Errorf("recovering unregistered BYO links: %w", err)
+	}
+
 	// FIX FOR ORPHANED SERVICES: We intentionally do NOT enhance NRP state with orphaned Azure resources.
 	// Orphaned resources are LBs/NATs that exist in Azure but are NOT registered in ServiceGateway.
 	// This happens when CCM crashes after creating Azure resources but before registering with ServiceGateway.
@@ -229,6 +234,11 @@ func InitializeFromCluster(
 	if shouldTriggerInitialLocationSync(hasDeletions, hasOnlyExistingServices, hasRecoveredItems, hasExistingNRPServices) {
 		logger.V(2).Info("Triggered initial location sync", "deletions", hasDeletions, "onlyExisting", hasOnlyExistingServices, "recoveredItems", hasRecoveredItems, "existingNRPServices", hasExistingNRPServices)
 		diffTracker.triggerLocationsUpdater()
+	}
+
+	// Their last-pod entries keep initialization open until all startup work is queued.
+	for _, identity := range unregisteredBYO {
+		diffTracker.DeleteService(identity, false, true)
 	}
 
 	// Rejected additions can leave no work and therefore no completion callback.
@@ -587,16 +597,17 @@ func recoverStuckFinalizers(
 		for i := range egressPods.Items {
 			pod := &egressPods.Items[i]
 
-			// Check if pod has our finalizer AND is being deleted
-			if pod.DeletionTimestamp == nil {
-				continue
-			}
 			if !hasFinalizer(pod.Finalizers, ServiceGatewayPodCleanupFinalizer) {
 				continue
 			}
 
-			// This pod was mid-deletion when we crashed - re-trigger cleanup
 			egressLabel := outboundServiceName(pod.Labels[consts.PodLabelServiceEgressGateway])
+			waitForBYOUnlink := egressLabel != "" && dt.byoNATGatewayID(egressLabel) != "" &&
+				!dt.NRPResources.NATGateways.Has(egressLabel)
+			if pod.DeletionTimestamp == nil &&
+				(!waitForBYOUnlink || pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodPending) {
+				continue
+			}
 			if egressLabel == "" {
 				// No egress label = nothing to track, just remove finalizer directly
 				logger.V(4).Info("Removed pod finalizer with missing egress label", "namespace", pod.Namespace, "pod", pod.Name)
@@ -627,7 +638,7 @@ func recoverStuckFinalizers(
 					UID:                string(pod.UID),
 					ServiceUID:         egressLabel,
 					VerifyServiceDrain: true,
-					IsLastPod:          false,
+					IsLastPod:          waitForBYOUnlink,
 					RecoveredAtStartup: true,
 					Timestamp:          time.Now().Format(time.RFC3339),
 				}
@@ -653,15 +664,9 @@ func recoverStuckFinalizers(
 				UID:        string(pod.UID),
 				ServiceUID: egressLabel,
 				Addresses:  podIPs,
-				// IsLastPod=false is INTENTIONAL even if this was actually the last pod.
-				// During initialization, NAT Gateway deletion is handled by the DIFF mechanism:
-				// - processK8sEgresses skips this pod → egress NOT in K8s.Egresses
-				// - GetSyncOperations sees NAT in NRP but not K8s → marks for Removal
-				// - reconcileServices queues the NAT Gateway deletion
-				// So we don't need IsLastPod=true to trigger service deletion - the diff does it.
-				// Setting IsLastPod=false allows the finalizer to be removed immediately after
-				// the address sync, rather than waiting for NAT Gateway deletion callback.
-				IsLastPod: false,
+				// Registered gateways are removed by the diff. Recovered unregistered BYO
+				// links must finish unlinking before their pod finalizers can be released.
+				IsLastPod: waitForBYOUnlink,
 				Timestamp: time.Now().Format(time.RFC3339),
 
 				RecoveredAtStartup: true,

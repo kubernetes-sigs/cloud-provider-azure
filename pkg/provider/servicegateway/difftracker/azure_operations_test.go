@@ -576,6 +576,98 @@ type armNetworkTransportFunc func(*http.Request) (*http.Response, error)
 
 func (f armNetworkTransportFunc) Do(req *http.Request) (*http.Response, error) { return f(req) }
 
+func TestGetNatGatewayByID(t *testing.T) {
+	const resourceID = "/subscriptions/sub/resourceGroups/byo-rg/providers/Microsoft.Network/natGateways/payments"
+	response := byoNATGateway("payments")
+	response.ID = ptr.To("/subscriptions/sub/resourceGroups/BYO-RG/providers/Microsoft.Network/natGateways/Payments")
+	response.Name = ptr.To("Payments")
+
+	for _, tc := range []struct {
+		name      string
+		status    int
+		resource  *armnetwork.NatGateway
+		invalidID bool
+		canceled  bool
+		wantErr   bool
+		wantCalls int
+	}{
+		{name: "returns the Azure response unchanged", status: http.StatusOK, resource: response, wantCalls: 1},
+		{name: "an empty successful response is a non-nil resource", status: http.StatusOK, resource: &armnetwork.NatGateway{}, wantCalls: 1},
+		{name: "not found", status: http.StatusNotFound, wantCalls: 1},
+		{name: "read forbidden", status: http.StatusForbidden, wantErr: true, wantCalls: 1},
+		{name: "server error", status: http.StatusInternalServerError, wantErr: true, wantCalls: 1},
+		{name: "invalid ARM ID", invalidID: true, wantErr: true},
+		{name: "canceled context", canceled: true, wantErr: true, wantCalls: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			type contextKey struct{}
+			ctx, cancel := context.WithCancel(context.WithValue(context.Background(), contextKey{}, "requested"))
+			defer cancel()
+			if tc.canceled {
+				cancel()
+			}
+			calls := 0
+			client, err := natgatewayclient.New("sub", fakeCredential{}, &arm.ClientOptions{
+				ClientOptions: azcore.ClientOptions{
+					Retry: policy.RetryOptions{MaxRetries: -1},
+					Transport: armNetworkTransportFunc(func(req *http.Request) (*http.Response, error) {
+						calls++
+						assert.Equal(t, http.MethodGet, req.Method)
+						assert.Equal(t, resourceID, req.URL.Path)
+						assert.Equal(t, "requested", req.Context().Value(contextKey{}))
+						if err := req.Context().Err(); err != nil {
+							return nil, err
+						}
+						body := []byte(`{"error":{"code":"TestError","message":"test error"}}`)
+						if tc.status == http.StatusOK {
+							var marshalErr error
+							body, marshalErr = json.Marshal(tc.resource)
+							if marshalErr != nil {
+								return nil, marshalErr
+							}
+						}
+						return &http.Response{
+							StatusCode: tc.status,
+							Header:     http.Header{"Content-Type": {"application/json"}},
+							Body:       io.NopCloser(bytes.NewReader(body)),
+							Request:    req,
+						}, nil
+					}),
+				},
+			})
+			if !assert.NoError(t, err) {
+				return
+			}
+			ctrl := gomock.NewController(t)
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			id := resourceID
+			if tc.invalidID {
+				id = "not-an-arm-id"
+			} else {
+				factory.EXPECT().GetNatGatewayClient().Return(client).Times(1)
+			}
+			dt := &DiffTracker{networkClientFactory: factory, config: testConfig()}
+			got, exists, err := dt.getNatGatewayByID(ctx, id)
+			if tc.wantErr {
+				assert.Error(t, err)
+				if tc.canceled {
+					assert.ErrorIs(t, err, context.Canceled)
+				} else if tc.status >= http.StatusBadRequest {
+					var responseErr *azcore.ResponseError
+					if assert.ErrorAs(t, err, &responseErr) {
+						assert.Equal(t, tc.status, responseErr.StatusCode)
+					}
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tc.resource != nil, exists)
+			assert.Equal(t, tc.resource, got)
+			assert.Equal(t, tc.wantCalls, calls)
+		})
+	}
+}
+
 func initialNATPutError(err error) error {
 	var responseErr *azcore.ResponseError
 	if !errors.As(err, &responseErr) || responseErr.RawResponse != nil {
@@ -1100,11 +1192,11 @@ func TestWithResourceETag_RejectsUnprotectedWrites(t *testing.T) {
 	}
 }
 
-// TestDisassociateNatGateway_ClearsReferencesOnTheWire pins the marshalled request bodies, not just
+// TestUnlinkNatGateway_ClearsReferencesOnTheWire pins the marshalled request bodies, not just
 // that the calls happen. Assigning a plain typed nil to clear a field is silently dropped by the
 // generated marshaller, and ARM reads an absent field as "leave unchanged", so both clears become
 // no-ops that still report success.
-func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
+func TestUnlinkNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
 	const sgwName, natName = "sgw", "egress-uid-natgw"
 	sgwID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/serviceGateways/" + sgwName
 	natID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + natName
@@ -1124,7 +1216,7 @@ func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
 				ServiceType:        ptr.To(armnetwork.ServiceTypeOutbound),
 				PublicNatGatewayID: ptr.To(natID),
 			},
-		}}, nil).AnyTimes()
+		}}, nil).Times(1)
 	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
 			sgwBody, _ = json.Marshal(req)
@@ -1135,12 +1227,12 @@ func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
 	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 	mockNAT.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&armnetwork.NatGateway{
-			Name: ptr.To(natName),
+			Name: ptr.To(natName), Tags: managedResourceTags(),
 			Properties: &armnetwork.NatGatewayPropertiesFormat{
 				IdleTimeoutInMinutes: ptr.To[int32](4),
 				ServiceGateway:       &armnetwork.SubResource{ID: ptr.To(sgwID)},
 			},
-		}, nil).AnyTimes()
+		}, nil).Times(1)
 	mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, ng armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
 			natBody, _ = json.Marshal(ng)
@@ -1151,7 +1243,10 @@ func TestDisassociateNatGateway_ClearsReferencesOnTheWire(t *testing.T) {
 	dt.networkClientFactory = mockFactory
 	dt.config = testConfig()
 
-	assert.NoError(t, dt.disassociateNatGatewayFromServiceGateway(context.Background(), sgwName, natName))
+	exists, canManage, err := dt.unlinkNatGateway(context.Background(), sgwName, natName, "rg", natName)
+	assert.NoError(t, err)
+	assert.True(t, exists)
+	assert.True(t, canManage)
 
 	assert.Contains(t, string(sgwBody), `"publicNatGatewayId":null`,
 		"the ServiceGateway-side reference must be cleared explicitly, not omitted")

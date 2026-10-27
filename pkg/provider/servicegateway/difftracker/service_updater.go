@@ -676,7 +676,7 @@ func (s *ServiceUpdater) createOutboundService(serviceUID string, config *Outbou
 			s.onComplete(serviceUID, false, egressRejectedError{fmt.Errorf("BYO NAT Gateway %q: %s", natGatewayID, problem)})
 		}
 
-		if problem := byoNATGatewayProblem(byoNATGateway, serviceGatewayID); problem != "" {
+		if problem := validateBYONATGateway(byoNATGateway, serviceGatewayID); problem != "" {
 			reject(problem)
 			return
 		}
@@ -896,10 +896,10 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 	defer cancel()
 
 	natGatewayID := s.diffTracker.byoNATGatewayID(serviceUID)
-	var owned bool
+	var canManage bool
 	if natGatewayID != "" {
 		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
-			if err := s.diffTracker.unlinkNatGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID, parsed.ResourceGroupName, parsed.Name); err != nil {
+			if _, _, err := s.diffTracker.unlinkNatGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID, parsed.ResourceGroupName, parsed.Name); err != nil {
 				// Permission or lock refusals do not block finalizer release.
 				if !isAccessDeniedOrLocked(err) {
 					s.logger.V(4).Info("Could not unlink BYO NAT Gateway", "serviceUID", serviceUID, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
@@ -916,16 +916,16 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 			return
 		}
 		var err error
-		owned, err = s.diffTracker.ownsClusterNATGateway(ctx, serviceUID)
-		if err != nil {
+		_, canManage, err = s.diffTracker.unlinkNatGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID, s.diffTracker.config.ResourceGroup, serviceUID)
+		if err != nil && !canManage {
 			s.finishOutboundDeletion(ctx, serviceUID, correlationID, err)
 			return
 		}
 
 		// Keep foreign gateways untouched while still unregistering this identity.
-		if !owned {
+		if !canManage {
 			s.logger.V(2).Info("Skipped disassociating a NAT Gateway not owned by this identity", "serviceUID", serviceUID)
-		} else if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
+		} else if err != nil {
 			recordDeleteSubstepFailure(deleteStepDisassociateNAT)
 			s.logger.Error(err, "Could not disassociate NAT Gateway from ServiceGateway; continuing with deletion", "serviceUID", serviceUID)
 		} else {
@@ -958,7 +958,7 @@ func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID 
 
 	if natGatewayID != "" {
 		lastErr = s.cleanupManagedOutboundResources(ctx, serviceUID, correlationID)
-	} else if !owned {
+	} else if !canManage {
 		s.logger.V(2).Info("Kept NAT Gateway and Public IPs not owned by this identity", "serviceUID", serviceUID)
 	} else if err := s.deleteManagedOutboundResources(ctx, serviceUID, correlationID); err != nil {
 		lastErr = err
