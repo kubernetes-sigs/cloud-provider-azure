@@ -85,6 +85,75 @@ If the row matches, follow
 [Shared e2e flake rerun](shared-actions.md#details-shared-e2e-flake-rerun) and
 fill the evidence with the registry 5xx plus the image-build phase marker.
 
+## Details: Go module proxy download flake
+
+Use this path only for a failed `pull-cloud-provider-azure-e2e-*` job whose
+first unrecovered failure is a pre-test Go module download — before any Ginkgo
+spec ran — in which `proxy.golang.org` returned a stream error while serving a module
+archive. The canonical fingerprint is `go mod tidy`, run by CAPZ
+`make modules` during cluster setup, failing with one or more lines like:
+
+```text
+<module>@<version>: read "https://proxy.golang.org/<escaped-module>/@v/<version>.zip": stream error: stream ID <n>; INTERNAL_ERROR; received from peer
+```
+
+followed by that step's non-zero exit (for example
+`make: *** [Makefile:<line>: modules] Error 1`), a non-zero `EXIT_VALUE`, and
+no test output.
+
+Read the job's complete raw `build-log.txt` before retesting; a rendered or
+truncated log view is not enough. Confirm:
+
+- The failing `go` command ran as pre-test setup, and the log attributes a
+  non-zero exit to that module-download step.
+- Every module-download error that command reports has the form above: host
+  exactly `proxy.golang.org`, an `/@v/<version>.zip` URL, and
+  `stream error: stream ID <n>; INTERNAL_ERROR; received from peer`. Repeated
+  import-chain lines for the same archive count as one error.
+- No earlier step failed without recovering. A diagnostic before these errors
+  is allowed only when the same log shows that step recovering and setup
+  continuing past it — for example `debconf` falling back to another frontend,
+  or a `no such manifest` / `Unable to find image ... locally` probe followed by
+  the image build or pull succeeding. An earlier error whose recovery the log
+  does not show blocks this match.
+- No Ginkgo spec started — there is no `Running Suite` / `[It]` / spec summary,
+  so the failure cannot be a real test regression.
+- Every error after the module step's exit is one of the cleanup consequences
+  listed below.
+
+Fail closed. If the build log is unavailable or incomplete, does not reach both
+the module step's exit and the final `EXIT_VALUE`, or does not let you attribute
+the failing command to pre-test setup, this row does not match. Missing JUnit
+files, or missing test lines in an incomplete log, are not evidence that no
+test ran.
+
+Do not use this path when the failing `go` command also reports a checksum or
+verification error (`checksum mismatch`, `SECURITY ERROR`), a missing or invalid
+version (`404 Not Found`, `410 Gone`, `unknown revision`, `invalid version`),
+`missing go.sum entry`, a Go toolchain or `go.mod requires go` error, a
+compile/typecheck error, or an authentication error. Also do not use it for a
+different host, a `.mod`, `.info`, `@latest`, or VCS fetch, a different stream
+error code, or other network errors such as `dial tcp`, `i/o timeout`,
+`connection reset by peer`, `TLS handshake timeout`, or `no such host`. Those
+need a more specific row or human review.
+
+Only these lines after the module step's exit are accepted as cleanup
+consequences of the aborted setup: log collection for the cluster
+(`Collecting logs for cluster ...`) failing to load a kubeconfig file with
+`no such file or directory`, that collector's stack trace and `exit status`,
+the outer `EXIT_VALUE`, and Docker cleanup output. Any other error after the
+module step — such as a compile, test, authentication, policy, or further
+download error, or an error you cannot attribute — blocks this match even
+though it appears later.
+
+If any Ginkgo spec ran and failed, handle that failure separately instead of
+retesting. Continue the per-failure loop for other failed required jobs.
+
+If the row matches, follow
+[Shared e2e flake rerun](shared-actions.md#details-shared-e2e-flake-rerun) and
+fill the evidence with the failing module archive URL(s), the `INTERNAL_ERROR`
+stream error, the module step's non-zero exit, and the fact that no test ran.
+
 ## Details: Cluster-provisioning node-readiness timeout
 
 Use this path only for a failed `pull-cloud-provider-azure-e2e-*` job whose

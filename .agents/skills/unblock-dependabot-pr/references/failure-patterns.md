@@ -56,6 +56,7 @@ or acting on a row.
 | 20 | act | go-mod-consistency failed | `go-mod-consistency` failed | auto-fix | no | [Details: go-mod-consistency](act-patterns.md#details-go-mod-consistency) |
 | 30 | act | Public-IP quota e2e flake | Public-IP quota marker in e2e log | auto-fix | no | [Details: Public-IP quota e2e](act-patterns.md#details-public-ip-quota-e2e) |
 | 35 | act | Image-build registry flake e2e | Registry 5xx during pre-test image build | auto-fix | no | [Details: Image-build registry flake](act-patterns.md#details-image-build-registry-flake) |
+| 36 | act | Go module proxy download flake e2e | `proxy.golang.org` module `.zip` `INTERNAL_ERROR` stream error during pre-test Go module download | auto-fix | no | [Details: Go module proxy download flake](act-patterns.md#details-go-module-proxy-download-flake) |
 | 37 | act | Cluster-provisioning node-readiness timeout e2e | Node readiness timeout during pre-test cluster provisioning | auto-fix | no | [Details: Cluster-provisioning node-readiness timeout](act-patterns.md#details-cluster-provisioning-node-readiness-timeout) |
 | 39 | act | Prow job did not start | Prow job never reaches entrypoint | auto-fix | no | [Details: Prow job did not start](act-patterns.md#details-prow-job-did-not-start) |
 | 40 | act | Only Tide pending | No failed checks; only `tide` pending | auto-fix | no | [Details: Only Tide pending](act-patterns.md#details-only-tide-pending) |

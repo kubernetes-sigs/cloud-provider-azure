@@ -70,7 +70,8 @@ terminating it. This includes the guard-stage
 that post a comment, push, or trigger a CI rerun. The budgeted act-stage actions
 are [go-mod-consistency](act-patterns.md#details-go-mod-consistency) (verified
 sync push), the [Shared e2e flake rerun](#details-shared-e2e-flake-rerun) rule
-used by [Image-build registry flake](act-patterns.md#details-image-build-registry-flake)
+used by [Image-build registry flake](act-patterns.md#details-image-build-registry-flake),
+[Go module proxy download flake](act-patterns.md#details-go-module-proxy-download-flake),
 and [Cluster-provisioning node-readiness timeout](act-patterns.md#details-cluster-provisioning-node-readiness-timeout)
 (each `/test <job-name>`),
 [Prow job did not start](act-patterns.md#details-prow-job-did-not-start)
