@@ -159,6 +159,7 @@ func InitializeFromCluster(
 		return nil, fmt.Errorf("failed to initialize DiffTracker: %w", err)
 	}
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
+	diffTracker.startupNodeIPs = nodeNameToIPs
 	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
 
 	// FIX FOR ORPHANED SERVICES: We intentionally do NOT enhance NRP state with orphaned Azure resources.
