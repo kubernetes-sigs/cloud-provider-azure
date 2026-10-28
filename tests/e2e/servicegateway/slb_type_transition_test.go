@@ -19,15 +19,20 @@ package servicegateway
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
@@ -306,6 +311,229 @@ var _ = Describe("SLB - Service Type Transition", Label(slbTestLabel), func() {
 			"a rapidly recreated LoadBalancer must regain both cleanup finalizers")
 
 		utils.Logf("\n✓ Rapid LoadBalancer→ClusterIP→LoadBalancer toggle preserved all %d endpoints", numPods)
+	})
+
+	It("should withdraw a deleted Public IP's address from a rejected Service whose create raced a LoadBalancer->ClusterIP->LoadBalancer round trip", func() {
+		// A Service that leaves LoadBalancer while its create is still in flight is marked for
+		// deletion, but the create keeps running and publishes its Public IP address when it
+		// finishes. If the Service is back to LoadBalancer by then with a config the provider
+		// rejects, nothing recreates it: the create's completion is routed to the deletion, which
+		// deletes the Public IP. Unless the deletion also withdraws the address, the Service keeps
+		// advertising an address that serves nothing and that Azure can give to another Service.
+		// The fillers keep the provider busy so the targets' creates are still in flight when the
+		// targets flip.
+		const (
+			numFillers     = 30
+			numTargets     = 4
+			numPods        = 2
+			targetPort     = 8080
+			settleTimeout  = 10 * time.Minute
+			cleanupTimeout = 15 * time.Minute
+		)
+		backendLabels := map[string]string{"app": "round-trip-backend"}
+
+		By("Creating backend pods")
+		for i := 0; i < numPods; i++ {
+			pod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("round-trip-backend-%d", i), Namespace: ns.Name, Labels: backendLabels},
+				Spec: v1.PodSpec{Containers: []v1.Container{{
+					Name:            "test-app",
+					Image:           utils.AgnhostImage,
+					ImagePullPolicy: v1.PullIfNotPresent,
+					Args:            []string{"netexec", fmt.Sprintf("--http-port=%d", targetPort)},
+				}}},
+			}
+			_, err := cs.CoreV1().Pods(ns.Name).Create(context.TODO(), pod, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+
+		By(fmt.Sprintf("Creating %d filler and then %d target LoadBalancer services in one burst", numFillers, numTargets))
+		uids := map[string]string{}
+		var fillers, targets []string
+		createService := func(name string, port int32) {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns.Name},
+				Spec: v1.ServiceSpec{
+					Type:     v1.ServiceTypeLoadBalancer,
+					Selector: backendLabels,
+					Ports:    []v1.ServicePort{{Port: port, TargetPort: intstr.FromInt(targetPort), Protocol: v1.ProtocolTCP}},
+				},
+			}
+			created, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			uids[name] = string(created.UID)
+		}
+		for i := 0; i < numFillers; i++ {
+			name := fmt.Sprintf("filler-%d", i)
+			createService(name, int32(9000+i))
+			fillers = append(fillers, name)
+		}
+		for i := 0; i < numTargets; i++ {
+			name := fmt.Sprintf("target-%d", i)
+			createService(name, int32(8100+i))
+			targets = append(targets, name)
+		}
+		// The container's AfterEach allows only a short Azure drain, which this many load balancers exceed.
+		defer func() {
+			By("Deleting every service and waiting for the Azure cleanup")
+			for name := range uids {
+				err := cs.CoreV1().Services(ns.Name).Delete(context.TODO(), name, metav1.DeleteOptions{})
+				Expect(err == nil || apierrors.IsNotFound(err)).To(BeTrue(), "delete service %s: %v", name, err)
+			}
+			eventuallyAzureCleanup(cleanupTimeout)
+		}()
+
+		// Poll every second so neither the cleanup finalizer's lifetime nor an address published by a
+		// create is missed.
+		var (
+			mu           sync.Mutex
+			recordFrom   time.Time
+			sawFinalizer = map[string]bool{}
+			hasFinalizer = map[string]bool{}
+			ingressIP    = map[string]string{}
+			publishedIP  = map[string]string{} // first ingress IP listed after recordFrom
+		)
+		pollCtx, stopPolling := context.WithCancel(context.Background())
+		defer stopPolling()
+		client, namespace := cs, ns.Name
+		go func() {
+			defer GinkgoRecover()
+			for {
+				listedAt := time.Now()
+				if list, err := client.CoreV1().Services(namespace).List(pollCtx, metav1.ListOptions{}); err == nil {
+					mu.Lock()
+					for i := range list.Items {
+						svc := &list.Items[i]
+						hasFinalizer[svc.Name] = slices.Contains(svc.Finalizers, serviceGatewayCleanupFinalizer)
+						sawFinalizer[svc.Name] = sawFinalizer[svc.Name] || hasFinalizer[svc.Name]
+						ingressIP[svc.Name] = ""
+						for _, ingress := range svc.Status.LoadBalancer.Ingress {
+							if ingress.IP != "" {
+								ingressIP[svc.Name] = ingress.IP
+								break
+							}
+						}
+						if ingressIP[svc.Name] != "" && publishedIP[svc.Name] == "" && !recordFrom.IsZero() && listedAt.After(recordFrom) {
+							publishedIP[svc.Name] = ingressIP[svc.Name]
+						}
+					}
+					mu.Unlock()
+				}
+				select {
+				case <-pollCtx.Done():
+					return
+				case <-time.After(time.Second):
+				}
+			}
+		}()
+
+		By("Waiting until the service controller has handed every target to the provider")
+		Eventually(func() error {
+			for _, name := range targets {
+				finalizers, err := getServiceFinalizers(cs, ns.Name, name)
+				if err != nil {
+					return err
+				}
+				if !slices.Contains(finalizers, loadBalancerCleanupFinalizer) {
+					return fmt.Errorf("service %s has not been ensured yet", name)
+				}
+			}
+			return nil
+		}, 2*time.Minute, time.Second).Should(Succeed())
+
+		updateTargets := func(mutate func(*v1.Service)) {
+			for _, name := range targets {
+				Eventually(func() error {
+					svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), name, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+					mutate(svc)
+					_, err = cs.CoreV1().Services(ns.Name).Update(context.TODO(), svc, metav1.UpdateOptions{})
+					return err
+				}, 30*time.Second, time.Second).Should(Succeed(), "update service %s", name)
+			}
+		}
+
+		By("Annotating the targets with an idle timeout the provider rejects")
+		updateTargets(func(svc *v1.Service) {
+			if svc.Annotations == nil {
+				svc.Annotations = map[string]string{}
+			}
+			svc.Annotations[consts.ServiceAnnotationLoadBalancerIdleTimeout] = "abc"
+		})
+
+		By("Transitioning the targets from LoadBalancer to ClusterIP")
+		updateTargets(func(svc *v1.Service) {
+			svc.Spec.Type = v1.ServiceTypeClusterIP
+			// LoadBalancer-only fields must be cleared or the API server rejects the update.
+			svc.Spec.ExternalTrafficPolicy = ""
+			svc.Spec.HealthCheckNodePort = 0
+			for i := range svc.Spec.Ports {
+				svc.Spec.Ports[i].NodePort = 0
+			}
+		})
+
+		By("Waiting for the service controller to hand every target's deletion to the provider")
+		for _, name := range targets {
+			Expect(utils.WaitForServiceNormalEventAfter(cs, ns.Name, name, "DeletedLoadBalancer", "", time.Time{})).To(Succeed(),
+				"the service controller should have deleted the load balancer of %s", name)
+		}
+
+		By("Transitioning the targets back to LoadBalancer")
+		updateTargets(func(svc *v1.Service) {
+			svc.Spec.Type = v1.ServiceTypeLoadBalancer
+		})
+		// The API server cleared the targets' ingress on the ClusterIP transition, so an address
+		// listed from now on was published by a create that outlived it.
+		mu.Lock()
+		recordFrom = time.Now()
+		mu.Unlock()
+
+		By("Waiting for every filler to be provisioned and every target's deletion to finish")
+		Eventually(func() error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, name := range fillers {
+				if ingressIP[name] == "" {
+					return fmt.Errorf("filler %s has no ingress IP yet", name)
+				}
+			}
+			for _, name := range targets {
+				if !sawFinalizer[name] || hasFinalizer[name] {
+					return fmt.Errorf("target %s has not been both provisioned and deleted yet", name)
+				}
+			}
+			return nil
+		}, settleTimeout, defaultPollInterval).Should(Succeed())
+
+		By("Verifying no target advertises an address that its own Public IP does not back")
+		mu.Lock()
+		published := maps.Clone(publishedIP)
+		mu.Unlock()
+		var stale []string
+		raced := 0
+		for _, name := range targets {
+			backing, err := getServicePublicIPAddress(uids[name])
+			Expect(err).NotTo(HaveOccurred())
+			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			for _, ingress := range svc.Status.LoadBalancer.Ingress {
+				if ingress.IP != "" && ingress.IP != backing {
+					stale = append(stale, fmt.Sprintf("%s advertises %s, its Public IP has %q", name, ingress.IP, backing))
+				}
+			}
+			if published[name] != "" && backing == "" {
+				utils.Logf("Target %s published %s after the round trip, then its Public IP was deleted", name, published[name])
+				raced++
+			}
+		}
+		Expect(stale).To(BeEmpty(), "a target must not advertise an address that no Public IP of its own backs")
+		Expect(raced).To(BeNumerically(">", 0),
+			"no target published an address after the round trip and then lost its Public IP, so the race was not reproduced")
+
+		utils.Logf("\n✓ %d/%d targets raced the round trip and none kept advertising a deleted Public IP", raced, numTargets)
 	})
 })
 

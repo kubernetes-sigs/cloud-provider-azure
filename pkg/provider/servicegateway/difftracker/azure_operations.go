@@ -104,6 +104,20 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 	return nil
 }
 
+// getPublicIPAddress returns the address allocated to a public IP, or "" when the public IP does not
+// exist or has no address allocated.
+func (dt *DiffTracker) getPublicIPAddress(ctx context.Context, pipResourceGroup string, pipName string) (string, error) {
+	pip, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, pipResourceGroup, pipName, nil)
+	exists, err := errutils.CheckResourceExistsFromAzcoreError(err)
+	if err != nil {
+		return "", fmt.Errorf("getting public IP %q: %w", pipName, err)
+	}
+	if !exists || pip == nil || pip.Properties == nil {
+		return "", nil
+	}
+	return ptr.Deref(pip.Properties.IPAddress, ""), nil
+}
+
 // createOrUpdateLB creates or updates a load balancer
 func (dt *DiffTracker) createOrUpdateLB(ctx context.Context, lb armnetwork.LoadBalancer) error {
 	lbName := ptr.Deref(lb.Name, "")
@@ -281,7 +295,18 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 // apply their own type and deletion checks.
 func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
 	namespace, name, lister := dt.serviceIdentityForUID(uid)
+	return dt.resolveServiceByUID(ctx, uid, namespace, name, lister)
+}
 
+// getServiceByUIDUncached is getServiceByUID reading from the API server instead of the informer
+// cache, for a caller that writes back what it read and must not act on a stale copy.
+func (dt *DiffTracker) getServiceByUIDUncached(ctx context.Context, uid string) (*v1.Service, error) {
+	namespace, name, _ := dt.serviceIdentityForUID(uid)
+	return dt.resolveServiceByUID(ctx, uid, namespace, name, nil)
+}
+
+// resolveServiceByUID implements getServiceByUID; a nil lister reads from the API server.
+func (dt *DiffTracker) resolveServiceByUID(ctx context.Context, uid, namespace, name string, lister corelisters.ServiceLister) (*v1.Service, error) {
 	if namespace != "" && name != "" {
 		svc, err := dt.getServiceByNamespaceName(ctx, lister, namespace, name)
 		switch {
@@ -364,10 +389,10 @@ func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (
 // backfills Service.Status.LoadBalancer.Ingress once the PIP is created, since it would otherwise
 // stay empty.
 //
-// The Service is resolved by UID only, so a Service that changed type or started terminating while
-// the PIP was provisioning still gets stamped: the ingress IP is written onto a Service that is no
-// longer a LoadBalancer, and nothing clears it until that Service is edited again. The startup
-// recovery path re-applies it for the same reason.
+// The Service is resolved by UID only, so the write can land on a Service that changed type or
+// started terminating while the PIP was provisioning; the startup recovery path re-applies it for the
+// same reason. Such a change also marks the Service for deletion, which withdraws the address from a
+// Service that remains (removeServiceLoadBalancerIngressIP) before it deletes the PIP.
 func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serviceUID string, ip string) error {
 	if ip == "" {
 		return fmt.Errorf("updateServiceLoadBalancerStatus: ip is empty")
@@ -421,6 +446,48 @@ func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serv
 		}
 
 		dt.logger.V(2).Info("Updated Service with LoadBalancer IP", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
+		return nil
+	})
+}
+
+// removeServiceLoadBalancerIngressIP withdraws ip from the Service's status.loadBalancer.ingress,
+// keeping every other entry (another IP family, hostnames). An empty ip is a no-op. A Service that is
+// gone, was replaced by a same-name Service, or is being deleted is left untouched.
+//
+// The Service is read from the API server, not the informer cache, and written back with its
+// resourceVersion, so a concurrent status write is never overwritten: the conflict re-reads it.
+func (dt *DiffTracker) removeServiceLoadBalancerIngressIP(ctx context.Context, serviceUID string, ip string) error {
+	if ip == "" {
+		return nil
+	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		svc, err := dt.getServiceByUIDUncached(ctx, serviceUID)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("removeServiceLoadBalancerIngressIP: failed to get service: %w", err)
+		}
+		if svc.DeletionTimestamp != nil {
+			return nil
+		}
+
+		desired := make([]v1.LoadBalancerIngress, 0, len(svc.Status.LoadBalancer.Ingress))
+		for _, ingress := range svc.Status.LoadBalancer.Ingress {
+			if ingress.IP != ip {
+				desired = append(desired, ingress)
+			}
+		}
+		if len(desired) == len(svc.Status.LoadBalancer.Ingress) {
+			return nil
+		}
+
+		svc.Status.LoadBalancer.Ingress = desired
+		if _, err := dt.kubeClient.CoreV1().Services(svc.Namespace).UpdateStatus(ctx, svc, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("removeServiceLoadBalancerIngressIP: failed to update service status: %w", err)
+		}
+
+		dt.logger.V(2).Info("Withdrew Public IP address from Service status", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
 		return nil
 	})
 }
