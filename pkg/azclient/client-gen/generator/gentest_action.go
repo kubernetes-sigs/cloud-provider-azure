@@ -59,6 +59,9 @@ func (g Generator) generateTestSuite(ctx *genall.GenerationContext, root *loader
 
 	importList["context"] = make(map[string]struct{})
 	importList["testing"] = make(map[string]struct{})
+	if markerConf.Resource == "ServiceGateway" {
+		importList["os"] = make(map[string]struct{})
+	}
 	importList["sigs.k8s.io/cloud-provider-azure/pkg/azclient/recording"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"] = make(map[string]struct{})
 	importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
@@ -93,6 +96,11 @@ func (g Generator) generateTestCase(ctx *genall.GenerationContext, root *loader.
 			importList["strings"] = make(map[string]struct{})
 			if markerConf.Etag {
 				importList["github.com/Azure/azure-sdk-for-go/sdk/azcore/to"] = make(map[string]struct{})
+				if markerConf.Resource == "PublicIPAddress" {
+					importList["errors"] = make(map[string]struct{})
+					importList["net/http"] = make(map[string]struct{})
+					importList["github.com/Azure/azure-sdk-for-go/sdk/azcore"] = make(map[string]struct{})
+				}
 			}
 		}
 		if strings.EqualFold(FuncListByRG, verb) || strings.EqualFold(FuncList, verb) {

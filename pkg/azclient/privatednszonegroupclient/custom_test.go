@@ -27,6 +27,8 @@ import (
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	armprivatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
 	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/recording"
 )
 
 var (
@@ -223,14 +225,12 @@ func init() {
 		}
 	}
 	afterAllFunc = func(ctx context.Context) {
-		vnetLinkPoller, err := vnetLinkClient.BeginDelete(ctx, resourceGroupName, *privateZone.Name, *virtualnetworklink.Name, nil)
+		vnetLinkPoller, err := vnetLinkClient.BeginDelete(ctx, resourceGroupName, *privateZone.Name, resourceName, nil)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = vnetLinkPoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{Frequency: 1 * time.Second})
 		Expect(err).NotTo(HaveOccurred())
 
-		privateZonePoller, err := privatezoneclient.BeginDelete(ctx, resourceGroupName, *privateZone.Name, nil)
-		Expect(err).NotTo(HaveOccurred())
-		_, err = privateZonePoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{Frequency: 1 * time.Second})
+		err = recording.DeletePrivateDNSZone(ctx, privatezoneclient, resourceGroupName, *privateZone.Name)
 		Expect(err).NotTo(HaveOccurred())
 
 		pepoller, err := privateendpointclient.BeginDelete(ctx, resourceGroupName, *privateEndpoint.Name, nil)

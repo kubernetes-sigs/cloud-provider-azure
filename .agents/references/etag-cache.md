@@ -118,6 +118,19 @@ if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceled
 2. **`*_repo.go`** files: read from cache for operations, invalidate on errors or cross-resource changes
 3. **azclient/policy/etag**: HTTP pipeline policy that extracts the ETag from the request body JSON and sets the `If-Match` header for optimistic concurrency
 
+## Public-IP Recording Tests
+
+The generated public-IP concurrency test uses a real stale ETag rather than a
+malformed value: fetch the public IP, change its idle timeout using its current
+ETag, then attempt another change using the old ETag and require HTTP 412.
+A no-op update or malformed ETag is not a reliable concurrency check.
+
+Check that the successful update changes the ETag only during live recording.
+The recorder sanitizes ETag UUIDs to the same placeholder, so that inequality
+cannot be asserted during playback. Changes to this scenario belong in the
+client generator template as well as its generated test. Re-record both clouds
+after changing the request sequence; do not synthesize successful recordings.
+
 ## Defer Ordering Pitfall (VMSS)
 
 In `ensureHostsInPool` and `ensureBackendPoolDeleted`, there is a subtle defer

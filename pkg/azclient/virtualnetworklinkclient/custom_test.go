@@ -27,6 +27,8 @@ import (
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	armprivatedns "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/privatedns/armprivatedns"
 	. "github.com/onsi/gomega"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/recording"
 )
 
 var (
@@ -53,6 +55,7 @@ func init() {
 		dnsPoller, err := privatednsClient.BeginCreateOrUpdate(ctx, resourceGroupName, privatezoneName, armprivatedns.PrivateZone{
 			Location: to.Ptr("global"),
 		}, nil)
+		Expect(err).NotTo(HaveOccurred())
 		networkClientOption := clientOption
 		networkClientOption.Telemetry.ApplicationID = "ccm-network-client"
 		networkClientFactory, err := armnetwork.NewClientFactory(recorder.SubscriptionID(), recorder.TokenCredential(), &arm.ClientOptions{
@@ -100,11 +103,8 @@ func init() {
 	}
 	afterAllFunc = func(ctx context.Context) {
 		privatednsClient = privatednsClientFactory.NewPrivateZonesClient()
-		dnsPoller, err := privatednsClient.BeginDelete(ctx, resourceGroupName, privatezoneName, nil)
+		err := recording.DeletePrivateDNSZone(ctx, privatednsClient, resourceGroupName, privatezoneName)
 		Expect(err).NotTo(HaveOccurred())
-		_, err = dnsPoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
-			Frequency: 1 * time.Second,
-		})
 		vnetPoller, err := virtualNetworksClient.BeginDelete(ctx, resourceGroupName, *vNet.Name, nil)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = vnetPoller.PollUntilDone(ctx, &runtime.PollUntilDoneOptions{
