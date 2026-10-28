@@ -167,7 +167,10 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.plsRepo = privatelinkservice.NewMockRepository(ctrl)
 	az.routeTableRepo = routetable.NewMockRepository(ctrl)
 	az.zoneRepo = zone.NewMockRepository(ctrl)
-	az.regionZonesMap = map[string][]string{az.Location: {"1", "2", "3"}}
+	az.regionZonesMap = map[string]map[string][]string{
+		consts.PublicIPAddressResourceType: {az.Location: {"1", "2", "3"}},
+		consts.LoadBalancerResourceType:    {az.Location: {"1", "2", "3"}},
+	}
 
 	{
 		kubeClient := fake.NewSimpleClientset() // FIXME: inject kubeClient

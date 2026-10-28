@@ -34,6 +34,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/virtualmachineclient/mock_virtualmachineclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -248,73 +249,108 @@ func TestAvailabilitySetGetZoneByNodeName(t *testing.T) {
 }
 
 func TestSyncRegionZonesMap(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	for _, testCase := range []struct {
 		description   string
-		zones         map[string][]string
+		zones         map[string]map[string][]string
 		getZonesErr   error
-		expectedZones map[string][]string
+		expectedZones map[string]map[string][]string
 	}{
 		{
 			description: "syncRegionZonesMap should report an error if failed to get zones",
 			getZonesErr: fmt.Errorf("error"),
 		},
 		{
-			description:   "syncRegionZonesMap should not report an error if the given zones map is empty",
-			expectedZones: make(map[string][]string),
+			description: "syncRegionZonesMap should not report an error if the given zones map is empty",
+			zones: map[string]map[string][]string{
+				consts.PublicIPAddressResourceType: {},
+				consts.LoadBalancerResourceType:    {},
+			},
+			expectedZones: map[string]map[string][]string{
+				consts.PublicIPAddressResourceType: {},
+				consts.LoadBalancerResourceType:    {},
+			},
+		},
+		{
+			description: "syncRegionZonesMap should replace stale zones independently for each resource type",
+			zones: map[string]map[string][]string{
+				consts.PublicIPAddressResourceType: {"eastus2": {"1", "2", "3", "4"}},
+				consts.LoadBalancerResourceType:    {"eastus2": {"1", "2", "3", "5"}},
+			},
+			expectedZones: map[string]map[string][]string{
+				consts.PublicIPAddressResourceType: {"eastus2": {"1", "2", "3", "4"}},
+				consts.LoadBalancerResourceType:    {"eastus2": {"1", "2", "3", "5"}},
+			},
 		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 			m := zone.NewMockRepository(ctrl)
 			az := &Cloud{
 				zoneRepo: m,
 			}
-			m.EXPECT().ListZones(gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
+			m.EXPECT().ListZones(gomock.Any(), consts.PublicIPAddressResourceType).Return(testCase.zones[consts.PublicIPAddressResourceType], testCase.getZonesErr)
+			if testCase.getZonesErr == nil {
+				az.regionZonesMap = map[string]map[string][]string{
+					consts.PublicIPAddressResourceType: {"stale": {"5"}},
+					consts.LoadBalancerResourceType:    {"stale": {"5"}},
+				}
+				m.EXPECT().ListZones(gomock.Any(), consts.LoadBalancerResourceType).Return(testCase.zones[consts.LoadBalancerResourceType], nil)
+			}
 
 			err := az.syncRegionZonesMap(context.TODO())
-			if err != nil {
-				assert.ErrorIs(t, err, testCase.getZonesErr)
-			}
+			assert.ErrorIs(t, err, testCase.getZonesErr)
 			assert.Equal(t, testCase.expectedZones, az.regionZonesMap)
 		})
 	}
 }
 
 func TestGetRegionZonesBackoff(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	for _, testCase := range []struct {
-		description   string
-		zones         map[string][]string
-		getZonesErr   error
-		expectedZones map[string][]string
-		expectedErr   error
+		description string
+		zones       map[string][]string
+		getZonesErr error
 	}{
 		{
 			description: "syncRegionZonesMap should report an error if failed to get zones",
 			getZonesErr: fmt.Errorf("error"),
-			expectedErr: fmt.Errorf("error"),
 		},
 		{
-			description:   "syncRegionZonesMap should not report an error if the given zones map is empty",
-			expectedZones: make(map[string][]string),
+			description: "syncRegionZonesMap should not report an error if the given zones map is empty",
+			zones:       make(map[string][]string),
+		},
+		{
+			description: "getRegionZonesBackoff should not reuse the other resource type's zones",
+			zones:       map[string][]string{"eastus2": {"1", "2", "3", "4"}},
 		},
 	} {
 		t.Run(testCase.description, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
 			m := zone.NewMockRepository(ctrl)
 			az := &Cloud{
 				zoneRepo: m,
+				regionZonesMap: map[string]map[string][]string{
+					consts.LoadBalancerResourceType: {"eastus2": {"1", "2", "3", "5"}},
+				},
 			}
-			m.EXPECT().ListZones(gomock.Any()).Return(testCase.expectedZones, testCase.getZonesErr)
+			m.EXPECT().ListZones(gomock.Any(), consts.PublicIPAddressResourceType).Return(testCase.zones, testCase.getZonesErr)
 
-			_, err := az.getRegionZonesBackoff(context.TODO(), "eastus2")
-			if err != nil {
-				assert.EqualError(t, testCase.expectedErr, err.Error())
+			zones, err := az.getRegionZonesBackoff(context.TODO(), "eastus2", consts.PublicIPAddressResourceType)
+			assert.ErrorIs(t, err, testCase.getZonesErr)
+			if testCase.getZonesErr == nil {
+				assert.Equal(t, to.SliceOfPtrs(testCase.zones["eastus2"]...), zones)
+				assert.Equal(t, testCase.zones, az.regionZonesMap[consts.PublicIPAddressResourceType])
+				if len(testCase.zones) != 0 {
+					cached, err := az.getRegionZonesBackoff(context.TODO(), "eastus2", consts.PublicIPAddressResourceType)
+					assert.NoError(t, err)
+					assert.Equal(t, zones, cached)
+					nonZonal, err := az.getRegionZonesBackoff(context.TODO(), "nonzonal", consts.PublicIPAddressResourceType)
+					assert.NoError(t, err)
+					assert.Empty(t, nonZonal)
+				}
 			}
-			assert.Equal(t, testCase.expectedZones, az.regionZonesMap)
+			lbZones, err := az.getRegionZonesBackoff(context.TODO(), "eastus2", consts.LoadBalancerResourceType)
+			assert.NoError(t, err)
+			assert.Equal(t, to.SliceOfPtrs("1", "2", "3", "5"), lbZones)
 		})
 	}
 }
@@ -326,7 +362,7 @@ func TestRefreshZones(t *testing.T) {
 	m := zone.NewMockRepository(ctrl)
 	az := GetTestCloud(ctrl)
 	az.zoneRepo = m
-	m.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{}, nil).Times(0)
+	m.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{}, nil).Times(0)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {

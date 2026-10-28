@@ -9477,6 +9477,29 @@ func compareStrings(s0, s1 []string) bool {
 	return ss0.Equal(ss1)
 }
 
+func TestEnsurePublicIPExistsUsesPublicIPCapabilities(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	az := GetTestCloud(ctrl)
+	az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+	az.regionZonesMap = map[string]map[string][]string{
+		consts.PublicIPAddressResourceType: {az.Location: {"1", "2", "3", "4"}},
+		consts.LoadBalancerResourceType:    {az.Location: {"1", "2", "3", "5"}},
+	}
+
+	client := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+	client.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{}, nil).AnyTimes()
+	client.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "pip1", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+			assert.Equal(t, to.SliceOfPtrs("1", "2", "3", "4"), pip.Zones)
+			return nil, nil
+		})
+	client.EXPECT().Get(gomock.Any(), "rg", "pip1", gomock.Any()).Return(&armnetwork.PublicIPAddress{}, nil)
+
+	service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
+	_, err := az.ensurePublicIPExists(context.Background(), &service, "pip1", "", "", false, false, false)
+	assert.NoError(t, err)
+}
+
 func TestEnsurePublicIPExistsCommon(t *testing.T) {
 	// Builds a pip tags annotation that tries to set every controller-owned tag key.
 	reservedTagKeysAnnotation := func(transform func(string) string) string {
@@ -11391,6 +11414,21 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 	})
 }
 
+func TestGetFrontendZonesUsesLoadBalancerCapabilities(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	az := GetTestCloud(ctrl)
+	az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+	az.regionZonesMap = map[string]map[string][]string{
+		consts.PublicIPAddressResourceType: {az.Location: {"1", "2", "3", "4"}},
+		consts.LoadBalancerResourceType:    {az.Location: {"1", "2", "3", "5"}},
+	}
+
+	fip := &armnetwork.FrontendIPConfiguration{}
+	err := az.getFrontendZones(context.Background(), fip, nil, false, "service", "frontend")
+	assert.NoError(t, err)
+	assert.Equal(t, to.SliceOfPtrs("1", "2", "3", "5"), fip.Zones)
+}
+
 func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 
 	for _, tc := range []struct {
@@ -11511,7 +11549,10 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			cloud := GetTestCloud(ctrl)
-			cloud.regionZonesMap = tc.regionZonesMap
+			cloud.regionZonesMap = map[string]map[string][]string{
+				consts.PublicIPAddressResourceType: tc.regionZonesMap,
+				consts.LoadBalancerResourceType:    tc.regionZonesMap,
+			}
 			cloud.LoadBalancerSKU = string(armnetwork.LoadBalancerSKUNameStandard)
 
 			lb := getTestLoadBalancer(ptr.To("lb"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("testCluster"), tc.service, "standard")
@@ -11530,7 +11571,7 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 				&armnetwork.Subnet{ID: ptr.To("subnet0"), Properties: &armnetwork.SubnetPropertiesFormat{AddressPrefixes: to.SliceOfPtrs("1.2.3.4/31", "2001::1/127")}}, nil).MaxTimes(1)
 
 			zoneMock := cloud.zoneRepo.(*zone.MockRepository)
-			zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{}, tc.getZoneError).MaxTimes(2)
+			zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{}, tc.getZoneError).MaxTimes(2)
 
 			service := tc.service
 			isDualStack := isServiceDualStack(&service)

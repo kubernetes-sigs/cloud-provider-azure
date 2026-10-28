@@ -120,8 +120,8 @@ type Cloud struct {
 	// routeCIDRs holds cache for route CIDRs.
 	routeCIDRs map[string]string
 
-	// regionZonesMap stores all available zones for the subscription by region
-	regionZonesMap   map[string][]string
+	// regionZonesMap stores available zones by network resource type and region.
+	regionZonesMap   map[string]map[string][]string
 	refreshZonesLock sync.RWMutex
 
 	KubeClient         clientset.Interface

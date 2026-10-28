@@ -1956,7 +1956,7 @@ func getCloudFromConfig(t *testing.T, configContent string) *Cloud {
 
 	az := GetTestCloud(ctrl)
 	zoneMock := az.zoneRepo.(*zone.MockRepository)
-	zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+	zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 	// Skip AAD client cert path validation since it will read the file from the path
 	aadCertPath := c.AADClientCertPath
@@ -2484,7 +2484,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		err := az.InitializeCloudFromConfig(context.Background(), nil, false, true)
 		assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
@@ -2495,7 +2495,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		azureconfig := providerconfig.Config{
 			DisableAvailabilitySetNodes: true,
@@ -2512,7 +2512,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		azureconfig := providerconfig.Config{
 			AzureClientConfig: providerconfig.AzureClientConfig{
@@ -2533,7 +2533,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		azureconfig := providerconfig.Config{
 			LoadBalancerBackendPoolConfigurationType: "invalid",
@@ -2547,7 +2547,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		azureconfig := providerconfig.Config{}
 		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
@@ -2562,7 +2562,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		const (
 			tenantID       = "tenant-id"
@@ -2612,7 +2612,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		const (
 			tenantID              = "tenant-id"
@@ -2665,7 +2665,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		const (
 			tenantID              = "tenant-id"
@@ -2817,7 +2817,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 				defer ctrl.Finish()
 				az := GetTestCloud(ctrl)
 				zoneMock := az.zoneRepo.(*zone.MockRepository)
-				zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+				zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 				azureconfig := providerconfig.Config{
 					ServiceGatewayEnabled:                    tt.serviceGatewayEnabled,
@@ -2838,7 +2838,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		// A valid ServiceGateway configuration (serviceGatewayEnabled + service SKU + podIP) supplied
 		// through the config argument must survive normalization: podIP is preserved and ServiceGateway
@@ -2860,7 +2860,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
 		zoneMock := az.zoneRepo.(*zone.MockRepository)
-		zoneMock.EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
+		zoneMock.EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1", "2", "3"}}, nil).AnyTimes()
 
 		azureconfig := providerconfig.Config{
 			ServiceGatewayEnabled:                    true,
@@ -2881,7 +2881,7 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		az := GetTestCloud(ctrl)
-		az.zoneRepo.(*zone.MockRepository).EXPECT().ListZones(gomock.Any()).Return(map[string][]string{"eastus": {"1"}}, nil).AnyTimes()
+		az.zoneRepo.(*zone.MockRepository).EXPECT().ListZones(gomock.Any(), gomock.Any()).Return(map[string][]string{"eastus": {"1"}}, nil).AnyTimes()
 		az.ComputeClientFactory = nil
 		az.NetworkClientFactory = nil
 		az.AuthProvider = &azclient.AuthProvider{
