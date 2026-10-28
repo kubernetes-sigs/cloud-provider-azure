@@ -36,6 +36,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // Retry configuration for finalizer removal operations
@@ -70,14 +72,15 @@ const (
 
 // PendingPodDeletion tracks a pod waiting for its location to be synced to NRP before finalizer removal
 type PendingPodDeletion struct {
-	Namespace          string   // Pod namespace
-	Name               string   // Pod name
-	UID                string   // Pod UID; guards against stripping a same-name replacement pod's finalizer
-	ServiceUID         string   // Egress service this pod belongs to
-	Addresses          []string // PodIPs; a dual-stack pod contributes one address per IP family
-	VerifyServiceDrain bool     // No PodIPs were available; wait until no unbacked NRP address remains for the service
-	IsLastPod          bool     // True if this was the last pod for the service (finalizer removed after NAT GW deletion)
-	RecoveredAtStartup bool     // Finalizer was found stuck at startup; removing it closes the recovery gap
+	Namespace          string              // Pod namespace
+	Name               string              // Pod name
+	UID                string              // Pod UID; guards against stripping a same-name replacement pod's finalizer
+	ServiceUID         string              // Egress service this pod belongs to
+	Addresses          []string            // PodIPs; a dual-stack pod contributes one address per IP family
+	ServiceAddresses   map[string][]string // Optional service -> addresses map for pods held by multiple egress identities
+	VerifyServiceDrain bool                // No PodIPs were available; wait until no unbacked NRP address remains for the service
+	IsLastPod          bool                // True if this was the last pod for the service (finalizer removed after NAT GW deletion)
+	RecoveredAtStartup bool                // Finalizer was found stuck at startup; removing it closes the recovery gap
 	Timestamp          string
 }
 
@@ -296,21 +299,23 @@ func (dt *DiffTracker) getPodByNamespaceName(ctx context.Context, namespace, nam
 	return pod, nil
 }
 
+// ErrPodGoneOrReplaced is returned by AddPodFinalizer when the event no longer describes the live
+// pod: it no longer exists, was replaced by a same-name pod with a different UID, or its egress label
+// changed or was emptied, it is deleting, or it is no longer Pending or Running. The finalizer is
+// intentionally not added, so the caller must skip registering the stale event pod rather than treat
+// this as a successful add; a later event for the live pod reconciles it.
+var ErrPodGoneOrReplaced = errors.New("pod gone, replaced or no longer an egress pod; skip egress registration")
+
 // AddPodFinalizer adds the ServiceGateway pod cleanup finalizer, gating pod deletion until the
 // address is synced out of NRP. It always GETs a fresh copy (retrying with backoff on conflicts;
 // a missing pod is success) rather than trusting the informer-cache finalizer list, so it re-adds a
 // concurrently-stripped finalizer. It is UID-guarded so a same-name replacement pod is never given
 // the finalizer (removePodFinalizer would then refuse to strip it, stranding the replacement).
-// ErrPodGoneOrReplaced is returned by AddPodFinalizer when the target pod no longer exists or has
-// been replaced by a same-name pod with a different UID. The finalizer is intentionally not added
-// (removePodFinalizer is UID-guarded), so the caller must skip registering the stale event pod
-// rather than treat this as a successful add.
-var ErrPodGoneOrReplaced = errors.New("pod gone or replaced by a same-name UID; skip egress registration")
-
 func (dt *DiffTracker) AddPodFinalizer(ctx context.Context, pod *v1.Pod) error {
 	namespace := pod.Namespace
 	name := pod.Name
 	intendedUID := string(pod.UID)
+	intendedEgress := podEgressGatewayName(pod)
 	var lastErr error
 	goneOrReplaced := false
 
@@ -334,6 +339,21 @@ func (dt *DiffTracker) AddPodFinalizer(ctx context.Context, pod *v1.Pod) error {
 		// the caller so it skips registering the stale event pod's addresses.
 		if intendedUID != "" && string(currentPod.UID) != intendedUID {
 			dt.logger.V(4).Info("Pod UID changed (replacement pod); not adding finalizer", "namespace", namespace, "name", name, "wantUID", intendedUID, "gotUID", string(currentPod.UID))
+			goneOrReplaced = true
+			return true, nil
+		}
+
+		currentEgress := podEgressGatewayName(currentPod)
+		if intendedEgress == "" || currentEgress != intendedEgress ||
+			currentPod.DeletionTimestamp != nil ||
+			(currentPod.Status.Phase != v1.PodRunning && currentPod.Status.Phase != v1.PodPending) {
+			dt.logger.V(4).Info("Pod no longer matches the egress add intent; not adding finalizer",
+				"namespace", namespace,
+				"name", name,
+				"wantEgress", intendedEgress,
+				"gotEgress", currentEgress,
+				"deleting", currentPod.DeletionTimestamp != nil,
+				"phase", currentPod.Status.Phase)
 			goneOrReplaced = true
 			return true, nil
 		}
@@ -447,6 +467,261 @@ func (dt *DiffTracker) RemovePodFinalizerByPod(ctx context.Context, pod *v1.Pod)
 	return dt.removePodFinalizer(ctx, pod)
 }
 
+type unlabelledPodReleasePlan struct {
+	serviceUID string
+	location   string
+	addresses  []string
+}
+
+func podEgressGatewayName(pod *v1.Pod) string {
+	if pod == nil || pod.Labels == nil {
+		return ""
+	}
+	return strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
+}
+
+func addReleaseAddress(plans map[string]map[string][]string, serviceUID, location, address string) {
+	if serviceUID == "" || address == "" {
+		return
+	}
+	if location == "" {
+		location = address
+	}
+	if plans[serviceUID] == nil {
+		plans[serviceUID] = make(map[string][]string)
+	}
+	if !slices.Contains(plans[serviceUID][location], address) {
+		plans[serviceUID][location] = append(plans[serviceUID][location], address)
+	}
+}
+
+func podIdentityMatches(statePod Pod, podKey, podUID, address string, podAddresses map[string]struct{}) bool {
+	if podUID != "" && statePod.OutboundPodUID != "" {
+		return statePod.OutboundPodUID == podUID
+	}
+	if podKey != "" && statePod.OutboundPodKey != "" {
+		return statePod.OutboundPodKey == podKey
+	}
+	if _, ok := podAddresses[address]; ok {
+		return statePod.OutboundPodKey == "" && statePod.OutboundPodUID == ""
+	}
+	return false
+}
+
+func pendingPodIdentityMatches(pending PendingPodUpdate, podKey, podUID string) bool {
+	if podUID != "" && pending.PodUID != "" {
+		return pending.PodUID == podUID
+	}
+	return podKey != "" && pending.PodKey == podKey
+}
+
+func (dt *DiffTracker) isOutboundIdentityLocked(serviceUID string) bool {
+	if serviceUID == "" {
+		return false
+	}
+	if (dt.NRPResources.NATGateways != nil && dt.NRPResources.NATGateways.Has(serviceUID)) ||
+		(dt.K8sResources.Egresses != nil && dt.K8sResources.Egresses.Has(serviceUID)) {
+		return true
+	}
+	if opState, ok := dt.pendingServiceOps[serviceUID]; ok {
+		return !opState.Config.IsInbound
+	}
+	_, hasBufferedPods := dt.pendingPods[serviceUID]
+	return hasBufferedPods
+}
+
+func (dt *DiffTracker) unlabelledPodReleasePlans(pod *v1.Pod) []unlabelledPodReleasePlan {
+	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+	podUID := string(pod.UID)
+	podAddresses := make(map[string]struct{})
+	for _, address := range PodEgressAddresses(pod) {
+		if address != "" {
+			podAddresses[address] = struct{}{}
+		}
+	}
+
+	plansByService := make(map[string]map[string][]string)
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	for location, node := range dt.K8sResources.Nodes {
+		for address, statePod := range node.Pods {
+			serviceUID := statePod.PublicOutboundIdentity
+			if !dt.isOutboundIdentityLocked(serviceUID) || !podIdentityMatches(statePod, podKey, podUID, address, podAddresses) {
+				continue
+			}
+			addReleaseAddress(plansByService, serviceUID, location, address)
+		}
+	}
+
+	for serviceUID, pendingPods := range dt.pendingPods {
+		if !dt.isOutboundIdentityLocked(serviceUID) {
+			continue
+		}
+		for _, pending := range pendingPods {
+			if pendingPodIdentityMatches(pending, podKey, podUID) {
+				addReleaseAddress(plansByService, serviceUID, pending.Location, pending.Address)
+			}
+		}
+	}
+
+	for location, nrpLocation := range dt.NRPResources.Locations {
+		for address, nrpAddress := range nrpLocation.Addresses {
+			if _, ok := podAddresses[address]; !ok || nrpAddress.Services == nil {
+				continue
+			}
+			for _, serviceUID := range nrpAddress.Services.UnsortedList() {
+				if dt.NRPResources.NATGateways != nil && dt.NRPResources.NATGateways.Has(serviceUID) {
+					addReleaseAddress(plansByService, serviceUID, location, address)
+				}
+			}
+		}
+	}
+
+	plans := make([]unlabelledPodReleasePlan, 0)
+	for serviceUID, byLocation := range plansByService {
+		for location, addresses := range byLocation {
+			plans = append(plans, unlabelledPodReleasePlan{
+				serviceUID: serviceUID,
+				location:   location,
+				addresses:  addresses,
+			})
+		}
+	}
+	return plans
+}
+
+func mergeServiceAddresses(dst map[string][]string, serviceUID string, addresses []string) map[string][]string {
+	if dst == nil {
+		dst = make(map[string][]string)
+	}
+	for _, address := range addresses {
+		if address != "" && !slices.Contains(dst[serviceUID], address) {
+			dst[serviceUID] = append(dst[serviceUID], address)
+		}
+	}
+	return dst
+}
+
+func serviceAddressUnion(serviceAddresses map[string][]string) []string {
+	var union []string
+	for _, addresses := range serviceAddresses {
+		for _, address := range addresses {
+			union = appendAddressIfAbsent(union, address)
+		}
+	}
+	return union
+}
+
+// releaseUnlabelledPodFinalizer drains any egress associations still tied to a pod whose egress
+// label is absent or empty, then releases only this controller's finalizer.
+func (dt *DiffTracker) releaseUnlabelledPodFinalizer(ctx context.Context, pod *v1.Pod, recoveredAtStartup bool) {
+	if pod == nil || !hasPodFinalizer(pod) || podEgressGatewayName(pod) != "" {
+		return
+	}
+
+	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
+	podUID := string(pod.UID)
+	var prior *PendingPodDeletion
+	dt.mu.Lock()
+	if existing, ok := dt.pendingPodDeletions[podKey]; ok && existing.UID == podUID {
+		snapshot := *existing
+		snapshot.ServiceAddresses = make(map[string][]string)
+		for serviceUID, addresses := range existing.ServiceAddresses {
+			snapshot.ServiceAddresses = mergeServiceAddresses(snapshot.ServiceAddresses, serviceUID, addresses)
+		}
+		if len(existing.ServiceAddresses) == 0 && existing.ServiceUID != "" {
+			snapshot.ServiceAddresses = mergeServiceAddresses(snapshot.ServiceAddresses, existing.ServiceUID, existing.Addresses)
+		}
+		prior = &snapshot
+	}
+	dt.mu.Unlock()
+
+	// A drain already recorded for this pod (e.g. its IPs were cleared after a labelled delete) owns
+	// the release; removing the finalizer here would bypass it.
+	plans := dt.unlabelledPodReleasePlans(pod)
+	if len(plans) == 0 {
+		if prior != nil {
+			dt.markPendingRecoveredAtStartup(podKey, podUID, recoveredAtStartup)
+			dt.triggerLocationsUpdater()
+			return
+		}
+		dt.removeUnlabelledPodFinalizerNow(ctx, pod, recoveredAtStartup)
+		return
+	}
+
+	serviceAddresses := make(map[string][]string)
+	held := false
+	for _, plan := range plans {
+		result := dt.DeletePod(plan.serviceUID, plan.location, plan.addresses, pod.Namespace, pod.Name, podUID)
+		if result.FinalizerDecision != PodFinalizerDecisionReleaseNoDrain {
+			held = true
+			serviceAddresses = mergeServiceAddresses(serviceAddresses, plan.serviceUID, plan.addresses)
+		}
+	}
+
+	if !held {
+		if prior != nil {
+			dt.markPendingRecoveredAtStartup(podKey, podUID, recoveredAtStartup)
+			dt.triggerLocationsUpdater()
+			return
+		}
+		dt.removeUnlabelledPodFinalizerNow(ctx, pod, recoveredAtStartup)
+		return
+	}
+
+	pending := &PendingPodDeletion{
+		Namespace:          pod.Namespace,
+		Name:               pod.Name,
+		UID:                podUID,
+		RecoveredAtStartup: recoveredAtStartup,
+	}
+	if prior != nil {
+		pending.ServiceAddresses = prior.ServiceAddresses
+		pending.RecoveredAtStartup = prior.RecoveredAtStartup || recoveredAtStartup
+		if prior.VerifyServiceDrain {
+			pending.VerifyServiceDrain = true
+			pending.ServiceUID = prior.ServiceUID
+		}
+	}
+	for serviceUID, addresses := range serviceAddresses {
+		pending.ServiceAddresses = mergeServiceAddresses(pending.ServiceAddresses, serviceUID, addresses)
+	}
+	if pending.ServiceUID == "" {
+		for serviceUID := range pending.ServiceAddresses {
+			pending.ServiceUID = serviceUID
+			break
+		}
+	}
+	pending.Addresses = serviceAddressUnion(pending.ServiceAddresses)
+	pending.Timestamp = time.Now().Format(time.RFC3339)
+	dt.mu.Lock()
+	dt.pendingPodDeletions[podKey] = pending
+	dt.mu.Unlock()
+}
+
+func (dt *DiffTracker) removeUnlabelledPodFinalizerNow(ctx context.Context, pod *v1.Pod, recoveredAtStartup bool) {
+	if err := dt.RemovePodFinalizerByPod(ctx, pod); err != nil {
+		RecordPodFinalizerRemoveFailed()
+		dt.logger.V(4).Info("Could not remove unlabelled pod finalizer; queued for retry",
+			"namespace", pod.Namespace, "pod", pod.Name, "err", err)
+		dt.enqueuePodFinalizerRetry(pod, "")
+		dt.markPendingRecoveredAtStartup(fmt.Sprintf("%s/%s", pod.Namespace, pod.Name), string(pod.UID), recoveredAtStartup)
+	}
+}
+
+func (dt *DiffTracker) markPendingRecoveredAtStartup(podKey, uid string, recoveredAtStartup bool) {
+	if !recoveredAtStartup {
+		return
+	}
+	dt.mu.Lock()
+	if pending, ok := dt.pendingPodDeletions[podKey]; ok && pending.UID == uid {
+		pending.RecoveredAtStartup = true
+	}
+	dt.mu.Unlock()
+}
+
 // ================================================================================================
 // PENDING DELETION TRACKING - POD FINALIZERS
 // ================================================================================================
@@ -516,15 +791,14 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 				dt.logger.V(4).Info("Unbacked service address still in NRP for no-IP pod, waiting", "address", addr, "pod", podKey, "service", pending.ServiceUID)
 				continue
 			}
-		} else {
-			// For non-last pods, remove the finalizer only once ALL of the pod's addresses have drained
-			// from NRP. A dual-stack pod registers one address per IP family under the same location, so
-			// stripping the finalizer while any address is still mapped would let the pod (and that IP) be
-			// reclaimed while NRP still routes it.
-			if addr, waiting := dt.podAddressStillInNRPLocked(pending); waiting {
-				dt.logger.V(4).Info("Address still in NRP for pod, waiting", "address", addr, "pod", podKey)
-				continue
-			}
+		}
+		// For non-last pods, remove the finalizer only once ALL of the pod's addresses have drained
+		// from NRP. A dual-stack pod registers one address per IP family under the same location, so
+		// stripping the finalizer while any address is still mapped would let the pod (and that IP) be
+		// reclaimed while NRP still routes it.
+		if addr, waiting := dt.podAddressStillInNRPLocked(pending); waiting {
+			dt.logger.V(4).Info("Address still in NRP for pod, waiting", "address", addr, "pod", podKey)
+			continue
 		}
 
 		// All addresses are no longer in NRP, collect for finalizer removal
@@ -649,6 +923,16 @@ func (dt *DiffTracker) outboundAddressDesiredLocked(serviceUID, address string) 
 // service, searching every location (a dual-stack pod's families live under per-family node
 // locations). The caller keeps the finalizer until every address has left NRP. Requires dt.mu held.
 func (dt *DiffTracker) podAddressStillInNRPLocked(pending *PendingPodDeletion) (string, bool) {
+	if len(pending.ServiceAddresses) > 0 {
+		for serviceUID, addresses := range pending.ServiceAddresses {
+			for _, address := range addresses {
+				if dt.outboundAddressInAnyNRPLocationLocked(serviceUID, address) {
+					return address, true
+				}
+			}
+		}
+		return "", false
+	}
 	for _, address := range pending.Addresses {
 		if dt.outboundAddressInAnyNRPLocationLocked(pending.ServiceUID, address) {
 			return address, true

@@ -30,6 +30,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -129,6 +130,8 @@ func (dt *DiffTracker) SetUpPodInformer(stopCh <-chan struct{}) error {
 		return fmt.Errorf("setUpPodInformerForEgress: cache sync stopped before completion")
 	}
 	klog.V(2).Infof("setUpPodInformerForEgress: Pod informer successfully initialized and synced")
+	// A label removed between the startup sweep and the informer's initial list produces no event.
+	recoverUnlabelledPodFinalizers(wait.ContextForChannel(stopCh), dt, true)
 	return nil
 }
 
@@ -137,14 +140,18 @@ func (dt *DiffTracker) SetUpPodInformer(stopCh <-chan struct{}) error {
 // can't touch the still-live pod); a genuine removal (needsRemove only) uses podInformerRemovePod,
 // which holds the finalizer until every address drains.
 func (dt *DiffTracker) reconcileEgressPodUpdate(oldPod, newPod *v1.Pod) {
-	needsRemove, needsAdd, reason := egressPodUpdateActions(oldPod, newPod)
-	if !needsRemove && !needsAdd {
+	needsRemove, needsAdd, releaseUnlabelledFinalizer, reason := egressPodUpdateActions(oldPod, newPod)
+	if !needsRemove && !needsAdd && !releaseUnlabelledFinalizer {
 		klog.V(4).Infof("setUpPodInformerForEgress: Pod %s/%s update has no relevant changes, skipping",
 			newPod.Namespace, newPod.Name)
 		return
 	}
 
 	klog.V(2).Infof("setUpPodInformerForEgress: Pod %s/%s update: %s", newPod.Namespace, newPod.Name, reason)
+	if releaseUnlabelledFinalizer {
+		dt.releaseUnlabelledPodFinalizer(context.Background(), newPod, false)
+		return
+	}
 	if needsRemove {
 		if needsAdd {
 			dt.podInformerDrainForReplace(oldPod, newPod)
@@ -161,7 +168,7 @@ func (dt *DiffTracker) reconcileEgressPodUpdate(oldPod, newPod *v1.Pod) {
 // and/or (re-)added to its current one. Change-detection uses the full PodIPs set and the per-family
 // node locations, so a dual-stack address or secondary-family location change is reconciled.
 // DeletionTimestamp being set, or the Phase leaving Running/Pending, makes the pod invalid (removal).
-func egressPodUpdateActions(oldPod, newPod *v1.Pod) (needsRemove, needsAdd bool, reason string) {
+func egressPodUpdateActions(oldPod, newPod *v1.Pod) (needsRemove, needsAdd, releaseUnlabelledFinalizer bool, reason string) {
 	var prevEgressGatewayName, currEgressGatewayName string
 	if oldPod.Labels != nil {
 		prevEgressGatewayName = strings.ToLower(oldPod.Labels[consts.PodLabelServiceEgressGateway])
@@ -188,6 +195,11 @@ func egressPodUpdateActions(oldPod, newPod *v1.Pod) (needsRemove, needsAdd bool,
 		(newPod.Status.Phase == v1.PodRunning || newPod.Status.Phase == v1.PodPending)
 
 	switch {
+	case currEgressGatewayName == "" && hasPodFinalizer(newPod):
+		// Checked before a label change so a pod emptied mid relabel chain drains every egress still
+		// holding its addresses, not only the previous label.
+		releaseUnlabelledFinalizer = true
+		reason = "pod has empty egress label and cleanup finalizer"
 	case labelChanged:
 		// Remove from the old gateway (if it had IPs), add to the new one (if valid and has IPs).
 		needsRemove = prevEgressGatewayName != "" && oldHadIPs
@@ -221,7 +233,7 @@ func egressPodUpdateActions(oldPod, newPod *v1.Pod) (needsRemove, needsAdd bool,
 		reason = fmt.Sprintf("pod became invalid while having IPs (Phase: %s, DeletionTimestamp: %v)",
 			newPod.Status.Phase, newPod.DeletionTimestamp != nil)
 	}
-	return needsRemove, needsAdd, reason
+	return needsRemove, needsAdd, releaseUnlabelledFinalizer, reason
 }
 
 // podInformerAddPod handles pod addition events for egress.
@@ -233,6 +245,12 @@ func egressPodUpdateActions(oldPod, newPod *v1.Pod) (needsRemove, needsAdd bool,
 func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 	// Validate pod has egress label (should always be true due to label selector, but check anyway)
 	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
+		if hasPodFinalizer(pod) {
+			klog.V(2).Infof("podInformerAddPod: Pod %s/%s has no egress label but carries the cleanup finalizer; releasing it",
+				pod.Namespace, pod.Name)
+			dt.releaseUnlabelledPodFinalizer(context.Background(), pod, false)
+			return
+		}
 		klog.V(4).Infof("podInformerAddPod: Pod %s/%s has no egress label, skipping", pod.Namespace, pod.Name)
 		return
 	}
@@ -313,10 +331,10 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 	// protection on a later delete; surface that via a metric + Event.
 	if err := dt.AddPodFinalizer(context.Background(), pod); err != nil {
 		if errors.Is(err, ErrPodGoneOrReplaced) {
-			// The named pod is gone or already replaced by a same-name pod with a different UID.
-			// Registering this stale event pod's address would add an unprotected NRP mapping (no
-			// finalizer to drain it); the live replacement registers itself via its own Add event.
-			klog.V(4).Infof("podInformerAddPod: pod %s gone or replaced; skipping stale egress registration", podKey)
+			// The event no longer describes the live pod (gone, replaced, relabelled, deleting or
+			// terminal). Registering this stale address would add an unprotected NRP mapping; the live
+			// pod's own later event reconciles it.
+			klog.V(4).Infof("podInformerAddPod: pod %s gone, replaced or no longer an egress pod; skipping stale egress registration", podKey)
 			return
 		}
 		klog.Warningf("podInformerAddPod: registering egress pod %s WITHOUT cleanup finalizer after retries: %v", podKey, err)
@@ -347,24 +365,26 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 	// Validate pod has egress label
 	if pod.Labels == nil || pod.Labels[consts.PodLabelServiceEgressGateway] == "" {
-		// An unlabelled pod carrying our cleanup finalizer is still ours to finish with. The informer
-		// selects on the label key alone, so a pod whose value was emptied keeps matching and is
-		// still delivered here, with nothing left to identify its egress service. Skipping it would
-		// leave the finalizer attached with nothing able to remove it, blocking node drain and
-		// namespace deletion.
 		if hasFinalizer(pod.Finalizers, ServiceGatewayPodCleanupFinalizer) {
-			klog.V(2).Infof("podInformerRemovePod: Pod %s/%s has no egress label but carries the cleanup finalizer; removing it directly",
+			klog.V(2).Infof("podInformerRemovePod: Pod %s/%s has no egress label but carries the cleanup finalizer; releasing it",
 				pod.Namespace, pod.Name)
-			if err := dt.RemovePodFinalizerByPod(context.Background(), pod); err != nil {
-				RecordPodFinalizerRemoveFailed()
-				klog.Errorf("podInformerRemovePod: pod %s/%s could not have its cleanup finalizer removed, queued for retry: %v",
-					pod.Namespace, pod.Name, err)
-				dt.enqueuePodFinalizerRetry(pod, "")
-			}
+			dt.releaseUnlabelledPodFinalizer(context.Background(), pod, false)
 			return
 		}
 		klog.V(4).Infof("podInformerRemovePod: Pod %s/%s has no egress label, skipping", pod.Namespace, pod.Name)
 		return
+	}
+
+	// A live pod whose egress label key was removed leaves the label-filtered watch through a delete
+	// event carrying its previous, still-labelled object. Drain every egress that may still hold it.
+	if pod.DeletionTimestamp == nil && (pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodPending) {
+		if live, err := dt.getPodByNamespaceName(context.Background(), pod.Namespace, pod.Name); err == nil &&
+			live.UID == pod.UID && hasPodFinalizer(live) && podEgressGatewayName(live) == "" {
+			klog.V(2).Infof("podInformerRemovePod: Pod %s/%s lost its egress label; releasing its cleanup finalizer after draining",
+				pod.Namespace, pod.Name)
+			dt.releaseUnlabelledPodFinalizer(context.Background(), live, false)
+			return
+		}
 	}
 
 	egressName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
