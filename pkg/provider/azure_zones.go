@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	cloudprovider "k8s.io/cloud-provider"
-	"k8s.io/klog/v2"
 
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -49,48 +48,50 @@ func (az *Cloud) refreshZones(ctx context.Context, refreshFunc func(ctx context.
 func (az *Cloud) syncRegionZonesMap(ctx context.Context) error {
 	logger := log.FromContextOrBackground(ctx).WithName("syncRegionZonesMap")
 	logger.V(2).Info("starting to fetch all available zones for the subscription", "subscriptionID", az.getNetworkResourceSubscriptionID())
-	zones, err := az.zoneRepo.ListZones(ctx)
-	if err != nil {
-		return fmt.Errorf("list zones: %w", err)
-	}
+	for _, resourceType := range []string{consts.PublicIPAddressResourceType, consts.LoadBalancerResourceType} {
+		zones, err := az.zoneRepo.ListZones(ctx, resourceType)
+		if err != nil {
+			return fmt.Errorf("list zones for %s: %w", resourceType, err)
+		}
 
-	if len(zones) == 0 {
-		klog.Warning("syncRegionZonesMap: empty zone list")
-	}
+		if len(zones) == 0 {
+			logger.V(2).Info("Received empty zone list", "resourceType", resourceType)
+		}
 
-	az.updateRegionZonesMap(zones)
+		az.updateRegionZonesMap(resourceType, zones)
+	}
 
 	return nil
 }
 
-func (az *Cloud) updateRegionZonesMap(zones map[string][]string) {
+func (az *Cloud) updateRegionZonesMap(resourceType string, zones map[string][]string) {
 	az.refreshZonesLock.Lock()
 	defer az.refreshZonesLock.Unlock()
 
 	if az.regionZonesMap == nil {
-		az.regionZonesMap = make(map[string][]string)
+		az.regionZonesMap = make(map[string]map[string][]string)
 	}
 
-	for region, z := range zones {
-		az.regionZonesMap[region] = z
-	}
+	az.regionZonesMap[resourceType] = zones
 }
 
-func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]*string, error) {
+func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region, resourceType string) ([]*string, error) {
 	logger := log.FromContextOrBackground(ctx).WithName("getRegionZonesBackoff")
 	if az.IsStackCloud() {
 		// Azure Stack does not support zone at the moment
 		// https://docs.microsoft.com/en-us/azure-stack/user/azure-stack-network-differences?view=azs-2102
 		logger.V(3).Info("Azure Stack does not support Zones at the moment, skipping")
-		return to.SliceOfPtrs(az.regionZonesMap[region]...), nil
+		return nil, nil
 	}
 
-	if len(az.regionZonesMap) != 0 {
-		az.refreshZonesLock.RLock()
-		defer az.refreshZonesLock.RUnlock()
-
-		return to.SliceOfPtrs(az.regionZonesMap[region]...), nil
+	az.refreshZonesLock.RLock()
+	cachedZones := az.regionZonesMap[resourceType]
+	if len(cachedZones) != 0 {
+		zones := to.SliceOfPtrs(cachedZones[region]...)
+		az.refreshZonesLock.RUnlock()
+		return zones, nil
 	}
+	az.refreshZonesLock.RUnlock()
 
 	logger.V(2).Info("the region-zones map is not initialized successfully, retrying immediately")
 
@@ -99,9 +100,9 @@ func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]*s
 		innerErr error
 	)
 	err := wait.ExponentialBackoffWithContext(ctx, az.RequestBackoff(), func(ctx context.Context) (done bool, err error) {
-		zones, innerErr = az.zoneRepo.ListZones(ctx)
+		zones, innerErr = az.zoneRepo.ListZones(ctx, resourceType)
 		if innerErr != nil {
-			logger.Error(innerErr, "Failed to list zones")
+			logger.V(4).Info("Could not list zones", "resourceType", resourceType, "err", innerErr)
 			return false, nil
 		}
 
@@ -112,16 +113,9 @@ func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]*s
 		return []*string{}, innerErr
 	}
 
-	az.updateRegionZonesMap(zones)
+	az.updateRegionZonesMap(resourceType, zones)
 
-	if len(az.regionZonesMap) != 0 {
-		az.refreshZonesLock.RLock()
-		defer az.refreshZonesLock.RUnlock()
-
-		return to.SliceOfPtrs(az.regionZonesMap[region]...), nil
-	}
-
-	return []*string{}, nil
+	return to.SliceOfPtrs(zones[region]...), nil
 }
 
 // makeZone returns the zone value in format of <region>-<zone-id>.

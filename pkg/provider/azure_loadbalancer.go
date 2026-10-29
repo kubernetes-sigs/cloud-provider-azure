@@ -1536,7 +1536,7 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			// skip adding zone info since edge zones doesn't support multiple availability zones.
 			if !az.HasExtendedLocation() {
 				// only add zone information for the new standard pips
-				zones, err := az.getRegionZonesBackoff(ctx, ptr.Deref(pip.Location, ""))
+				zones, err := az.getRegionZonesBackoff(ctx, ptr.Deref(pip.Location, ""), consts.PublicIPAddressResourceType)
 				if err != nil {
 					return nil, err
 				}
@@ -3249,7 +3249,7 @@ func (az *Cloud) getFrontendZones(
 	if !isFipChanged { // fetch zone information from API for new frontends
 		// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
 		location := az.Location
-		zones, err := az.getRegionZonesBackoff(ctx, location)
+		zones, err := az.getRegionZonesBackoff(ctx, location, consts.LoadBalancerResourceType)
 		if err != nil {
 			return err
 		}

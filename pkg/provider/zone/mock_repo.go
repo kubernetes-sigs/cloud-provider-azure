@@ -56,16 +56,16 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 }
 
 // ListZones mocks base method.
-func (m *MockRepository) ListZones(ctx context.Context) (map[string][]string, error) {
+func (m *MockRepository) ListZones(ctx context.Context, resourceType string) (map[string][]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ListZones", ctx)
+	ret := m.ctrl.Call(m, "ListZones", ctx, resourceType)
 	ret0, _ := ret[0].(map[string][]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ListZones indicates an expected call of ListZones.
-func (mr *MockRepositoryMockRecorder) ListZones(ctx any) *gomock.Call {
+func (mr *MockRepositoryMockRecorder) ListZones(ctx, resourceType any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListZones", reflect.TypeOf((*MockRepository)(nil).ListZones), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListZones", reflect.TypeOf((*MockRepository)(nil).ListZones), ctx, resourceType)
 }
