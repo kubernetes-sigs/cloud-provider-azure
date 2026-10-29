@@ -195,17 +195,54 @@ func serviceListerWith(t *testing.T, svcs ...*v1.Service) corelisters.ServiceLis
 	return factory.Core().V1().Services().Lister()
 }
 
-// trackService records a namespace/name for a UID so getServiceByUID can resolve it through
+// trackService records a namespace/name for a UID so getServiceBySGWName can resolve it through
 // the lister, mirroring what EnsureLoadBalancer populates on the ServiceConfig.
 func (dt *DiffTracker) trackService(uid, namespace, name string) {
-	uid = inboundServiceName(uid)
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     ServiceConfig{UID: uid, IsInbound: true, Namespace: namespace, Name: name},
+	serviceName := inboundServiceName(uid)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      ServiceConfig{ServiceName: serviceName, IsInbound: true, Namespace: namespace, Name: name},
 	}
 }
 
-func TestGetServiceByUID_ResolvesThroughListerWithoutList(t *testing.T) {
+func TestGetServiceBySGWName_RejectsInvalidNamesBeforeReadingState(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		serviceName string
+	}{
+		{name: "empty"},
+		{name: "missing suffix", serviceName: "payments"},
+		{name: "empty inbound identity", serviceName: "-lb"},
+		{name: "outbound", serviceName: outboundServiceName("payments")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			dt.mu.Lock()
+			var svc *v1.Service
+			var err error
+			done := make(chan struct{})
+			go func() {
+				svc, err = dt.getServiceBySGWName(context.Background(), tc.serviceName)
+				close(done)
+			}()
+
+			returnedWithoutLock := false
+			select {
+			case <-done:
+				returnedWithoutLock = true
+			case <-time.After(5 * time.Second):
+			}
+			dt.mu.Unlock()
+			<-done
+
+			assert.True(t, returnedWithoutLock, "invalid names must not wait for tracker state")
+			assert.Nil(t, svc)
+			assert.ErrorContains(t, err, "invalid inbound ServiceGateway name")
+		})
+	}
+}
+
+func TestGetServiceBySGWName_ResolvesThroughListerWithoutList(t *testing.T) {
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"}}
 	dt := newTestDiffTracker()
 	// Empty clientset: a List fallback would find nothing, so a successful resolve means the
@@ -214,14 +251,14 @@ func TestGetServiceByUID_ResolvesThroughListerWithoutList(t *testing.T) {
 	dt.serviceLister = serviceListerWith(t, svc)
 	dt.trackService("uid-1", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
+	got, err := dt.getServiceBySGWName(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
 	}
 }
 
-func TestGetServiceByUID_UIDMismatchReturnsNotFound(t *testing.T) {
+func TestGetServiceBySGWName_UIDMismatchReturnsNotFound(t *testing.T) {
 	// The lister holds a different Service at the recorded namespace/name (a recreation that
 	// reused the name). A clientset copy carrying the expected UID exists at another
 	// namespace/name so a UID mismatch resolves to NotFound rather than falling through to the
@@ -233,39 +270,39 @@ func TestGetServiceByUID_UIDMismatchReturnsNotFound(t *testing.T) {
 	dt.serviceLister = serviceListerWith(t, current)
 	dt.trackService("uid-expected", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-expected"))
+	got, err := dt.getServiceBySGWName(context.Background(), inboundServiceName("uid-expected"))
 	assert.Nil(t, got)
 	assert.True(t, apierrors.IsNotFound(err), "UID mismatch must surface as NotFound, got %v", err)
 }
 
-func TestGetServiceByUID_NilListerFallsBackToApiserverGet(t *testing.T) {
+func TestGetServiceBySGWName_NilListerFallsBackToApiserverGet(t *testing.T) {
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"}}
 	dt := newTestDiffTracker()
 	dt.kubeClient = fake.NewSimpleClientset(svc)
 	dt.serviceLister = nil
 	dt.trackService("uid-1", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
+	got, err := dt.getServiceBySGWName(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
 	}
 }
 
-func TestGetServiceByUID_UnknownIdentityFallsBackToList(t *testing.T) {
+func TestGetServiceBySGWName_UnknownIdentityFallsBackToList(t *testing.T) {
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"}}
 	dt := newTestDiffTracker()
 	dt.kubeClient = fake.NewSimpleClientset(svc)
 	dt.serviceLister = serviceListerWith(t) // lister present but empty
 
-	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
+	got, err := dt.getServiceBySGWName(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
 	}
 }
 
-func TestGetServiceByUID_ColdListerCacheFallsBackToApiserverGet(t *testing.T) {
+func TestGetServiceBySGWName_ColdListerCacheFallsBackToApiserverGet(t *testing.T) {
 	// The Service exists on the apiserver but the lister cache has not observed it yet. The
 	// read must fall back rather than reporting a false NotFound.
 	svc := &v1.Service{ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"}}
@@ -274,7 +311,7 @@ func TestGetServiceByUID_ColdListerCacheFallsBackToApiserverGet(t *testing.T) {
 	dt.serviceLister = serviceListerWith(t) // empty cache
 	dt.trackService("uid-1", "ns", "svc")
 
-	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-1"))
+	got, err := dt.getServiceBySGWName(context.Background(), inboundServiceName("uid-1"))
 	assert.NoError(t, err)
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-1", string(got.UID))
@@ -540,6 +577,28 @@ func serviceClientWithTypeFieldSelector(services ...*v1.Service) *fake.Clientset
 	return c
 }
 
+func TestGetServiceByUIDViaList_ReadErrors(t *testing.T) {
+	t.Run("missing client", func(t *testing.T) {
+		dt := &DiffTracker{}
+		svc, err := dt.getServiceByUIDViaList(context.Background(), "uid")
+		assert.Nil(t, svc)
+		assert.EqualError(t, err, "getServiceByUIDViaList: no Kubernetes client")
+	})
+
+	t.Run("list failure", func(t *testing.T) {
+		listErr := errors.New("list unavailable")
+		kube := fake.NewSimpleClientset()
+		kube.PrependReactor("list", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+			return true, nil, listErr
+		})
+		dt := &DiffTracker{kubeClient: kube}
+		svc, err := dt.getServiceByUIDViaList(context.Background(), "uid")
+		assert.Nil(t, svc)
+		assert.EqualError(t, err, "getServiceByUIDViaList: list failed: list unavailable")
+		assert.ErrorIs(t, err, listErr)
+	})
+}
+
 // TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer pins that the UID scan is not
 // narrowed by spec.type. Retyping a LoadBalancer to ClusterIP is a normal way to decommission it,
 // and the delete that follows still has to tear down the PIP/LB and strip the finalizer. Hiding
@@ -558,14 +617,14 @@ func TestGetServiceByUIDViaList_FindsServiceRetypedAwayFromLoadBalancer(t *testi
 	// No namespace/name recorded for either UID, so both reads take the List scan.
 	dt.kubeClient = serviceClientWithTypeFieldSelector(retyped, stillLB)
 
-	got, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-retyped"))
+	got, err := dt.getServiceBySGWName(context.Background(), inboundServiceName("uid-retyped"))
 	assert.NoError(t, err,
 		"a Service retyped away from LoadBalancer must still resolve: the tracker still owns its finalizer and Azure resources")
 	if assert.NotNil(t, got) {
 		assert.Equal(t, "uid-retyped", string(got.UID))
 	}
 
-	gotLB, err := dt.getServiceByUID(context.Background(), inboundServiceName("uid-lb"))
+	gotLB, err := dt.getServiceBySGWName(context.Background(), inboundServiceName("uid-lb"))
 	assert.NoError(t, err, "control: a LoadBalancer Service resolves regardless of the selector")
 	if assert.NotNil(t, gotLB) {
 		assert.Equal(t, "uid-lb", string(gotLB.UID))
@@ -892,11 +951,24 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 	serviceName := outboundServiceName(identity)
 	cfg := testConfig()
 	for _, unlink := range []bool{false, true} {
-		for _, conflict := range []bool{false, true} {
-			t.Run(fmt.Sprintf("unlink=%t/conflict=%t", unlink, conflict), func(t *testing.T) {
+		for _, tc := range []struct {
+			name        string
+			conflict    bool
+			missingETag bool
+		}{
+			{name: "matching ETag"},
+			{name: "stale ETag", conflict: true},
+			{name: "missing ETag", missingETag: true},
+		} {
+			t.Run(fmt.Sprintf("unlink=%t/%s", unlink, tc.name), func(t *testing.T) {
 				live := byoNATGateway(identity)
+				var serviceNATID *string
+				if tc.missingETag {
+					live.Etag = nil
+				}
 				if unlink {
 					live.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+					serviceNATID = ptr.To(byoNATGatewayARMID(identity))
 				}
 				lastReadETag := ""
 				gets, puts := 0, 0
@@ -922,7 +994,7 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 						assert.NoError(t, err)
 					case http.MethodPut:
 						puts++
-						if conflict && puts == 1 {
+						if tc.conflict && !unlink && puts == 1 {
 							live.Etag = ptr.To(`W/"owner-edited"`)
 							live.Tags["owner"] = ptr.To("owner-changed")
 						}
@@ -971,12 +1043,35 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 				sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
 				factory.EXPECT().GetNatGatewayClient().Return(client).AnyTimes()
 				factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
-				sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
-				sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+				sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").
+					DoAndReturn(func(context.Context, string, string) ([]*armnetwork.ServiceGatewayService, error) {
+						if !unlink {
+							return nil, nil
+						}
+						return []*armnetwork.ServiceGatewayService{{
+							Name: ptr.To(serviceName),
+							Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+								ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), PublicNatGatewayID: serviceNATID,
+							},
+						}}, nil
+					}).AnyTimes()
+				sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+					DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
+						if unlink && !ptr.Deref(req.ServiceRequests[0].IsDelete, false) {
+							assert.Equal(t, 1, gets, "read the NAT before clearing the service reference")
+							assert.Equal(t, azcore.NullValue[*string](), req.ServiceRequests[0].Service.Properties.PublicNatGatewayID)
+							serviceNATID = nil
+							if tc.conflict {
+								live.Etag = ptr.To(`W/"owner-edited"`)
+								live.Tags["owner"] = ptr.To("owner-changed")
+							}
+						}
+						return nil
+					}).Times(wantedCalls(unlink) + wantedCalls(!tc.missingETag))
 				dt := newTestDiffTracker()
 				dt.config, dt.networkClientFactory = testConfig(), factory
 				dt.kubeClient = fake.NewSimpleClientset(byoPod(identity, byoNATGatewayRG))
-				if unlink || conflict {
+				if unlink || tc.conflict {
 					dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(identity))
 				}
 				if unlink {
@@ -995,7 +1090,14 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 					return success, result
 				}
 				success, err := attempt()
-				if conflict {
+				if tc.missingETag {
+					assert.False(t, success)
+					assert.ErrorContains(t, err, fmt.Sprintf("BYO NAT Gateway %q was read without a usable ETag", identity))
+					assert.Zero(t, puts)
+					assert.Equal(t, 1, gets)
+					return
+				}
+				if tc.conflict {
 					assert.False(t, success)
 					var responseErr *azcore.ResponseError
 					if assert.ErrorAs(t, err, &responseErr) {
@@ -1008,7 +1110,7 @@ func TestBYONATGatewayConditionalWrites(t *testing.T) {
 				}
 				assert.True(t, success, "%v", err)
 				assert.NoError(t, err)
-				assert.Equal(t, 1+wantedCalls(conflict), puts)
+				assert.Equal(t, 1+wantedCalls(tc.conflict), puts)
 				assert.Equal(t, puts, gets, "each retry must re-read the gateway")
 			})
 		}
@@ -1168,7 +1270,7 @@ func TestBYOLinkPollingFailureRetainsAppliedLinkForDeletion(t *testing.T) {
 			}
 			deleted := &outboundCompletion{}
 			dt.pendingServiceOps[serviceName] = &ServiceOperationState{
-				ServiceUID: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateDeletionInProgress,
+				ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateDeletionInProgress,
 			}
 			outboundUpdater(dt, deleted).deleteOutboundService(serviceName, "corr")
 			_, success, deleteErr := deleted.result()

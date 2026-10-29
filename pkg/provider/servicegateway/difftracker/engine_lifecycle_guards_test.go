@@ -25,21 +25,21 @@ import (
 // into the deletion flow, never leaving the service in StateCreated.
 func TestGuardLifecycle_DeleteDuringCreateRoutesToDeletion(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-del-during-create"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-del-during-create"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: cfg, InFlightConfig: &inflight, State: StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: cfg, InFlightConfig: &inflight, State: StateCreationInProgress,
 	}
 
-	dt.DeleteService(uid, true, false)
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.DeleteService(serviceName, true, false)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	// A weak "not StateCreated" check would also pass on the bug this guard exists to catch:
 	// if the preempt block is removed, the create success is treated as a plain success, wipes
 	// all tracking, and the entry is simply absent — leaking the Azure LB/PIP/SGW registration
 	// and leaving the Service stuck Terminating. Require the positive routing instead.
-	op, ok := dt.pendingServiceOps[uid]
+	op, ok := dt.pendingServiceOps[serviceName]
 	if !ok {
 		t.Fatalf("delete-during-create: service tracking was wiped; the create completion must route to deletion, not vanish")
 	}
@@ -56,19 +56,19 @@ func TestGuardLifecycle_DeleteDuringCreateRoutesToDeletion(t *testing.T) {
 // (IsLastPod=false) and must not drive the ref-counter negative.
 func TestGuardLifecycle_StaleDeletePodIsNoOp(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "egress-nat"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: NewOutboundServiceConfig(uid, nil), State: StateCreated,
+	serviceName := "egress-nat"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
 	}
-	dt.NRPResources.NATGateways.Insert(uid)
+	dt.NRPResources.NATGateways.Insert(serviceName)
 
-	dt.AddPod(uid, "ns/pod-a", "10.0.0.1", "10.244.0.5")
+	dt.AddPod(serviceName, "ns/pod-a", "10.0.0.1", "10.244.0.5")
 
-	first := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
+	first := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
 	if !first.IsLastPod {
 		t.Fatalf("delete of the only pod should report IsLastPod=true, got false")
 	}
-	second := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
+	second := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
 	if second.IsLastPod {
 		t.Fatalf("duplicate delete must be a no-op (IsLastPod=false), got true")
 	}
@@ -81,16 +81,16 @@ func TestGuardLifecycle_StaleDeletePodIsNoOp(t *testing.T) {
 // with CreationFailedTerminal set, so the dispatcher stops retrying it.
 func TestGuardLifecycle_TerminalCreateFailureParksService(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-terminal-create"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-terminal-create"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: cfg, InFlightConfig: &inflight, State: StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: cfg, InFlightConfig: &inflight, State: StateCreationInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, false, newTerminalError(fmt.Errorf("unsupported protocol")))
+	dt.OnServiceCreationComplete(serviceName, false, newTerminalError(fmt.Errorf("unsupported protocol")))
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if op == nil {
 		t.Fatalf("terminal create failure must keep the service tracked, got removed")
 	}
@@ -104,25 +104,25 @@ func TestGuardLifecycle_TerminalCreateFailureParksService(t *testing.T) {
 // K8s state after the buffered updates are replayed on completion.
 func TestGuardLifecycle_BufferedEndpointAddRemoveNoLeak(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-buffer-replay"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-buffer-replay"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: cfg, InFlightConfig: &inflight, State: StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: cfg, InFlightConfig: &inflight, State: StateCreationInProgress,
 	}
 
-	dt.UpdateEndpoints(uid, nil, map[string]string{"10.244.0.7": "10.0.0.1"})
-	dt.UpdateEndpoints(uid, map[string]string{"10.244.0.7": "10.0.0.1"}, nil)
+	dt.UpdateEndpoints(serviceName, nil, map[string]string{"10.244.0.7": "10.0.0.1"})
+	dt.UpdateEndpoints(serviceName, map[string]string{"10.244.0.7": "10.0.0.1"}, nil)
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	if node, ok := dt.K8sResources.Nodes["10.0.0.1"]; ok {
 		if _, leaked := node.Pods["10.244.0.7"]; leaked {
 			t.Fatalf("add-then-remove during create leaked pod IP 10.244.0.7 into K8s state after replay")
 		}
 	}
-	if len(dt.pendingEndpoints[uid]) != 0 {
-		t.Fatalf("pendingEndpoints must be drained after promotion, got %d", len(dt.pendingEndpoints[uid]))
+	if len(dt.pendingEndpoints[serviceName]) != 0 {
+		t.Fatalf("pendingEndpoints must be drained after promotion, got %d", len(dt.pendingEndpoints[serviceName]))
 	}
 }
 
@@ -130,14 +130,14 @@ func TestGuardLifecycle_BufferedEndpointAddRemoveNoLeak(t *testing.T) {
 // pod refs into K8s state (which would never be cleaned up on delete-success).
 func TestGuardLifecycle_AdditionsDuringDeletionPendingNoLeak(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-del-pending"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: NewInboundServiceConfig(uid, makeInboundConfig(80)), State: StateDeletionPending,
+	serviceName := "svc-del-pending"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewInboundServiceConfig(serviceName, makeInboundConfig(80)), State: StateDeletionPending,
 	}
 
-	dt.UpdateEndpoints(uid, nil, map[string]string{"10.244.0.11": "10.0.0.2"})
-	dt.pendingServiceOps[uid].State = StateDeletionInProgress
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.UpdateEndpoints(serviceName, nil, map[string]string{"10.244.0.11": "10.0.0.2"})
+	dt.pendingServiceOps[serviceName].State = StateDeletionInProgress
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	if node, ok := dt.K8sResources.Nodes["10.0.0.2"]; ok {
 		if _, leaked := node.Pods["10.244.0.11"]; leaked {

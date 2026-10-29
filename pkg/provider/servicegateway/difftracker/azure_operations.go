@@ -86,8 +86,12 @@ func (dt *DiffTracker) createOrUpdateManagedPublicIP(ctx context.Context, pip ar
 		if existing == nil {
 			return nil, fmt.Errorf("reading Public IP %q before creation returned no resource", pipName)
 		}
-		if kind == Outbound && !ownsPublicIP(existing) {
-			return nil, egressRejectedError{fmt.Errorf("public IP %q is not marked as CCM-managed", pipName)}
+		if !ownsPublicIP(existing) {
+			ownershipErr := fmt.Errorf("public IP %q is not marked as CCM-managed", pipName)
+			if kind == Outbound {
+				return nil, egressRejectedError{ownershipErr}
+			}
+			return nil, ownershipErr
 		}
 		pip.Tags = existing.Tags
 		pip.Etag = existing.Etag
@@ -102,7 +106,7 @@ func (dt *DiffTracker) createOrUpdateManagedPublicIP(ctx context.Context, pip ar
 	return response, nil
 }
 
-// The caller must establish ownership before deleting the address.
+// deletePublicIP deletes a public IP address. The caller must establish ownership first.
 func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup string, pipName string) error {
 	if pipName == "" {
 		return fmt.Errorf("deletePublicIP: pipName is empty")
@@ -163,23 +167,23 @@ func (dt *DiffTracker) createOrUpdateLB(ctx context.Context, lb armnetwork.LoadB
 	return nil
 }
 
-// deleteLB deletes a load balancer by service UID
-func (dt *DiffTracker) deleteLB(ctx context.Context, uid string) error {
-	uid = strings.ToLower(uid)
-	dt.logger.V(2).Info("Deleting LoadBalancer", "loadBalancer", uid)
+// deleteLB deletes a load balancer by its ServiceGateway service name.
+func (dt *DiffTracker) deleteLB(ctx context.Context, serviceName string) error {
+	serviceName = strings.ToLower(serviceName)
+	dt.logger.V(2).Info("Deleting LoadBalancer", "loadBalancer", serviceName)
 
-	err := dt.networkClientFactory.GetLoadBalancerClient().Delete(ctx, dt.config.ResourceGroup, uid)
+	err := dt.networkClientFactory.GetLoadBalancerClient().Delete(ctx, dt.config.ResourceGroup, serviceName)
 	if _, err := errutils.CheckResourceExistsFromAzcoreError(err); err != nil {
-		return fmt.Errorf("deleteLB: failed to delete LoadBalancer (uid=%s): %w", uid, err)
+		return fmt.Errorf("deleteLB: failed to delete LoadBalancer (uid=%s): %w", serviceName, err)
 	}
 
 	return nil
 }
 
-func withNATGatewayETag(ctx context.Context, etag *string) (context.Context, error) {
+func withNATGatewayETag(ctx context.Context, natGatewayName string, etag *string) (context.Context, error) {
 	// A retried PUT can hide an applied link behind a later 412.
 	ctx = policy.WithRetryOptions(ctx, policy.RetryOptions{MaxRetries: -1})
-	return withResourceETag(ctx, "BYO NAT Gateway", etag)
+	return withResourceETag(ctx, fmt.Sprintf("BYO NAT Gateway %q", natGatewayName), etag)
 }
 
 func withResourceETag(ctx context.Context, resource string, etag *string) (context.Context, error) {
@@ -255,18 +259,15 @@ func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName,
 	dt.logger.V(2).Info("Disassociating NAT Gateway from Service Gateway", "natGateway", natGatewayName, "serviceGateway", serviceGatewayName, "resourceGroup", natGatewayResourceGroup)
 
 	managed := strings.EqualFold(natGatewayResourceGroup, dt.config.ResourceGroup)
-	var natGateway *armnetwork.NatGateway
-	if managed {
-		natGateway, exists, err = dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
-		if err != nil {
-			return false, false, err
-		}
-		if !exists {
-			return false, true, nil
-		}
-		if !ownsNATGateway(natGateway) {
-			return true, false, nil
-		}
+	natGateway, exists, err := dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
+	if err != nil {
+		return false, false, err
+	}
+	if !exists {
+		return false, true, nil
+	}
+	if managed && !ownsNATGateway(natGateway) {
+		return true, false, nil
 	}
 
 	// Step 1: clear the ServiceGateway-side reference if it still has one.
@@ -279,9 +280,9 @@ func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName,
 		return exists, false, fmt.Errorf("getting Service Gateway services: %w", err)
 	}
 	natGatewayID := fmt.Sprintf(consts.NatGatewayIDTemplate, dt.config.networkResourceSubscriptionID(), natGatewayResourceGroup, natGatewayName)
-	user := otherServiceUsingNATGateway(services, serviceName, natGatewayID)
-	if managed && user != "" {
-		return true, false, nil
+	if otherServiceName := otherServiceUsingNATGateway(services, serviceName, natGatewayID); otherServiceName != "" {
+		dt.logger.V(2).Info("Skipped unlinking NAT Gateway because another service uses it", "natGateway", natGatewayName, "service", otherServiceName)
+		return exists, false, nil
 	}
 	canManage = true
 
@@ -314,26 +315,13 @@ func (dt *DiffTracker) unlinkNatGateway(ctx context.Context, serviceGatewayName,
 	// Step 2: clear the NAT-gateway-side reference if it still points back at the
 	// Service Gateway. This runs independently of Step 1 so a retry after a
 	// partial failure still reconciles the NAT gateway.
-	if user != "" {
-		dt.logger.V(2).Info("Kept NAT Gateway linked to Service Gateway because another service uses it", "natGateway", natGatewayName, "service", user)
-		return false, false, nil
-	}
-	if !managed {
-		natGateway, exists, err = dt.getNatGateway(ctx, natGatewayResourceGroup, natGatewayName)
-		if err != nil {
-			return false, false, err
-		}
-		if !exists {
-			return false, true, nil
-		}
-		if natGateway == nil || natGateway.Properties == nil {
-			return true, false, fmt.Errorf("NAT Gateway %q was read without its properties; link state is unknown", natGatewayID)
-		}
+	if !managed && natGateway.Properties == nil {
+		return true, false, fmt.Errorf("NAT Gateway %q was read without its properties; link state is unknown", natGatewayID)
 	}
 	if linked := natGatewayServiceGatewayID(natGateway); linked != "" && strings.EqualFold(linked, dt.config.ServiceGatewayResourceID()) {
 		updateCtx := ctx
 		if !managed {
-			updateCtx, err = withNATGatewayETag(ctx, natGateway.Etag)
+			updateCtx, err = withNATGatewayETag(ctx, natGatewayName, natGateway.Etag)
 			if err != nil {
 				return exists, canManage, err
 			}
@@ -394,7 +382,7 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 	return nil
 }
 
-// getServiceByUID resolves a canonical inbound SGW name to its Kubernetes Service. It resolves
+// getServiceBySGWName resolves a canonical inbound SGW name to its Kubernetes Service. It resolves
 // the recorded namespace/name through the cached serviceLister, an O(1) read backed by the shared
 // informer, checking the decoded Kubernetes UID so a recreated Service that reuses the same
 // namespace/name is never mistaken for the original. It falls back to a direct apiserver Get when
@@ -402,42 +390,41 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 // namespace/name are unknown (e.g. entries recovered from NRP without a Service object).
 //
 // It matches on UID alone: the returned Service may no longer be of type LoadBalancer and may be
-// terminating. Only the UID-scan fallback narrows by spec.type. Callers that act on the result must
-// apply their own type and deletion checks.
-func (dt *DiffTracker) getServiceByUID(ctx context.Context, uid string) (*v1.Service, error) {
-	namespace, name, lister := dt.serviceIdentityForUID(uid)
-	rawUID, kind, ok := serviceIdentity(uid)
+// terminating. Callers that act on the result must apply their own type and deletion checks.
+func (dt *DiffTracker) getServiceBySGWName(ctx context.Context, serviceName string) (*v1.Service, error) {
+	uid, kind, ok := serviceIdentity(serviceName)
 	if !ok || kind != Inbound {
-		return nil, fmt.Errorf("getServiceByUID: invalid inbound ServiceGateway name %q", uid)
+		return nil, fmt.Errorf("getServiceBySGWName: invalid inbound ServiceGateway name %q", serviceName)
 	}
 
+	namespace, name, lister := dt.serviceLookupInfo(serviceName)
 	if namespace != "" && name != "" {
 		svc, err := dt.getServiceByNamespaceName(ctx, lister, namespace, name)
 		switch {
 		case err == nil:
-			if string(svc.UID) == rawUID {
+			if string(svc.UID) == uid {
 				return svc, nil
 			}
 			// A different Service now occupies this namespace/name; the original is gone.
-			return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "services"}, uid)
+			return nil, apierrors.NewNotFound(schema.GroupResource{Resource: "services"}, serviceName)
 		case apierrors.IsNotFound(err):
 			return nil, err
 		default:
 			// Transient error resolving by namespace/name; fall through to a UID scan.
-			dt.logger.V(4).Info("getServiceByUID: namespace/name lookup failed, falling back to list",
-				"uid", uid, "namespace", namespace, "name", name, "error", err)
+			dt.logger.V(4).Info("getServiceBySGWName: namespace/name lookup failed, falling back to list",
+				"uid", serviceName, "namespace", namespace, "name", name, "error", err)
 		}
 	}
 
-	return dt.getServiceByUIDViaList(ctx, rawUID)
+	return dt.getServiceByUIDViaList(ctx, uid)
 }
 
-// serviceIdentityForUID returns the namespace/name recorded for a canonical SGW identity together with the
-// current serviceLister, read under mu.
-func (dt *DiffTracker) serviceIdentityForUID(uid string) (namespace, name string, lister corelisters.ServiceLister) {
+// serviceLookupInfo returns the recorded Kubernetes namespace/name and current serviceLister,
+// read together under mu.
+func (dt *DiffTracker) serviceLookupInfo(serviceName string) (namespace, name string, lister corelisters.ServiceLister) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	if op, ok := dt.pendingServiceOps[uid]; ok {
+	if op, ok := dt.pendingServiceOps[serviceName]; ok {
 		namespace = op.Config.Namespace
 		name = op.Config.Name
 	}
@@ -470,11 +457,11 @@ func (dt *DiffTracker) getServiceByNamespaceName(ctx context.Context, lister cor
 // Filtering by type would hide such a Service, and callers read the NotFound below as "gone".
 func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (*v1.Service, error) {
 	if dt.kubeClient == nil {
-		return nil, fmt.Errorf("getServiceByUID: no Kubernetes client")
+		return nil, fmt.Errorf("getServiceByUIDViaList: no Kubernetes client")
 	}
 	svcList, err := dt.kubeClient.CoreV1().Services(v1.NamespaceAll).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("getServiceByUID: list failed: %w", err)
+		return nil, fmt.Errorf("getServiceByUIDViaList: list failed: %w", err)
 	}
 	for i := range svcList.Items {
 		if string(svcList.Items[i].UID) == uid {
@@ -497,7 +484,7 @@ func (dt *DiffTracker) getServiceByUIDViaList(ctx context.Context, uid string) (
 // the PIP was provisioning still gets stamped: the ingress IP is written onto a Service that is no
 // longer a LoadBalancer, and nothing clears it until that Service is edited again. The startup
 // recovery path re-applies it for the same reason.
-func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serviceUID string, ip string) error {
+func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serviceName string, ip string) error {
 	if ip == "" {
 		return fmt.Errorf("updateServiceLoadBalancerStatus: ip is empty")
 	}
@@ -508,7 +495,7 @@ func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serv
 	newIsIPv4 := parsedIP.To4() != nil
 
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		svc, err := dt.getServiceByUID(ctx, serviceUID)
+		svc, err := dt.getServiceBySGWName(ctx, serviceName)
 		if err != nil {
 			return fmt.Errorf("updateServiceLoadBalancerStatus: failed to get service: %w", err)
 		}

@@ -42,10 +42,10 @@ import (
 )
 
 func TestPodInformerSameRawIdentityHasIndependentDrain(t *testing.T) {
-	const rawUID, hostIP, podIP = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "10.0.0.1", "10.244.0.5"
-	inboundName, outboundName := inboundServiceName(rawUID), outboundServiceName(rawUID)
+	const uid, hostIP, podIP = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "10.0.0.1", "10.244.0.5"
+	inboundName, outboundName := inboundServiceName(uid), outboundServiceName(uid)
 	for _, registered := range []bool{false, true} {
-		pod := newTestPod("ns", "shared", rawUID, hostIP, podIP, v1.PodRunning, nil)
+		pod := newTestPod("ns", "shared", uid, hostIP, podIP, v1.PodRunning, nil)
 		pod.UID = "pod-uid"
 		kube := fake.NewSimpleClientset(pod)
 		dt := newTestDiffTracker()
@@ -827,9 +827,9 @@ func TestPodInformerRemovePod_NoIPDeleteWaitsForUnbackedNRPAddress(t *testing.T)
 	kube := fake.NewSimpleClientset(pod)
 	dt := newProviderDiffTracker(t, ctrl, kube)
 	dt.pendingServiceOps[egress] = &ServiceOperationState{
-		ServiceUID: egress,
-		Config:     NewOutboundServiceConfig(egress, nil),
-		State:      StateCreated,
+		ServiceName: egress,
+		Config:      NewOutboundServiceConfig(egress, nil),
+		State:       StateCreated,
 	}
 	dt.K8sResources.Nodes[location] = Node{
 		Pods: map[string]Pod{
@@ -890,9 +890,9 @@ func TestPodInformerRemovePod_NoIPLastPodWaitsForServiceDeletion(t *testing.T) {
 	kube := fake.NewSimpleClientset(pod)
 	dt := newProviderDiffTracker(t, ctrl, kube)
 	dt.pendingServiceOps[egress] = &ServiceOperationState{
-		ServiceUID: egress,
-		Config:     NewOutboundServiceConfig(egress, nil),
-		State:      StateCreated,
+		ServiceName: egress,
+		Config:      NewOutboundServiceConfig(egress, nil),
+		State:       StateCreated,
 	}
 	dt.K8sResources.Nodes["10.0.0.1"] = Node{
 		Pods: map[string]Pod{
@@ -967,9 +967,9 @@ func TestPodInformerRemovePod_LocalStateMissingButNRPAddressPresentKeepsFinalize
 		},
 	}
 	dt.pendingServiceOps[outboundServiceName(egress)] = &ServiceOperationState{
-		ServiceUID: outboundServiceName(egress),
-		Config:     NewOutboundServiceConfig(outboundServiceName(egress), nil),
-		State:      StateCreated,
+		ServiceName: outboundServiceName(egress),
+		Config:      NewOutboundServiceConfig(outboundServiceName(egress), nil),
+		State:       StateCreated,
 	}
 
 	// Deliberately do not seed K8sResources.Nodes: this models the production failure where the
@@ -1431,8 +1431,8 @@ func TestPodInformerRemovePod_BufferedPodFinalizerRemovedByCaller(t *testing.T) 
 
 func TestPodInformerRemovePod_ReservedFinalizerDecision(t *testing.T) {
 	for _, tc := range []struct {
-		name, label, pendingUID string
-		last, retry             bool
+		name, label, pendingUID   string
+		last, retry, unregistered bool
 	}{
 		{name: "no pending drain", label: "default"},
 		{name: "case-insensitive reserved name", label: "DEFAULT"},
@@ -1441,6 +1441,8 @@ func TestPodInformerRemovePod_ReservedFinalizerDecision(t *testing.T) {
 		{name: "previous gateway still deleting", label: "policy-default", pendingUID: "pod-uid", last: true},
 		{name: "another UID does not hold this pod", label: "default", pendingUID: "older-uid", last: true},
 		{name: "failed finalizer removal is retried", label: "default", retry: true},
+		{name: "rejected raw default label", label: "default-natgw", unregistered: true},
+		{name: "rejected raw default label preserves prior drain", label: "default-natgw", pendingUID: "pod-uid", unregistered: true},
 	} {
 		for _, noIP := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/noIP=%t", tc.name, noIP), func(t *testing.T) {
@@ -1457,14 +1459,17 @@ func TestPodInformerRemovePod_ReservedFinalizerDecision(t *testing.T) {
 				dt := newTestDiffTracker()
 				dt.kubeClient = kube
 				serviceName := outboundServiceName(tc.label)
-				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(serviceName)
-				dt.NRPResources.NATGateways.Insert(serviceName)
+				dt.NRPResources.ReservedOutboundServices = utilsets.NewString()
+				if !tc.unregistered {
+					dt.NRPResources.ReservedOutboundServices.Insert(serviceName)
+					dt.NRPResources.NATGateways.Insert(serviceName)
+				}
 				var pending *PendingPodDeletion
 				if tc.pendingUID != "" {
 					pending = &PendingPodDeletion{
 						Namespace: "ns", Name: pod.Name, UID: tc.pendingUID,
-						ServiceUID: outboundServiceName("previous"),
-						Addresses:  []string{"10.244.0.9"}, IsLastPod: tc.last,
+						ServiceName: outboundServiceName("previous"),
+						Addresses:   []string{"10.244.0.9"}, IsLastPod: tc.last,
 					}
 					dt.pendingPodDeletions["ns/"+pod.Name] = pending
 				}
@@ -1512,8 +1517,8 @@ func TestPodInformerRemovePod_ReservedFinalizerDecision(t *testing.T) {
 				assert.Empty(t, dt.pendingServiceOps)
 				assert.Empty(t, dt.pendingServiceDeletions)
 				assert.Empty(t, dt.pendingPods)
-				assert.True(t, dt.NRPResources.ReservedOutboundServices.Has(serviceName))
-				assert.True(t, dt.NRPResources.NATGateways.Has(serviceName))
+				assert.Equal(t, !tc.unregistered, dt.NRPResources.ReservedOutboundServices.Has(serviceName))
+				assert.Equal(t, !tc.unregistered, dt.NRPResources.NATGateways.Has(serviceName))
 			})
 		}
 	}
@@ -1522,15 +1527,7 @@ func TestPodInformerRemovePod_ReservedFinalizerDecision(t *testing.T) {
 }
 
 // TestPodInformerAddPod_IgnoresReservedEgressLabel pins that a pod cannot make this controller
-// manage the cluster's default outbound NAT Gateway.
-//
-// The egress label is user-controlled and becomes the Azure resource name verbatim: the NAT Gateway
-// is named after it and its Public IP is "<label>-pip". Labelling a pod with the RP-owned default
-// gateway's name therefore aims the whole egress lifecycle at it - registering the first pod PUTs
-// that gateway and its Public IP, and removing the last pod DELETEs them, taking out the cluster's
-// default egress and reallocating its address. Nothing else prevents this: the default gateway is
-// deliberately excluded from NRP state at startup, so the pod-add path always concludes it must be
-// created, and the pod informer watches every namespace filtered only by this label.
+// manage the default service or accept its reserved raw label.
 func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
 	for _, tc := range []struct {
 		label      string
@@ -1539,9 +1536,10 @@ func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
 		{label: "default"},
 		{label: "Default"},
 		{label: "DEFAULT"},
+		{label: "default-natgw"},
+		{label: "DEFAULT-NATGW"},
 		{label: "custom-egress", nrpDefault: true},
 		{label: "CUSTOM-EGRESS", nrpDefault: true},
-		{label: "default-natgw", nrpDefault: true},
 	} {
 		t.Run(tc.label, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -1587,7 +1585,7 @@ func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
 			case ev := <-rec.Events:
 				assert.Contains(t, ev, "ServiceGatewayReservedEgressLabel",
 					"the user must be told the label is reserved, not merely malformed")
-				assert.Contains(t, ev, fmt.Sprintf("Egress service name %q is reserved for a default service", serviceName))
+				assert.Contains(t, ev, fmt.Sprintf("Egress label %q is reserved for a default service", strings.ToLower(tc.label)))
 			default:
 				t.Fatal("expected a ServiceGatewayReservedEgressLabel warning Event")
 			}
@@ -1599,7 +1597,7 @@ func TestPodInformerAddPod_IgnoresReservedEgressLabel(t *testing.T) {
 // TestPodInformerAddPod_AcceptsOrdinaryEgressLabel is the control: the reserved-name guard must not
 // reject ordinary egress identities.
 func TestPodInformerAddPod_AcceptsOrdinaryEgressLabel(t *testing.T) {
-	for _, label := range []string{"team-egress", "TEAM-EGRESS", "default-natgw", "DEFAULT-NATGW", strings.Repeat("a", maxEgressIdentityLength)} {
+	for _, label := range []string{"team-egress", "TEAM-EGRESS", "team-natgw", "TEAM-NATGW", "default-natgw2", strings.Repeat("a", maxEgressIdentityLength)} {
 		t.Run(label, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
@@ -1733,9 +1731,9 @@ func TestPodInformerRemovePod_ReleasesFinalizerWhenLabelValueEmptied(t *testing.
 		Addresses: map[string]NRPAddress{"10.244.0.5": {Services: utilsets.NewString(outboundServiceName("team-egress"))}},
 	}
 	labelledDT.pendingServiceOps[outboundServiceName("team-egress")] = &ServiceOperationState{
-		ServiceUID: outboundServiceName("team-egress"),
-		Config:     NewOutboundServiceConfig(outboundServiceName("team-egress"), nil),
-		State:      StateCreated,
+		ServiceName: outboundServiceName("team-egress"),
+		Config:      NewOutboundServiceConfig(outboundServiceName("team-egress"), nil),
+		State:       StateCreated,
 	}
 
 	labelledDT.podInformerRemovePod(labelled)

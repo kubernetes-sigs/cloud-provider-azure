@@ -103,6 +103,25 @@ func TestCreateOrUpdateManagedPublicIP_Mock(t *testing.T) {
 		assert.Nil(t, result)
 		assert.ErrorIs(t, err, writeErr)
 	})
+
+	t.Run("unowned outbound PIP remains an egress rejection", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		factory := mock_azclient.NewMockClientFactory(ctrl)
+		client := mock_publicipaddressclient.NewMockInterface(ctrl)
+		factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+		client.EXPECT().Get(gomock.Any(), "rg", "svc-natgw-pip", nil).
+			Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"external"`)}, nil).Times(1)
+
+		dt := &DiffTracker{networkClientFactory: factory, config: testConfig()}
+		result, err := dt.createOrUpdateManagedPublicIP(context.Background(), armnetwork.PublicIPAddress{
+			Name: ptr.To("svc-natgw-pip"), Tags: managedResourceTags(),
+		})
+
+		assert.Nil(t, result)
+		assert.ErrorContains(t, err, "not marked as CCM-managed")
+		assert.True(t, isEgressRejected(err))
+		assert.False(t, isTerminalError(err))
+	})
 }
 
 func TestDeletePublicIP_Mock(t *testing.T) {
@@ -253,12 +272,21 @@ func TestCreateInboundPublicIP_PreservesExistingOwnership(t *testing.T) {
 		wantErrText string
 	}{
 		{name: "new address gets ownership", readErr: notFoundError(), wantWrite: true},
-		{name: "owned retry keeps all tags", existing: &armnetwork.PublicIPAddress{Tags: ownedTags}, wantWrite: true},
-		{name: "legacy remains untagged", existing: &armnetwork.PublicIPAddress{}, wantWrite: true},
-		{name: "another owner is not adopted", existing: &armnetwork.PublicIPAddress{Tags: foreignTags}, wantWrite: true},
+		{name: "owned retry keeps all tags and ETag", existing: &armnetwork.PublicIPAddress{
+			Tags: ownedTags, Etag: ptr.To(`W/"existing"`),
+		}, wantWrite: true},
+		{name: "untagged address is rejected", existing: &armnetwork.PublicIPAddress{}, wantErrText: "not marked as CCM-managed"},
+		{name: "another owner is rejected", existing: &armnetwork.PublicIPAddress{Tags: foreignTags}, wantErrText: "not marked as CCM-managed"},
+		{name: "empty marker is rejected", existing: &armnetwork.PublicIPAddress{
+			Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("")},
+		}, wantErrText: "not marked as CCM-managed"},
+		{name: "nil marker is rejected", existing: &armnetwork.PublicIPAddress{
+			Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: nil},
+		}, wantErrText: "not marked as CCM-managed"},
 		{name: "managed marker is preserved", existing: &armnetwork.PublicIPAddress{Tags: managedResourceTags()}, wantWrite: true},
-		{name: "old identity tag is preserved without migration", existing: &armnetwork.PublicIPAddress{
-			Tags: map[string]*string{"k8s-azure-service-uid": ptr.To(identity)}}, wantWrite: true},
+		{name: "unrelated tags do not establish ownership", existing: &armnetwork.PublicIPAddress{
+			Tags: map[string]*string{"team": ptr.To("customer")},
+		}, wantErrText: "not marked as CCM-managed"},
 		{name: "read failed", readErr: readFailure, wantErr: readFailure},
 		{name: "read canceled", readErr: context.Canceled, wantErr: context.Canceled},
 		{name: "nil successful response", wantErrText: "returned no resource"},
@@ -291,6 +319,9 @@ func TestCreateInboundPublicIP_PreservesExistingOwnership(t *testing.T) {
 				assert.ErrorIs(t, err, tc.wantErr)
 			case tc.wantErrText != "":
 				assert.ErrorContains(t, err, tc.wantErrText)
+				assert.Nil(t, result)
+				assert.False(t, isEgressRejected(err))
+				assert.False(t, isTerminalError(err))
 			default:
 				assert.NoError(t, err)
 				assert.Equal(t, &expected, result)

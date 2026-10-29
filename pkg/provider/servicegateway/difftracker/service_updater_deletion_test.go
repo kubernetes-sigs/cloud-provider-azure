@@ -75,9 +75,9 @@ func deletionTestDiffTracker(kube *fake.Clientset, f *mock_azclient.MockClientFa
 	serviceName := inboundServiceName("uid-1")
 	dt.NRPResources.LoadBalancers = utilsets.NewString(serviceName)
 	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
-		ServiceUID: serviceName, Config: NewInboundServiceConfig(serviceName, nil), State: StateDeletionInProgress,
+		ServiceName: serviceName, Config: NewInboundServiceConfig(serviceName, nil), State: StateDeletionInProgress,
 	}
-	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceUID: serviceName, IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
 	return dt
 }
 
@@ -110,10 +110,10 @@ func TestServiceUpdaterDeleteInboundService_FinalizerFailureRetries(t *testing.T
 
 	dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
 	var reportedSuccess *bool
-	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+	su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 		v := ok
 		reportedSuccess = &v
-		dt.OnServiceCreationComplete(uid, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	})
 
 	su.deleteInboundService(inboundServiceName("uid-1"), "corr-1")
@@ -134,10 +134,10 @@ func TestServiceUpdaterDeleteInboundService_Succeeds(t *testing.T) {
 	kube := fake.NewSimpleClientset(deletionTestService())
 	dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
 	var reportedSuccess *bool
-	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+	su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 		v := ok
 		reportedSuccess = &v
-		dt.OnServiceCreationComplete(uid, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	})
 
 	su.deleteInboundService(inboundServiceName("uid-1"), "corr-1")

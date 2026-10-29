@@ -66,12 +66,12 @@ func TestLoadBalancerEnsureTracksExternalService(t *testing.T) {
 
 	lb := NewLoadBalancer(nil)
 	assert.NoError(t, lb.SetTracker(tracker))
-	assert.False(t, tracker.IsServiceTracked(ServiceUID(svc)))
+	assert.False(t, tracker.IsServiceTracked(ServiceName(svc)))
 
 	status, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, status)
-	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)))
+	assert.True(t, tracker.IsServiceTracked(ServiceName(svc)))
 
 	_, exists, err := lb.GetLoadBalancer(context.Background(), "cluster", svc)
 	assert.NoError(t, err)
@@ -197,7 +197,7 @@ func TestLoadBalancerEmitsWarningEventForRejectedService(t *testing.T) {
 
 			_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
 			assert.Error(t, err)
-			assert.False(t, tracker.IsServiceTracked(ServiceUID(svc)))
+			assert.False(t, tracker.IsServiceTracked(ServiceName(svc)))
 
 			select {
 			case event := <-recorder.Events:
@@ -256,13 +256,13 @@ func TestLoadBalancerEnsureDeletedSchedulesTeardown(t *testing.T) {
 
 	_, err := lb.EnsureLoadBalancer(context.Background(), "cluster", svc, nil)
 	assert.NoError(t, err)
-	assert.True(t, tracker.IsServiceTracked(ServiceUID(svc)))
+	assert.True(t, tracker.IsServiceTracked(ServiceName(svc)))
 
 	assert.NoError(t, lb.EnsureLoadBalancerDeleted(context.Background(), "cluster", svc))
 
 	tracker.mu.Lock()
 	defer tracker.mu.Unlock()
-	opState, tracked := tracker.pendingServiceOps[ServiceUID(svc)]
+	opState, tracked := tracker.pendingServiceOps[ServiceName(svc)]
 	if assert.True(t, tracked, "deletion must leave the engine tracking the teardown") {
 		assert.Contains(t,
 			[]ResourceState{StateDeletionPending, StateDeletionInProgress},

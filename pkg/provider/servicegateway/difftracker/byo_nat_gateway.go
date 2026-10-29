@@ -44,7 +44,7 @@ const natGatewayResourceType = "Microsoft.Network/natGateways"
 
 var byoResourceGroupNameRE = regexp.MustCompile(consts.ResourceGroupNamePattern)
 
-// Admission rejection retries without holding initial synchronization open between attempts.
+// egressRejectedError marks admission rejections that retry without blocking initial sync between attempts.
 type egressRejectedError struct{ error }
 
 var errNoEgressMember = errors.New("no active member pod")
@@ -56,7 +56,8 @@ func isEgressRejected(err error) bool {
 	return errors.As(err, &rejected)
 }
 
-// On success, a nil gateway means managed egress; the pod identifies the event recipient.
+// resolveBYONATGateway selects a gateway; nil on success means managed egress.
+// The returned pod identifies the event recipient.
 func (s *ServiceUpdater) resolveBYONATGateway(ctx context.Context, identity, podNS, podName string) (*armnetwork.NatGateway, *v1.Pod, error) {
 	dt := s.diffTracker
 	pod, err := dt.egressMemberPod(ctx, identity, podNS, podName)
@@ -122,7 +123,7 @@ func (s *ServiceUpdater) resolveBYONATGateway(ctx context.Context, identity, pod
 	return natGateway, pod, nil
 }
 
-// Read pods from the API because selection also runs before informer startup.
+// egressMemberPod reads from the API because selection also runs before informer startup.
 // Prefer the trigger, then buffered arrival order, then sorted startup members.
 func (dt *DiffTracker) egressMemberPod(ctx context.Context, identity, podNS, podName string) (*v1.Pod, error) {
 	if dt.kubeClient == nil {
@@ -162,7 +163,7 @@ func (dt *DiffTracker) readEgressMember(ctx context.Context, identity, namespace
 	return pod, nil
 }
 
-// Snapshot membership under dt.mu; callers read pods after releasing it.
+// egressPodKeysOf snapshots membership under dt.mu; callers read pods after releasing it.
 func (dt *DiffTracker) egressPodKeysOf(identity string) []string {
 	var pending, known []string
 	dt.mu.Lock()
@@ -305,6 +306,7 @@ func (s *ServiceUpdater) cleanupManagedOutboundResources(ctx context.Context, id
 	return s.deleteOwnedOutboundPublicIPs(ctx, identity, correlationID)
 }
 
+// otherServiceUsing finds another service using the NAT Gateway.
 // A missing Service Gateway has no remaining users.
 func (dt *DiffTracker) otherServiceUsing(ctx context.Context, identity, natGatewayID string) (string, error) {
 	services, err := dt.networkClientFactory.GetServiceGatewayClient().GetServices(ctx, dt.config.ResourceGroup, dt.config.ServiceGatewayResourceName)
@@ -449,7 +451,7 @@ func (dt *DiffTracker) clusterNATGatewayState(ctx context.Context, identity stri
 	return true, user == "", nil
 }
 
-// Reserve service identities, not the names of their referenced NAT Gateways.
+// isReservedOutboundService checks reserved service identities, not referenced NAT Gateway names.
 func (dt *DiffTracker) isReservedOutboundService(identity string) bool {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()

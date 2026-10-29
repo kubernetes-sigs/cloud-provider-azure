@@ -34,9 +34,9 @@ import (
 func TestServiceGatewayResourceNaming(t *testing.T) {
 	service := &v1.Service{ObjectMeta: metav1.ObjectMeta{UID: "SERVICE-UID"}}
 
-	assert.Equal(t, "service-uid-lb", ServiceUID(service))
-	assert.Empty(t, ServiceUID(nil))
-	assert.Equal(t, "service-uid-lb-pip", PublicIPName(ServiceUID(service)))
+	assert.Equal(t, "service-uid-lb", ServiceName(service))
+	assert.Empty(t, ServiceName(nil))
+	assert.Equal(t, "service-uid-lb-pip", PublicIPName(ServiceName(service)))
 	assert.Equal(t, "payments-natgw", outboundServiceName("PAYMENTS"))
 	assert.Equal(t, "payments-natgw-natgw", outboundServiceName("payments-natgw"))
 	assert.Equal(t, "payments-lb-natgw", outboundServiceName("payments-lb"))
@@ -1055,9 +1055,13 @@ func TestIsValidEgressIdentity_RejectsReservedNames(t *testing.T) {
 		assert.False(t, IsValidEgressIdentity(strings.ToLower(name)),
 			"%q generates the RP-owned default gateway name", name)
 	}
+	for _, name := range []string{"default-natgw", "Default-Natgw", "DEFAULT-NATGW"} {
+		assert.True(t, IsReservedEgressIdentity(name))
+		assert.False(t, IsValidEgressIdentity(strings.ToLower(name)), "%q is a reserved raw label", name)
+	}
 
 	// Controls: shape-valid identities that merely resemble the reserved name stay usable.
-	for _, name := range []string{"team-egress", "default-natgw", "default-natgw2", "my-default-natgw", "default-natgateway"} {
+	for _, name := range []string{"team-egress", "team-natgw", "default-natgw2", "my-default-natgw", "default-natgateway"} {
 		assert.False(t, IsReservedEgressIdentity(outboundServiceName(name)), "%q must not generate a reserved name", name)
 		assert.True(t, IsValidEgressIdentity(name), "%q must remain a usable egress identity", name)
 	}
@@ -1102,7 +1106,7 @@ func TestIdleTimeout_AdmissionAndBuildAgree(t *testing.T) {
 // NAT Gateway list. An IPv6 pod address registered against a gateway with no V6 public path has no
 // egress at all, and there is no outbound update path to correct it later.
 func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
-	const uid = "team-egress-natgw"
+	const serviceName = "team-egress-natgw"
 	dtConfig := testConfig()
 
 	versions := func(pips []armnetwork.PublicIPAddress) map[string]string {
@@ -1126,7 +1130,7 @@ func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
 	}
 
 	t.Run("dual-stack provisions both families", func(t *testing.T) {
-		pips, natGw, _ := buildOutboundServiceResources(uid, &OutboundConfig{
+		pips, natGw, _ := buildOutboundServiceResources(serviceName, &OutboundConfig{
 			IPFamilies: []string{"IPv4", "IPv6"},
 		}, dtConfig)
 
@@ -1145,7 +1149,7 @@ func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
 	})
 
 	t.Run("IPv4-only is unchanged", func(t *testing.T) {
-		pips, natGw, _ := buildOutboundServiceResources(uid, &OutboundConfig{
+		pips, natGw, _ := buildOutboundServiceResources(serviceName, &OutboundConfig{
 			IPFamilies: []string{"IPv4"},
 		}, dtConfig)
 
@@ -1156,7 +1160,7 @@ func TestBuildOutboundServiceResources_DualStack(t *testing.T) {
 	})
 
 	t.Run("a nil config stays IPv4-only", func(t *testing.T) {
-		pips, natGw, _ := buildOutboundServiceResources(uid, nil, dtConfig)
+		pips, natGw, _ := buildOutboundServiceResources(serviceName, nil, dtConfig)
 
 		assert.Equal(t, map[string]string{"team-egress-natgw-pip": "IPv4"}, versions(pips))
 		assert.Empty(t, natGw.Properties.PublicIPAddressesV6)

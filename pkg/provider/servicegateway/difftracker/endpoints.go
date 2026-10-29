@@ -27,15 +27,15 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// serviceUIDOfEndpointSlice returns the owning Service's canonical inbound SGW name, if any.
-func serviceUIDOfEndpointSlice(es *discovery_v1.EndpointSlice) (uid string, loaded bool) {
+// serviceNameOfEndpointSlice returns the owning Service's canonical inbound SGW name, if any.
+func serviceNameOfEndpointSlice(es *discovery_v1.EndpointSlice) (serviceName string, loaded bool) {
 	if es == nil {
 		return "", false
 	}
 	for _, owner := range es.OwnerReferences {
 		if owner.Kind == "Service" {
-			uid := inboundServiceName(string(owner.UID))
-			return uid, uid != ""
+			serviceName := inboundServiceName(string(owner.UID))
+			return serviceName, serviceName != ""
 		}
 	}
 	return "", false
@@ -132,8 +132,8 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldSlice, newES *discovery_v1.Endp
 		return
 	}
 
-	oldUID, oldLoaded := serviceUIDOfEndpointSlice(oldSlice)
-	newUID, newLoaded := serviceUIDOfEndpointSlice(newES)
+	oldServiceName, oldLoaded := serviceNameOfEndpointSlice(oldSlice)
+	newServiceName, newLoaded := serviceNameOfEndpointSlice(newES)
 	oldAddresses := make(map[string]string)
 	newAddresses := make(map[string]string)
 
@@ -155,35 +155,35 @@ func (dt *DiffTracker) ReconcileEndpointSlice(oldSlice, newES *discovery_v1.Endp
 		}
 	}
 
-	if oldLoaded && (!newLoaded || !strings.EqualFold(oldUID, newUID)) {
+	if oldLoaded && (!newLoaded || !strings.EqualFold(oldServiceName, newServiceName)) {
 		if len(oldAddresses) > 0 {
-			dt.UpdateEndpoints(oldUID, oldAddresses, nil)
+			dt.UpdateEndpoints(oldServiceName, oldAddresses, nil)
 		}
 		oldAddresses = nil
 	}
-	if newLoaded && (!oldLoaded || !strings.EqualFold(oldUID, newUID)) {
+	if newLoaded && (!oldLoaded || !strings.EqualFold(oldServiceName, newServiceName)) {
 		if len(newAddresses) > 0 {
-			dt.UpdateEndpoints(newUID, nil, newAddresses)
+			dt.UpdateEndpoints(newServiceName, nil, newAddresses)
 		}
 		return
 	}
 
-	serviceUID := newUID
+	serviceName := newServiceName
 	if !newLoaded {
-		serviceUID = oldUID
+		serviceName = oldServiceName
 	}
-	if serviceUID == "" || len(oldAddresses) == 0 && len(newAddresses) == 0 {
+	if serviceName == "" || len(oldAddresses) == 0 && len(newAddresses) == 0 {
 		return
 	}
-	dt.UpdateEndpoints(serviceUID, oldAddresses, newAddresses)
+	dt.UpdateEndpoints(serviceName, oldAddresses, newAddresses)
 }
 
 // seedInboundEndpointsFromCache replays the current ready endpoints for a newly registered or
 // recreated inbound service. EndpointSlice informers only report changes, so an unchanged slice
 // cannot repopulate endpoint state after a ClusterIP-to-LoadBalancer transition or an in-flight
 // delete/recreate.
-func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
-	if dt == nil || serviceUID == "" {
+func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceName string) {
+	if dt == nil || serviceName == "" {
 		return
 	}
 
@@ -209,8 +209,8 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 		if !ok || es == nil || es.DeletionTimestamp != nil {
 			return true
 		}
-		uid, loaded := serviceUIDOfEndpointSlice(es)
-		if !loaded || !strings.EqualFold(uid, serviceUID) {
+		sliceServiceName, loaded := serviceNameOfEndpointSlice(es)
+		if !loaded || !strings.EqualFold(sliceServiceName, serviceName) {
 			return true
 		}
 
@@ -223,8 +223,8 @@ func (dt *DiffTracker) seedInboundEndpointsFromCache(serviceUID string) {
 	if len(addresses) == 0 {
 		return
 	}
-	dt.logger.V(2).Info("Seeded endpoints for registered service", "service", serviceUID, "endpoints", len(addresses))
-	dt.updateEndpointsLocked(serviceUID, nil, addresses)
+	dt.logger.V(2).Info("Seeded endpoints for registered service", "service", serviceName, "endpoints", len(addresses))
+	dt.updateEndpointsLocked(serviceName, nil, addresses)
 }
 
 // ReconcileNodeIPChange replays the cached EndpointSlices hosting a pod on nodeName into the diff
@@ -257,7 +257,7 @@ func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNod
 		if !ok || es == nil || es.DeletionTimestamp != nil {
 			return true
 		}
-		serviceUID, loaded := serviceUIDOfEndpointSlice(es)
+		serviceName, loaded := serviceNameOfEndpointSlice(es)
 		if !loaded {
 			return true
 		}
@@ -282,10 +282,10 @@ func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNod
 				if !oldOK && !newOK {
 					continue
 				}
-				delta := perService[serviceUID]
+				delta := perService[serviceName]
 				if delta == nil {
 					delta = &endpointDelta{oldAddresses: map[string]string{}, newAddresses: map[string]string{}}
-					perService[serviceUID] = delta
+					perService[serviceName] = delta
 				}
 				if oldOK {
 					delta.oldAddresses[addr.String()] = oldLocation
@@ -298,12 +298,12 @@ func (dt *DiffTracker) ReconcileNodeIPChange(nodeName string, oldNodeIPs, newNod
 		return true
 	})
 
-	for serviceUID, delta := range perService {
+	for serviceName, delta := range perService {
 		if len(delta.oldAddresses) == 0 && len(delta.newAddresses) == 0 {
 			continue
 		}
 		klog.V(2).Infof("ReconcileNodeIPChange: node %s changed, moving pod addresses for service %s (old=%d new=%d)",
-			nodeName, serviceUID, len(delta.oldAddresses), len(delta.newAddresses))
-		dt.UpdateEndpoints(serviceUID, delta.oldAddresses, delta.newAddresses)
+			nodeName, serviceName, len(delta.oldAddresses), len(delta.newAddresses))
+		dt.UpdateEndpoints(serviceName, delta.oldAddresses, delta.newAddresses)
 	}
 }
