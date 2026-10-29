@@ -73,7 +73,7 @@ type PendingPodDeletion struct {
 	Namespace          string   // Pod namespace
 	Name               string   // Pod name
 	UID                string   // Pod UID; guards against stripping a same-name replacement pod's finalizer
-	ServiceUID         string   // Egress service this pod belongs to
+	ServiceName        string   // Egress service this pod belongs to
 	Addresses          []string // PodIPs; a dual-stack pod contributes one address per IP family
 	VerifyServiceDrain bool     // No PodIPs were available; wait until no unbacked NRP address remains for the service
 	IsLastPod          bool     // True if this was the last pod for the service (finalizer removed after NAT GW deletion)
@@ -88,7 +88,7 @@ type PendingPodDeletion struct {
 // carries no addresses and is immediately ready. Without it a transient apiserver error is simply
 // lost: no pending record exists, and the informer only re-drives a pod whose state changes, so the
 // pod stays Terminating until the CCM restarts and blocks node drain and namespace deletion.
-func (dt *DiffTracker) enqueuePodFinalizerRetry(pod *v1.Pod, serviceUID string) {
+func (dt *DiffTracker) enqueuePodFinalizerRetry(pod *v1.Pod, serviceName string) {
 	if pod == nil {
 		return
 	}
@@ -97,11 +97,11 @@ func (dt *DiffTracker) enqueuePodFinalizerRetry(pod *v1.Pod, serviceUID string) 
 	dt.mu.Lock()
 	if _, exists := dt.pendingPodDeletions[podKey]; !exists {
 		dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
-			Namespace:  pod.Namespace,
-			Name:       pod.Name,
-			UID:        string(pod.UID),
-			ServiceUID: serviceUID,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   pod.Namespace,
+			Name:        pod.Name,
+			UID:         string(pod.UID),
+			ServiceName: serviceName,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 	}
 	dt.mu.Unlock()
@@ -368,22 +368,22 @@ func (dt *DiffTracker) AddPodFinalizer(ctx context.Context, pod *v1.Pod) error {
 
 // markServiceFinalizerRecovering records that startup found a stuck finalizer on this Service and
 // left its removal to the diff, so the removal can later be counted as recovered.
-func (dt *DiffTracker) markServiceFinalizerRecovering(serviceUID string) {
+func (dt *DiffTracker) markServiceFinalizerRecovering(serviceName string) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	if dt.recoveredServiceFinalizers == nil {
 		dt.recoveredServiceFinalizers = make(map[string]struct{})
 	}
-	dt.recoveredServiceFinalizers[serviceUID] = struct{}{}
+	dt.recoveredServiceFinalizers[serviceName] = struct{}{}
 }
 
 // recordServiceFinalizerRecoveryDone counts a finalizer that startup scheduled for recovery once it
 // is actually off the Service. Routine deletions are not counted: only a UID that startup marked
 // matches, and it matches once.
-func (dt *DiffTracker) recordServiceFinalizerRecoveryDone(serviceUID string) {
+func (dt *DiffTracker) recordServiceFinalizerRecoveryDone(serviceName string) {
 	dt.mu.Lock()
-	_, scheduled := dt.recoveredServiceFinalizers[serviceUID]
-	delete(dt.recoveredServiceFinalizers, serviceUID)
+	_, scheduled := dt.recoveredServiceFinalizers[serviceName]
+	delete(dt.recoveredServiceFinalizers, serviceName)
 	dt.mu.Unlock()
 
 	if scheduled {
@@ -476,6 +476,20 @@ func (dt *DiffTracker) HasPendingPodDeletion(namespace, name, uid string) bool {
 	return ok && (uid == "" || existing.UID == uid)
 }
 
+// reservedPodFinalizerDecisionLocked leaves reserved resources untouched, but an earlier
+// pod drain can still own its finalizer.
+func (dt *DiffTracker) reservedPodFinalizerDecisionLocked(namespace, name, uid string) DeletePodResult {
+	result := DeletePodResult{}
+	if namespace == "" || name == "" {
+		return result
+	}
+	if pending := dt.pendingPodDeletions[namespace+"/"+name]; pending != nil && (uid == "" || pending.UID == uid) {
+		result.IsLastPod, result.Enqueued = pending.IsLastPod, true
+	}
+	result.setFinalizerDecision()
+	return result
+}
+
 // CheckPendingPodDeletions checks pending pod deletions and removes finalizers for non-last pods
 // whose addresses have been synced to NRP.
 // For non-last pods (isLastPod=false): remove finalizer immediately after location sync
@@ -512,8 +526,8 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 			// unavailable. Wait until the refreshed NRP snapshot contains no service address that is
 			// absent from desired live/buffered state. This prevents restart/no-IP events from
 			// releasing the finalizer while an old overlay mapping can still own the pod's IP.
-			if addr, waiting := dt.serviceHasUnbackedNRPAddressLocked(pending.ServiceUID); waiting {
-				dt.logger.V(4).Info("Unbacked service address still in NRP for no-IP pod, waiting", "address", addr, "pod", podKey, "service", pending.ServiceUID)
+			if addr, waiting := dt.serviceHasUnbackedNRPAddressLocked(pending.ServiceName); waiting {
+				dt.logger.V(4).Info("Unbacked service address still in NRP for no-IP pod, waiting", "address", addr, "pod", podKey, "service", pending.ServiceName)
 				continue
 			}
 		} else {
@@ -613,13 +627,13 @@ func (dt *DiffTracker) CheckPendingPodDeletions(ctx context.Context) (readyRemov
 // serviceHasUnbackedNRPAddressLocked reports whether NRP maps an address to the service that is not
 // backed by current live or buffered desired pod state. It is used for terminating pods first
 // observed without PodIPs, where the exact old address set cannot be reconstructed. Requires dt.mu.
-func (dt *DiffTracker) serviceHasUnbackedNRPAddressLocked(serviceUID string) (string, bool) {
+func (dt *DiffTracker) serviceHasUnbackedNRPAddressLocked(serviceName string) (string, bool) {
 	for _, nrpLocation := range dt.NRPResources.Locations {
 		for address, nrpAddress := range nrpLocation.Addresses {
-			if nrpAddress.Services == nil || !nrpAddress.Services.Has(serviceUID) {
+			if nrpAddress.Services == nil || !nrpAddress.Services.Has(serviceName) {
 				continue
 			}
-			if !dt.outboundAddressDesiredLocked(serviceUID, address) {
+			if !dt.outboundAddressDesiredLocked(serviceName, address) {
 				return address, true
 			}
 		}
@@ -629,15 +643,15 @@ func (dt *DiffTracker) serviceHasUnbackedNRPAddressLocked(serviceUID string) (st
 
 // outboundAddressDesiredLocked reports whether an address is still desired by a live or buffered pod
 // for the service. Requires dt.mu.
-func (dt *DiffTracker) outboundAddressDesiredLocked(serviceUID, address string) bool {
+func (dt *DiffTracker) outboundAddressDesiredLocked(serviceName, address string) bool {
 	for _, node := range dt.K8sResources.Nodes {
 		if pod, ok := node.Pods[address]; ok &&
 			pod.PublicOutboundIdentity != "" &&
-			strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
+			strings.EqualFold(pod.PublicOutboundIdentity, serviceName) {
 			return true
 		}
 	}
-	for _, pending := range dt.pendingPods[serviceUID] {
+	for _, pending := range dt.pendingPods[serviceName] {
 		if pending.Address == address {
 			return true
 		}
@@ -650,7 +664,7 @@ func (dt *DiffTracker) outboundAddressDesiredLocked(serviceUID, address string) 
 // locations). The caller keeps the finalizer until every address has left NRP. Requires dt.mu held.
 func (dt *DiffTracker) podAddressStillInNRPLocked(pending *PendingPodDeletion) (string, bool) {
 	for _, address := range pending.Addresses {
-		if dt.outboundAddressInAnyNRPLocationLocked(pending.ServiceUID, address) {
+		if dt.outboundAddressInAnyNRPLocationLocked(pending.ServiceName, address) {
 			return address, true
 		}
 	}
@@ -659,13 +673,13 @@ func (dt *DiffTracker) podAddressStillInNRPLocked(pending *PendingPodDeletion) (
 
 // outboundAddressInAnyNRPLocationLocked reports whether the given address is registered in NRP for
 // the service under any node location. Must be called with dt.mu held.
-func (dt *DiffTracker) outboundAddressInAnyNRPLocationLocked(serviceUID, address string) bool {
+func (dt *DiffTracker) outboundAddressInAnyNRPLocationLocked(serviceName, address string) bool {
 	for _, nrpLocation := range dt.NRPResources.Locations {
 		nrpAddress, ok := nrpLocation.Addresses[address]
 		if !ok {
 			continue
 		}
-		if nrpAddress.Services != nil && nrpAddress.Services.Has(serviceUID) {
+		if nrpAddress.Services != nil && nrpAddress.Services.Has(serviceName) {
 			return true
 		}
 	}
@@ -688,7 +702,7 @@ func appendAddressIfAbsent(addresses []string, addr string) []string {
 // This is called after the NAT Gateway has been successfully deleted.
 // It uses the collect-unlock-process-relock pattern to avoid holding the mutex during API calls.
 // Implements retry with exponential backoff for resilience against transient failures.
-func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID string) error {
+func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceName string) error {
 	// Phase 1: Collect last-pod entries to process (with lock)
 	dt.mu.Lock()
 
@@ -703,11 +717,11 @@ func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID s
 
 	for podKey, pending := range dt.pendingPodDeletions {
 		// Only process last-pod entries for this service
-		if !pending.IsLastPod || pending.ServiceUID != serviceUID {
+		if !pending.IsLastPod || pending.ServiceName != serviceName {
 			continue
 		}
 
-		dt.logger.V(5).Info("Will remove finalizer from last pod after NAT Gateway deletion", "pod", podKey, "serviceUID", serviceUID)
+		dt.logger.V(5).Info("Will remove finalizer from last pod after NAT Gateway deletion", "pod", podKey, "serviceUID", serviceName)
 
 		toProcess = append(toProcess, lastPodEntry{
 			Key:                podKey,
@@ -789,13 +803,13 @@ func (dt *DiffTracker) RemoveLastPodFinalizers(ctx context.Context, serviceUID s
 		remaining := len(dt.pendingPodDeletions)
 		dt.mu.Unlock()
 
-		dt.logger.V(2).Info("Removed finalizers from last-pod entries for service", "processed", len(processed), "serviceUID", serviceUID, "failed", len(failed), "remaining", remaining)
+		dt.logger.V(2).Info("Removed finalizers from last-pod entries for service", "processed", len(processed), "serviceUID", serviceName, "failed", len(failed), "remaining", remaining)
 	}
 
 	// Surface retry-exhaustion so the caller keeps the delete op tracked and
 	// retries instead of reporting success while a pod finalizer is still set.
 	if len(failed) > 0 {
-		return fmt.Errorf("RemoveLastPodFinalizers: %d last-pod finalizer(s) for service %s could not be removed after retries: %v", len(failed), serviceUID, failed)
+		return fmt.Errorf("RemoveLastPodFinalizers: %d last-pod finalizer(s) for service %s could not be removed after retries: %v", len(failed), serviceName, failed)
 	}
 	return nil
 }

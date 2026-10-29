@@ -124,7 +124,7 @@ var _ = Describe("SLB - Mutation Edge Cases", Label(slbTestLabel), func() {
 		serviceUID := string(created.UID)
 
 		By("Waiting for the TCP rule to provision")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 		Eventually(func() (string, error) {
 			return frontendPortProtocol(serviceUID, servicePort)
 		}, 60*time.Second, 5*time.Second).Should(Equal("Tcp"),
@@ -140,7 +140,7 @@ var _ = Describe("SLB - Mutation Edge Cases", Label(slbTestLabel), func() {
 			return frontendPortProtocol(serviceUID, servicePort)
 		}, waitTime, 5*time.Second).Should(Equal("Udp"),
 			"the LB rule should become UDP after the protocol change")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		utils.Logf("\n✓ Port protocol change TCP->UDP reconciled")
 	})
@@ -175,26 +175,26 @@ var _ = Describe("SLB - Mutation Edge Cases", Label(slbTestLabel), func() {
 		serviceUID := string(created.UID)
 
 		By("Waiting for initial provisioning")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		By("Switching ExternalTrafficPolicy Cluster -> Local")
 		updateService(serviceName, func(svc *v1.Service) {
 			svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 		})
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		By("Switching ExternalTrafficPolicy Local -> Cluster")
 		updateService(serviceName, func(svc *v1.Service) {
 			svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeCluster
 		})
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		utils.Logf("\n✓ ExternalTrafficPolicy switches stayed reconciled")
 	})
 })
 
 // frontendPortProtocol returns the Azure protocol ("Tcp"/"Udp") of the LB rule whose frontend
-// port matches the given port, for the LB named serviceUID.
+// port matches the given port, for the raw service UID.
 func frontendPortProtocol(serviceUID string, frontendPort int32) (string, error) {
 	rules, err := getLoadBalancerRules(serviceUID)
 	if err != nil {

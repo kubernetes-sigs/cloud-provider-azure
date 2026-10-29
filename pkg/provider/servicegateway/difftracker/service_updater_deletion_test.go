@@ -21,6 +21,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -28,11 +29,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -48,6 +51,8 @@ func deletionTestFactory(ctrl *gomock.Controller) *mock_azclient.MockClientFacto
 	f.EXPECT().GetPublicIPAddressClient().Return(pip).AnyTimes()
 	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	pip.EXPECT().Get(gomock.Any(), "rg", "uid-1-lb-pip", nil).
+		Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(consts.ServiceGatewayManagedTagValue)}}, nil).AnyTimes()
 	pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	return f
 }
@@ -67,11 +72,12 @@ func deletionTestDiffTracker(kube *fake.Clientset, f *mock_azclient.MockClientFa
 	dt.config = testConfig()
 	dt.kubeClient = kube
 	dt.networkClientFactory = f
-	dt.NRPResources.LoadBalancers = utilsets.NewString("uid-1")
-	dt.pendingServiceOps["uid-1"] = &ServiceOperationState{
-		ServiceUID: "uid-1", Config: NewInboundServiceConfig("uid-1", nil), State: StateDeletionInProgress,
+	serviceName := inboundServiceName("uid-1")
+	dt.NRPResources.LoadBalancers = utilsets.NewString(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewInboundServiceConfig(serviceName, nil), State: StateDeletionInProgress,
 	}
-	dt.pendingServiceDeletions["uid-1"] = &PendingServiceDeletion{ServiceUID: "uid-1", IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
 	return dt
 }
 
@@ -104,18 +110,18 @@ func TestServiceUpdaterDeleteInboundService_FinalizerFailureRetries(t *testing.T
 
 	dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
 	var reportedSuccess *bool
-	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+	su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 		v := ok
 		reportedSuccess = &v
-		dt.OnServiceCreationComplete(uid, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	})
 
-	su.deleteInboundService("uid-1", "corr-1")
+	su.deleteInboundService(inboundServiceName("uid-1"), "corr-1")
 
 	if assert.NotNil(t, reportedSuccess, "onComplete should be called") {
 		assert.False(t, *reportedSuccess, "deletion must not report success when finalizer removal fails")
 	}
-	_, stillTracked := dt.pendingServiceOps["uid-1"]
+	_, stillTracked := dt.pendingServiceOps[inboundServiceName("uid-1")]
 	assert.True(t, stillTracked, "service must remain tracked for retry when finalizer removal fails")
 }
 
@@ -128,17 +134,17 @@ func TestServiceUpdaterDeleteInboundService_Succeeds(t *testing.T) {
 	kube := fake.NewSimpleClientset(deletionTestService())
 	dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
 	var reportedSuccess *bool
-	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+	su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 		v := ok
 		reportedSuccess = &v
-		dt.OnServiceCreationComplete(uid, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	})
 
-	su.deleteInboundService("uid-1", "corr-1")
+	su.deleteInboundService(inboundServiceName("uid-1"), "corr-1")
 
 	if assert.NotNil(t, reportedSuccess) {
 		assert.True(t, *reportedSuccess, "deletion should succeed when finalizer removal works")
 	}
-	_, stillTracked := dt.pendingServiceOps["uid-1"]
+	_, stillTracked := dt.pendingServiceOps[inboundServiceName("uid-1")]
 	assert.False(t, stillTracked, "service tracking should be cleared after successful deletion")
 }

@@ -124,7 +124,7 @@ var _ = Describe("SLB - Provisioning Edge Cases", Label(slbTestLabel), func() {
 					return fmt.Errorf("foreign-class service unexpectedly carries the ServiceGateway finalizer")
 				}
 			}
-			n, cErr := countRegisteredEndpoints(serviceUID)
+			n, cErr := countRegisteredEndpoints(inboundServiceName(serviceUID))
 			if cErr != nil {
 				return cErr
 			}
@@ -182,7 +182,7 @@ var _ = Describe("SLB - Provisioning Edge Cases", Label(slbTestLabel), func() {
 		serviceUID := string(created.UID)
 
 		By("Verifying the service provisions and registers all pods")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		By("Confirming the service spec carries no node ports")
 		svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
@@ -240,7 +240,7 @@ var _ = Describe("SLB - Provisioning Edge Cases", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Verifying the IPv6 service provisions and registers its pods")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		utils.Logf("\n✓ IPv6 single-stack service provisioned and registered %d pods", numPods)
 	})

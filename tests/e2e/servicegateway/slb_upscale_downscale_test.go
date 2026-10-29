@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
@@ -143,14 +142,14 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			if err := verifyAzureResources(serviceUID); err != nil {
 				return err
 			}
-			want, err := livePodIPs(cs, ns.Name, serviceLabels)
+			want, podCount, err := livePodIPs(cs, ns.Name, serviceLabels, createdService.Spec.IPFamilies)
 			if err != nil {
 				return err
 			}
-			if len(want) != initialPods {
-				return fmt.Errorf("expected %d live pod IPs, got %d", initialPods, len(want))
+			if podCount != initialPods {
+				return fmt.Errorf("expected %d Ready pods, got %d", initialPods, podCount)
 			}
-			return registeredAddressesMatchErr(serviceUID, want)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"the Service Gateway must register exactly the initial pods' IPs")
 
@@ -184,14 +183,14 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 
 		By("Waiting for Service Gateway to register exactly the upscaled pod set")
 		Eventually(func() error {
-			want, err := livePodIPs(cs, ns.Name, serviceLabels)
+			want, podCount, err := livePodIPs(cs, ns.Name, serviceLabels, createdService.Spec.IPFamilies)
 			if err != nil {
 				return err
 			}
-			if len(want) != finalPods {
-				return fmt.Errorf("expected %d live pod IPs, got %d", finalPods, len(want))
+			if podCount != finalPods {
+				return fmt.Errorf("expected %d Ready pods, got %d", finalPods, podCount)
 			}
-			return registeredAddressesMatchErr(serviceUID, want)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"every upscaled pod IP - and no other - must be registered")
 
@@ -270,30 +269,28 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			if err := verifyAzureResources(serviceUID); err != nil {
 				return err
 			}
-			want, err := livePodIPs(cs, ns.Name, serviceLabels)
+			want, podCount, err := livePodIPs(cs, ns.Name, serviceLabels, createdService.Spec.IPFamilies)
 			if err != nil {
 				return err
 			}
-			if len(want) != initialPods {
-				return fmt.Errorf("expected %d live pod IPs, got %d", initialPods, len(want))
+			if podCount != initialPods {
+				return fmt.Errorf("expected %d Ready pods, got %d", initialPods, podCount)
 			}
-			return registeredAddressesMatchErr(serviceUID, want)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"the full pre-downscale pod set must be registered, so the later drain is provably observed")
 
 		By("Capturing the survivors' pod IPs before the downscale")
 		// A bare count cannot see the failure that matters here: a stale IP left behind paired
 		// with a survivor wrongly dropped also yields exactly finalPods.
-		survivorIPs := make(map[string]struct{})
+		var survivors []v1.Pod
 		for i := 0; i < finalPods; i++ {
 			pod, getErr := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), fmt.Sprintf("%s-pod-%d", serviceName, i), metav1.GetOptions{})
 			Expect(getErr).NotTo(HaveOccurred())
-			for _, ip := range pod.Status.PodIPs {
-				if ip.IP != "" {
-					survivorIPs[ip.IP] = struct{}{}
-				}
-			}
+			survivors = append(survivors, *pod)
 		}
+		survivorIPs, err := inboundPodIPSet(cs, survivors, createdService.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(survivorIPs).NotTo(BeEmpty())
 
 		By(fmt.Sprintf("Downscaling: Deleting %d pods (keeping %d)", initialPods-finalPods, finalPods))
@@ -305,7 +302,7 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 
 		By("Verifying exactly the survivors remain registered")
 		Eventually(func() error {
-			return registeredAddressesMatchErr(serviceUID, survivorIPs)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), survivorIPs)
 		}, waitTime+30*time.Second, 10*time.Second).Should(Succeed(),
 			"every deleted pod IP must be deregistered and every survivor must remain")
 		utils.Logf("After downscale: exactly the %d survivor pod IPs remain", len(survivorIPs))
@@ -405,19 +402,17 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 			// API server marks it terminating, which yields one address too many.
 			var wantAddrs map[string]struct{}
 			Eventually(func() (int, error) {
-				livePods, listErr := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{
-					LabelSelector: labels.SelectorFromSet(serviceLabels).String(),
-				})
+				addresses, podCount, listErr := livePodIPs(cs, ns.Name, serviceLabels, createdService.Spec.IPFamilies)
 				if listErr != nil {
 					return 0, listErr
 				}
-				wantAddrs = podIPSet(livePods.Items)
-				return len(wantAddrs), nil
+				wantAddrs = addresses
+				return podCount, nil
 			}, 3*time.Minute, 5*time.Second).Should(Equal(targetPods),
-				"scale step %d: expected %d live pod IPs to compare against", stepIdx+1, targetPods)
+				"scale step %d: expected %d Ready pods to compare against", stepIdx+1, targetPods)
 
 			Eventually(func() error {
-				return registeredAddressesMatchErr(serviceUID, wantAddrs)
+				return registeredAddressesMatchErr(inboundServiceName(serviceUID), wantAddrs)
 			}, waitTime, 10*time.Second).Should(Succeed(),
 				"Service Gateway must register exactly the live pod IPs at scale step %d", stepIdx+1)
 			registeredPods := targetPods
@@ -433,21 +428,6 @@ var _ = Describe("Container Load Balancer Scale Operations", Label(slbTestLabel)
 // matching selector. Specs assert against this set rather than a count: on a scale-down the two are
 // different claims, and only the set can detect that a surviving pod's IP was drained while a
 // deleted pod's IP was left registered.
-func livePodIPs(cs clientset.Interface, namespace string, selector map[string]string) (map[string]struct{}, error) {
-	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(selector).String(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	readyPods := make([]v1.Pod, 0, len(pods.Items))
-	for i := range pods.Items {
-		// Skip pods that are already Terminating: their addresses are being drained, so they
-		// are not part of the set the Service Gateway should still hold. Counting them makes
-		// a scale-down transiently expect one address too many.
-		if pods.Items[i].DeletionTimestamp == nil {
-			readyPods = append(readyPods, pods.Items[i])
-		}
-	}
-	return podIPSet(readyPods), nil
+func livePodIPs(cs clientset.Interface, namespace string, selector map[string]string, families []v1.IPFamily) (map[string]struct{}, int, error) {
+	return livePodIPsForSelector(cs, namespace, selector, families)
 }

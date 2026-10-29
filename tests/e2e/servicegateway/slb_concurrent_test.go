@@ -203,21 +203,23 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 
 		By("Waiting for Azure to provision all services")
 		Eventually(func() error {
+			expectedAddresses := 0
 			for _, service := range services {
 				// Assert each service's exact address set. A per-service count cannot detect one
 				// service's pods being registered under another service's name - a plausible
 				// outcome of a race in concurrent reconciliation, and one that leaves every count
 				// correct while routing traffic to the wrong workload.
-				want, err := livePodIPsForSelector(cs, ns.Name, service.Spec.Selector)
+				want, podCount, err := livePodIPsForSelector(cs, ns.Name, service.Spec.Selector, service.Spec.IPFamilies)
 				if err != nil {
 					return err
 				}
-				if len(want) != podsPerService {
-					return fmt.Errorf("service %s: expected %d live pod IPs, got %d", service.Name, podsPerService, len(want))
+				if podCount != podsPerService {
+					return fmt.Errorf("service %s: expected %d Ready pods, got %d", service.Name, podsPerService, podCount)
 				}
 				if err := serviceReconciledMatchErr(string(service.UID), want); err != nil {
 					return fmt.Errorf("service %s: %w", service.Name, err)
 				}
+				expectedAddresses += len(want)
 			}
 
 			addressLocations, err := queryServiceGatewayAddressLocations()
@@ -232,8 +234,8 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 					}
 				}
 			}
-			if totalRegisteredPods < totalPods {
-				return fmt.Errorf("expected at least %d pod IPs in address locations, found %d", totalPods, totalRegisteredPods)
+			if totalRegisteredPods < expectedAddresses {
+				return fmt.Errorf("expected at least %d eligible pod IPs in address locations, found %d", expectedAddresses, totalRegisteredPods)
 			}
 			return nil
 		}, azureWaitTime, 10*time.Second).Should(Succeed(),
@@ -264,9 +266,9 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 
 		// A count is satisfied by the wrong services: with ">=" an unrelated leftover registration
 		// offsets a missing one, so 15 registrations can hide a service that never reached the
-		// Service Gateway. Assert each created Service's UID is registered by name instead.
+		// Service Gateway. Assert each created Service's canonical inbound name instead.
 		for _, service := range services {
-			Expect(registeredServices).To(HaveKey(string(service.UID)),
+			Expect(registeredServices).To(HaveKey(inboundServiceName(string(service.UID))),
 				"service %s (UID %s) is not registered as an inbound service in the Service Gateway",
 				service.Name, string(service.UID))
 		}
@@ -321,8 +323,8 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 		verifiedCount := 0
 		for _, service := range services {
 			serviceUID := string(service.UID)
-			publicIPName := fmt.Sprintf("%s-pip", serviceUID)
-			loadBalancerName := serviceUID
+			loadBalancerName := inboundServiceName(serviceUID)
+			publicIPName := loadBalancerName + "-pip"
 
 			// Check Public IP
 			pip, pipExists := pipByName[publicIPName]
@@ -341,7 +343,7 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 			}
 
 			// Check Service Gateway
-			_, sgExists := sgServiceByName[serviceUID]
+			_, sgExists := sgServiceByName[loadBalancerName]
 			if !sgExists {
 				Fail(fmt.Sprintf("Service %s: Service %s not found in Service Gateway", service.Name, serviceUID))
 			}
@@ -355,49 +357,47 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 		utils.Logf("Successfully verified all %d services", numServices)
 
 		// Verify address locations contain all pod IPs
-		By(fmt.Sprintf("Verifying Service Gateway address locations contain all %d pod IPs", totalPods))
+		By(fmt.Sprintf("Verifying Service Gateway address locations for all %d pods", totalPods))
 		addressLocations, err := queryServiceGatewayAddressLocations()
 		Expect(err).NotTo(HaveOccurred())
 
 		totalRegisteredPods := 0
-		serviceToPodsCount := make(map[string]int)
+		serviceToAddresses := make(map[string]map[string]struct{})
 
 		for _, location := range addressLocations.Value {
 			for _, addr := range location.Addresses {
 				if len(addr.Services) > 0 {
 					totalRegisteredPods++
 					for _, svcID := range addr.Services {
-						serviceToPodsCount[svcID]++
+						if serviceToAddresses[svcID] == nil {
+							serviceToAddresses[svcID] = make(map[string]struct{})
+						}
+						serviceToAddresses[svcID][addr.Address] = struct{}{}
 					}
 				}
 			}
 		}
 
 		utils.Logf("Found %d pod IPs registered in Service Gateway address locations", totalRegisteredPods)
-		Expect(totalRegisteredPods).To(BeNumerically(">=", totalPods),
-			fmt.Sprintf("Expected at least %d pod IPs in address locations, found %d", totalPods, totalRegisteredPods))
-
-		// Verify each service has approximately podsPerService pods registered
+		// Count pods separately from the eligible addresses each Service serves.
 		servicesWithCorrectPodCount := 0
+		expectedAddresses := 0
 		for _, service := range services {
-			// Service IDs might be in different formats, so we check by UID
-			var podCount int
-			for svcID, count := range serviceToPodsCount {
-				if strings.Contains(svcID, string(service.UID)) {
-					podCount = count
-					break
-				}
-			}
-
-			if podCount == podsPerService {
+			want, podCount, err := livePodIPsForSelector(cs, ns.Name, service.Spec.Selector, service.Spec.IPFamilies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(podCount).To(Equal(podsPerService))
+			name := inboundServiceName(string(service.UID))
+			Expect(registeredAddressSetsMatchErr(name, serviceToAddresses[name], want)).To(Succeed())
+			expectedAddresses += len(want)
+			if len(serviceToAddresses[name]) == len(want) {
 				servicesWithCorrectPodCount++
 			}
 		}
+		Expect(totalRegisteredPods).To(BeNumerically(">=", expectedAddresses))
 
 		utils.Logf("%d/%d services have exactly %d pods registered", servicesWithCorrectPodCount, numServices, podsPerService)
 		Expect(servicesWithCorrectPodCount).To(Equal(numServices),
-			"every service must have exactly %d pod IPs registered; computing this and only logging it "+
-				"lets a run where most services registered nothing still pass", podsPerService)
+			"every service must register exactly the eligible addresses of its pods")
 
 		utils.Logf("\n✓ Container Load Balancer with %d concurrent services (%d total pods) verified", numServices, totalPods)
 		utils.Logf("  Services verified: %d/%d", numServices, numServices)
@@ -422,21 +422,35 @@ var _ = Describe("SLB - Concurrent Services", Label(slbTestLabel), func() {
 // livePodIPsForSelector returns the address set the pods matching a Service's own selector should
 // have registered. Deriving the selector from the Service avoids relying on creation order, which
 // is not preserved when results are collected from a channel.
-func livePodIPsForSelector(cs clientset.Interface, namespace string, selector map[string]string) (map[string]struct{}, error) {
+func livePodIPsForSelector(cs clientset.Interface, namespace string, selector map[string]string, families []v1.IPFamily) (map[string]struct{}, int, error) {
+	if len(selector) == 0 {
+		return map[string]struct{}{}, 0, nil
+	}
 	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: labels.SelectorFromSet(selector).String(),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	readyPods := make([]v1.Pod, 0, len(pods.Items))
 	for i := range pods.Items {
 		// Skip pods that are already Terminating: their addresses are being drained, so they
 		// are not part of the set the Service Gateway should still hold. Counting them makes
 		// a scale-down transiently expect one address too many.
-		if pods.Items[i].DeletionTimestamp == nil {
-			readyPods = append(readyPods, pods.Items[i])
+		if pods.Items[i].DeletionTimestamp != nil ||
+			pods.Items[i].Status.Phase == v1.PodSucceeded || pods.Items[i].Status.Phase == v1.PodFailed {
+			continue
+		}
+		for _, condition := range pods.Items[i].Status.Conditions {
+			if condition.Type == v1.PodReady && condition.Status == v1.ConditionTrue {
+				readyPods = append(readyPods, pods.Items[i])
+				break
+			}
 		}
 	}
-	return podIPSet(readyPods), nil
+	addresses, err := inboundPodIPSet(cs, readyPods, families)
+	if err == nil && len(readyPods) > 0 && len(addresses) == 0 {
+		err = fmt.Errorf("no eligible backend addresses for %d Ready pods in namespace %s", len(readyPods), namespace)
+	}
+	return addresses, len(readyPods), err
 }

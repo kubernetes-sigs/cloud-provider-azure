@@ -319,25 +319,25 @@ func (dt *DiffTracker) UpdateK8sPod(input UpdatePodInputType) error {
 // This is used during service deletion to proactively clear location/address references
 // so the LocationsUpdater can sync the removal to NRP.
 // Assumes lock is already held.
-func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbound bool) {
+func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceName string, isInbound bool) {
 	for nodeIP, node := range dt.K8sResources.Nodes {
 		for podIP, pod := range node.Pods {
 			if isInbound {
 				// Remove from inbound identities
-				if pod.InboundIdentities != nil && pod.InboundIdentities.Has(serviceUID) {
-					pod.InboundIdentities.Delete(serviceUID)
+				if pod.InboundIdentities != nil && pod.InboundIdentities.Has(serviceName) {
+					pod.InboundIdentities.Delete(serviceName)
 				}
 			} else {
 				// Clear outbound identity if it matches, releasing its ref-count so
 				// the counter doesn't leak when a service is deleted before its pods
 				// are removed.
-				if strings.EqualFold(pod.PublicOutboundIdentity, serviceUID) {
+				if strings.EqualFold(pod.PublicOutboundIdentity, serviceName) {
 					pod.PublicOutboundIdentity = ""
 					pod.OutboundPodKey = ""
 					pod.OutboundPodUID = ""
 					node.Pods[podIP] = pod
-					if err := dt.decrementOutboundRefCount(serviceUID); err != nil {
-						dt.logger.V(4).Info("Could not decrement outbound ref-count", "err", err, "service", serviceUID)
+					if err := dt.decrementOutboundRefCount(serviceName); err != nil {
+						dt.logger.V(4).Info("Could not decrement outbound ref-count", "err", err, "service", serviceName)
 					}
 				}
 			}
@@ -356,7 +356,7 @@ func (dt *DiffTracker) removeServiceFromK8sStateLocked(serviceUID string, isInbo
 // RemoveServiceFromK8sState is the public, lock-acquiring entry point for
 // removeServiceFromK8sStateLocked. Use it to clear a deleted service's references
 // from pod identities when the caller does not already hold dt.mu.
-func (dt *DiffTracker) RemoveServiceFromK8sState(serviceUID string, isInbound bool) {
+func (dt *DiffTracker) RemoveServiceFromK8sState(serviceName string, isInbound bool) {
 	defer dt.lockWithLatency("RemoveServiceFromK8sState")()
-	dt.removeServiceFromK8sStateLocked(serviceUID, isInbound)
+	dt.removeServiceFromK8sStateLocked(serviceName, isInbound)
 }

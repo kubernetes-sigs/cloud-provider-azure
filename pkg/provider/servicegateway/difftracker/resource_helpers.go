@@ -39,23 +39,50 @@ const (
 	// maxEgressIdentityLength is the longest egress identity that still leaves room for the longest
 	// Public IP suffix within Azure's resource-name limit. Kubernetes caps a label value at 63, so
 	// this bound is not reachable through the pod label in practice.
-	maxEgressIdentityLength = publicIPNameMaxLength - len(publicIPNameSuffixV6)
+	maxEgressIdentityLength = publicIPNameMaxLength - len(consts.ServiceGatewayOutboundNameSuffix) - len(publicIPNameSuffixV6)
 )
 
-// egressIdentityRegex matches a valid (lowercased) Azure NAT Gateway resource name and reserves
-// enough room for the longest Public IP suffix within Azure's resource-name limit. The bound is
-// maxEgressIdentityLength; the pattern spends one character on each anchored end.
+// egressIdentityRegex validates raw labels while reserving room for the service and Public IP suffixes.
 var egressIdentityRegex = regexp.MustCompile(fmt.Sprintf(
 	`^[a-z0-9]([a-z0-9._-]{0,%d}[a-z0-9_])?$`,
 	maxEgressIdentityLength-2,
 ))
 
-// ServiceUID returns the canonical ServiceGateway identity for a Kubernetes Service.
-func ServiceUID(service *v1.Service) string {
+// ServiceName returns the canonical inbound ServiceGateway name (<UID>-lb).
+func ServiceName(service *v1.Service) string {
 	if service == nil {
 		return ""
 	}
-	return strings.ToLower(string(service.UID))
+	return inboundServiceName(string(service.UID))
+}
+
+func inboundServiceName(uid string) string {
+	if uid == "" {
+		return ""
+	}
+	return strings.ToLower(uid) + consts.ServiceGatewayInboundNameSuffix
+}
+
+func outboundServiceName(identity string) string {
+	if identity == "" {
+		return ""
+	}
+	return strings.ToLower(identity) + consts.ServiceGatewayOutboundNameSuffix
+}
+
+// serviceIdentity reverses a canonical SGW name at Kubernetes and BYO lookup boundaries.
+func serviceIdentity(name string) (identity string, kind ServiceType, ok bool) {
+	name = strings.ToLower(name)
+	switch {
+	case strings.HasSuffix(name, consts.ServiceGatewayInboundNameSuffix):
+		identity = strings.TrimSuffix(name, consts.ServiceGatewayInboundNameSuffix)
+		return identity, Inbound, identity != ""
+	case strings.HasSuffix(name, consts.ServiceGatewayOutboundNameSuffix):
+		identity = strings.TrimSuffix(name, consts.ServiceGatewayOutboundNameSuffix)
+		return identity, Outbound, identity != ""
+	default:
+		return "", "", false
+	}
 }
 
 // PublicIPName returns the Public IP resource name associated with a ServiceGateway identity.
@@ -76,8 +103,7 @@ func outboundWantsIPv6(config *OutboundConfig) bool {
 	return false
 }
 
-// PublicIPNameV6 returns the IPv6 Public IP resource name for an outbound identity. Egress keeps
-// the IPv4 address under PublicIPName so existing resources are untouched.
+// PublicIPNameV6 returns the IPv6 Public IP name for a canonical outbound ServiceGateway identity.
 func PublicIPNameV6(identity string) string {
 	return identity + publicIPNameSuffixV6
 }
@@ -97,18 +123,24 @@ func OutboundPublicIPNames(identity string) []string {
 	return []string{PublicIPName(identity), PublicIPNameV6(identity)}
 }
 
-// identityFromPublicIPName maps a Public IP name back to the identity that owns it. The IPv6 suffix
-// must be tested first: "<identity>-pip-v6" does not end in "-pip", so a plain "-pip" test rejects
-// every IPv6 address as unrecognized and leaks it.
+// identityFromPublicIPName extracts the canonical SGW identity from a managed Public IP name.
+// Matching the naming convention alone does not establish CCM ownership.
 func identityFromPublicIPName(pipName string) (identity string, ok bool) {
+	pipName = strings.ToLower(pipName)
+	ipv6 := false
 	switch {
 	case strings.HasSuffix(pipName, publicIPNameSuffixV6):
-		return strings.TrimSuffix(pipName, publicIPNameSuffixV6), true
+		identity, ipv6 = strings.TrimSuffix(pipName, publicIPNameSuffixV6), true
 	case strings.HasSuffix(pipName, publicIPNameSuffix):
-		return strings.TrimSuffix(pipName, publicIPNameSuffix), true
+		identity = strings.TrimSuffix(pipName, publicIPNameSuffix)
 	default:
 		return "", false
 	}
+	_, kind, valid := serviceIdentity(identity)
+	if !valid || (ipv6 && kind != Outbound) {
+		return "", false
+	}
+	return identity, true
 }
 
 // DefaultOutboundNATGatewayName is the RP-owned default outbound NAT Gateway. AKS provisions it
@@ -116,42 +148,28 @@ func identityFromPublicIPName(pipName string) (identity string, ok bool) {
 // IP. It is not managed by this controller and must never be created, updated or deleted by it.
 const DefaultOutboundNATGatewayName = "default-natgw"
 
-// IsReservedEgressIdentity reports whether name refers to a resource this controller must not
-// manage. Matching is case-insensitive because the value originates from a user-controlled label and
-// Azure may normalise resource-name casing differently across endpoints.
+// IsReservedEgressIdentity checks an actual SGW/NAT name against the well-known RP-owned default.
 func IsReservedEgressIdentity(name string) bool {
 	return strings.EqualFold(name, DefaultOutboundNATGatewayName)
 }
 
-// IsValidEgressIdentity reports whether name is a safe egress identity. The identity is derived from
-// a user-controllable pod label and is used verbatim as the NAT Gateway name and as the stem of the
-// Public IP name (identity+"-pip"), and is interpolated into their ARM resource IDs, so it must be
-// validated to avoid malformed ARM requests (for example a path-traversal value like "../foo") or a
-// PIP name that overflows Azure's 80-char limit, either of which causes endless create retries.
-//
-// Reserved names are rejected here so every caller fails closed. The identity names the Azure
-// resources directly, so a pod label naming a resource this controller does not own would make the
-// egress lifecycle act on it: registering the first pod PUTs that NAT Gateway and its Public IP, and
-// removing the last pod DELETEs them. For the RP-owned default gateway that is a cluster-wide egress
-// outage reachable by anyone who can create a labelled pod in any namespace, and it is not otherwise
-// prevented: the default gateway is deliberately excluded from NRP state at startup, so the pod-add
-// path always concludes it must be created.
+// IsValidEgressIdentity validates the raw pod label before canonical naming.
+// Generated SGW, NAT Gateway and Public IP names must fit Azure's limits and avoid reserved names.
 func IsValidEgressIdentity(name string) bool {
-	if IsReservedEgressIdentity(name) {
+	if IsReservedEgressIdentity(name) || IsReservedEgressIdentity(outboundServiceName(name)) {
 		return false
 	}
 	return egressIdentityRegex.MatchString(name)
 }
 
 // buildInboundServiceResources constructs the PIP, LoadBalancer, and ServicesDTO for an inbound service
-// Returns the resources ready to be created via createOrUpdatePIP/createOrUpdateLB/updateNRPSGWServices
-func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtConfig Config) (
+func buildInboundServiceResources(serviceName string, config *InboundConfig, dtConfig Config) (
 	pip armnetwork.PublicIPAddress,
 	lb armnetwork.LoadBalancer,
 	servicesDTO ServicesDataDTO,
 	err error,
 ) {
-	pipName := PublicIPName(serviceUID)
+	pipName := PublicIPName(serviceName)
 
 	// Resolve the Public IP version from the Service's IP families. Dual-stack is not
 	// supported for PodIP backend pools, so reject it here; the create path classifies this
@@ -160,10 +178,10 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 	pipVersion := armnetwork.IPVersionIPv4
 	if config != nil {
 		if len(config.NamedTargetPorts) > 0 {
-			return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: named targetPort(s) %v are not supported for PodIP backend pools (service %s); use a numeric targetPort", config.NamedTargetPorts, serviceUID)
+			return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: named targetPort(s) %v are not supported for PodIP backend pools (service %s); use a numeric targetPort", config.NamedTargetPorts, serviceName)
 		}
 		if len(config.IPFamilies) > 1 {
-			return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: dual-stack services are not supported for PodIP backend pools (service %s, ipFamilies=%v)", serviceUID, config.IPFamilies)
+			return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: dual-stack services are not supported for PodIP backend pools (service %s, ipFamilies=%v)", serviceName, config.IPFamilies)
 		}
 		if len(config.IPFamilies) == 1 {
 			switch {
@@ -172,7 +190,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			case strings.EqualFold(config.IPFamilies[0], string(armnetwork.IPVersionIPv4)):
 				pipVersion = armnetwork.IPVersionIPv4
 			default:
-				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: unknown IP family %q for service %s", config.IPFamilies[0], serviceUID)
+				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: unknown IP family %q for service %s", config.IPFamilies[0], serviceName)
 			}
 		}
 	}
@@ -186,6 +204,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
+		Tags:     managedResourceTags(),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 			PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 			PublicIPAddressVersion:   to.Ptr(pipVersion),
@@ -193,11 +212,11 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 	}
 
 	// Build LoadBalancer with backend pool and rules
-	backendPoolName := serviceUID
+	backendPoolName := serviceName
 	frontendIPConfigID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/frontend",
-		dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID)
+		dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceName)
 	backendPoolID := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/backendAddressPools/%s",
-		dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID, backendPoolName)
+		dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceName, backendPoolName)
 
 	// Build backend pool
 	backendPools := []*armnetwork.BackendAddressPool{
@@ -219,7 +238,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			idleTimeout = *config.IdleTimeoutMinutes
 			if idleTimeout < inboundIdleTimeoutMinMinutes || idleTimeout > inboundIdleTimeoutMaxMinutes {
 				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: idle timeout %d out of range (%d-%d) for service %s",
-					idleTimeout, inboundIdleTimeoutMinMinutes, inboundIdleTimeoutMaxMinutes, serviceUID)
+					idleTimeout, inboundIdleTimeoutMinMinutes, inboundIdleTimeoutMaxMinutes, serviceName)
 			}
 		}
 		// Azure rejects two load-balancing rules that share the same protocol and backend
@@ -237,10 +256,10 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			// Azure accepts 1-65534 for a load-balancing rule's frontend port and 1-65535 for its
 			// backend port; the asymmetry is the API's, not a typo.
 			if frontendPort.Port < 1 || frontendPort.Port > 65534 {
-				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: frontend port %d out of range (1-65534) for service %s", frontendPort.Port, serviceUID)
+				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: frontend port %d out of range (1-65534) for service %s", frontendPort.Port, serviceName)
 			}
 			if backendPort < 1 || backendPort > 65535 {
-				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: backend port %d out of range (1-65535) for service %s", backendPort, serviceUID)
+				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: backend port %d out of range (1-65535) for service %s", backendPort, serviceName)
 			}
 
 			var protocol armnetwork.TransportProtocol
@@ -250,12 +269,12 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			case strings.EqualFold(frontendPort.Protocol, "UDP"):
 				protocol = armnetwork.TransportProtocolUDP
 			default:
-				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: unsupported protocol %q for service %s", frontendPort.Protocol, serviceUID)
+				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: unsupported protocol %q for service %s", frontendPort.Protocol, serviceName)
 			}
 
 			backendKey := fmt.Sprintf("%s/%d", protocol, backendPort)
 			if prev, ok := seenBackend[backendKey]; ok {
-				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: service %s frontend ports %d and %d both map to backend port %d over %s; Azure rejects load-balancing rules that share a backend port and protocol on the same pool with floating IP disabled (RulesUseSameBackendPortProtocolAndPool), so distinct service ports must use distinct targetPorts", serviceUID, config.FrontendPorts[prev].Port, frontendPort.Port, backendPort, protocol)
+				return pip, lb, servicesDTO, fmt.Errorf("buildInboundServiceResources: service %s frontend ports %d and %d both map to backend port %d over %s; Azure rejects load-balancing rules that share a backend port and protocol on the same pool with floating IP disabled (RulesUseSameBackendPortProtocolAndPool), so distinct service ports must use distinct targetPorts", serviceName, config.FrontendPorts[prev].Port, frontendPort.Port, backendPort, protocol)
 			}
 			seenBackend[backendKey] = i
 
@@ -285,15 +304,15 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 			})
 
 			log.Background().WithName("difftracker").V(5).Info("Created LB rule",
-				"rule", ruleName, "frontendPort", frontendPort.Port, "backendPort", backendPort, "protocol", frontendPort.Protocol, "service", serviceUID)
+				"rule", ruleName, "frontendPort", frontendPort.Port, "backendPort", backendPort, "protocol", frontendPort.Protocol, "service", serviceName)
 		}
 	} else {
-		log.Background().WithName("difftracker").V(5).Info("No port configuration provided, creating LB without rules", "service", serviceUID)
+		log.Background().WithName("difftracker").V(5).Info("No port configuration provided, creating LB without rules", "service", serviceName)
 	}
 
 	lb = armnetwork.LoadBalancer{
-		Name:     to.Ptr(serviceUID),
-		ID:       to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s", dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID)),
+		Name:     to.Ptr(serviceName),
+		ID:       to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s", dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceName)),
 		Location: to.Ptr(dtConfig.Location),
 		SKU: &armnetwork.LoadBalancerSKU{
 			Name: to.Ptr(armnetwork.LoadBalancerSKUName(consts.LoadBalancerARMSKUService)),
@@ -319,7 +338,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 	// Build ServicesDTO for ServiceGateway registration
 	servicesDTO = MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 		SyncServicesReturnType{
-			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Additions: newIgnoreCaseSetFromSlice([]string{serviceName}),
 			Removals:  nil,
 		},
 		SyncServicesReturnType{
@@ -334,8 +353,7 @@ func buildInboundServiceResources(serviceUID string, config *InboundConfig, dtCo
 }
 
 // buildOutboundServiceResources constructs the PIP, NAT Gateway, and ServicesDTO for an outbound service
-// Returns the resources ready to be created via createOrUpdatePIP/createOrUpdateNatGateway/updateNRPSGWServices
-func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dtConfig Config) (
+func buildOutboundServiceResources(serviceName string, config *OutboundConfig, dtConfig Config) (
 	pips []armnetwork.PublicIPAddress,
 	natGateway armnetwork.NatGateway,
 	servicesDTO ServicesDataDTO,
@@ -352,6 +370,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 				Name: to.Ptr(armnetwork.PublicIPAddressSKUNameStandardV2),
 			},
 			Location: to.Ptr(dtConfig.Location),
+			Tags:     managedResourceTags(),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
 				PublicIPAllocationMethod: to.Ptr(armnetwork.IPAllocationMethodStatic),
 				PublicIPAddressVersion:   to.Ptr(version),
@@ -361,26 +380,27 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 
 	// IPv4 is always provisioned; its name and shape are unchanged so existing NAT Gateways are
 	// untouched. IPv6 is added only when the config asks for it.
-	v4Name := PublicIPName(serviceUID)
+	v4Name := PublicIPName(serviceName)
 	pips = []armnetwork.PublicIPAddress{buildPIP(v4Name, armnetwork.IPVersionIPv4)}
 	v4Refs := []*armnetwork.SubResource{{ID: to.Ptr(pipID(v4Name))}}
 
 	var v6Refs []*armnetwork.SubResource
 	if outboundWantsIPv6(config) {
-		v6Name := PublicIPNameV6(serviceUID)
+		v6Name := PublicIPNameV6(serviceName)
 		pips = append(pips, buildPIP(v6Name, armnetwork.IPVersionIPv6))
 		v6Refs = []*armnetwork.SubResource{{ID: to.Ptr(pipID(v6Name))}}
 	}
 
 	// Build NAT Gateway
 	natGateway = armnetwork.NatGateway{
-		Name: to.Ptr(serviceUID),
+		Name: to.Ptr(serviceName),
 		ID: to.Ptr(fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/natGateways/%s",
-			dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceUID)),
+			dtConfig.networkResourceSubscriptionID(), dtConfig.ResourceGroup, serviceName)),
 		SKU: &armnetwork.NatGatewaySKU{
 			Name: to.Ptr(armnetwork.NatGatewaySKUNameStandardV2),
 		},
 		Location: to.Ptr(dtConfig.Location),
+		Tags:     managedResourceTags(),
 		Properties: &armnetwork.NatGatewayPropertiesFormat{
 			ServiceGateway: &armnetwork.SubResource{
 				ID: to.Ptr(dtConfig.ServiceGatewayResourceID()),
@@ -397,7 +417,7 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 			Removals:  nil,
 		},
 		SyncServicesReturnType{
-			Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Additions: newIgnoreCaseSetFromSlice([]string{serviceName}),
 			Removals:  nil,
 		},
 		dtConfig.networkResourceSubscriptionID(),
@@ -405,6 +425,26 @@ func buildOutboundServiceResources(serviceUID string, config *OutboundConfig, dt
 	)
 
 	return pips, natGateway, servicesDTO
+}
+
+func managedResourceTags() map[string]*string {
+	return map[string]*string{consts.ServiceGatewayManagedTagKey: to.Ptr(consts.ServiceGatewayManagedTagValue)}
+}
+
+// ownsNATGateway checks the CCM-managed marker, not exclusive use.
+// Callers must also check other Service Gateway users.
+func ownsNATGateway(natGateway *armnetwork.NatGateway) bool {
+	if natGateway == nil {
+		return false
+	}
+	return derefString(natGateway.Tags[consts.ServiceGatewayManagedTagKey]) == consts.ServiceGatewayManagedTagValue
+}
+
+func ownsPublicIP(pip *armnetwork.PublicIPAddress) bool {
+	if pip == nil {
+		return false
+	}
+	return derefString(pip.Tags[consts.ServiceGatewayManagedTagKey]) == consts.ServiceGatewayManagedTagValue
 }
 
 // newIgnoreCaseSetFromSlice creates an IgnoreCaseSet from a slice of strings
@@ -660,22 +700,22 @@ func ValidateInboundConfig(config *InboundConfig) error {
 }
 
 // buildInboundResourceNames returns the resource names for an inbound service
-func buildInboundResourceNames(serviceUID string) (lbName string, pipName string, backendPoolName string) {
-	return serviceUID, PublicIPName(serviceUID), serviceUID
+func buildInboundResourceNames(serviceName string) (lbName string, pipName string, backendPoolName string) {
+	return serviceName, PublicIPName(serviceName), serviceName
 }
 
 // buildOutboundResourceNames returns the resource names for an outbound service
-func buildOutboundResourceNames(serviceUID string) (natGatewayName string, pipName string) {
-	return serviceUID, PublicIPName(serviceUID)
+func buildOutboundResourceNames(serviceName string) (natGatewayName string, pipName string) {
+	return serviceName, PublicIPName(serviceName)
 }
 
 // buildServiceGatewayRemovalDTO creates a ServicesDTO for removing a service from ServiceGateway
-func buildServiceGatewayRemovalDTO(serviceUID string, isInbound bool, dtConfig Config) ServicesDataDTO {
+func buildServiceGatewayRemovalDTO(serviceName string, isInbound bool, dtConfig Config) ServicesDataDTO {
 	if isInbound {
 		return MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
 			SyncServicesReturnType{
 				Additions: nil,
-				Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+				Removals:  newIgnoreCaseSetFromSlice([]string{serviceName}),
 			},
 			SyncServicesReturnType{
 				Additions: nil,
@@ -692,7 +732,7 @@ func buildServiceGatewayRemovalDTO(serviceUID string, isInbound bool, dtConfig C
 		},
 		SyncServicesReturnType{
 			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceName}),
 		},
 		dtConfig.networkResourceSubscriptionID(),
 		dtConfig.ResourceGroup,

@@ -208,8 +208,8 @@ var _ = Describe("SLB - Dual-stack nodes with single-stack services", Label(slbT
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for both services to register their pod in Service Gateway")
-		eventuallyServiceReconciled(v4UID, 1, provisioning)
-		eventuallyServiceReconciled(v6UID, 1, provisioning)
+		eventuallyServiceReconciled(cs, ns.Name, v4UID, 1, provisioning)
+		eventuallyServiceReconciled(cs, ns.Name, v6UID, 1, provisioning)
 
 		By("Reading back the pods' actual IPs")
 		v4Pod, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), "ds-v4-pod", metav1.GetOptions{})

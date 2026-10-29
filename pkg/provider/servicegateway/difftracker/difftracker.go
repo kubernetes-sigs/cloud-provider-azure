@@ -18,8 +18,10 @@ package difftracker
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -27,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 )
 
 // New creates and initializes a new DiffTracker with the given state and configuration.
@@ -95,16 +98,61 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
 
 		recoveredServiceFinalizers: make(map[string]struct{}),
+		byoNATGateways:             make(map[string]string),
 
 		// Initialize Engine communication channels
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),
 	}
 
+	for _, identity := range k8s.Services.UnsortedList() {
+		if diffTracker.isReservedServiceLocked(identity) {
+			k8s.Services.Delete(identity)
+			logger.V(2).Info("Excluded reserved service from startup inbound state", "service", identity)
+		}
+	}
+	for _, identity := range k8s.Egresses.UnsortedList() {
+		if diffTracker.isReservedServiceLocked(identity) {
+			k8s.Egresses.Delete(identity)
+			logger.V(2).Info("Excluded reserved service from startup egress state", "service", identity)
+		}
+	}
+
+	for identity, natGatewayID := range nrp.OutboundNATGatewayIDs {
+		if diffTracker.isReservedServiceLocked(identity) {
+			continue
+		}
+		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil && validateBYONATGatewayID(natGatewayID, config) == "" {
+			diffTracker.byoNATGateways[strings.ToLower(identity)] = fmt.Sprintf(consts.NatGatewayIDTemplate,
+				parsed.SubscriptionID, parsed.ResourceGroupName, parsed.Name)
+		}
+	}
+	diffTracker.NRPResources.OutboundNATGatewayIDs = nil
+
 	// Seed the outbound ref-counter from egress pods already in the initial state
 	// so a later REMOVE can drive the counter to zero.
 	for _, node := range k8s.Nodes {
-		for _, pod := range node.Pods {
+		for address, pod := range node.Pods {
+			changed := false
+			if pod.InboundIdentities != nil {
+				for _, identity := range pod.InboundIdentities.UnsortedList() {
+					if diffTracker.isReservedServiceLocked(identity) {
+						pod.InboundIdentities.Delete(identity)
+						changed = true
+					}
+				}
+			}
+			if pod.PublicOutboundIdentity != "" && diffTracker.isReservedServiceLocked(pod.PublicOutboundIdentity) {
+				pod.PublicOutboundIdentity, pod.OutboundPodKey, pod.OutboundPodUID = "", "", ""
+				changed = true
+			}
+			if changed {
+				if pod.HasIdentities() {
+					node.Pods[address] = pod
+				} else {
+					delete(node.Pods, address)
+				}
+			}
 			diffTracker.incrementOutboundRefCount(pod.PublicOutboundIdentity)
 		}
 	}
@@ -113,7 +161,7 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 }
 
 // SetServiceLister publishes the provider's shared-informer-backed Service lister to the engine.
-// It is called from SetInformers once the lister exists; getServiceByUID uses it for O(1) cached
+// It is called from SetInformers once the lister exists; getServiceBySGWName uses it for O(1) cached
 // reads instead of listing every Service. Safe to call from a different goroutine than the engine
 // workers because the write is serialized under mu.
 func (dt *DiffTracker) SetServiceLister(lister corelisters.ServiceLister) {

@@ -134,8 +134,8 @@ var _ = Describe("SLB - Basic Service", Label(slbTestLabel), func() {
 		// Use the resource group from the shared constants
 		utils.Logf("Checking resources in Resource Group: %s", resourceGroupName) // Azure names resources using the service UID
 		serviceUID := string(createdService.UID)
-		expectedPIPName := fmt.Sprintf("%s-pip", serviceUID)
-		expectedLBName := serviceUID
+		expectedLBName := inboundServiceName(serviceUID)
+		expectedPIPName := expectedLBName + "-pip"
 
 		utils.Logf("Service UID: %s", serviceUID)
 		utils.Logf("Looking for Public IP with name: %s", expectedPIPName)
@@ -239,10 +239,9 @@ var _ = Describe("SLB - Basic Service", Label(slbTestLabel), func() {
 
 		utils.Logf("Found %d service(s) in Service Gateway", len(sgResponse.Value))
 
-		// Find our service by matching the service UID
 		var ourService *ServiceGatewayService
 		for i := range sgResponse.Value {
-			if sgResponse.Value[i].Name == serviceUID {
+			if sgResponse.Value[i].Name == inboundServiceName(serviceUID) {
 				ourService = &sgResponse.Value[i]
 				break
 			}

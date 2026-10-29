@@ -18,7 +18,6 @@ package difftracker
 
 import (
 	"errors"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -47,11 +47,11 @@ func TestInitConcurrencyHandshakeRace(t *testing.T) {
 
 	// Seed one service in StateCreated so the pendingOps check inside
 	// checkInitializationCompleteLocked sees zero outstanding work.
-	uid := "svc-init-race"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreated,
+	serviceName := inboundServiceName("svc-init-race")
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreated,
 	}
 
 	const goroutines = 200
@@ -120,11 +120,11 @@ func TestInitConcurrencyHandshakeRace(t *testing.T) {
 func TestNRPDrainVsRemoveWireShapes(t *testing.T) {
 	t.Run("GoneNodeEmitsEmptyAddressesArray", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := "svc-gone-node"
-		dt.NRPResources.LoadBalancers.Insert(uid)
+		serviceName := inboundServiceName("svc-gone-node")
+		dt.NRPResources.LoadBalancers.Insert(serviceName)
 		dt.NRPResources.Locations["10.0.0.99"] = NRPLocation{
 			Addresses: map[string]NRPAddress{
-				"10.244.9.1": {Services: utilsets.NewString(uid)},
+				"10.244.9.1": {Services: utilsets.NewString(serviceName)},
 			},
 		}
 
@@ -149,11 +149,11 @@ func TestNRPDrainVsRemoveWireShapes(t *testing.T) {
 
 	t.Run("PerAddressRemovalEmitsEmptyServiceRef", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := "svc-addr-removed"
-		dt.NRPResources.LoadBalancers.Insert(uid)
+		serviceName := inboundServiceName("svc-addr-removed")
+		dt.NRPResources.LoadBalancers.Insert(serviceName)
 		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
 			Addresses: map[string]NRPAddress{
-				"10.244.0.5": {Services: utilsets.NewString(uid)},
+				"10.244.0.5": {Services: utilsets.NewString(serviceName)},
 			},
 		}
 		node := newNode()
@@ -194,41 +194,43 @@ func TestNRPDrainVsRemoveWireShapes(t *testing.T) {
 func TestEgressRefCountSoundness(t *testing.T) {
 	t.Run("DuplicateDeletePodIsNoOp", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := "egress-dup-guard"
-		dt.NRPResources.NATGateways.Insert(uid)
-		dt.pendingServiceOps[uid] = &ServiceOperationState{
-			ServiceUID: uid, Config: NewOutboundServiceConfig(uid, nil), State: StateCreated,
+		egressIdentity := "egress-dup-guard"
+		serviceName := outboundServiceName(egressIdentity)
+		dt.NRPResources.NATGateways.Insert(serviceName)
+		dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+			ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
 		}
-		dt.AddPod(uid, "ns/pod-a", "10.0.0.1", "10.244.0.5")
+		dt.AddPod(serviceName, "ns/pod-a", "10.0.0.1", "10.244.0.5")
 
-		first := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
+		first := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
 		assert.True(t, first.IsLastPod, "first delete of the sole pod must report IsLastPod=true")
 
-		second := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
+		second := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "")
 		assert.False(t, second.IsLastPod, "duplicate delete must be a no-op")
 
-		if v, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(uid)); ok {
+		if v, ok := dt.outboundIdentityPodRefCount.Load(serviceName); ok {
 			assert.GreaterOrEqual(t, v.(int), 0, "ref-counter must not be negative after duplicate delete")
 		}
 	})
 
 	t.Run("LastPodRemovalDrivesRefCountToZero", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := "egress-last-zero"
-		dt.NRPResources.NATGateways.Insert(uid)
-		dt.pendingServiceOps[uid] = &ServiceOperationState{
-			ServiceUID: uid, Config: NewOutboundServiceConfig(uid, nil), State: StateCreated,
+		egressIdentity := "egress-last-zero"
+		serviceName := outboundServiceName(egressIdentity)
+		dt.NRPResources.NATGateways.Insert(serviceName)
+		dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+			ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
 		}
-		dt.AddPod(uid, "ns/p", "10.0.0.1", "10.244.0.1")
-		dt.AddPod(uid, "ns/q", "10.0.0.1", "10.244.0.2")
+		dt.AddPod(serviceName, "ns/p", "10.0.0.1", "10.244.0.1")
+		dt.AddPod(serviceName, "ns/q", "10.0.0.1", "10.244.0.2")
 
-		notLast := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.1"}, "ns", "p", "")
+		notLast := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.1"}, "ns", "p", "")
 		assert.False(t, notLast.IsLastPod, "first delete of two pods must not be last-pod")
 
-		last := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.2"}, "ns", "q", "")
+		last := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.2"}, "ns", "q", "")
 		assert.True(t, last.IsLastPod, "deleting the final pod must report IsLastPod=true")
 
-		_, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(uid))
+		_, ok := dt.outboundIdentityPodRefCount.Load(serviceName)
 		assert.False(t, ok, "last-pod removal must delete the ref-count key (counter 1 to 0)")
 	})
 }
@@ -250,6 +252,8 @@ func TestDeleteInboundServiceLastErrMonotonic(t *testing.T) {
 	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(errors.New("simulated-lb-delete-failure"))
+	pip.EXPECT().Get(gomock.Any(), "rg", "uid-1-lb-pip", nil).
+		Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(consts.ServiceGatewayManagedTagValue)}}, nil).Times(1)
 	pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
 	kube := fake.NewSimpleClientset(deletionTestService())
@@ -257,14 +261,14 @@ func TestDeleteInboundServiceLastErrMonotonic(t *testing.T) {
 
 	var completedSuccess *bool
 	var completedErr error
-	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+	su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 		b := ok
 		completedSuccess = &b
 		completedErr = err
-		dt.OnServiceCreationComplete(uid, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	})
 
-	su.deleteInboundService("uid-1", "corr-lastErr-monotonic")
+	su.deleteInboundService(inboundServiceName("uid-1"), "corr-lastErr-monotonic")
 
 	if !assert.NotNil(t, completedSuccess, "onComplete must be called") {
 		return
@@ -283,7 +287,7 @@ func TestSDKV9WireValues(t *testing.T) {
 			FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
 			BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
 		}
-		_, lb, _, err := buildInboundServiceResources("svc-sku-wire", cfg, dtConfig)
+		_, lb, _, err := buildInboundServiceResources(inboundServiceName("svc-sku-wire"), cfg, dtConfig)
 		assert.NoError(t, err)
 		if !assert.NotNil(t, lb.SKU) || !assert.NotNil(t, lb.SKU.Name) {
 			return
@@ -318,7 +322,7 @@ func TestSDKV9WireValues(t *testing.T) {
 			FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}, {Port: 53, Protocol: "UDP"}},
 			BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}, {Port: 5353, Protocol: "UDP"}},
 		}
-		_, lb, _, err := buildInboundServiceResources("svc-proto-wire", cfg, dtConfig)
+		_, lb, _, err := buildInboundServiceResources(inboundServiceName("svc-proto-wire"), cfg, dtConfig)
 		assert.NoError(t, err)
 		if !assert.Len(t, lb.Properties.LoadBalancingRules, 2) {
 			return

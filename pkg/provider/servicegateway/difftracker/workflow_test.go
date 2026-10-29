@@ -75,26 +75,26 @@ func TestCompleteServiceCreationWorkflow(t *testing.T) {
 		ServiceGatewayResourceName: "my-service-gateway",
 	}
 
-	serviceUID := string(service.UID)
-	pip, lb, servicesDTO, err := buildInboundServiceResources(serviceUID, inboundConfig, dtConfig)
+	serviceName := string(service.UID)
+	pip, lb, servicesDTO, err := buildInboundServiceResources(serviceName, inboundConfig, dtConfig)
 	assert.NoError(t, err)
 
 	// Step 4: Validate Public IP resource
 	assert.NotNil(t, pip.Name)
-	assert.Equal(t, serviceUID+"-pip", *pip.Name)
+	assert.Equal(t, serviceName+"-pip", *pip.Name)
 	assert.Equal(t, "eastus", *pip.Location)
 	assert.Contains(t, *pip.ID, "test-subscription-123")
 	assert.Contains(t, *pip.ID, "production-rg")
-	assert.Contains(t, *pip.ID, serviceUID+"-pip")
+	assert.Contains(t, *pip.ID, serviceName+"-pip")
 
 	// Step 5: Validate LoadBalancer resource
 	assert.NotNil(t, lb.Name)
-	assert.Equal(t, serviceUID, *lb.Name)
+	assert.Equal(t, serviceName, *lb.Name)
 	assert.Equal(t, "eastus", *lb.Location)
 
 	// Validate backend pool
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
-	assert.Equal(t, serviceUID, *lb.Properties.BackendAddressPools[0].Name)
+	assert.Equal(t, serviceName, *lb.Properties.BackendAddressPools[0].Name)
 
 	// Validate LB rules match service ports
 	assert.Len(t, lb.Properties.LoadBalancingRules, 2)
@@ -116,7 +116,7 @@ func TestCompleteServiceCreationWorkflow(t *testing.T) {
 	// Step 6: Validate ServicesDTO for ServiceGateway registration
 	assert.Len(t, servicesDTO.Services, 1)
 	assert.Equal(t, Inbound, servicesDTO.Services[0].ServiceType)
-	assert.Contains(t, servicesDTO.Services[0].Service, serviceUID)
+	assert.Contains(t, servicesDTO.Services[0].Service, serviceName)
 }
 
 // TestWorkflowWithUDPService tests the workflow with a UDP service
@@ -253,7 +253,7 @@ func TestWorkflowWithComplexPortMapping(t *testing.T) {
 
 // TestResourceIDsAreConsistent validates resource IDs are properly formatted
 func TestResourceIDsAreConsistent(t *testing.T) {
-	serviceUID := "test-service-123"
+	serviceName := "test-service-123"
 	dtConfig := Config{
 		SubscriptionID:             "sub-abc",
 		ResourceGroup:              "rg-xyz",
@@ -266,7 +266,7 @@ func TestResourceIDsAreConsistent(t *testing.T) {
 		BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
 	}
 
-	pip, lb, _, err := buildInboundServiceResources(serviceUID, config, dtConfig)
+	pip, lb, _, err := buildInboundServiceResources(serviceName, config, dtConfig)
 	assert.NoError(t, err)
 
 	// Validate PIP ID format
@@ -288,7 +288,7 @@ func TestResourceIDsAreConsistent(t *testing.T) {
 
 // TestOutboundWorkflow tests NAT Gateway creation workflow
 func TestOutboundWorkflow(t *testing.T) {
-	egressUID := "egress-gateway-789"
+	egressName := "egress-gateway-789"
 	dtConfig := Config{
 		SubscriptionID:             "sub-123",
 		ResourceGroup:              "rg-456",
@@ -296,15 +296,15 @@ func TestOutboundWorkflow(t *testing.T) {
 		ServiceGatewayResourceName: "sgw-789",
 	}
 
-	pips, natGw, servicesDTO := buildOutboundServiceResources(egressUID, nil, dtConfig)
+	pips, natGw, servicesDTO := buildOutboundServiceResources(egressName, nil, dtConfig)
 	pip := pips[0]
 
 	// Validate PIP
-	assert.Equal(t, egressUID+"-pip", *pip.Name)
+	assert.Equal(t, egressName+"-pip", *pip.Name)
 	assert.Equal(t, "westus2", *pip.Location)
 
 	// Validate NAT Gateway
-	assert.Equal(t, egressUID, *natGw.Name)
+	assert.Equal(t, egressName, *natGw.Name)
 	assert.Equal(t, "westus2", *natGw.Location)
 
 	// Verify NAT Gateway references ServiceGateway
@@ -461,15 +461,15 @@ func TestBackendPoolPopulation(t *testing.T) {
 		ServiceGatewayResourceName: "sgw",
 	}
 
-	serviceUID := "my-service-uid"
-	_, lb, _, err := buildInboundServiceResources(serviceUID, config, dtConfig)
+	serviceName := "my-service-uid"
+	_, lb, _, err := buildInboundServiceResources(serviceName, config, dtConfig)
 	assert.NoError(t, err)
 
 	// Backend pool should be named after serviceUID for SLB
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
 	backendPool := lb.Properties.BackendAddressPools[0]
 
-	assert.Equal(t, serviceUID, *backendPool.Name)
+	assert.Equal(t, serviceName, *backendPool.Name)
 
 	// Backend pool should be empty (populated by ServiceGateway)
 	assert.NotNil(t, backendPool.Properties)

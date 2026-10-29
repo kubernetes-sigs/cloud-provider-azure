@@ -122,7 +122,7 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for all pods to register")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		By("Deleting all backend pods")
 		Expect(cs.CoreV1().Pods(ns.Name).DeleteCollection(context.TODO(), metav1.DeleteOptions{},
@@ -130,7 +130,7 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 
 		By("Verifying the backend empties while the LB/Service Gateway entry remains")
 		Eventually(func() (int, error) {
-			return countRegisteredEndpoints(serviceUID)
+			return countRegisteredEndpoints(inboundServiceName(serviceUID))
 		}, waitTime, defaultPollInterval).Should(Equal(0), "all pod registrations should drain")
 		Expect(verifyAzureResources(serviceUID)).To(Succeed(),
 			"the LB/PIP/Service Gateway entry must survive an empty backend")
@@ -143,7 +143,7 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Verifying the backend repopulates")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		utils.Logf("\n✓ Endpoint churn to zero and back verified")
 	})
@@ -170,7 +170,7 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 			if err := verifyAzureResources(serviceUID); err != nil {
 				return err
 			}
-			n, err := countRegisteredEndpoints(serviceUID)
+			n, err := countRegisteredEndpoints(inboundServiceName(serviceUID))
 			if err != nil {
 				return err
 			}
@@ -189,7 +189,7 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Verifying the pods register once they appear")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		utils.Logf("\n✓ Pre-provisioned LB registered pods on appearance")
 	})
@@ -237,19 +237,21 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for all pods to register")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		By("Capturing which address belongs to the pod that will go NotReady")
 		// A count of numPods-1 would also be satisfied by deregistering one of the pods that
 		// stayed Ready, so assert on the specific addresses instead.
 		flip, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), flipPod, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		flipIPs := podIPSet([]v1.Pod{*flip})
+		flipIPs, err := inboundPodIPSet(cs, []v1.Pod{*flip}, svc.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(flipIPs).NotTo(BeEmpty())
 
 		allPods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		remainingIPs := podIPSet(allPods.Items)
+		remainingIPs, err := inboundPodIPSet(cs, allPods.Items, svc.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 		for ip := range flipIPs {
 			delete(remainingIPs, ip)
 		}
@@ -261,7 +263,7 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 
 		By("Verifying exactly the NotReady pod's address is deregistered")
 		Eventually(func() error {
-			return registeredAddressesMatchErr(serviceUID, remainingIPs)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), remainingIPs)
 		}, waitTime, defaultPollInterval).Should(Succeed(),
 			"only the NotReady pod's address may be deregistered; the Ready pods must all remain")
 
@@ -270,7 +272,7 @@ var _ = Describe("SLB - Endpoint Lifecycle", Label(slbTestLabel), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verifying the pod is re-registered")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		utils.Logf("\n✓ Readiness-driven deregister/re-register verified")
 	})

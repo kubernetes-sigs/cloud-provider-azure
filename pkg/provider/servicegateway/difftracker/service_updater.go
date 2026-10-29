@@ -22,19 +22,24 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // ServiceUpdater processes service creation/deletion in parallel
 type ServiceUpdater struct {
 	diffTracker *DiffTracker
-	onComplete  func(serviceUID string, success bool, err error)
+	onComplete  func(serviceName string, success bool, err error)
 	trigger     <-chan bool
 	ctx         context.Context
 	cancel      context.CancelFunc
@@ -45,7 +50,7 @@ type ServiceUpdater struct {
 	// retryTimers holds the pending re-dispatch timer per service. A parked or backed-off operation
 	// has no external driver, so it self-arms with time.AfterFunc; those timers are not tracked by wg
 	// nor bound to ctx, so they must be stopped explicitly or they keep the whole DiffTracker
-	// reachable and fire into a stopped updater. Keyed by service UID so re-arming replaces its
+	// reachable and fire into a stopped updater. Keyed by SGW service name so re-arming replaces its
 	// pending revisit. Guarded by mu.
 	retryTimers map[string]*time.Timer
 	logger      logr.Logger
@@ -137,9 +142,9 @@ func (s *ServiceUpdater) Stop() {
 	// Cancel pending re-dispatch timers so they stop holding the DiffTracker. A timer that has
 	// already fired is harmless: its callback checks ctx.
 	s.mu.Lock()
-	for uid, timer := range s.retryTimers {
+	for serviceName, timer := range s.retryTimers {
 		timer.Stop()
-		delete(s.retryTimers, uid)
+		delete(s.retryTimers, serviceName)
 	}
 	s.mu.Unlock()
 	s.wg.Wait()
@@ -149,19 +154,19 @@ func (s *ServiceUpdater) Stop() {
 // scheduleRetry arms a single re-dispatch for a service after delay, replacing any revisit already
 // pending for it so repeated backoff passes cannot accumulate timers. The callback is a no-op once
 // the updater's context is done. Takes s.mu.
-func (s *ServiceUpdater) scheduleRetry(serviceUID string, delay time.Duration) {
+func (s *ServiceUpdater) scheduleRetry(serviceName string, delay time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.retryTimers == nil {
 		// Tolerate an updater built as a struct literal rather than through NewServiceUpdater.
 		s.retryTimers = make(map[string]*time.Timer)
 	}
-	if existing, ok := s.retryTimers[serviceUID]; ok {
+	if existing, ok := s.retryTimers[serviceName]; ok {
 		existing.Stop()
 	}
-	s.retryTimers[serviceUID] = time.AfterFunc(delay, func() {
+	s.retryTimers[serviceName] = time.AfterFunc(delay, func() {
 		s.mu.Lock()
-		delete(s.retryTimers, serviceUID)
+		delete(s.retryTimers, serviceName)
 		s.mu.Unlock()
 		if s.ctx != nil && s.ctx.Err() != nil {
 			return
@@ -171,9 +176,9 @@ func (s *ServiceUpdater) scheduleRetry(serviceUID string, delay time.Duration) {
 }
 
 // requeueIfMoreWork is fired from a per-service goroutine's defer chain AFTER
-// activeOps[uid] has been cleared. It pokes the dispatcher to re-scan
+// activeOps[serviceName] has been cleared. It pokes the dispatcher to re-scan
 // pendingServiceOps. This closes a race where onComplete (running INSIDE the
-// goroutine, while activeOps[uid] was still true) already enqueued a
+// goroutine, while activeOps[serviceName] was still true) already enqueued a
 // follow-up trigger that the dispatcher consumed during the activeOps-held
 // window — leaving a service stuck with no active worker and no pending trigger.
 //
@@ -186,8 +191,8 @@ func (s *ServiceUpdater) scheduleRetry(serviceUID string, delay time.Duration) {
 // leave that decrement unmatched, driving pendingUpdaterTriggers negative and making
 // WaitForInitialSync hang forever. Post-init, triggerServiceUpdater does not increment,
 // so steady-state behavior is unchanged.
-func (s *ServiceUpdater) requeueIfMoreWork(uid string) {
-	s.logger.V(5).Info("Queued follow-up service updater trigger", "serviceUID", uid)
+func (s *ServiceUpdater) requeueIfMoreWork(serviceName string) {
+	s.logger.V(5).Info("Queued follow-up service updater trigger", "serviceUID", serviceName)
 	s.diffTracker.triggerServiceUpdater()
 }
 
@@ -207,12 +212,12 @@ const parkReArmCooldown = 5 * time.Minute
 // true (caller must `continue`) when the op is still within its post-failure backoff window
 // (scheduling a guaranteed revisit via time.AfterFunc) or has exhausted its current retry burst
 // (a park-and-re-arm cooldown). It must be called with s.diffTracker.mu held and after
-// activeOps[uid] has been set; it releases activeOps[uid] on skip.
+// activeOps[serviceName] has been set; it releases activeOps[serviceName] on skip.
 //
 // Note the op is never abandoned: exhausting maxServiceRetries parks it for parkReArmCooldown and
 // schedules a revisit, after which it re-arms and retries again. A permanently failing op therefore
 // retries forever at one burst per cooldown rather than stranding until CCM restart.
-func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationState) bool {
+func (s *ServiceUpdater) retryGate(serviceName string, opState *ServiceOperationState) bool {
 	// Retry-burst ceiling: pause re-dispatching until the park cooldown elapses.
 	if opState.RetryCount >= maxServiceRetries {
 		// A parked op has no external driver on a stable cluster, so it must self-arm or it strands
@@ -227,9 +232,9 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 			recordServiceParked(parkReasonRetriesExceeded)
 			recordServiceOperationRetries(operationLabelForState(opState.State), opState.Config.IsInbound, opState.RetryCount)
 			s.logger.Info("Parked service operation after exhausting its retry burst; will re-arm and retry after the cooldown",
-				"serviceUID", serviceUID, "state", opState.State, "retries", opState.RetryCount,
+				"serviceUID", serviceName, "state", opState.State, "retries", opState.RetryCount,
 				"reArmAfter", parkReArmCooldown)
-			s.scheduleRetry(serviceUID, parkReArmCooldown)
+			s.scheduleRetry(serviceName, parkReArmCooldown)
 
 		} else if !opState.NextRetryAt.IsZero() && time.Now().After(opState.NextRetryAt) {
 			// Cooldown elapsed: re-arm once so the op dispatches again this pass.
@@ -237,7 +242,7 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 			return false
 		}
 		s.mu.Lock()
-		delete(s.activeOps, serviceUID)
+		delete(s.activeOps, serviceName)
 		s.mu.Unlock()
 		return true
 	}
@@ -248,9 +253,9 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 	if !opState.NextRetryAt.IsZero() && time.Now().Before(opState.NextRetryAt) {
 		delay := time.Until(opState.NextRetryAt)
 		s.mu.Lock()
-		delete(s.activeOps, serviceUID)
+		delete(s.activeOps, serviceName)
 		s.mu.Unlock()
-		s.scheduleRetry(serviceUID, delay)
+		s.scheduleRetry(serviceName, delay)
 		return true
 	}
 
@@ -261,7 +266,7 @@ func (s *ServiceUpdater) retryGate(serviceUID string, opState *ServiceOperationS
 func (s *ServiceUpdater) processBatch() {
 	// Collect work to do while holding lock, then spawn goroutines after releasing lock
 	type workItem struct {
-		serviceUID             string
+		serviceName            string
 		config                 ServiceConfig
 		state                  ResourceState
 		correlationID          string
@@ -271,14 +276,14 @@ func (s *ServiceUpdater) processBatch() {
 	var workToDo []workItem
 
 	s.diffTracker.mu.Lock()
-	for serviceUID, opState := range s.diffTracker.pendingServiceOps {
+	for serviceName, opState := range s.diffTracker.pendingServiceOps {
 		// Check if already being processed
 		s.mu.Lock()
-		if s.activeOps[serviceUID] {
+		if s.activeOps[serviceName] {
 			s.mu.Unlock()
 			continue
 		}
-		s.activeOps[serviceUID] = true
+		s.activeOps[serviceName] = true
 		s.mu.Unlock()
 
 		// Collect work based on state
@@ -287,60 +292,60 @@ func (s *ServiceUpdater) processBatch() {
 			if opState.CreationFailedTerminal {
 				// Parked after a non-retryable creation error; do not re-dispatch.
 				s.mu.Lock()
-				delete(s.activeOps, serviceUID)
+				delete(s.activeOps, serviceName)
 				s.mu.Unlock()
-				s.logger.V(4).Info("Skipped parked service", "serviceUID", serviceUID)
+				s.logger.V(4).Info("Skipped parked service", "serviceUID", serviceName)
 				continue
 			}
 			// Transition to CreationInProgress
-			if s.retryGate(serviceUID, opState) {
+			if s.retryGate(serviceName, opState) {
 				continue
 			}
 			opState.State = StateCreationInProgress
 			opState.OperationStartedAt = time.Now()
 			configSnapshot := opState.Config
 			opState.InFlightConfig = &configSnapshot
-			workToDo = append(workToDo, workItem{serviceUID, configSnapshot, StateCreationInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
+			workToDo = append(workToDo, workItem{serviceName, configSnapshot, StateCreationInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 
 		case StateCreationInProgress:
 			// Already being processed by another goroutine, skip
 			s.mu.Lock()
-			delete(s.activeOps, serviceUID)
+			delete(s.activeOps, serviceName)
 			s.mu.Unlock()
-			s.logger.V(4).Info("Skipped service already being created", "serviceUID", serviceUID, "state", StateCreationInProgress)
+			s.logger.V(4).Info("Skipped service already being created", "serviceUID", serviceName, "state", StateCreationInProgress)
 
 		case StateCreated:
 			// Service successfully created, nothing to do
 			s.mu.Lock()
-			delete(s.activeOps, serviceUID)
+			delete(s.activeOps, serviceName)
 			s.mu.Unlock()
-			s.logger.V(4).Info("Skipped already created service", "serviceUID", serviceUID, "state", StateCreated)
+			s.logger.V(4).Info("Skipped already created service", "serviceUID", serviceName, "state", StateCreated)
 
 		case StateDeletionPending:
 			// Services in StateDeletionPending are waiting for LocationsUpdater to clear their addresses.
 			// They will be moved to pendingServiceDeletions map and checkPendingServiceDeletions() will transition
 			// them to StateDeletionInProgress once locations are cleared. Skip processing here.
 			s.mu.Lock()
-			delete(s.activeOps, serviceUID)
+			delete(s.activeOps, serviceName)
 			s.mu.Unlock()
-			s.logger.V(4).Info("Skipped service waiting for locations to clear", "serviceUID", serviceUID, "state", StateDeletionPending)
+			s.logger.V(4).Info("Skipped service waiting for locations to clear", "serviceUID", serviceName, "state", StateDeletionPending)
 
 		case StateDeletionInProgress:
-			if s.retryGate(serviceUID, opState) {
+			if s.retryGate(serviceName, opState) {
 				continue
 			}
 			opState.OperationStartedAt = time.Now()
-			workToDo = append(workToDo, workItem{serviceUID, opState.Config, StateDeletionInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
+			workToDo = append(workToDo, workItem{serviceName, opState.Config, StateDeletionInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 
 		case StateUpdateInProgress:
-			if s.retryGate(serviceUID, opState) {
+			if s.retryGate(serviceName, opState) {
 				continue
 			}
 			// Snapshot the desired config so OnServiceCreationComplete can detect drift.
 			opState.OperationStartedAt = time.Now()
 			configSnapshot := opState.Config
 			opState.InFlightConfig = &configSnapshot
-			workToDo = append(workToDo, workItem{serviceUID, configSnapshot, StateUpdateInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
+			workToDo = append(workToDo, workItem{serviceName, configSnapshot, StateUpdateInProgress, opState.CorrelationID, opState.TriggeringPodNamespace, opState.TriggeringPodName})
 		}
 	}
 	s.diffTracker.mu.Unlock()
@@ -368,39 +373,39 @@ func (s *ServiceUpdater) processBatch() {
 		switch work.state {
 		case StateCreationInProgress:
 			s.wg.Add(1)
-			go func(uid string, cfg ServiceConfig, corrID string, podNS string, podName string) {
-				s.runWorker(uid, func() {
+			go func(serviceName string, cfg ServiceConfig, corrID string, podNS string, podName string) {
+				s.runWorker(serviceName, func() {
 					if cfg.IsInbound {
-						s.createInboundService(uid, cfg.InboundConfig, corrID)
+						s.createInboundService(serviceName, cfg.InboundConfig, corrID)
 					} else {
-						s.createOutboundService(uid, cfg.OutboundConfig, corrID, podNS, podName)
+						s.createOutboundService(serviceName, cfg.OutboundConfig, corrID, podNS, podName)
 					}
 				})
-			}(work.serviceUID, work.config, work.correlationID, work.triggeringPodNamespace, work.triggeringPodName)
+			}(work.serviceName, work.config, work.correlationID, work.triggeringPodNamespace, work.triggeringPodName)
 		case StateDeletionInProgress:
 			s.wg.Add(1)
-			go func(uid string, cfg ServiceConfig, corrID string) {
-				s.runWorker(uid, func() {
+			go func(serviceName string, cfg ServiceConfig, corrID string) {
+				s.runWorker(serviceName, func() {
 					if cfg.IsInbound {
-						s.deleteInboundService(uid, corrID)
+						s.deleteInboundService(serviceName, corrID)
 					} else {
-						s.deleteOutboundService(uid, corrID)
+						s.deleteOutboundService(serviceName, corrID)
 					}
 				})
-			}(work.serviceUID, work.config, work.correlationID)
+			}(work.serviceName, work.config, work.correlationID)
 		case StateUpdateInProgress:
 			s.wg.Add(1)
-			go func(uid string, cfg ServiceConfig, corrID string) {
-				s.runWorker(uid, func() {
+			go func(serviceName string, cfg ServiceConfig, corrID string) {
+				s.runWorker(serviceName, func() {
 					if cfg.IsInbound {
-						s.updateInboundService(uid, cfg.InboundConfig, corrID)
+						s.updateInboundService(serviceName, cfg.InboundConfig, corrID)
 					} else {
-						s.logger.Info("Skipped outbound service update; egress identities cannot be updated in place", "serviceUID", uid)
+						s.logger.Info("Skipped outbound service update; egress identities cannot be updated in place", "serviceUID", serviceName)
 						recordOutboundServiceUpdateSkipped()
-						s.onComplete(uid, true, nil)
+						s.onComplete(serviceName, true, nil)
 					}
 				})
-			}(work.serviceUID, work.config, work.correlationID)
+			}(work.serviceName, work.config, work.correlationID)
 		}
 	}
 }
@@ -410,19 +415,19 @@ func (s *ServiceUpdater) processBatch() {
 // and recovers panics. A panicking operation is reported as a failed op via onComplete (so the
 // existing retry path handles it) instead of crashing the whole process. op is only invoked once
 // the semaphore is acquired; if the context is cancelled first, the op is skipped.
-func (s *ServiceUpdater) runWorker(uid string, op func()) {
+func (s *ServiceUpdater) runWorker(serviceName string, op func()) {
 	defer s.wg.Done()
-	defer s.requeueIfMoreWork(uid)
+	defer s.requeueIfMoreWork(serviceName)
 	defer func() {
 		s.mu.Lock()
-		delete(s.activeOps, uid)
+		delete(s.activeOps, serviceName)
 		s.mu.Unlock()
 	}()
 	defer func() {
 		if r := recover(); r != nil {
 			s.logger.Error(fmt.Errorf("%v", r), "Recovered from panic in ServiceUpdater worker",
-				"serviceUID", uid, "stack", string(debug.Stack()))
-			s.onComplete(uid, false, fmt.Errorf("panic in service worker: %v", r))
+				"serviceUID", serviceName, "stack", string(debug.Stack()))
+			s.onComplete(serviceName, false, fmt.Errorf("panic in service worker: %v", r))
 		}
 	}()
 
@@ -433,7 +438,7 @@ func (s *ServiceUpdater) runWorker(uid string, op func()) {
 			<-s.semaphore
 		}()
 	case <-s.ctx.Done():
-		s.logger.V(4).Info("Skipped service because context was canceled before acquiring semaphore", "serviceUID", uid)
+		s.logger.V(4).Info("Skipped service because context was canceled before acquiring semaphore", "serviceUID", serviceName)
 		return
 	}
 
@@ -441,8 +446,8 @@ func (s *ServiceUpdater) runWorker(uid string, op func()) {
 }
 
 // createInboundService creates LoadBalancer resources for inbound service
-func (s *ServiceUpdater) createInboundService(serviceUID string, config *InboundConfig, correlationID string) {
-	s.logger.V(5).Info("Started creating inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+func (s *ServiceUpdater) createInboundService(serviceName string, config *InboundConfig, correlationID string) {
+	s.logger.V(5).Info("Started creating inbound service", "serviceUID", serviceName, "correlationID", correlationID)
 
 	// Bound the operation so a hung/slow Azure call fails into retry instead of holding the
 	// ServiceUpdater semaphore slot forever (see nrpOperationTimeout).
@@ -450,23 +455,23 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	defer cancel()
 	dropGoneService := func() {
 		s.diffTracker.mu.Lock()
-		delete(s.diffTracker.pendingServiceOps, serviceUID)
-		delete(s.diffTracker.pendingEndpoints, serviceUID)
-		delete(s.diffTracker.pendingPods, serviceUID)
+		delete(s.diffTracker.pendingServiceOps, serviceName)
+		delete(s.diffTracker.pendingEndpoints, serviceName)
+		delete(s.diffTracker.pendingPods, serviceName)
 		s.diffTracker.checkInitializationCompleteLocked()
 		s.diffTracker.mu.Unlock()
 	}
 
 	// Step 0: Add finalizer to K8s service to prevent deletion until Azure resources are cleaned up
-	svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
+	svc, err := s.diffTracker.getServiceBySGWName(ctx, serviceName)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			// A transient lookup failure (e.g. an apiserver List error) is NOT "service gone":
 			// proceeding would create the PIP/LB/SGW without ever adding the K8s cleanup
 			// finalizers, leaving Azure resources with no anchor for EnsureLoadBalancerDeleted.
 			// Fail the operation so it is retried once the apiserver recovers.
-			s.logger.V(4).Info("Could not get service for finalizer, will retry", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
-			s.onComplete(serviceUID, false, fmt.Errorf("failed to get service for finalizer: %w", err))
+			s.logger.V(4).Info("Could not get service for finalizer, will retry", "serviceUID", serviceName, "correlationID", correlationID, "err", err)
+			s.onComplete(serviceName, false, fmt.Errorf("failed to get service for finalizer: %w", err))
 			return
 		}
 		// Typed NotFound: the K8s Service is gone. Do NOT fall through to create the PIP/LB/SGW -
@@ -476,7 +481,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 		// re-calls EnsureLoadBalancer, which re-adds the operation. We deliberately do NOT call
 		// onComplete here: onComplete(false) would re-hit NotFound and loop, and onComplete(true)
 		// would falsely report the service as Created.
-		s.logger.V(4).Info("Service gone (NotFound) before create; aborting to avoid orphaned resources", "serviceUID", serviceUID, "correlationID", correlationID)
+		s.logger.V(4).Info("Service gone (NotFound) before create; aborting to avoid orphaned resources", "serviceUID", serviceName, "correlationID", correlationID)
 		dropGoneService()
 		return
 	}
@@ -484,37 +489,37 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	// Service exists: add the cleanup finalizers before creating any Azure resources.
 	if err := s.diffTracker.addServiceGatewayFinalizer(ctx, svc); err != nil {
 		if errors.Is(err, ErrServiceGoneOrReplaced) {
-			s.logger.V(4).Info("Service gone or replaced before finalizer add; aborting to avoid orphaned resources", "serviceUID", serviceUID, "correlationID", correlationID)
+			s.logger.V(4).Info("Service gone or replaced before finalizer add; aborting to avoid orphaned resources", "serviceUID", serviceName, "correlationID", correlationID)
 			dropGoneService()
 			return
 		}
-		s.logger.V(4).Info("Could not add finalizer to service", "serviceUID", serviceUID, "err", err)
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to add finalizer: %w", err))
+		s.logger.V(4).Info("Could not add finalizer to service", "serviceUID", serviceName, "err", err)
+		s.onComplete(serviceName, false, fmt.Errorf("failed to add finalizer: %w", err))
 		return
 	}
-	s.logger.V(5).Info("Added finalizer to service", "serviceUID", serviceUID)
+	s.logger.V(5).Info("Added finalizer to service", "serviceUID", serviceName)
 
 	// Step 1: Build resources using shared helper
-	pipResource, lbResource, servicesDTO, err := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
+	pipResource, lbResource, servicesDTO, err := buildInboundServiceResources(serviceName, config, s.diffTracker.config)
 	if err != nil {
-		s.logger.V(4).Info("Could not build inbound service resources", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
+		s.logger.V(4).Info("Could not build inbound service resources", "serviceUID", serviceName, "correlationID", correlationID, "err", err)
 		// Building resources only fails on deterministic, spec-driven validation errors
 		// (unsupported protocol, port/idle-timeout out of range). Retrying cannot help, so
 		// mark the failure terminal; the engine parks the service until its spec changes.
-		s.onComplete(serviceUID, false, newTerminalError(fmt.Errorf("failed to build inbound resources: %w", err)))
+		s.onComplete(serviceName, false, newTerminalError(fmt.Errorf("failed to build inbound resources: %w", err)))
 		return
 	}
 
 	// Step 2: Create Public IP and capture the response to get the allocated IP address
-	pipResponse, err := s.diffTracker.createOrUpdatePIPWithResponse(ctx, s.diffTracker.config.ResourceGroup, &pipResource)
+	pipResponse, err := s.diffTracker.createOrUpdateManagedPublicIP(ctx, pipResource)
 	if err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not create Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
+		s.logger.V(4).Info("Could not create Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.onComplete(serviceName, false, fmt.Errorf("failed to create Public IP: %w", err))
 		return
 	}
-	pipName := PublicIPName(serviceUID)
-	s.logger.V(5).Info("Created Public IP for inbound service", "serviceUID", serviceUID, "publicIP", pipName)
+	pipName := PublicIPName(serviceName)
+	s.logger.V(5).Info("Created Public IP for inbound service", "serviceUID", serviceName, "publicIP", pipName)
 
 	// Extract IP address from PIP response
 	var pipIPAddress string
@@ -526,26 +531,26 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	// Step 3: Create LoadBalancer
 	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not create LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.logger.V(4).Info("Could not create LoadBalancer for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		// Don't delete PIP here - retry will use existing PIP
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
+		s.onComplete(serviceName, false, fmt.Errorf("failed to create LoadBalancer: %w", err))
 		return
 	}
 	lbRulesCount := 0
 	if lbResource.Properties != nil && lbResource.Properties.LoadBalancingRules != nil {
 		lbRulesCount = len(lbResource.Properties.LoadBalancingRules)
 	}
-	s.logger.V(5).Info("Created LoadBalancer for inbound service", "serviceUID", serviceUID, "rules", lbRulesCount)
+	s.logger.V(5).Info("Created LoadBalancer for inbound service", "serviceUID", serviceName, "rules", lbRulesCount)
 
 	// Step 4: Register service with ServiceGateway API
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not register inbound service with ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.logger.V(4).Info("Could not register inbound service with ServiceGateway", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		// Don't delete resources - retry will reconcile
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
+		s.onComplete(serviceName, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
 		return
 	}
-	s.logger.V(5).Info("Registered inbound service with ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID)
+	s.logger.V(5).Info("Registered inbound service with ServiceGateway", "serviceUID", serviceName, "correlationID", correlationID)
 
 	// The LoadBalancer is live from here: Azure holds the PIP and LB, and NRP holds the registration.
 	// Record that before the status write below, which touches only Kubernetes. Leaving it until
@@ -553,7 +558,7 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	// no LoadBalancer tracked, and isServiceReadyToSync then withholds its endpoints - a public IP
 	// serving nothing until the patch eventually succeeds.
 	s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
-		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		Additions: newIgnoreCaseSetFromSlice([]string{serviceName}),
 		Removals:  nil,
 	})
 
@@ -564,23 +569,23 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 	if pipIPAddress == "" {
 		// The Public IP create response carried no allocated address. Fail the op so it is retried;
 		// the Azure resources are idempotent and a later attempt returns the allocated address.
-		s.logger.V(4).Info("Public IP address unavailable, will retry to populate service status", "serviceUID", serviceUID, "correlationID", correlationID)
-		s.onComplete(serviceUID, false, fmt.Errorf("public IP address unavailable for service %s", serviceUID))
+		s.logger.V(4).Info("Public IP address unavailable, will retry to populate service status", "serviceUID", serviceName, "correlationID", correlationID)
+		s.onComplete(serviceName, false, fmt.Errorf("public IP address unavailable for service %s", serviceName))
 		return
 	}
-	if err := s.diffTracker.updateServiceLoadBalancerStatus(ctx, serviceUID, pipIPAddress); err != nil {
+	if err := s.diffTracker.updateServiceLoadBalancerStatus(ctx, serviceName, pipIPAddress); err != nil {
 		// The Azure resources are created and idempotent, but the Service status was not written.
 		// Fail the op so the existing retry path re-runs and re-attempts the status update instead of
 		// reporting a false success that would leave the service stranded without an ingress IP.
-		s.logger.V(4).Info("Could not update service status with external IP, will retry", "serviceUID", serviceUID, "correlationID", correlationID, "publicIPAddress", pipIPAddress, "err", err)
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to update service status with external IP: %w", err))
+		s.logger.V(4).Info("Could not update service status with external IP, will retry", "serviceUID", serviceName, "correlationID", correlationID, "publicIPAddress", pipIPAddress, "err", err)
+		s.onComplete(serviceName, false, fmt.Errorf("failed to update service status with external IP: %w", err))
 		return
 	}
-	s.logger.V(5).Info("Updated service status with external IP", "serviceUID", serviceUID, "publicIPAddress", pipIPAddress)
+	s.logger.V(5).Info("Updated service status with external IP", "serviceUID", serviceName, "publicIPAddress", pipIPAddress)
 
 	// Step 6: Success callback
-	s.onComplete(serviceUID, true, nil)
-	s.logger.V(2).Info("Created inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+	s.onComplete(serviceName, true, nil)
+	s.logger.V(2).Info("Created inbound service", "serviceUID", serviceName, "correlationID", correlationID)
 }
 
 // updateInboundService re-PUTs the LoadBalancer for an existing inbound service to apply
@@ -593,8 +598,8 @@ func (s *ServiceUpdater) createInboundService(serviceUID string, config *Inbound
 //
 // If, in the future, port changes need to surface to NRP (e.g., for backend-port routing
 // metadata in the SGW Service DTO), call updateNRPSGWServices here as well.
-func (s *ServiceUpdater) updateInboundService(serviceUID string, config *InboundConfig, correlationID string) {
-	s.logger.V(5).Info("Started updating inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+func (s *ServiceUpdater) updateInboundService(serviceName string, config *InboundConfig, correlationID string) {
+	s.logger.V(5).Info("Started updating inbound service", "serviceUID", serviceName, "correlationID", correlationID)
 
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
@@ -602,91 +607,178 @@ func (s *ServiceUpdater) updateInboundService(serviceUID string, config *Inbound
 	// Rebuild the LB ARM model from the new config. We discard the PIP and DTO portions
 	// because we are doing a port-only/spec update; the underlying PIP is unchanged and
 	// the SGW service registration (which references the backend pool by ID) is stable.
-	_, lbResource, _, err := buildInboundServiceResources(serviceUID, config, s.diffTracker.config)
+	_, lbResource, _, err := buildInboundServiceResources(serviceName, config, s.diffTracker.config)
 	if err != nil {
-		s.logger.V(4).Info("Could not build inbound service resources for update", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
+		s.logger.V(4).Info("Could not build inbound service resources for update", "serviceUID", serviceName, "correlationID", correlationID, "err", err)
 		// Building resources only fails on deterministic, spec-driven validation errors
 		// (unsupported protocol, port/idle-timeout out of range, dual-stack). Retrying the
 		// same spec cannot help, so mark the failure terminal; the engine parks the service
 		// (its existing Azure resources keep the last-applied config) until its spec changes.
-		s.onComplete(serviceUID, false, newTerminalError(fmt.Errorf("failed to build inbound resources: %w", err)))
+		s.onComplete(serviceName, false, newTerminalError(fmt.Errorf("failed to build inbound resources: %w", err)))
 		return
 	}
 
 	if err := s.diffTracker.createOrUpdateLB(ctx, lbResource); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not update LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to update LoadBalancer: %w", err))
+		s.logger.V(4).Info("Could not update LoadBalancer for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.onComplete(serviceName, false, fmt.Errorf("failed to update LoadBalancer: %w", err))
 		return
 	}
 	lbRulesCount := 0
 	if lbResource.Properties != nil && lbResource.Properties.LoadBalancingRules != nil {
 		lbRulesCount = len(lbResource.Properties.LoadBalancingRules)
 	}
-	s.logger.V(5).Info("Updated LoadBalancer for inbound service", "serviceUID", serviceUID, "rules", lbRulesCount)
+	s.logger.V(5).Info("Updated LoadBalancer for inbound service", "serviceUID", serviceName, "rules", lbRulesCount)
 
-	s.onComplete(serviceUID, true, nil)
-	s.logger.V(2).Info("Updated inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+	s.onComplete(serviceName, true, nil)
+	s.logger.V(2).Info("Updated inbound service", "serviceUID", serviceName, "correlationID", correlationID)
 }
 
-// createOutboundService creates NAT Gateway resources for outbound service
-func (s *ServiceUpdater) createOutboundService(serviceUID string, config *OutboundConfig, correlationID string, triggeringPodNS string, triggeringPodName string) {
-	s.logger.V(5).Info("Started creating outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
+func (s *ServiceUpdater) createOutboundService(serviceName string, config *OutboundConfig, correlationID string, triggeringPodNS string, triggeringPodName string) {
+	s.logger.V(5).Info("Started creating outbound service", "serviceUID", serviceName, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
 
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
 
-	// Step 1: Build resources using shared helper
-	pipResources, natGatewayResource, servicesDTO := buildOutboundServiceResources(serviceUID, config, s.diffTracker.config)
-
-	// Step 2: Create every Public IP the NAT Gateway references. Creating them all before the
-	// gateway keeps the retry idempotent: a partial failure here leaves addresses the next attempt
-	// reuses, and the gateway is never PUT referencing an address that does not exist.
-	for i := range pipResources {
-		pipResource := pipResources[i]
-		if err := s.diffTracker.createOrUpdatePIP(ctx, s.diffTracker.config.ResourceGroup, &pipResource); err != nil {
-			httpStatus, errCode := extractAzureErrorInfo(err)
-			s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "publicIP", derefString(pipResource.Name), "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-			s.onComplete(serviceUID, false, fmt.Errorf("failed to create Public IP: %w", err))
+	byoNATGateway, memberPod, err := s.resolveBYONATGateway(ctx, serviceName, triggeringPodNS, triggeringPodName)
+	if err != nil {
+		s.logger.V(4).Info("Could not resolve NAT Gateway for outbound service", "serviceUID", serviceName, "correlationID", correlationID, "err", err)
+		s.onComplete(serviceName, false, err)
+		return
+	}
+	var servicesDTO ServicesDataDTO
+	var natGatewayID string
+	if byoNATGateway != nil {
+		dt := s.diffTracker
+		natGatewayID = derefString(byoNATGateway.ID)
+		serviceGatewayID := dt.config.ServiceGatewayResourceID()
+		parsed, err := arm.ParseResourceID(natGatewayID)
+		if err != nil {
+			s.onComplete(serviceName, false, fmt.Errorf("parsing NAT Gateway ID %q: %w", natGatewayID, err))
 			return
 		}
-		s.logger.V(5).Info("Created Public IP for outbound service", "serviceUID", serviceUID, "publicIP", derefString(pipResource.Name))
+		freshRecord := dt.setBYONATGatewayID(serviceName, natGatewayID)
+		linkedHere := strings.EqualFold(natGatewayServiceGatewayID(byoNATGateway), serviceGatewayID)
+		retainRecord := !freshRecord || linkedHere
+		defer func() {
+			if !retainRecord {
+				dt.setBYONATGatewayID(serviceName, "")
+			}
+		}()
+
+		reject := func(problem string) {
+			if byoNATGateway.Properties != nil && !linkedHere {
+				// Missing properties cannot prove an existing link is gone.
+				dt.setBYONATGatewayID(serviceName, "")
+			}
+			dt.recordEgressEvent(memberPod, v1.EventTypeWarning, egressNATGatewayRejectedReason,
+				fmt.Sprintf("Egress identity %q cannot use NAT Gateway %q: %s.", serviceName, natGatewayID, problem))
+			s.onComplete(serviceName, false, egressRejectedError{fmt.Errorf("BYO NAT Gateway %q: %s", natGatewayID, problem)})
+		}
+
+		if problem := validateBYONATGateway(byoNATGateway, serviceGatewayID); problem != "" {
+			reject(problem)
+			return
+		}
+		user, err := dt.otherServiceUsing(ctx, serviceName, natGatewayID)
+		if err != nil {
+			s.onComplete(serviceName, false, err)
+			return
+		}
+		if user != "" {
+			reject(fmt.Sprintf("it is already used by Service Gateway service %q", user))
+			return
+		}
+		// Recorded IDs include ambiguous writes, so every attempt must reassert the link.
+		linkCtx, err := withNATGatewayETag(ctx, parsed.Name, byoNATGateway.Etag)
+		if err != nil {
+			s.onComplete(serviceName, false, err)
+			return
+		}
+		if err := s.cleanupManagedOutboundResources(ctx, serviceName, correlationID); err != nil {
+			s.onComplete(serviceName, false, fmt.Errorf("cleaning managed resources before BYO selection: %w", err))
+			return
+		}
+
+		// Keep the record once a write may have applied, including an ambiguous failure.
+		retainRecord = true
+		byoNATGateway.Properties.ServiceGateway = &armnetwork.SubResource{ID: to.Ptr(serviceGatewayID)}
+		if err := dt.createOrUpdateNatGateway(linkCtx, parsed.ResourceGroupName, *byoNATGateway); err != nil {
+			s.logger.V(4).Info("Could not link BYO NAT Gateway to Service Gateway", "serviceUID", serviceName, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
+			var respErr *azcore.ResponseError
+			if errors.As(err, &respErr) && isResponseForMethod(respErr, http.MethodPut) &&
+				respErr.StatusCode == http.StatusPreconditionFailed && freshRecord && !linkedHere {
+				retainRecord = false
+			}
+			if errors.As(err, &respErr) && isLinkRefusal(respErr) {
+				problem := fmt.Sprintf("Azure refused to link it to the Service Gateway (HTTP %d %s)", respErr.StatusCode, respErr.ErrorCode)
+				if respErr.StatusCode == http.StatusForbidden {
+					problem = "access denied when linking it to the Service Gateway; grant the cluster identity write access to the NAT Gateway"
+				}
+				reject(problem)
+				return
+			}
+			s.onComplete(serviceName, false, fmt.Errorf("failed to link NAT Gateway: %w", err))
+			return
+		}
+		servicesDTO = byoOutboundServicesDTO(serviceName, natGatewayID, dt.config)
+	} else {
+		pipResources, natGatewayResource, managedServicesDTO := buildOutboundServiceResources(serviceName, config, s.diffTracker.config)
+		servicesDTO = managedServicesDTO
+
+		// Create every referenced Public IP before the NAT Gateway.
+		for i := range pipResources {
+			pipResource := pipResources[i]
+			if _, err := s.diffTracker.createOrUpdateManagedPublicIP(ctx, pipResource); err != nil {
+				httpStatus, errCode := extractAzureErrorInfo(err)
+				s.logger.V(4).Info("Could not create Public IP for outbound service", "serviceUID", serviceName, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "publicIP", derefString(pipResource.Name), "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+				if isEgressRejected(err) {
+					s.diffTracker.recordEgressEvent(memberPod, v1.EventTypeWarning, egressNATGatewayRejectedReason,
+						fmt.Sprintf("Egress identity %q cannot be used: %v.", serviceName, err))
+				}
+				s.onComplete(serviceName, false, fmt.Errorf("failed to create Public IP: %w", err))
+				return
+			}
+			s.logger.V(5).Info("Created Public IP for outbound service", "serviceUID", serviceName, "publicIP", derefString(pipResource.Name))
+		}
+
+		if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			s.logger.V(4).Info("Could not create NAT Gateway for outbound service", "serviceUID", serviceName, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			s.onComplete(serviceName, false, fmt.Errorf("failed to create NAT Gateway: %w", err))
+			return
+		}
+		s.logger.V(5).Info("Created NAT Gateway for outbound service", "serviceUID", serviceName)
 	}
 
-	// Step 3: Create NAT Gateway
-	if err := s.diffTracker.createOrUpdateNatGateway(ctx, s.diffTracker.config.ResourceGroup, natGatewayResource); err != nil {
-		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not create NAT Gateway for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		// Don't delete PIP here - retry will use existing PIP
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to create NAT Gateway: %w", err))
-		return
-	}
-	s.logger.V(5).Info("Created NAT Gateway for outbound service", "serviceUID", serviceUID)
-
-	// Step 4: Register service with ServiceGateway API
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not register outbound service with ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		// Don't delete resources - retry will reconcile
-		s.onComplete(serviceUID, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
+		s.logger.V(4).Info("Could not register outbound service with ServiceGateway", "serviceUID", serviceName, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.onComplete(serviceName, false, fmt.Errorf("failed to register with ServiceGateway: %w", err))
 		return
 	}
-	s.logger.V(5).Info("Registered outbound service with ServiceGateway", "serviceUID", serviceUID)
+	s.logger.V(5).Info("Registered outbound service with ServiceGateway", "serviceUID", serviceName)
 
-	// Update NRPResources to reflect the sync
 	s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
-		Additions: newIgnoreCaseSetFromSlice([]string{serviceUID}),
+		Additions: newIgnoreCaseSetFromSlice([]string{serviceName}),
 		Removals:  nil,
 	})
 
-	// Step 4: Success callback
-	s.onComplete(serviceUID, true, nil)
-	s.logger.V(2).Info("Created outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
+	if byoNATGateway != nil {
+		s.diffTracker.recordEgressEvent(memberPod, v1.EventTypeNormal, egressNATGatewayLinkedReason,
+			fmt.Sprintf("Egress identity %q uses BYO NAT Gateway %q.", serviceName, natGatewayID))
+	}
+	s.onComplete(serviceName, true, nil)
+	if byoNATGateway != nil {
+		s.logger.V(2).Info("Created outbound service with BYO NAT Gateway", "serviceUID", serviceName, "natGateway", natGatewayID, "correlationID", correlationID)
+	} else {
+		s.logger.V(2).Info("Created outbound service", "serviceUID", serviceName, "correlationID", correlationID, "pod", triggeringPodNS+"/"+triggeringPodName)
+	}
 }
 
 // deleteInboundService deletes LoadBalancer resources
-func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID string) {
-	s.logger.V(5).Info("Started deleting inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+func (s *ServiceUpdater) deleteInboundService(serviceName string, correlationID string) {
+	s.logger.V(5).Info("Started deleting inbound service", "serviceUID", serviceName, "correlationID", correlationID)
 
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
@@ -697,7 +789,7 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 	removeBackendPoolDTO := RemoveBackendPoolReferenceFromServicesDTO(
 		SyncServicesReturnType{
 			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceName}),
 		},
 		s.diffTracker.config.networkResourceSubscriptionID(),
 		s.diffTracker.config.ResourceGroup,
@@ -708,59 +800,59 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 		// because nothing retries this step, the deletion is still recorded as a success, and the
 		// ServiceGateway keeps a stale backend pool reference.
 		recordDeleteSubstepFailure(deleteStepRemoveBackendPool)
-		s.logger.Error(err, "Could not remove backend pool reference for inbound service; continuing with deletion", "serviceUID", serviceUID)
+		s.logger.Error(err, "Could not remove backend pool reference for inbound service; continuing with deletion", "serviceUID", serviceName)
 	} else {
-		s.logger.V(5).Info("Removed backend pool reference for inbound service", "serviceUID", serviceUID)
+		s.logger.V(5).Info("Removed backend pool reference for inbound service", "serviceUID", serviceName)
 	}
 
 	// Step 2: Delete LoadBalancer
-	if err := s.diffTracker.deleteLB(ctx, serviceUID); err != nil {
+	if err := s.diffTracker.deleteLB(ctx, serviceName); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not delete LoadBalancer for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.logger.V(4).Info("Could not delete LoadBalancer for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		lastErr = fmt.Errorf("failed to delete LoadBalancer: %w", err)
 		// Continue with PIP deletion
 	} else {
-		s.logger.V(5).Info("Deleted LoadBalancer for inbound service", "serviceUID", serviceUID)
+		s.logger.V(5).Info("Deleted LoadBalancer for inbound service", "serviceUID", serviceName)
 	}
 
 	// Step 3: Fully unregister service from ServiceGateway
-	unregisterDTO := buildServiceGatewayRemovalDTO(serviceUID, true, s.diffTracker.config)
+	unregisterDTO := buildServiceGatewayRemovalDTO(serviceName, true, s.diffTracker.config)
 
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, unregisterDTO); err != nil {
 		// Treat 404 NotFound as success - the service is already gone from ServiceGateway
 		var respErr *azcore.ResponseError
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
-			s.logger.V(4).Info("Skipped already unregistered inbound service", "serviceUID", serviceUID, "httpStatus", http.StatusNotFound)
+			s.logger.V(4).Info("Skipped already unregistered inbound service", "serviceUID", serviceName, "httpStatus", http.StatusNotFound)
 		} else {
 			httpStatus, errCode := extractAzureErrorInfo(err)
-			s.logger.V(4).Info("Could not unregister inbound service from ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			s.logger.V(4).Info("Could not unregister inbound service from ServiceGateway", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 			lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
 			// Continue with PIP deletion
 		}
 	} else {
-		s.logger.V(5).Info("Unregistered inbound service from ServiceGateway", "serviceUID", serviceUID)
+		s.logger.V(5).Info("Unregistered inbound service from ServiceGateway", "serviceUID", serviceName)
 	}
 
 	// Step 4: Delete Public IP
-	_, pipName, _ := buildInboundResourceNames(serviceUID)
-	if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
+	_, pipName, _ := buildInboundResourceNames(serviceName)
+	if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName); err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not delete Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		s.logger.V(4).Info("Could not delete Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
 		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
-	} else {
-		s.logger.V(5).Info("Deleted Public IP for inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName)
+	} else if deleted {
+		s.logger.V(5).Info("Deleted Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName)
 	}
 
 	// Step 5: Update NRPResources and notify completion
 	if lastErr != nil {
-		s.logger.V(4).Info("Could not delete inbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", lastErr)
-		s.onComplete(serviceUID, false, lastErr)
+		s.logger.V(4).Info("Could not delete inbound service", "serviceUID", serviceName, "correlationID", correlationID, "err", lastErr)
+		s.onComplete(serviceName, false, lastErr)
 	} else {
-		s.logger.V(2).Info("Deleted inbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+		s.logger.V(2).Info("Deleted inbound service", "serviceUID", serviceName, "correlationID", correlationID)
 		// Update NRPResources to reflect the deletion
 		s.diffTracker.UpdateNRPLoadBalancers(SyncServicesReturnType{
 			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceName}),
 		})
 
 		// Step 6: Remove finalizer from K8s service to allow deletion.
@@ -771,114 +863,159 @@ func (s *ServiceUpdater) deleteInboundService(serviceUID string, correlationID s
 		// no-op (see DeleteService guard) and the finalizer is stranded until the next
 		// CCM restart (recoverStuckFinalizers). All Azure steps above are idempotent
 		// (404 is treated as success), so failing here simply retries the whole delete.
-		svc, err := s.diffTracker.getServiceByUID(ctx, serviceUID)
+		svc, err := s.diffTracker.getServiceBySGWName(ctx, serviceName)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				// Service object is already gone - nothing left to finalize.
-				s.logger.V(4).Info("Skipped finalizer removal for deleted service", "serviceUID", serviceUID)
-				s.diffTracker.recordServiceFinalizerRecoveryDone(serviceUID)
+				s.logger.V(4).Info("Skipped finalizer removal for deleted service", "serviceUID", serviceName)
+				s.diffTracker.recordServiceFinalizerRecoveryDone(serviceName)
 			} else {
 				// Transient lookup failure - retry the deletion rather than assume success.
-				s.logger.V(4).Info("Could not look up service for finalizer removal", "serviceUID", serviceUID, "err", err)
-				s.onComplete(serviceUID, false, fmt.Errorf("failed to look up service for finalizer removal: %w", err))
+				s.logger.V(4).Info("Could not look up service for finalizer removal", "serviceUID", serviceName, "err", err)
+				s.onComplete(serviceName, false, fmt.Errorf("failed to look up service for finalizer removal: %w", err))
 				return
 			}
 		} else {
 			if err := s.diffTracker.removeServiceGatewayFinalizer(ctx, svc); err != nil {
-				s.logger.V(4).Info("Could not remove finalizer from service", "serviceUID", serviceUID, "err", err)
-				s.onComplete(serviceUID, false, fmt.Errorf("failed to remove ServiceGateway finalizer: %w", err))
+				s.logger.V(4).Info("Could not remove finalizer from service", "serviceUID", serviceName, "err", err)
+				s.onComplete(serviceName, false, fmt.Errorf("failed to remove ServiceGateway finalizer: %w", err))
 				return
 			}
-			s.logger.V(5).Info("Removed finalizer from service", "serviceUID", serviceUID)
-			s.diffTracker.recordServiceFinalizerRecoveryDone(serviceUID)
+			s.logger.V(5).Info("Removed finalizer from service", "serviceUID", serviceName)
+			s.diffTracker.recordServiceFinalizerRecoveryDone(serviceName)
 		}
 
-		s.onComplete(serviceUID, true, nil)
+		s.onComplete(serviceName, true, nil)
 	}
 }
 
-// deleteOutboundService deletes NAT Gateway resources
-func (s *ServiceUpdater) deleteOutboundService(serviceUID string, correlationID string) {
-	s.logger.V(5).Info("Started deleting outbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+func (s *ServiceUpdater) deleteOutboundService(serviceName string, correlationID string) {
+	s.logger.V(5).Info("Started deleting outbound service", "serviceUID", serviceName, "correlationID", correlationID)
 
 	ctx, cancel := context.WithTimeout(s.ctx, getNRPOperationTimeout())
 	defer cancel()
+
+	natGatewayID := s.diffTracker.byoNATGatewayID(serviceName)
+	var canManage bool
+	if natGatewayID != "" {
+		if parsed, err := arm.ParseResourceID(natGatewayID); err == nil {
+			if _, _, err := s.diffTracker.unlinkNatGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceName, parsed.ResourceGroupName, parsed.Name); err != nil {
+				// Permission or lock refusals do not block finalizer release.
+				if !isAccessDeniedOrLocked(err) {
+					s.logger.V(4).Info("Could not unlink BYO NAT Gateway", "serviceUID", serviceName, "correlationID", correlationID, "natGateway", natGatewayID, "err", err)
+					s.onComplete(serviceName, false, fmt.Errorf("failed to unlink NAT Gateway: %w", err))
+					return
+				}
+				recordDeleteSubstepFailure(deleteStepDisassociateNAT)
+				s.logger.Error(err, "Left the BYO NAT Gateway linked to the Service Gateway; remove the link manually", "serviceUID", serviceName, "natGateway", natGatewayID)
+			}
+		}
+	} else {
+		if s.diffTracker.isReservedOutboundService(serviceName) {
+			s.finishOutboundDeletion(ctx, serviceName, correlationID, nil)
+			return
+		}
+		var err error
+		_, canManage, err = s.diffTracker.unlinkNatGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceName, s.diffTracker.config.ResourceGroup, serviceName)
+		if err != nil && !canManage {
+			s.finishOutboundDeletion(ctx, serviceName, correlationID, err)
+			return
+		}
+
+		// Keep foreign gateways untouched while still unregistering this identity.
+		if !canManage {
+			s.logger.V(2).Info("Skipped disassociating a NAT Gateway not owned by this identity", "serviceUID", serviceName)
+		} else if err != nil {
+			recordDeleteSubstepFailure(deleteStepDisassociateNAT)
+			s.logger.Error(err, "Could not disassociate NAT Gateway from ServiceGateway; continuing with deletion", "serviceUID", serviceName)
+		} else {
+			s.logger.V(5).Info("Disassociated NAT Gateway from ServiceGateway", "serviceUID", serviceName)
+		}
+	}
 	var lastErr error
 
-	// Step 1: Disassociate NAT Gateway from ServiceGateway
-	if err := s.diffTracker.disassociateNatGatewayFromServiceGateway(ctx, s.diffTracker.config.ServiceGatewayResourceName, serviceUID); err != nil {
-		// Continue: the later steps are what free the resources. Logged at error level and counted
-		// because nothing retries this step, the deletion is still recorded as a success, and the
-		// ServiceGateway keeps a stale NAT Gateway association.
-		recordDeleteSubstepFailure(deleteStepDisassociateNAT)
-		s.logger.Error(err, "Could not disassociate NAT Gateway from ServiceGateway; continuing with deletion", "serviceUID", serviceUID)
-	} else {
-		s.logger.V(5).Info("Disassociated NAT Gateway from ServiceGateway", "serviceUID", serviceUID)
-	}
-
 	// Step 2: Unregister from ServiceGateway API
-	servicesDTO := buildServiceGatewayRemovalDTO(serviceUID, false, s.diffTracker.config)
+	servicesDTO := buildServiceGatewayRemovalDTO(serviceName, false, s.diffTracker.config)
 
 	if err := s.diffTracker.updateNRPSGWServices(ctx, s.diffTracker.config.ServiceGatewayResourceName, servicesDTO); err != nil {
 		// Treat 404 NotFound as success - the service is already gone from ServiceGateway
 		var respErr *azcore.ResponseError
 		if errors.As(err, &respErr) && respErr.StatusCode == http.StatusNotFound {
-			s.logger.V(4).Info("Skipped already unregistered outbound service", "serviceUID", serviceUID, "httpStatus", http.StatusNotFound)
+			s.logger.V(4).Info("Skipped already unregistered outbound service", "serviceUID", serviceName, "httpStatus", http.StatusNotFound)
 		} else {
 			httpStatus, errCode := extractAzureErrorInfo(err)
-			s.logger.V(4).Info("Could not unregister outbound service from ServiceGateway", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			s.logger.V(4).Info("Could not unregister outbound service from ServiceGateway", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			if natGatewayID != "" {
+				s.onComplete(serviceName, false, fmt.Errorf("failed to unregister from ServiceGateway: %w", err))
+				return
+			}
 			lastErr = fmt.Errorf("failed to unregister from ServiceGateway: %w", err)
 			// Continue with deletion
 		}
 	} else {
-		s.logger.V(5).Info("Unregistered outbound service from ServiceGateway", "serviceUID", serviceUID)
+		s.logger.V(5).Info("Unregistered outbound service from ServiceGateway", "serviceUID", serviceName)
 	}
 
-	// Step 3: Delete NAT Gateway
-	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceUID); err != nil {
-		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not delete NAT Gateway for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		lastErr = fmt.Errorf("failed to delete NAT Gateway: %w", err)
-		// Continue with PIP deletion
-	} else {
-		s.logger.V(5).Info("Deleted NAT Gateway for outbound service", "serviceUID", serviceUID)
+	if natGatewayID != "" {
+		lastErr = s.cleanupManagedOutboundResources(ctx, serviceName, correlationID)
+	} else if !canManage {
+		s.logger.V(2).Info("Kept NAT Gateway and Public IPs not owned by this identity", "serviceUID", serviceName)
+	} else if err := s.deleteManagedOutboundResources(ctx, serviceName, correlationID); err != nil {
+		lastErr = err
 	}
 
-	// Step 4: Delete every Public IP this identity can own. Both names are reserved for this
-	// controller, and the config that decided the families is not available here, so both are
-	// always attempted. A delete for an address that was never created is a 404, which
-	// deletePublicIP already treats as success.
-	for _, pipName := range OutboundPublicIPNames(serviceUID) {
-		if err := s.diffTracker.deletePublicIP(ctx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
-			httpStatus, errCode := extractAzureErrorInfo(err)
-			s.logger.V(4).Info("Could not delete Public IP for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-			lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
-		} else {
-			s.logger.V(5).Info("Deleted Public IP for outbound service", "serviceUID", serviceUID, "publicIP", pipName)
-		}
-	}
+	s.finishOutboundDeletion(ctx, serviceName, correlationID, lastErr)
+}
 
-	// Step 5: Update NRPResources and notify completion
+func (s *ServiceUpdater) finishOutboundDeletion(ctx context.Context, serviceName, correlationID string, lastErr error) {
 	if lastErr != nil {
-		s.logger.V(4).Info("Could not delete outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", lastErr)
-		s.onComplete(serviceUID, false, lastErr)
+		s.logger.V(4).Info("Could not delete outbound service", "serviceUID", serviceName, "correlationID", correlationID, "err", lastErr)
+		s.onComplete(serviceName, false, lastErr)
 	} else {
-		s.logger.V(2).Info("Deleted outbound service", "serviceUID", serviceUID, "correlationID", correlationID)
+		s.logger.V(2).Info("Deleted outbound service", "serviceUID", serviceName, "correlationID", correlationID)
 		// Update NRPResources to reflect the deletion
 		s.diffTracker.UpdateNRPNATGateways(SyncServicesReturnType{
 			Additions: nil,
-			Removals:  newIgnoreCaseSetFromSlice([]string{serviceUID}),
+			Removals:  newIgnoreCaseSetFromSlice([]string{serviceName}),
 		})
 
-		// Remove finalizers from last-pod entries now that the NAT Gateway is deleted.
-		// If that exhausts retries, report the delete as failed so it retries (the NAT/PIP
-		// deletes above are idempotent on 404) instead of stranding the pod finalizer.
-		if err := s.diffTracker.RemoveLastPodFinalizers(ctx, serviceUID); err != nil {
-			s.logger.V(4).Info("Could not clean up last-pod finalizers for outbound service", "serviceUID", serviceUID, "correlationID", correlationID, "err", err)
-			s.onComplete(serviceUID, false, err)
+		if err := s.diffTracker.RemoveLastPodFinalizers(ctx, serviceName); err != nil {
+			s.logger.V(4).Info("Could not clean up last-pod finalizers for outbound service", "serviceUID", serviceName, "correlationID", correlationID, "err", err)
+			s.onComplete(serviceName, false, err)
 			return
 		}
 
-		s.onComplete(serviceUID, true, nil)
+		s.onComplete(serviceName, true, nil)
 	}
+}
+
+func (s *ServiceUpdater) deleteManagedOutboundResources(ctx context.Context, serviceName, correlationID string) error {
+	var lastErr error
+	if err := s.diffTracker.deleteNatGateway(ctx, s.diffTracker.config.ResourceGroup, serviceName); err != nil {
+		httpStatus, errCode := extractAzureErrorInfo(err)
+		s.logger.V(4).Info("Could not delete NAT Gateway for outbound service", "serviceUID", serviceName, "correlationID", correlationID, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		lastErr = fmt.Errorf("failed to delete NAT Gateway: %w", err)
+	} else {
+		s.logger.V(5).Info("Deleted NAT Gateway for outbound service", "serviceUID", serviceName)
+	}
+
+	if err := s.deleteOwnedOutboundPublicIPs(ctx, serviceName, correlationID); err != nil {
+		lastErr = err
+	}
+	return lastErr
+}
+
+func (s *ServiceUpdater) deleteOwnedOutboundPublicIPs(ctx context.Context, serviceName, correlationID string) error {
+	var lastErr error
+	// Also clean up owned PIPs left by a failed managed creation.
+	for _, pipName := range OutboundPublicIPNames(serviceName) {
+		if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName); err != nil {
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			s.logger.V(4).Info("Could not delete Public IP for outbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
+		} else if deleted {
+			s.logger.V(5).Info("Deleted Public IP for outbound service", "serviceUID", serviceName, "publicIP", pipName)
+		}
+	}
+	return lastErr
 }

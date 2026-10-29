@@ -48,7 +48,7 @@ var strToExtendedLocationType = map[string]armnetwork.ExtendedLocationTypes{
 
 var (
 	// Resource group naming rules: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftresources
-	resourceGroupNameRE = regexp.MustCompile(`^[\p{L}\p{Nd}_().-]{0,89}[\p{L}\p{Nd}_()-]$`) // codespell:ignore nd
+	resourceGroupNameRE = regexp.MustCompile(consts.ResourceGroupNamePattern)
 
 	// Private Link Service naming rules: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftnetwork
 	privateLinkServiceNameRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}[a-zA-Z0-9_]$`)

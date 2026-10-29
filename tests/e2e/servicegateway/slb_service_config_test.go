@@ -128,7 +128,7 @@ var _ = Describe("SLB - Service Config Edge Cases", Label(slbTestLabel), func() 
 		serviceUID := string(created.UID)
 
 		By("Waiting for the service to provision and register its pods")
-		eventuallyServiceReconciled(serviceUID, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, waitTime)
 
 		By(fmt.Sprintf("Verifying the LB has exactly %d rules, one per service port", numPorts))
 		Eventually(func() ([]int32, error) {
@@ -178,8 +178,8 @@ var _ = Describe("SLB - Service Config Edge Cases", Label(slbTestLabel), func() 
 		uidB := newSharedService("shared-svc-b")
 
 		By("Verifying each service independently provisions and registers all shared pods")
-		eventuallyServiceReconciled(uidA, numPods, waitTime)
-		eventuallyServiceReconciled(uidB, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, uidA, numPods, waitTime)
+		eventuallyServiceReconciled(cs, ns.Name, uidB, numPods, waitTime)
 
 		utils.Logf("\n✓ Shared-pod services each registered %d pods (UIDs %s, %s)", numPods, uidA, uidB)
 	})
