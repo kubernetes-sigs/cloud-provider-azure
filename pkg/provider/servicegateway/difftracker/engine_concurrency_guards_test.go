@@ -31,9 +31,9 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	const (
-		uids       = 64
-		repeats    = 4
-		workersPer = 8
+		serviceCount = 64
+		repeats      = 4
+		workersPer   = 8
 	)
 
 	var wg sync.WaitGroup
@@ -46,7 +46,7 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 				defer wg.Done()
 				<-start
 				for r := 0; r < repeats; r++ {
-					for u := 0; u < uids; u++ {
+					for u := 0; u < serviceCount; u++ {
 						fn(u * (idx + 1))
 					}
 				}
@@ -55,49 +55,49 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 	}
 
 	launch(func(u int) {
-		uid := fmt.Sprintf("svc-%d", u%uids)
-		assert.NoError(t, dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
+		serviceName := fmt.Sprintf("svc-%d", u%serviceCount)
+		assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, makeInboundConfig(80))))
 	})
 	launch(func(u int) {
-		uid := fmt.Sprintf("svc-%d", u%uids)
-		assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))))
+		serviceName := fmt.Sprintf("svc-%d", u%serviceCount)
+		assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(8080))))
 	})
 	launch(func(u int) {
-		uid := fmt.Sprintf("svc-%d", u%uids)
-		dt.UpdateEndpoints(uid, nil, map[string]string{"10.0.0.1": "node1"})
+		serviceName := fmt.Sprintf("svc-%d", u%serviceCount)
+		dt.UpdateEndpoints(serviceName, nil, map[string]string{"10.0.0.1": "node1"})
 	})
 	launch(func(u int) {
-		euid := fmt.Sprintf("egress-%d", u%uids)
-		assert.NoError(t, dt.AddService(NewOutboundServiceConfig(euid, nil)))
+		egressName := fmt.Sprintf("egress-%d", u%serviceCount)
+		assert.NoError(t, dt.AddService(NewOutboundServiceConfig(egressName, nil)))
 	})
 	launch(func(u int) {
-		euid := fmt.Sprintf("egress-%d", u%uids)
+		egressName := fmt.Sprintf("egress-%d", u%serviceCount)
 		addr := fmt.Sprintf("10.244.0.%d", (u%250)+1)
 		loc := fmt.Sprintf("10.0.0.%d", (u%200)+1)
 		key := fmt.Sprintf("ns/p-%d", u)
-		dt.AddPod(euid, key, loc, addr)
+		dt.AddPod(egressName, key, loc, addr)
 	})
 	launch(func(u int) {
-		euid := fmt.Sprintf("egress-%d", u%uids)
+		egressName := fmt.Sprintf("egress-%d", u%serviceCount)
 		addr := fmt.Sprintf("10.244.0.%d", (u%250)+1)
 		loc := fmt.Sprintf("10.0.0.%d", (u%200)+1)
-		dt.DeletePod(euid, loc, []string{addr}, "ns", fmt.Sprintf("p-%d", u), "")
+		dt.DeletePod(egressName, loc, []string{addr}, "ns", fmt.Sprintf("p-%d", u), "")
 	})
 	launch(func(u int) {
-		uid := fmt.Sprintf("svc-%d", u%uids)
-		_ = dt.IsServiceTracked(uid)
+		serviceName := fmt.Sprintf("svc-%d", u%serviceCount)
+		_ = dt.IsServiceTracked(serviceName)
 	})
 	launch(func(u int) {
-		uid := fmt.Sprintf("svc-%d", u%uids)
-		dt.DeleteService(uid, true, false)
+		serviceName := fmt.Sprintf("svc-%d", u%serviceCount)
+		dt.DeleteService(serviceName, true, false)
 	})
 	launch(func(_ int) {
 		dt.CheckPendingServiceDeletions()
 	})
 	launch(func(u int) {
-		uid := fmt.Sprintf("svc-%d", u%uids)
+		serviceName := fmt.Sprintf("svc-%d", u%serviceCount)
 		// Should be a safe no-op for UIDs that are not currently tracked.
-		dt.OnServiceCreationComplete(uid, true, nil)
+		dt.OnServiceCreationComplete(serviceName, true, nil)
 	})
 
 	close(start)
@@ -107,23 +107,23 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	for uid, op := range dt.pendingServiceOps {
-		assert.NotNil(t, op, "pendingServiceOps[%s] must not be nil", uid)
-		assert.Equal(t, uid, op.ServiceUID, "pendingServiceOps key/value UID mismatch")
+	for serviceName, op := range dt.pendingServiceOps {
+		assert.NotNil(t, op, "pendingServiceOps[%s] must not be nil", serviceName)
+		assert.Equal(t, serviceName, op.ServiceName, "pendingServiceOps key/value UID mismatch")
 		assert.GreaterOrEqual(t, op.RetryCount, 0, "RetryCount must be >= 0 (no negative)")
 	}
-	for uid, pd := range dt.pendingServiceDeletions {
-		assert.NotNil(t, pd, "pendingServiceDeletions[%s] must not be nil", uid)
+	for serviceName, pd := range dt.pendingServiceDeletions {
+		assert.NotNil(t, pd, "pendingServiceDeletions[%s] must not be nil", serviceName)
 		// Every pending deletion MUST have a matching tracking entry (else
 		// CheckPendingServiceDeletions would dereference into nothing).
-		_, hasOp := dt.pendingServiceOps[uid]
-		assert.True(t, hasOp, "pendingServiceDeletions entry %s has no pendingServiceOps row (orphan)", uid)
+		_, hasOp := dt.pendingServiceOps[serviceName]
+		assert.True(t, hasOp, "pendingServiceDeletions entry %s has no pendingServiceOps row (orphan)", serviceName)
 	}
-	for uid, buf := range dt.pendingEndpoints {
-		assert.NotNil(t, buf, "pendingEndpoints[%s] must not be nil slice", uid)
+	for serviceName, buf := range dt.pendingEndpoints {
+		assert.NotNil(t, buf, "pendingEndpoints[%s] must not be nil slice", serviceName)
 	}
-	for uid, buf := range dt.pendingPods {
-		assert.NotNil(t, buf, "pendingPods[%s] must not be nil slice", uid)
+	for serviceName, buf := range dt.pendingPods {
+		assert.NotNil(t, buf, "pendingPods[%s] must not be nil slice", serviceName)
 	}
 	for key, ppd := range dt.pendingPodDeletions {
 		assert.NotNil(t, ppd, "pendingPodDeletions[%s] must not be nil", key)
@@ -133,12 +133,12 @@ func TestGuardConcurrency_PublicMethodStorm(t *testing.T) {
 // AddPod/DeletePod waves should leave no remaining references for the service.
 func TestGuardConcurrency_AddPodDeletePod_RefCountSymmetry(t *testing.T) {
 	dt := newTestDiffTracker()
-	euid := "egress-refcount"
-	dt.NRPResources.NATGateways.Insert(euid)
-	dt.pendingServiceOps[euid] = &ServiceOperationState{
-		ServiceUID: euid,
-		Config:     NewOutboundServiceConfig(euid, nil),
-		State:      StateCreated,
+	egressName := "egress-refcount"
+	dt.NRPResources.NATGateways.Insert(egressName)
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreated,
 	}
 
 	const N = 256
@@ -152,7 +152,7 @@ func TestGuardConcurrency_AddPodDeletePod_RefCountSymmetry(t *testing.T) {
 			<-start
 			loc := fmt.Sprintf("10.0.0.%d", (idx%50)+1)
 			addr := fmt.Sprintf("10.244.0.%d", (idx%200)+1)
-			dt.AddPod(euid, fmt.Sprintf("ns/p-%d", idx), loc, addr)
+			dt.AddPod(egressName, fmt.Sprintf("ns/p-%d", idx), loc, addr)
 		}(i)
 	}
 	close(start)
@@ -168,7 +168,7 @@ func TestGuardConcurrency_AddPodDeletePod_RefCountSymmetry(t *testing.T) {
 			<-start2
 			loc := fmt.Sprintf("10.0.0.%d", (idx%50)+1)
 			addr := fmt.Sprintf("10.244.0.%d", (idx%200)+1)
-			dt.DeletePod(euid, loc, []string{addr}, "ns", fmt.Sprintf("p-%d", idx), "")
+			dt.DeletePod(egressName, loc, []string{addr}, "ns", fmt.Sprintf("p-%d", idx), "")
 		}(i)
 	}
 	close(start2)
@@ -179,8 +179,8 @@ func TestGuardConcurrency_AddPodDeletePod_RefCountSymmetry(t *testing.T) {
 	defer dt.mu.Unlock()
 	for nodeIP, node := range dt.K8sResources.Nodes {
 		for podIP, pod := range node.Pods {
-			assert.NotEqual(t, euid, pod.PublicOutboundIdentity,
-				"node=%s pod=%s still references egress %s after symmetric delete", nodeIP, podIP, euid)
+			assert.NotEqual(t, egressName, pod.PublicOutboundIdentity,
+				"node=%s pod=%s still references egress %s after symmetric delete", nodeIP, podIP, egressName)
 		}
 	}
 
@@ -191,15 +191,15 @@ func TestGuardConcurrency_AddPodDeletePod_RefCountSymmetry(t *testing.T) {
 	// NAT Gateway alive after the last pod is gone.
 	assert.Empty(t, dt.K8sResources.Nodes, "every node entry must be dropped once its last pod is deleted")
 
-	_, stillCounted := dt.outboundIdentityPodRefCount.Load(euid)
+	_, stillCounted := dt.outboundIdentityPodRefCount.Load(egressName)
 	assert.False(t, stillCounted,
-		"outbound ref-count for %s must be released after an equal number of AddPod/DeletePod calls", euid)
+		"outbound ref-count for %s must be released after an equal number of AddPod/DeletePod calls", egressName)
 }
 
 // Concurrent AddService/DeleteService should not panic and should keep valid state.
 func TestGuardConcurrency_NoPanicOnDeleteServiceWhileAddService(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "race-uid"
+	serviceName := "race-uid"
 
 	var wg sync.WaitGroup
 	start := make(chan struct{})
@@ -208,12 +208,12 @@ func TestGuardConcurrency_NoPanicOnDeleteServiceWhileAddService(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			<-start
-			assert.NoError(t, dt.AddService(NewInboundServiceConfig(uid, makeInboundConfig(80))))
+			assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, makeInboundConfig(80))))
 		}()
 		go func() {
 			defer wg.Done()
 			<-start
-			dt.DeleteService(uid, true, false)
+			dt.DeleteService(serviceName, true, false)
 		}()
 	}
 	close(start)
@@ -226,14 +226,14 @@ func TestGuardConcurrency_NoPanicOnDeleteServiceWhileAddService(t *testing.T) {
 	// Azure LB/PIP leaked.
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	if op, ok := dt.pendingServiceOps[uid]; ok {
+	if op, ok := dt.pendingServiceOps[serviceName]; ok {
 		assert.Contains(t,
 			[]ResourceState{StateDeletionPending, StateDeletionInProgress},
 			op.State,
 			"an AddService/DeleteService race must settle in a deletion state, got %v", op.State)
 	}
-	if _, hasPending := dt.pendingServiceDeletions[uid]; hasPending {
-		_, hasOp := dt.pendingServiceOps[uid]
+	if _, hasPending := dt.pendingServiceDeletions[serviceName]; hasPending {
+		_, hasOp := dt.pendingServiceOps[serviceName]
 		assert.True(t, hasOp, "pendingServiceDeletions without pendingServiceOps is an invariant break")
 	}
 }

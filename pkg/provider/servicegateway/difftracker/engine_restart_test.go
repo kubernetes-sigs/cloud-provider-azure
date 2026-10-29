@@ -26,11 +26,11 @@ import (
 // when the service exists in NRP but pendingServiceOps is empty (e.g., after restart)
 func TestEngineUpdateEndpoints_AfterRestart(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-after-restart"
+	serviceName := "service-after-restart"
 
 	// Simulate restart scenario:
 	// 1. Service exists in NRP (LoadBalancers)
-	dt.NRPResources.LoadBalancers.Insert(serviceUID)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
 	// 2. pendingServiceOps is empty (lost on restart)
 	// This is already the case in newTestDiffTracker()
@@ -42,7 +42,7 @@ func TestEngineUpdateEndpoints_AfterRestart(t *testing.T) {
 		"10.0.0.2": "node2",
 	}
 
-	dt.UpdateEndpoints(serviceUID, oldEndpoints, newEndpoints)
+	dt.UpdateEndpoints(serviceName, oldEndpoints, newEndpoints)
 
 	// Verify endpoints were added to K8s state (not buffered)
 	assert.Equal(t, 0, len(dt.pendingEndpoints), "Endpoints should not be buffered")
@@ -53,27 +53,27 @@ func TestEngineUpdateEndpoints_AfterRestart(t *testing.T) {
 	assert.True(t, exists, "node1 should exist")
 	pod1, exists := node1.Pods["10.0.0.1"]
 	assert.True(t, exists, "pod 10.0.0.1 should exist")
-	assert.True(t, pod1.InboundIdentities.Has(serviceUID), "pod should have inbound identity")
+	assert.True(t, pod1.InboundIdentities.Has(serviceName), "pod should have inbound identity")
 }
 
 // TestEngineAddPod_AfterRestart tests that AddPod works correctly
 // when the service exists in NRP but pendingServiceOps is empty (e.g., after restart)
 func TestEngineAddPod_AfterRestart(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "natgateway-after-restart"
+	serviceName := "natgateway-after-restart"
 	podKey := "pod1"
 	location := "node1"
 	address := "10.0.0.1"
 
 	// Simulate restart scenario:
 	// 1. NAT Gateway exists in NRP
-	dt.NRPResources.NATGateways.Insert(serviceUID)
+	dt.NRPResources.NATGateways.Insert(serviceName)
 
 	// 2. pendingServiceOps is empty (lost on restart)
 	// This is already the case in newTestDiffTracker()
 
 	// 3. AddPod is called
-	dt.AddPod(serviceUID, podKey, location, address)
+	dt.AddPod(serviceName, podKey, location, address)
 
 	// Verify pod was added to K8s state (not buffered)
 	assert.Equal(t, 0, len(dt.pendingPods), "Pods should not be buffered")
@@ -84,10 +84,10 @@ func TestEngineAddPod_AfterRestart(t *testing.T) {
 	assert.True(t, exists, "node should exist")
 	pod, exists := node.Pods[address]
 	assert.True(t, exists, "pod should exist")
-	assert.Equal(t, serviceUID, pod.PublicOutboundIdentity, "pod should have outbound identity")
+	assert.Equal(t, serviceName, pod.PublicOutboundIdentity, "pod should have outbound identity")
 
 	// Verify counter was updated
-	val, ok := dt.outboundIdentityPodRefCount.Load(serviceUID)
+	val, ok := dt.outboundIdentityPodRefCount.Load(serviceName)
 	assert.True(t, ok, "service should be in counter map")
 	assert.Equal(t, 1, val.(int), "counter should be 1")
 }
@@ -96,27 +96,27 @@ func TestEngineAddPod_AfterRestart(t *testing.T) {
 // when the service exists in NRP but pendingServiceOps is empty (e.g., after restart)
 func TestEngineDeleteService_AfterRestart(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-delete-after-restart"
+	serviceName := "service-delete-after-restart"
 
 	// Simulate restart scenario:
 	// 1. Service exists in NRP (LoadBalancers)
-	dt.NRPResources.LoadBalancers.Insert(serviceUID)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
 	// 2. pendingServiceOps is empty (lost on restart)
 	// This is already the case in newTestDiffTracker()
 
 	// 3. DeleteService is called
-	dt.DeleteService(serviceUID, true, false)
+	dt.DeleteService(serviceName, true, false)
 
 	// Verify service was added to pendingServiceOps with StateDeletionInProgress
 	// (goes directly to InProgress since service has no locations)
-	opState, exists := dt.pendingServiceOps[serviceUID]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	assert.True(t, exists, "service should be in pendingServiceOps")
 	assert.Equal(t, StateDeletionInProgress, opState.State, "state should be DeletionInProgress (no locations)")
 	assert.True(t, opState.Config.IsInbound, "should be marked as inbound")
 
 	// Verify service was removed from pendingServiceDeletions (already triggered for deletion)
-	_, exists = dt.pendingServiceDeletions[serviceUID]
+	_, exists = dt.pendingServiceDeletions[serviceName]
 	assert.False(t, exists, "service should not be in pendingServiceDeletions (already triggered)")
 }
 
@@ -124,24 +124,24 @@ func TestEngineDeleteService_AfterRestart(t *testing.T) {
 // services that already exist in NRP (e.g., after restart)
 func TestEngineAddService_AfterRestart(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-add-after-restart"
+	serviceName := "service-add-after-restart"
 
 	// Simulate restart scenario:
 	// 1. Service already exists in NRP (LoadBalancers)
-	dt.NRPResources.LoadBalancers.Insert(serviceUID)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
 	// 2. pendingServiceOps is empty (lost on restart)
 	// This is already the case in newTestDiffTracker()
 
 	// 3. AddService is called
-	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceUID, nil)))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, nil)))
 
 	// Verify service was NOT added to pendingServiceOps (already exists in NRP)
-	_, exists := dt.pendingServiceOps[serviceUID]
+	_, exists := dt.pendingServiceOps[serviceName]
 	assert.False(t, exists, "service should not be added to pendingServiceOps since it exists in NRP")
 
 	// Verify service is still in NRP
-	assert.True(t, dt.NRPResources.LoadBalancers.Has(serviceUID), "service should still be in NRP")
+	assert.True(t, dt.NRPResources.LoadBalancers.Has(serviceName), "service should still be in NRP")
 }
 
 // TestEngineMultipleOperations_AfterRestart tests a complete flow after restart

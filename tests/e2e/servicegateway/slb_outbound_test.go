@@ -1226,7 +1226,8 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		defaultName := strings.ToLower(resourceNameFromID(defaultNATGatewayID))
 		defaultRG := resourceGroupFromID(defaultNATGatewayID)
 		defaultLink := byoNATGatewayLink(defaultNATGatewayID)
-		reservedIdentity := outboundServiceName(defaultName) == "default-natgw" || strings.EqualFold(outboundServiceName(defaultName), defaultServiceName)
+		reservedIdentity := defaultName == "default-natgw" || outboundServiceName(defaultName) == "default-natgw" ||
+			strings.EqualFold(outboundServiceName(defaultName), defaultServiceName)
 		if len(validation.IsValidLabelValue(defaultName)) != 0 {
 			Skip("the default gateway name cannot be expressed as an egress label")
 		}
@@ -1388,28 +1389,39 @@ var _ = Describe("Container Load Balancer Outbound (NAT Gateway)", Label(slbTest
 		expectBYOResourcesExist(natGatewayID, addresses)
 	})
 
-	It("should reject the raw default label but manage the raw default-natgw label independently", func() {
+	It("should reject reserved raw egress labels while allowing similar names", func() {
 		defaultNATGatewayID := defaultOutboundNATGatewayID()
 		Expect(defaultNATGatewayID).NotTo(BeEmpty(), "the cluster must have a default outbound service")
 
-		By("Creating an egress pod labelled default, whose canonical name is reserved")
-		createEgressPods(cs, ns.Name, "default", 1)
-		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		eventuallyNamespaceEvent(cs, ns.Name, "ServiceGatewayReservedEgressLabel", 2*time.Minute)
+		for _, label := range []string{"default", "default-natgw"} {
+			By(fmt.Sprintf("Rejecting the reserved raw label %q before registration or finalizers", label))
+			createEgressPods(cs, ns.Name, label, 1)
+			Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
+			Eventually(func() bool {
+				return namespaceHasEventContaining(cs, ns.Name, "ServiceGatewayReservedEgressLabel",
+					fmt.Sprintf("Egress label %q is reserved", label))
+			}, 2*time.Minute, defaultPollInterval).Should(BeTrue())
+			pod, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), egressPodName(label, 0), metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(hasFinalizer(pod.Finalizers, serviceGatewayPodFinalizer)).To(BeFalse())
+			if label == "default-natgw" {
+				Expect(egressOutboundGoneErr(label)).To(Succeed(), "a rejected label must not create an extra service or Azure resources")
+			}
+			deleteEgressPods(cs, ns.Name, label)
+			Eventually(func() (int, error) { return livePodCount(cs, ns.Name, label) }, 2*time.Minute, defaultPollInterval).Should(BeZero())
+		}
 
-		deleteEgressPods(cs, ns.Name, "default")
-		Eventually(func() (int, error) { return livePodCount(cs, ns.Name, "default") }, 2*time.Minute, defaultPollInterval).Should(BeZero())
-
-		By("Creating an egress pod labelled default-natgw, whose canonical name is not reserved")
-		createEgressPods(cs, ns.Name, "default-natgw", 1)
+		By("Creating an ordinary egress identity with a similar name")
+		const ordinary = "default-natgw2"
+		createEgressPods(cs, ns.Name, ordinary, 1)
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
-		managedID := byoNATGatewayARMID(resourceGroupName, outboundServiceName("default-natgw"))
+		managedID := byoNATGatewayARMID(resourceGroupName, outboundServiceName(ordinary))
 		Expect(strings.EqualFold(managedID, defaultNATGatewayID)).To(BeFalse())
-		eventuallyManagedRegistered(cs, ns.Name, "default-natgw", managedID)
+		eventuallyManagedRegistered(cs, ns.Name, ordinary, managedID)
 
 		By("Deleting the managed egress pod without touching the default outbound service")
-		deleteEgressPods(cs, ns.Name, "default-natgw")
-		Eventually(func() error { return egressOutboundGoneErr("default-natgw") }, 6*time.Minute, defaultPollInterval).Should(Succeed())
+		deleteEgressPods(cs, ns.Name, ordinary)
+		Eventually(func() error { return egressOutboundGoneErr(ordinary) }, 6*time.Minute, defaultPollInterval).Should(Succeed())
 		Consistently(func() string { return defaultOutboundNATGatewayID() }, time.Minute, defaultPollInterval).
 			Should(Equal(defaultNATGatewayID), "the default outbound service must keep its NAT Gateway")
 	})
@@ -1779,7 +1791,8 @@ func livePodIPsWithLabel(cs clientset.Interface, namespace, labelKey, labelValue
 // byoResourceAPIVersion supports StandardV2 NAT Gateways and Public IPs.
 const byoResourceAPIVersion = "2025-05-01"
 
-// Resource groups granted access by this spec may still be waiting for RBAC propagation.
+// byoGrantedResourceGroups tracks resource groups granted access by this spec,
+// which may still be waiting for RBAC propagation.
 var byoGrantedResourceGroups = map[string]bool{}
 
 func byoResourceGroup(suffix string) string {
@@ -1877,7 +1890,8 @@ func createBYOPublicIP(rg, name, version string) string {
 	return id
 }
 
-// Register after the addresses so reverse-order cleanup removes the NAT Gateway first.
+// createBYONATGateway registers cleanup; call it after creating addresses so reverse-order
+// cleanup removes the NAT Gateway first.
 func createBYONATGateway(rg, name string, addresses byoAddresses) string {
 	DeferCleanup(deleteBYOResource, byoNATGatewayARMID(rg, name))
 	return putBYONATGateway(rg, name, addresses)
@@ -1898,7 +1912,7 @@ func egressSourceIP(namespace, podName string) string {
 	return egressSourceIPFrom(utils.RunKubectl(namespace, "exec", podName, "--", "/bin/sh", "-c", "curl -4 -s -m 10 ifconfig.me/ip || true"))
 }
 
-// RunKubectl wraps stdout and stderr; accept only a complete IPv4 address on stdout,
+// egressSourceIPFrom extracts a complete IPv4 address from RunKubectl's wrapped stdout,
 // never an address embedded in an exec error.
 func egressSourceIPFrom(out string, err error) string {
 	if err != nil {
@@ -1929,7 +1943,8 @@ func classifyEgress(natIPs, seen []string, controlSawEgress bool) egressOutcome 
 	return egressUnobservable
 }
 
-// Returns false only when both test and default-egress control pods are unobservable.
+// expectEgressThroughNATGateway returns false only when both test and default-egress
+// control pods are unobservable.
 func expectEgressThroughNATGateway(cs clientset.Interface, namespace, podName, natGatewayID string) bool {
 	natIPs, err := getNatGatewayPublicIPs(natGatewayID)
 	Expect(err).NotTo(HaveOccurred())
@@ -2040,8 +2055,8 @@ func eventuallyNamespaceEvent(cs clientset.Interface, namespace, reason string, 
 		Should(BeTrue(), "expected a %s event in namespace %s", reason, namespace)
 }
 
-// Skip missing access only when the spec did not grant it. Otherwise keep retrying to
-// allow role-assignment propagation.
+// skipIfBYONATGatewayInaccessible skips missing access only when the spec did not grant it.
+// Otherwise keep retrying to allow role-assignment propagation.
 func skipIfBYONATGatewayInaccessible(cs clientset.Interface, namespace, byoRG string) {
 	if byoGrantedResourceGroups[byoRG] {
 		return
@@ -2223,6 +2238,7 @@ func createBYOPublicIPPrefix(rg, name, version string, length int) string {
 	return id
 }
 
+// byoAccessIdentitiesEnvVar names the environment variable for cluster identity object IDs.
 // Role changes are limited to the spec's resource groups and restored during cleanup.
 const byoAccessIdentitiesEnvVar = "BYO_E2E_CLUSTER_IDENTITY_OBJECT_IDS"
 
@@ -2244,8 +2260,9 @@ func byoAccessTestIdentities() []string {
 	return ids
 }
 
-// Cleanup and the returned function restore the original scoped assignments.
-// Inherited grants would mask denial, so those cases must be skipped.
+// replaceClusterIdentityRoles replaces scoped assignments and returns a restore function.
+// Cleanup also restores the original assignments. Inherited grants would mask denial,
+// so those cases must be skipped.
 func replaceClusterIdentityRoles(ids []string, rg, role string) (restore func()) {
 	scope := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s", subscriptionID, rg)
 	original := map[string][]string{}
@@ -2337,7 +2354,8 @@ func eventuallyResourcesDeleted(ids ...string) {
 	}, 8*time.Minute, defaultPollInterval).Should(Succeed())
 }
 
-// All requested fragments must match; an empty list matches the reason alone.
+// namespaceHasEventContaining matches the reason and all requested fragments.
+// An empty fragment list matches the reason alone.
 func namespaceHasEventContaining(cs clientset.Interface, namespace, reason string, wants ...string) bool {
 	events, err := cs.CoreV1().Events(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -2358,8 +2376,8 @@ func namespaceHasEventContaining(cs clientset.Interface, namespace, reason strin
 	return false
 }
 
-// Probe with a new identity each time so a gateway linked before the role change
-// cannot be mistaken for a successful post-change write.
+// untilRoleChangeApplies requires each attempt to use a new identity so a gateway linked
+// before the role change cannot be mistaken for a successful post-change write.
 func untilRoleChangeApplies(attempt func(i int) bool) {
 	deadline := time.Now().Add(20 * time.Minute)
 	for i := 0; ; i++ {

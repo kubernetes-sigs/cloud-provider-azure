@@ -105,21 +105,21 @@ func TestGuardOrphanedNATGatewayUsesOutboundDeletionPath(t *testing.T) {
 // guards on both buffered pods and the live pod ref-count; this pins the ref-count guard.
 func TestGuardOutboundTeardownRespectsLivePodRefCount(t *testing.T) {
 	dt := newTestDiffTracker()
-	const svcUID = "egress-identity"
+	const serviceName = "egress-identity"
 
-	dt.pendingServiceOps[svcUID] = &ServiceOperationState{
-		ServiceUID: svcUID,
-		Config:     NewOutboundServiceConfig(svcUID, nil),
-		State:      StateNotStarted,
-		RetryCount: 3, // a create that already reached Azure
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateNotStarted,
+		RetryCount:  3, // a create that already reached Azure
 	}
 	// No buffered pods, but three LIVE pods are still registered against this identity.
-	dt.outboundIdentityPodRefCount.Store(svcUID, 3)
+	dt.outboundIdentityPodRefCount.Store(serviceName, 3)
 
 	dt.mu.Lock()
-	retained := dt.handleEmptyOutboundServiceLocked(svcUID)
-	_, scheduled := dt.pendingServiceDeletions[svcUID]
-	state := dt.pendingServiceOps[svcUID].State
+	retained := dt.handleEmptyOutboundServiceLocked(serviceName)
+	_, scheduled := dt.pendingServiceDeletions[serviceName]
+	state := dt.pendingServiceOps[serviceName].State
 	dt.mu.Unlock()
 
 	assert.False(t, scheduled,
@@ -130,16 +130,16 @@ func TestGuardOutboundTeardownRespectsLivePodRefCount(t *testing.T) {
 	// CONTROL: with the ref-count at zero the same call MUST schedule the teardown, so the probe
 	// is not passing because handleEmptyOutboundServiceLocked never does anything.
 	dt2 := newTestDiffTracker()
-	dt2.pendingServiceOps[svcUID] = &ServiceOperationState{
-		ServiceUID: svcUID,
-		Config:     NewOutboundServiceConfig(svcUID, nil),
-		State:      StateNotStarted,
-		RetryCount: 3,
+	dt2.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateNotStarted,
+		RetryCount:  3,
 	}
-	dt2.outboundIdentityPodRefCount.Store(svcUID, 0)
+	dt2.outboundIdentityPodRefCount.Store(serviceName, 0)
 	dt2.mu.Lock()
-	retained2 := dt2.handleEmptyOutboundServiceLocked(svcUID)
-	_, scheduled2 := dt2.pendingServiceDeletions[svcUID]
+	retained2 := dt2.handleEmptyOutboundServiceLocked(serviceName)
+	_, scheduled2 := dt2.pendingServiceDeletions[serviceName]
 	dt2.mu.Unlock()
 	assert.True(t, scheduled2, "CONTROL: with no live pods the failed create must be torn down")
 	assert.True(t, retained2, "CONTROL: teardown in flight must retain the pod finalizer")
@@ -160,10 +160,10 @@ func TestGuardRemoveLastPodFinalizersIsScopedToItsService(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.kubeClient = kubeClient
 	dt.pendingPodDeletions["ns/pod-a"] = &PendingPodDeletion{
-		Namespace: "ns", Name: "pod-a", UID: "uid-a", ServiceUID: "egress-a", IsLastPod: true,
+		Namespace: "ns", Name: "pod-a", UID: "uid-a", ServiceName: "egress-a", IsLastPod: true,
 	}
 	dt.pendingPodDeletions["ns/pod-b"] = &PendingPodDeletion{
-		Namespace: "ns", Name: "pod-b", UID: "uid-b", ServiceUID: "egress-b", IsLastPod: true,
+		Namespace: "ns", Name: "pod-b", UID: "uid-b", ServiceName: "egress-b", IsLastPod: true,
 	}
 
 	// egress-b's NAT Gateway has NOT been deleted, so pod-b must keep its finalizer.
@@ -303,17 +303,17 @@ func TestGuardDeleteInboundServiceRetriesOnTransientServiceLookupFailure(t *test
 
 		kube := fake.NewSimpleClientset(deletionTestService())
 		if getErr != nil {
-			// getServiceByUID resolves the Service by listing/getting; fail every read.
+			// getServiceBySGWName resolves the Service by listing/getting; fail every read.
 			fail := func(k8stesting.Action) (bool, runtime.Object, error) { return true, nil, getErr }
 			kube.PrependReactor("get", "services", fail)
 			kube.PrependReactor("list", "services", fail)
 		}
 
 		dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
-		su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+		su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 			v := ok
 			reported = &v
-			dt.OnServiceCreationComplete(uid, ok, err)
+			dt.OnServiceCreationComplete(serviceName, ok, err)
 		})
 		su.deleteInboundService("uid-1-lb", "corr-1")
 		_, tracked = dt.pendingServiceOps["uid-1-lb"]

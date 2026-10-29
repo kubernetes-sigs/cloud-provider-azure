@@ -36,8 +36,8 @@ import (
 // ================================================================================================
 
 var (
-	// ErrServiceUIDEmpty is returned when a service UID is empty
-	ErrServiceUIDEmpty = errors.New("service UID cannot be empty")
+	// ErrServiceNameEmpty is returned when a ServiceGateway service name is empty.
+	ErrServiceNameEmpty = errors.New("service name cannot be empty")
 )
 
 // ================================================================================================
@@ -232,14 +232,14 @@ func healthProbeEqual(a, b *HealthProbeConfig) bool {
 
 // ServiceConfig encapsulates all configuration needed for a service
 type ServiceConfig struct {
-	// UID is the canonical ServiceGateway service name.
-	UID            string
+	// ServiceName is the canonical ServiceGateway service name.
+	ServiceName    string
 	IsInbound      bool
 	InboundConfig  *InboundConfig  // nil allowed for defaults
 	OutboundConfig *OutboundConfig // nil allowed for defaults
 
 	// Namespace and Name identify the originating Kubernetes Service. They let the engine
-	// resolve a UID to a cached serviceLister read instead of scanning every Service. They
+	// resolve an SGW name through the cached serviceLister instead of scanning every Service. They
 	// are empty for entries recovered from NRP without a Service object.
 	Namespace string
 	Name      string
@@ -247,26 +247,26 @@ type ServiceConfig struct {
 
 // Validate checks if the ServiceConfig is valid
 func (c *ServiceConfig) Validate() error {
-	if c.UID == "" {
-		return ErrServiceUIDEmpty
+	if c.ServiceName == "" {
+		return ErrServiceNameEmpty
 	}
 	// A nil InboundConfig or OutboundConfig is allowed; defaults are applied downstream.
 	return nil
 }
 
 // NewInboundServiceConfig creates a ServiceConfig for an inbound service
-func NewInboundServiceConfig(uid string, inboundConfig *InboundConfig) ServiceConfig {
+func NewInboundServiceConfig(serviceName string, inboundConfig *InboundConfig) ServiceConfig {
 	return ServiceConfig{
-		UID:           uid,
+		ServiceName:   serviceName,
 		IsInbound:     true,
 		InboundConfig: inboundConfig,
 	}
 }
 
 // NewOutboundServiceConfig creates a ServiceConfig for an outbound service
-func NewOutboundServiceConfig(uid string, outboundConfig *OutboundConfig) ServiceConfig {
+func NewOutboundServiceConfig(serviceName string, outboundConfig *OutboundConfig) ServiceConfig {
 	return ServiceConfig{
-		UID:            uid,
+		ServiceName:    serviceName,
 		IsInbound:      false,
 		OutboundConfig: outboundConfig,
 	}
@@ -347,7 +347,7 @@ type K8sState struct {
 
 // ServiceOperationState tracks the lifecycle state of a service being created or deleted
 type ServiceOperationState struct {
-	ServiceUID string
+	ServiceName string
 	// Config is the desired configuration. For update flows it is overwritten by
 	// the latest Update call before the updater goroutine picks it up.
 	Config ServiceConfig
@@ -418,9 +418,9 @@ type PendingEndpointUpdate struct {
 
 // PendingServiceDeletion tracks a service waiting for locations to clear before deletion
 type PendingServiceDeletion struct {
-	ServiceUID string
-	IsInbound  bool
-	Timestamp  string
+	ServiceName string
+	IsInbound   bool
+	Timestamp   string
 }
 
 // DiffTracker is the main struct that contains the state of the K8s and NRP services
@@ -446,7 +446,7 @@ type DiffTracker struct {
 
 	// serviceLister is the provider's shared-informer-backed Service lister, published via
 	// SetServiceLister once SetInformers has run. It is nil until then (and in tests), in which
-	// case getServiceByUID falls back to a direct apiserver read. Guarded by mu.
+	// case getServiceBySGWName falls back to a direct apiserver read. Guarded by mu.
 	serviceLister corelisters.ServiceLister
 	// nodeLister is the provider's shared-informer-backed Node lister used to resolve EndpointSlice
 	// node names to InternalIPs. Guarded by mu.

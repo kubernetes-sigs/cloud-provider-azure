@@ -47,11 +47,11 @@ func TestInitConcurrencyHandshakeRace(t *testing.T) {
 
 	// Seed one service in StateCreated so the pendingOps check inside
 	// checkInitializationCompleteLocked sees zero outstanding work.
-	uid := inboundServiceName("svc-init-race")
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreated,
+	serviceName := inboundServiceName("svc-init-race")
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreated,
 	}
 
 	const goroutines = 200
@@ -120,11 +120,11 @@ func TestInitConcurrencyHandshakeRace(t *testing.T) {
 func TestNRPDrainVsRemoveWireShapes(t *testing.T) {
 	t.Run("GoneNodeEmitsEmptyAddressesArray", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := inboundServiceName("svc-gone-node")
-		dt.NRPResources.LoadBalancers.Insert(uid)
+		serviceName := inboundServiceName("svc-gone-node")
+		dt.NRPResources.LoadBalancers.Insert(serviceName)
 		dt.NRPResources.Locations["10.0.0.99"] = NRPLocation{
 			Addresses: map[string]NRPAddress{
-				"10.244.9.1": {Services: utilsets.NewString(uid)},
+				"10.244.9.1": {Services: utilsets.NewString(serviceName)},
 			},
 		}
 
@@ -149,11 +149,11 @@ func TestNRPDrainVsRemoveWireShapes(t *testing.T) {
 
 	t.Run("PerAddressRemovalEmitsEmptyServiceRef", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := inboundServiceName("svc-addr-removed")
-		dt.NRPResources.LoadBalancers.Insert(uid)
+		serviceName := inboundServiceName("svc-addr-removed")
+		dt.NRPResources.LoadBalancers.Insert(serviceName)
 		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
 			Addresses: map[string]NRPAddress{
-				"10.244.0.5": {Services: utilsets.NewString(uid)},
+				"10.244.0.5": {Services: utilsets.NewString(serviceName)},
 			},
 		}
 		node := newNode()
@@ -194,11 +194,11 @@ func TestNRPDrainVsRemoveWireShapes(t *testing.T) {
 func TestEgressRefCountSoundness(t *testing.T) {
 	t.Run("DuplicateDeletePodIsNoOp", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := "egress-dup-guard"
-		serviceName := outboundServiceName(uid)
+		egressIdentity := "egress-dup-guard"
+		serviceName := outboundServiceName(egressIdentity)
 		dt.NRPResources.NATGateways.Insert(serviceName)
 		dt.pendingServiceOps[serviceName] = &ServiceOperationState{
-			ServiceUID: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
+			ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
 		}
 		dt.AddPod(serviceName, "ns/pod-a", "10.0.0.1", "10.244.0.5")
 
@@ -215,11 +215,11 @@ func TestEgressRefCountSoundness(t *testing.T) {
 
 	t.Run("LastPodRemovalDrivesRefCountToZero", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		uid := "egress-last-zero"
-		serviceName := outboundServiceName(uid)
+		egressIdentity := "egress-last-zero"
+		serviceName := outboundServiceName(egressIdentity)
 		dt.NRPResources.NATGateways.Insert(serviceName)
 		dt.pendingServiceOps[serviceName] = &ServiceOperationState{
-			ServiceUID: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
+			ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
 		}
 		dt.AddPod(serviceName, "ns/p", "10.0.0.1", "10.244.0.1")
 		dt.AddPod(serviceName, "ns/q", "10.0.0.1", "10.244.0.2")
@@ -261,11 +261,11 @@ func TestDeleteInboundServiceLastErrMonotonic(t *testing.T) {
 
 	var completedSuccess *bool
 	var completedErr error
-	su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+	su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 		b := ok
 		completedSuccess = &b
 		completedErr = err
-		dt.OnServiceCreationComplete(uid, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	})
 
 	su.deleteInboundService(inboundServiceName("uid-1"), "corr-lastErr-monotonic")

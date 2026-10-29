@@ -566,7 +566,6 @@ func TestSyncServicesReturnTypeEquals(t *testing.T) {
 	}
 }
 
-// TestMapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO tests the DTO mapping function
 func TestCanonicalServiceNamesRemainDistinctOnWire(t *testing.T) {
 	const raw = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	inboundName, outboundName := inboundServiceName(raw), outboundServiceName(raw)
@@ -594,6 +593,7 @@ func TestCanonicalServiceNamesRemainDistinctOnWire(t *testing.T) {
 	assert.ElementsMatch(t, []string{raw + "-lb", raw + "-natgw"}, names)
 }
 
+// TestMapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO tests the DTO mapping function
 func TestMapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(t *testing.T) {
 	tests := []struct {
 		name        string

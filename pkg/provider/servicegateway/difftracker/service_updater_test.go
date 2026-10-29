@@ -70,55 +70,55 @@ func newTestServiceUpdater(dt *DiffTracker) *ServiceUpdater {
 // maxServiceRetries the op is parked (RetriesExhausted) and no longer dispatched.
 func TestGuardServiceUpdater_BackoffAndTerminalCeiling(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := inboundServiceName("svc-backoff")
+	serviceName := inboundServiceName("svc-backoff")
 	transientErr := errors.New("transient ARM 429")
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreationInProgress,
 	}
 
 	// failOnce puts the op back in-flight (as the dispatcher would) and signals a transient
 	// failure, returning the scheduled backoff delay.
 	failOnce := func() time.Duration {
-		op := dt.pendingServiceOps[uid]
+		op := dt.pendingServiceOps[serviceName]
 		op.State = StateCreationInProgress
 		snap := op.Config
 		op.InFlightConfig = &snap
 		before := time.Now()
-		dt.OnServiceCreationComplete(uid, false, transientErr)
-		return dt.pendingServiceOps[uid].NextRetryAt.Sub(before)
+		dt.OnServiceCreationComplete(serviceName, false, transientErr)
+		return dt.pendingServiceOps[serviceName].NextRetryAt.Sub(before)
 	}
 
 	// First transient failure: RetryCount advances, NextRetryAt is set in the future.
 	d1 := failOnce()
-	assert.Equal(t, 1, dt.pendingServiceOps[uid].RetryCount)
+	assert.Equal(t, 1, dt.pendingServiceOps[serviceName].RetryCount)
 	assert.Greater(t, d1, time.Duration(0), "a transient failure must schedule a future retry")
-	assert.Equal(t, StateNotStarted, dt.pendingServiceOps[uid].State)
+	assert.Equal(t, StateNotStarted, dt.pendingServiceOps[serviceName].State)
 
 	// The dispatcher must SKIP the op while it is in backoff (now < NextRetryAt): not dispatched
 	// and activeOps released - i.e. no immediate re-dispatch hot-loop.
 	su := newTestServiceUpdater(dt)
 	su.processBatch()
-	assert.Equal(t, StateNotStarted, dt.pendingServiceOps[uid].State, "op in backoff must not be dispatched")
+	assert.Equal(t, StateNotStarted, dt.pendingServiceOps[serviceName].State, "op in backoff must not be dispatched")
 	su.mu.Lock()
-	_, active := su.activeOps[uid]
+	_, active := su.activeOps[serviceName]
 	su.mu.Unlock()
 	assert.False(t, active, "activeOps must be released for a backoff-skipped op")
 
 	// Second failure: the backoff grows per attempt.
 	d2 := failOnce()
-	assert.Equal(t, 2, dt.pendingServiceOps[uid].RetryCount)
+	assert.Equal(t, 2, dt.pendingServiceOps[serviceName].RetryCount)
 	assert.Greater(t, d2, d1, "backoff must grow per attempt")
 
 	// Terminal ceiling: at maxServiceRetries the op is parked and no longer dispatched.
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	op.RetryCount = maxServiceRetries
 	op.NextRetryAt = time.Time{} // exercise the ceiling, not the backoff window
 	su.processBatch()
-	assert.True(t, dt.pendingServiceOps[uid].RetriesExhausted, "op must park after exhausting the retry budget")
-	assert.Equal(t, StateNotStarted, dt.pendingServiceOps[uid].State, "parked op must not be dispatched")
+	assert.True(t, dt.pendingServiceOps[serviceName].RetriesExhausted, "op must park after exhausting the retry budget")
+	assert.Equal(t, StateNotStarted, dt.pendingServiceOps[serviceName].State, "parked op must not be dispatched")
 }
 
 // TestCreateInboundService_TransientServiceLookupErrorDoesNotCreatePIP verifies that a transient
@@ -129,7 +129,7 @@ func TestCreateInboundService_TransientServiceLookupErrorDoesNotCreatePIP(t *tes
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// The Service List fails transiently, so getServiceByUID returns a generic wrapped error
+	// The Service List fails transiently, so getServiceBySGWName returns a generic wrapped error
 	// (not a typed NotFound).
 	kube := fake.NewSimpleClientset()
 	kube.PrependReactor("list", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
@@ -165,7 +165,7 @@ func TestCreateInboundService_TransientServiceLookupErrorDoesNotCreatePIP(t *tes
 }
 
 // TestCreateInboundService_ServiceGoneNotFoundAbortsWithoutCreatingResources verifies that when the
-// K8s Service is gone (getServiceByUID returns a typed NotFound), createInboundService must abort -
+// K8s Service is gone (getServiceBySGWName returns a typed NotFound), createInboundService must abort -
 // it must NOT fall through to create the PIP/LB/SGW (which would be orphaned with no Service object
 // to ever clean them up). It drops tracking and does NOT call onComplete (which would loop on
 // NotFound or falsely report Created); a still-live Service is re-added on the next resync.
@@ -173,7 +173,7 @@ func TestCreateInboundService_ServiceGoneNotFoundAbortsWithoutCreatingResources(
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Empty kube (no Services): the List succeeds but no UID matches, so getServiceByUID returns a
+	// Empty kube (no Services): the List succeeds but no UID matches, so getServiceBySGWName returns a
 	// typed NotFound.
 	kube := fake.NewSimpleClientset()
 
@@ -187,21 +187,21 @@ func TestCreateInboundService_ServiceGoneNotFoundAbortsWithoutCreatingResources(
 	dt.config = testConfig()
 	dt.kubeClient = kube
 	dt.networkClientFactory = factory
-	uid := inboundServiceName("uid-gone")
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreationInProgress,
+	serviceName := inboundServiceName("uid-gone")
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreationInProgress,
 	}
 
 	completeCalled := false
 	su := newTestServiceUpdater(dt)
 	su.onComplete = func(string, bool, error) { completeCalled = true }
 
-	su.createInboundService(uid, makeInboundConfig(80), "corr-gone")
+	su.createInboundService(serviceName, makeInboundConfig(80), "corr-gone")
 
 	dt.mu.Lock()
-	_, tracked := dt.pendingServiceOps[uid]
+	_, tracked := dt.pendingServiceOps[serviceName]
 	dt.mu.Unlock()
 	assert.False(t, tracked, "a NotFound (service gone) create must drop tracking, not orphan resources")
 	assert.False(t, completeCalled, "the abort path must not call onComplete")
@@ -272,9 +272,9 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 
 	// The Services must exist: a dispatched operation looks its Service up by UID, and an operation
 	// whose Service is gone is dropped from tracking rather than dispatched.
-	uids := []string{"not-started", "creation-in-progress", "created", "deletion-pending", "deletion-in-progress", "parked"}
-	objects := make([]runtime.Object, 0, len(uids))
-	for _, uid := range uids {
+	serviceUIDs := []string{"not-started", "creation-in-progress", "created", "deletion-pending", "deletion-in-progress", "parked"}
+	objects := make([]runtime.Object, 0, len(serviceUIDs))
+	for _, uid := range serviceUIDs {
 		objects = append(objects, &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: uid, Namespace: "default", UID: types.UID(uid),
@@ -289,8 +289,8 @@ func TestServiceUpdaterProcessBatchFlow(t *testing.T) {
 	dt.networkClientFactory = m.factory
 	dt.kubeClient = fake.NewSimpleClientset(objects...)
 
-	newOp := func(uid string, state ResourceState) *ServiceOperationState {
-		return &ServiceOperationState{ServiceUID: uid, Config: NewInboundServiceConfig(uid, nil), State: state}
+	newOp := func(serviceName string, state ResourceState) *ServiceOperationState {
+		return &ServiceOperationState{ServiceName: serviceName, Config: NewInboundServiceConfig(serviceName, nil), State: state}
 	}
 	dt.pendingServiceOps = map[string]*ServiceOperationState{
 		"not-started-lb":          newOp("not-started-lb", StateNotStarted),
@@ -358,7 +358,7 @@ func TestServiceUpdaterRequeueKeepsInitTriggerCounterBalanced(t *testing.T) {
 func TestServiceUpdaterProcessBatchSkipsParkedService(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.pendingServiceOps["svc-lb"] = &ServiceOperationState{
-		ServiceUID:             "svc-lb",
+		ServiceName:            "svc-lb",
 		Config:                 NewInboundServiceConfig("svc-lb", nil),
 		State:                  StateNotStarted,
 		CreationFailedTerminal: true,
@@ -422,13 +422,13 @@ func TestCreateInboundService_StatusUpdateFailureRetriesInsteadOfFalseSuccess(t 
 	dt.config = testConfig()
 	dt.kubeClient = kube
 	dt.networkClientFactory = f
-	uid := inboundServiceName("uid-status")
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreationInProgress,
+	serviceName := inboundServiceName("uid-status")
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreationInProgress,
 		InFlightConfig: func() *ServiceConfig {
-			c := NewInboundServiceConfig(uid, makeInboundConfig(80))
+			c := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 			return &c
 		}(),
 	}
@@ -436,15 +436,15 @@ func TestCreateInboundService_StatusUpdateFailureRetriesInsteadOfFalseSuccess(t 
 	var gotSuccess *bool
 	var gotErr error
 	su := newTestServiceUpdater(dt)
-	su.onComplete = func(serviceUID string, ok bool, err error) {
+	su.onComplete = func(serviceName string, ok bool, err error) {
 		b := ok
 		gotSuccess = &b
 		gotErr = err
 		// Route through the engine completion to drive the StateCreated transition.
-		dt.OnServiceCreationComplete(serviceUID, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	}
 
-	su.createInboundService(uid, makeInboundConfig(80), "corr-status")
+	su.createInboundService(serviceName, makeInboundConfig(80), "corr-status")
 
 	if assert.NotNil(t, gotSuccess, "onComplete must be called") {
 		assert.False(t, *gotSuccess, "a status-patch failure must fail the op, not report success")
@@ -453,7 +453,7 @@ func TestCreateInboundService_StatusUpdateFailureRetriesInsteadOfFalseSuccess(t 
 		assert.Contains(t, gotErr.Error(), "failed to update service status with external IP")
 	}
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if assert.NotNil(t, op, "op must remain tracked") {
 		assert.Equal(t, StateNotStarted, op.State, "a status-patch failure must reset the op for retry, not promote it to StateCreated")
 		assert.Equal(t, 1, op.RetryCount, "a status-patch failure must schedule a retry")
@@ -502,31 +502,31 @@ func TestCreateInboundService_PopulatesIngressOnSuccess(t *testing.T) {
 	dt.config = testConfig()
 	dt.kubeClient = kube
 	dt.networkClientFactory = f
-	uid := inboundServiceName("uid-status-ok")
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreationInProgress,
+	serviceName := inboundServiceName("uid-status-ok")
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreationInProgress,
 		InFlightConfig: func() *ServiceConfig {
-			c := NewInboundServiceConfig(uid, makeInboundConfig(80))
+			c := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 			return &c
 		}(),
 	}
 
 	var gotSuccess *bool
 	su := newTestServiceUpdater(dt)
-	su.onComplete = func(serviceUID string, ok bool, err error) {
+	su.onComplete = func(serviceName string, ok bool, err error) {
 		b := ok
 		gotSuccess = &b
-		dt.OnServiceCreationComplete(serviceUID, ok, err)
+		dt.OnServiceCreationComplete(serviceName, ok, err)
 	}
 
-	su.createInboundService(uid, makeInboundConfig(80), "corr-status-ok")
+	su.createInboundService(serviceName, makeInboundConfig(80), "corr-status-ok")
 
 	if assert.NotNil(t, gotSuccess, "onComplete must be called") {
 		assert.True(t, *gotSuccess, "a create with a successful status patch must report success")
 	}
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if assert.NotNil(t, op, "op must remain tracked") {
 		assert.Equal(t, StateCreated, op.State, "a successful create must promote the op to StateCreated")
 	}
@@ -538,6 +538,94 @@ func TestCreateInboundService_PopulatesIngressOnSuccess(t *testing.T) {
 	}
 }
 
+func TestCreateInboundService_UnownedPublicIPRetriesAfterRemoval(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "pip-ownership", Namespace: "default", UID: "uid-pip-ownership"},
+		Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+	}
+	kube := fake.NewSimpleClientset(svc)
+	serviceName := inboundServiceName(string(svc.UID))
+	pipName := PublicIPName(serviceName)
+	factory := mock_azclient.NewMockClientFactory(ctrl)
+	pipClient := mock_publicipaddressclient.NewMockInterface(ctrl)
+	factory.EXPECT().GetPublicIPAddressClient().Return(pipClient).AnyTimes()
+	existing := &armnetwork.PublicIPAddress{
+		Name: ptr.To(pipName), Etag: ptr.To(`W/"external"`),
+		Tags: map[string]*string{"team": ptr.To("customer")},
+	}
+	pipClient.EXPECT().Get(gomock.Any(), "rg", pipName, nil).Return(existing, nil).Times(1)
+
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.kubeClient = kube
+	dt.networkClientFactory = factory
+	config := makeInboundConfig(80)
+	serviceConfig := NewInboundServiceConfig(serviceName, config)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: serviceConfig, State: StateCreationInProgress, InFlightConfig: &serviceConfig,
+	}
+	updater := newTestServiceUpdater(dt)
+	completions := 0
+	var succeeded bool
+	var completionErr error
+	updater.onComplete = func(id string, success bool, err error) {
+		completions++
+		succeeded, completionErr = success, err
+		dt.OnServiceCreationComplete(id, success, err)
+	}
+
+	updater.createInboundService(serviceName, config, "corr")
+
+	assert.Equal(t, 1, completions)
+	assert.False(t, succeeded)
+	assert.ErrorContains(t, completionErr, "not marked as CCM-managed")
+	assert.False(t, isEgressRejected(completionErr))
+	assert.False(t, isTerminalError(completionErr))
+	assert.False(t, ownsPublicIP(existing))
+	assert.False(t, dt.NRPResources.LoadBalancers.Has(serviceName))
+	op := dt.pendingServiceOps[serviceName]
+	assert.Equal(t, StateNotStarted, op.State)
+	assert.Equal(t, 1, op.RetryCount)
+	assert.False(t, op.CreationRejected)
+	assert.False(t, op.NextRetryAt.IsZero())
+	current, err := kube.CoreV1().Services(svc.Namespace).Get(context.Background(), svc.Name, metav1.GetOptions{})
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Empty(t, current.Status.LoadBalancer.Ingress)
+	assert.Contains(t, current.Finalizers, ServiceGatewayServiceCleanupFinalizer)
+
+	pipClient.EXPECT().Get(gomock.Any(), "rg", pipName, nil).Return(nil, notFoundError()).Times(1)
+	pipClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", pipName, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+			assert.True(t, ownsPublicIP(&pip))
+			pip.Properties.IPAddress = ptr.To("192.0.2.10")
+			return &pip, nil
+		}).Times(1)
+	lbClient := mock_loadbalancerclient.NewMockInterface(ctrl)
+	sgwClient := mock_servicegatewayclient.NewMockInterface(ctrl)
+	factory.EXPECT().GetLoadBalancerClient().Return(lbClient).AnyTimes()
+	factory.EXPECT().GetServiceGatewayClient().Return(sgwClient).AnyTimes()
+	lbClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", serviceName, gomock.Any()).Return(nil, nil).Times(1)
+	sgwClient.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
+	op.State = StateCreationInProgress
+	op.InFlightConfig = &serviceConfig
+	op.NextRetryAt = time.Time{}
+
+	updater.createInboundService(serviceName, config, "corr")
+
+	assert.Equal(t, 2, completions)
+	assert.True(t, succeeded)
+	assert.NoError(t, completionErr)
+	assert.Equal(t, StateCreated, op.State)
+	assert.Equal(t, 0, op.RetryCount)
+	current, err = kube.CoreV1().Services(svc.Namespace).Get(context.Background(), svc.Name, metav1.GetOptions{})
+	if assert.NoError(t, err) && assert.Len(t, current.Status.LoadBalancer.Ingress, 1) {
+		assert.Equal(t, "192.0.2.10", current.Status.LoadBalancer.Ingress[0].IP)
+	}
+}
+
 // TestCreateInboundServiceClearsBuffersWhenServiceGone verifies that aborting createInboundService
 // because the Service no longer exists also drops the endpoints and pods buffered for its in-flight
 // creation, so they do not leak until the next restart.
@@ -545,27 +633,27 @@ func TestCreateInboundServiceClearsBuffersWhenServiceGone(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	uid := inboundServiceName("11111111-1111-1111-1111-111111111111")
+	serviceName := inboundServiceName("11111111-1111-1111-1111-111111111111")
 	dt := newTestDiffTracker()
-	dt.kubeClient = fake.NewSimpleClientset() // empty: getServiceByUID returns a typed NotFound
+	dt.kubeClient = fake.NewSimpleClientset() // empty: getServiceBySGWName returns a typed NotFound
 	dt.networkClientFactory = mock_azclient.NewMockClientFactory(ctrl)
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, State: StateCreationInProgress}
-	dt.pendingEndpoints[uid] = []PendingEndpointUpdate{{PodIPToNodeIP: map[string]string{"10.244.0.1": "10.0.0.1"}}}
-	dt.pendingPods[uid] = []PendingPodUpdate{{PodKey: "ns/p", Location: "10.0.0.1", Address: "10.244.0.1"}}
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceName: serviceName, State: StateCreationInProgress}
+	dt.pendingEndpoints[serviceName] = []PendingEndpointUpdate{{PodIPToNodeIP: map[string]string{"10.244.0.1": "10.0.0.1"}}}
+	dt.pendingPods[serviceName] = []PendingPodUpdate{{PodKey: "ns/p", Location: "10.0.0.1", Address: "10.244.0.1"}}
 
 	su := NewServiceUpdater(context.Background(), dt, func(string, bool, error) {}, dt.GetServiceUpdaterTrigger())
-	su.createInboundService(uid, &InboundConfig{}, "corr")
+	su.createInboundService(serviceName, &InboundConfig{}, "corr")
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	if _, ok := dt.pendingServiceOps[uid]; ok {
+	if _, ok := dt.pendingServiceOps[serviceName]; ok {
 		t.Fatalf("aborted create must drop the service operation")
 	}
-	if _, ok := dt.pendingEndpoints[uid]; ok {
+	if _, ok := dt.pendingEndpoints[serviceName]; ok {
 		t.Fatalf("aborted create must drop buffered endpoints")
 	}
-	if _, ok := dt.pendingPods[uid]; ok {
+	if _, ok := dt.pendingPods[serviceName]; ok {
 		t.Fatalf("aborted create must drop buffered pods")
 	}
 }
@@ -624,16 +712,16 @@ func (m *outboundMocks) expectNoDisassociation() {
 		Return(nil, notFoundError()).AnyTimes()
 }
 
-func newOutboundDiffTracker(uid string, m *outboundMocks, kube *fake.Clientset) *DiffTracker {
+func newOutboundDiffTracker(serviceName string, m *outboundMocks, kube *fake.Clientset) *DiffTracker {
 	dt := newTestDiffTracker()
 	dt.config = testConfig()
 	dt.networkClientFactory = m.factory
 	if kube != nil {
 		dt.kubeClient = kube
 	}
-	dt.NRPResources.NATGateways = utilsets.NewString(uid)
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: NewOutboundServiceConfig(uid, nil), State: StateDeletionInProgress,
+	dt.NRPResources.NATGateways = utilsets.NewString(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateDeletionInProgress,
 	}
 	return dt
 }
@@ -686,9 +774,9 @@ func assertOutboundCreationOrder(t *testing.T, updater *ServiceUpdater, identity
 	t.Helper()
 	callbacks := 0
 	onComplete := updater.onComplete
-	updater.onComplete = func(uid string, success bool, err error) {
+	updater.onComplete = func(serviceName string, success bool, err error) {
 		callbacks++
-		assert.Equal(t, identity, uid)
+		assert.Equal(t, identity, serviceName)
 		assert.Equal(t, success, err == nil)
 		assert.Equal(t, success, updater.diffTracker.NRPResources.NATGateways.Has(identity))
 		assert.Equal(t, wantBinding, updater.diffTracker.byoNATGatewayID(identity) != "", "binding disposition follows the callback")
@@ -696,7 +784,7 @@ func assertOutboundCreationOrder(t *testing.T, updater *ServiceUpdater, identity
 			assert.NoError(t, (*operationCtx).Err(), "context cancellation follows completion")
 		}
 		assert.Len(t, rec.Events, wantedCalls(wantBinding && success), "events must precede completion")
-		onComplete(uid, success, err)
+		onComplete(serviceName, success, err)
 	}
 	return func() {
 		t.Helper()
@@ -725,11 +813,11 @@ func assertOutboundCreationOrder(t *testing.T, updater *ServiceUpdater, identity
 // call itself, that the finalizer is still attached at that moment.
 func TestGuardDeleteOutboundService_RemovesLastPodFinalizerOnlyAfterNATGatewayDeletion(t *testing.T) {
 	const (
-		uid     = "egress-ordering-natgw"
-		podNS   = "default"
-		podName = "egress-last-pod"
-		podUID  = "pod-uid-1"
-		podKey  = podNS + "/" + podName
+		serviceName = "egress-ordering-natgw"
+		podNS       = "default"
+		podName     = "egress-last-pod"
+		podUID      = "pod-uid-1"
+		podKey      = podNS + "/" + podName
 	)
 
 	ctrl := gomock.NewController(t)
@@ -751,7 +839,7 @@ func TestGuardDeleteOutboundService_RemovesLastPodFinalizerOnlyAfterNATGatewayDe
 
 	// Captured at the instant the NAT Gateway delete runs.
 	var finalizerHeldDuringNATDelete bool
-	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).DoAndReturn(func(ctx context.Context, _, _ string) error {
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).DoAndReturn(func(ctx context.Context, _, _ string) error {
 		live, err := kube.CoreV1().Pods(podNS).Get(ctx, podName, metav1.GetOptions{})
 		if err == nil {
 			finalizerHeldDuringNATDelete = hasPodFinalizer(live)
@@ -759,22 +847,22 @@ func TestGuardDeleteOutboundService_RemovesLastPodFinalizerOnlyAfterNATGatewayDe
 		return nil
 	}).Times(1)
 
-	m.expectOwnedPublicIPs(uid, 1)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
+	m.expectOwnedPublicIPs(serviceName, 1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(serviceName)).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(serviceName)).Return(nil).Times(1)
 
-	dt := newOutboundDiffTracker(uid, m, kube)
+	dt := newOutboundDiffTracker(serviceName, m, kube)
 	dt.pendingPodDeletions[podKey] = &PendingPodDeletion{
-		Namespace:  podNS,
-		Name:       podName,
-		UID:        podUID,
-		ServiceUID: uid,
-		Addresses:  []string{"10.244.0.5"},
-		IsLastPod:  true,
+		Namespace:   podNS,
+		Name:        podName,
+		UID:         podUID,
+		ServiceName: serviceName,
+		Addresses:   []string{"10.244.0.5"},
+		IsLastPod:   true,
 	}
 
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 	called, success, completionErr := got.result()
 	assert.True(t, called)
@@ -795,10 +883,10 @@ func TestGuardDeleteOutboundService_RemovesLastPodFinalizerOnlyAfterNATGatewayDe
 // while the pod stays stuck Terminating forever.
 func TestGuardDeleteOutboundService_FinalizerRemovalFailureReportsFailure(t *testing.T) {
 	const (
-		uid     = "egress-ordering-fail-natgw"
-		podNS   = "default"
-		podName = "egress-last-pod"
-		podUID  = "pod-uid-2"
+		serviceName = "egress-ordering-fail-natgw"
+		podNS       = "default"
+		podName     = "egress-last-pod"
+		podUID      = "pod-uid-2"
 	)
 
 	ctrl := gomock.NewController(t)
@@ -820,23 +908,23 @@ func TestGuardDeleteOutboundService_FinalizerRemovalFailureReportsFailure(t *tes
 	m := newOutboundMocks(ctrl)
 	m.expectNoDisassociation()
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
-	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
-	m.expectOwnedPublicIPs(uid, 1)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(nil).Times(1)
+	m.expectOwnedPublicIPs(serviceName, 1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(serviceName)).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(serviceName)).Return(nil).Times(1)
 
-	dt := newOutboundDiffTracker(uid, m, kube)
+	dt := newOutboundDiffTracker(serviceName, m, kube)
 	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
-		Namespace:  podNS,
-		Name:       podName,
-		UID:        podUID,
-		ServiceUID: uid,
-		Addresses:  []string{"10.244.0.5"},
-		IsLastPod:  true,
+		Namespace:   podNS,
+		Name:        podName,
+		UID:         podUID,
+		ServiceName: serviceName,
+		Addresses:   []string{"10.244.0.5"},
+		IsLastPod:   true,
 	}
 
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 	called, success, completionErr := got.result()
 	assert.True(t, called)
@@ -846,26 +934,26 @@ func TestGuardDeleteOutboundService_FinalizerRemovalFailureReportsFailure(t *tes
 }
 
 func TestServiceUpdaterDeleteOutboundService_HappyPath(t *testing.T) {
-	const uid = "egress-a-natgw"
+	const serviceName = "egress-a-natgw"
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	m := newOutboundMocks(ctrl)
 	m.expectNoDisassociation()
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
-	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
-	m.expectOwnedPublicIPs(uid, 1)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(nil).Times(1)
+	m.expectOwnedPublicIPs(serviceName, 1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(serviceName)).Return(nil).Times(1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(serviceName)).Return(nil).Times(1)
 
-	dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+	dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 	called, success, completionErr := got.result()
 	assert.True(t, called)
 	assert.True(t, success, "a fully successful teardown must report success: %v", completionErr)
-	assert.False(t, dt.NRPResources.NATGateways.Has(uid),
+	assert.False(t, dt.NRPResources.NATGateways.Has(serviceName),
 		"NRP NAT Gateway state must be cleared after a successful delete")
 }
 
@@ -873,7 +961,7 @@ func TestServiceUpdaterDeleteOutboundService_HappyPath(t *testing.T) {
 // must report failure so the operation is retried, and must NOT clear the NRP entry - clearing it
 // would make the retried delete a no-op and leak the Azure resource while the pod finalizer stays.
 func TestServiceUpdaterDeleteOutboundService_StepFailuresRetain(t *testing.T) {
-	const uid = "egress-b-natgw"
+	const serviceName = "egress-b-natgw"
 	boom := errors.New("ARM failure")
 
 	for _, tc := range []struct {
@@ -894,18 +982,18 @@ func TestServiceUpdaterDeleteOutboundService_StepFailuresRetain(t *testing.T) {
 			m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(tc.unregister).AnyTimes()
 			m.nat.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.natDel).AnyTimes()
-			m.expectOwnedPublicIPs(uid, 1)
+			m.expectOwnedPublicIPs(serviceName, 1)
 			m.pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.pipDel).AnyTimes()
 
-			dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+			dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 			got := &outboundCompletion{}
-			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+			outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 			called, success, completionErr := got.result()
 			assert.True(t, called)
 			assert.False(t, success, "a failed teardown step must report failure so it is retried")
 			assert.Error(t, completionErr)
-			assert.True(t, dt.NRPResources.NATGateways.Has(uid),
+			assert.True(t, dt.NRPResources.NATGateways.Has(serviceName),
 				"NRP state must be retained on failure, otherwise the retry is a no-op and Azure leaks")
 		})
 	}
@@ -915,7 +1003,7 @@ func TestServiceUpdaterDeleteOutboundService_StepFailuresRetain(t *testing.T) {
 // convergence: an already-absent NAT Gateway and Public IP are a successful teardown, not a
 // permanent failure that would strand the egress pod finalizer.
 func TestServiceUpdaterDeleteOutboundService_ToleratesAlreadyDeleted(t *testing.T) {
-	const uid = "egress-c-natgw"
+	const serviceName = "egress-c-natgw"
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -924,24 +1012,24 @@ func TestServiceUpdaterDeleteOutboundService_ToleratesAlreadyDeleted(t *testing.
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(&azcore.ResponseError{StatusCode: http.StatusNotFound}).AnyTimes()
 	m.nat.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(notFoundError()).AnyTimes()
-	for _, name := range OutboundPublicIPNames(uid) {
+	for _, name := range OutboundPublicIPNames(serviceName) {
 		m.pip.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(nil, notFoundError()).Times(1)
 	}
 	m.pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 
-	dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+	dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 	called, success, completionErr := got.result()
 	assert.True(t, called)
 	assert.True(t, success, "404 on every resource means the teardown is already complete: %v", completionErr)
-	assert.False(t, dt.NRPResources.NATGateways.Has(uid))
+	assert.False(t, dt.NRPResources.NATGateways.Has(serviceName))
 }
 
 func TestServiceUpdaterDeleteOutboundService_RejectedBYOKeepsUnownedPublicIPs(t *testing.T) {
-	const uid = "payments"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "payments"
+	serviceName := outboundServiceName(egressIdentity)
 	for _, tc := range []struct {
 		name    string
 		linkErr error
@@ -952,17 +1040,17 @@ func TestServiceUpdaterDeleteOutboundService_RejectedBYOKeepsUnownedPublicIPs(t 
 			tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("inbound")}},
 		{name: "refused link and old-tagged Public IPs",
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusForbidden},
-			tags:    map[string]*string{"k8s-azure-egress-identity": ptr.To(uid)}},
+			tags:    map[string]*string{"k8s-azure-egress-identity": ptr.To(egressIdentity)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := newOutboundMocks(ctrl)
 			if tc.linkErr == nil {
-				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
+				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(nil, notFoundError()).Times(1)
 			} else {
-				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(byoNATGateway(uid), nil).Times(1)
-				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, initialNATPutError(tc.linkErr)).Times(1)
+				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(byoNATGateway(egressIdentity), nil).Times(1)
+				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(nil, initialNATPutError(tc.linkErr)).Times(1)
 			}
 			m.expectNoDisassociation()
 			m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
@@ -976,7 +1064,7 @@ func TestServiceUpdaterDeleteOutboundService_RejectedBYOKeepsUnownedPublicIPs(t 
 			dt := newTestDiffTracker()
 			dt.config = testConfig()
 			dt.networkClientFactory = m.factory
-			dt.kubeClient = fake.NewSimpleClientset(byoPod(uid, byoNATGatewayRG))
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(egressIdentity, byoNATGatewayRG))
 			created := &outboundCompletion{}
 			outboundUpdater(dt, created).createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 			called, success, err := created.result()
@@ -997,21 +1085,21 @@ func TestServiceUpdaterDeleteOutboundService_RejectedBYOKeepsUnownedPublicIPs(t 
 // TestServiceUpdaterCreateOutboundService_HappyPath asserts the provisioning order (PIP, then NAT
 // Gateway, then ServiceGateway registration) and that NRP state is recorded only on success.
 func TestServiceUpdaterCreateOutboundService_HappyPath(t *testing.T) {
-	const uid = "egress-d-natgw"
+	const serviceName = "egress-d-natgw"
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	m := newOutboundMocks(ctrl)
 	var operationCtx context.Context
-	m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).
+	m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, gomock.Any()).
 		DoAndReturn(func(ctx context.Context, _, _ string, _ *string) (*armnetwork.NatGateway, error) {
 			operationCtx = ctx
 			return nil, notFoundError()
 		}).Times(1)
-	m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), nil).Return(nil, notFoundError()).Times(1)
-	pipCall := m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
-		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, nil).Times(1)
-	natCall := m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).
+	m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(serviceName), nil).Return(nil, notFoundError()).Times(1)
+	pipCall := m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(serviceName), gomock.Any()).
+		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(serviceName))}, nil).Times(1)
+	natCall := m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", serviceName, gomock.Any()).
 		Return(nil, nil).Times(1).After(pipCall)
 	registrationCall := m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
 		Return(nil).Times(1).After(natCall)
@@ -1023,17 +1111,17 @@ func TestServiceUpdaterCreateOutboundService_HappyPath(t *testing.T) {
 	rec := record.NewFakeRecorder(10)
 	dt.eventRecorder = rec
 	registrationCall.Do(func(context.Context, string, string, armnetwork.ServiceGatewayUpdateServicesRequest) {
-		assertOutboundRegistrationOrder(t, dt, uid)
+		assertOutboundRegistrationOrder(t, dt, serviceName)
 	})
 	got := &outboundCompletion{}
 	updater := outboundUpdater(dt, got)
-	defer assertOutboundCreationOrder(t, updater, uid, &operationCtx, rec, false)()
-	updater.createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+	defer assertOutboundCreationOrder(t, updater, serviceName, &operationCtx, rec, false)()
+	updater.createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 
 	called, success, completionErr := got.result()
 	assert.True(t, called)
 	assert.True(t, success, "a fully successful create must report success: %v", completionErr)
-	assert.True(t, dt.NRPResources.NATGateways.Has(uid),
+	assert.True(t, dt.NRPResources.NATGateways.Has(serviceName),
 		"NRP NAT Gateway state must be recorded after a successful create")
 }
 
@@ -1041,7 +1129,7 @@ func TestServiceUpdaterCreateOutboundService_HappyPath(t *testing.T) {
 // provisioning step. Recording NRP state after a partial create would make the tracker believe NRP
 // holds a service it does not, and the diff would never re-create it.
 func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *testing.T) {
-	const uid = "egress-e-natgw"
+	const serviceName = "egress-e-natgw"
 	boom := errors.New("ARM failure")
 
 	for _, tc := range []struct {
@@ -1058,14 +1146,14 @@ func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *
 
 			m := newOutboundMocks(ctrl)
 			var operationCtx context.Context
-			m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).
+			m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, gomock.Any()).
 				DoAndReturn(func(ctx context.Context, _, _ string, _ *string) (*armnetwork.NatGateway, error) {
 					operationCtx = ctx
 					return nil, notFoundError()
 				}).Times(1)
-			m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), nil).Return(nil, notFoundError()).Times(1)
+			m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(serviceName), nil).Return(nil, notFoundError()).Times(1)
 			m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, tc.pipErr).AnyTimes()
+				Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(serviceName))}, tc.pipErr).AnyTimes()
 			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(nil, tc.natErr).AnyTimes()
 			registrationCall := m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -1078,18 +1166,18 @@ func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *
 			rec := record.NewFakeRecorder(10)
 			dt.eventRecorder = rec
 			registrationCall.Do(func(context.Context, string, string, armnetwork.ServiceGatewayUpdateServicesRequest) {
-				assertOutboundRegistrationOrder(t, dt, uid)
+				assertOutboundRegistrationOrder(t, dt, serviceName)
 			})
 			got := &outboundCompletion{}
 			updater := outboundUpdater(dt, got)
-			defer assertOutboundCreationOrder(t, updater, uid, &operationCtx, rec, false)()
-			updater.createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+			defer assertOutboundCreationOrder(t, updater, serviceName, &operationCtx, rec, false)()
+			updater.createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 
 			called, success, completionErr := got.result()
 			assert.True(t, called)
 			assert.False(t, success, "a failed create step must report failure so it is retried")
 			assert.Error(t, completionErr)
-			assert.False(t, dt.NRPResources.NATGateways.Has(uid),
+			assert.False(t, dt.NRPResources.NATGateways.Has(serviceName),
 				"a partially created outbound service must not be recorded as present in NRP")
 		})
 	}
@@ -1100,7 +1188,7 @@ func TestServiceUpdaterCreateOutboundService_StepFailuresDoNotRecordNRPState(t *
 // rules, and the ServiceGateway registration references the backend pool by an ID that is stable
 // across port edits.
 func TestServiceUpdaterUpdateInboundService(t *testing.T) {
-	uid := inboundServiceName("11111111-1111-1111-1111-111111111111")
+	serviceName := inboundServiceName("11111111-1111-1111-1111-111111111111")
 
 	validConfig := func() *InboundConfig {
 		return &InboundConfig{
@@ -1116,7 +1204,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		m := newOutboundMocks(ctrl)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
-		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", serviceName, gomock.Any()).Return(nil, nil).Times(1)
 		// A port-only update must not touch the Public IP or re-register with the ServiceGateway.
 		m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
 		m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
@@ -1125,7 +1213,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		dt.config = testConfig()
 		dt.networkClientFactory = m.factory
 		got := &outboundCompletion{}
-		outboundUpdater(dt, got).updateInboundService(uid, validConfig(), "corr")
+		outboundUpdater(dt, got).updateInboundService(serviceName, validConfig(), "corr")
 
 		called, success, completionErr := got.result()
 		assert.True(t, called)
@@ -1146,7 +1234,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		dt.config = testConfig()
 		dt.networkClientFactory = m.factory
 		got := &outboundCompletion{}
-		outboundUpdater(dt, got).updateInboundService(uid, validConfig(), "corr")
+		outboundUpdater(dt, got).updateInboundService(serviceName, validConfig(), "corr")
 
 		called, success, completionErr := got.result()
 		assert.True(t, called)
@@ -1172,7 +1260,7 @@ func TestServiceUpdaterUpdateInboundService(t *testing.T) {
 		dt.config = testConfig()
 		dt.networkClientFactory = m.factory
 		got := &outboundCompletion{}
-		outboundUpdater(dt, got).updateInboundService(uid, dualStack, "corr")
+		outboundUpdater(dt, got).updateInboundService(serviceName, dualStack, "corr")
 
 		called, success, completionErr := got.result()
 		assert.True(t, called)
@@ -1196,14 +1284,14 @@ func TestServiceUpdaterUpdateInboundService_PortRemovalDropsOnlyThatRule(t *test
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	uid := inboundServiceName("22222222-2222-2222-2222-222222222222")
+	serviceName := inboundServiceName("22222222-2222-2222-2222-222222222222")
 
 	m := newOutboundMocks(ctrl)
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 	m.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 
 	var puts []armnetwork.LoadBalancer
-	mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).
+	mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", serviceName, gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, lb armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
 			puts = append(puts, lb)
 			return nil, nil
@@ -1226,7 +1314,7 @@ func TestServiceUpdaterUpdateInboundService_PortRemovalDropsOnlyThatRule(t *test
 	}
 
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).updateInboundService(uid, remaining, "corr-port-removal")
+	outboundUpdater(dt, got).updateInboundService(serviceName, remaining, "corr-port-removal")
 
 	called, success, completionErr := got.result()
 	assert.True(t, called)
@@ -1261,11 +1349,11 @@ func TestServiceUpdaterOutboundUpdateIsCountedAsSkipped(t *testing.T) {
 	RegisterMetrics()
 
 	dt := newTestDiffTracker()
-	uid := outboundServiceName("outbound-update")
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewOutboundServiceConfig(uid, &OutboundConfig{}),
-		State:      StateUpdateInProgress,
+	serviceName := outboundServiceName("outbound-update")
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, &OutboundConfig{}),
+		State:       StateUpdateInProgress,
 	}
 
 	before, err := testutil.GetCounterMetricValue(outboundServiceUpdatesSkippedTotal)
@@ -1352,10 +1440,10 @@ func TestServiceUpdaterScheduleRetry_ReplacesPendingTimer(t *testing.T) {
 // lastErr == nil branch, but without this test that guard can be deleted with no signal.
 func TestGuardDeleteOutboundService_NATDeleteFailureRetainsLastPodFinalizer(t *testing.T) {
 	const (
-		uid     = "egress-nat-fail-natgw"
-		podNS   = "default"
-		podName = "egress-last-pod"
-		podUID  = "pod-uid-nat-fail"
+		serviceName = "egress-nat-fail-natgw"
+		podNS       = "default"
+		podName     = "egress-last-pod"
+		podUID      = "pod-uid-nat-fail"
 	)
 
 	ctrl := gomock.NewController(t)
@@ -1375,23 +1463,23 @@ func TestGuardDeleteOutboundService_NATDeleteFailureRetainsLastPodFinalizer(t *t
 	m.expectNoDisassociation()
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
 	// The NAT Gateway teardown fails, so the Azure resource is still live afterwards.
-	m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(errors.New("nat gateway delete failed")).Times(1)
-	m.expectOwnedPublicIPs(uid, 1)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).AnyTimes()
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(errors.New("nat gateway delete failed")).Times(1)
+	m.expectOwnedPublicIPs(serviceName, 1)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(serviceName)).Return(nil).AnyTimes()
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(serviceName)).Return(nil).AnyTimes()
 
-	dt := newOutboundDiffTracker(uid, m, kube)
+	dt := newOutboundDiffTracker(serviceName, m, kube)
 	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
-		Namespace:  podNS,
-		Name:       podName,
-		UID:        podUID,
-		ServiceUID: uid,
-		Addresses:  []string{"10.244.0.5"},
-		IsLastPod:  true,
+		Namespace:   podNS,
+		Name:        podName,
+		UID:         podUID,
+		ServiceName: serviceName,
+		Addresses:   []string{"10.244.0.5"},
+		IsLastPod:   true,
 	}
 
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 	called, success, _ := got.result()
 	assert.True(t, called)
@@ -1415,10 +1503,10 @@ func TestGuardDeleteOutboundService_NATDeleteFailureRetainsLastPodFinalizer(t *t
 // would look correct to the test above while blocking node drain and namespace deletion indefinitely.
 func TestGuardDeleteOutboundService_FinalizerReleasedOnRetryAfterNATFailure(t *testing.T) {
 	const (
-		uid     = "egress-nat-retry-natgw"
-		podNS   = "default"
-		podName = "egress-last-pod"
-		podUID  = "pod-uid-nat-retry"
+		serviceName = "egress-nat-retry-natgw"
+		podNS       = "default"
+		podName     = "egress-last-pod"
+		podUID      = "pod-uid-nat-retry"
 	)
 
 	ctrl := gomock.NewController(t)
@@ -1438,33 +1526,33 @@ func TestGuardDeleteOutboundService_FinalizerReleasedOnRetryAfterNATFailure(t *t
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
 	// First attempt fails, second succeeds.
 	gomock.InOrder(
-		m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(errors.New("nat gateway delete failed")).Times(1),
-		m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1),
+		m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(errors.New("nat gateway delete failed")).Times(1),
+		m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(nil).Times(1),
 	)
-	m.expectOwnedPublicIPs(uid, 2)
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).AnyTimes()
-	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).AnyTimes()
+	m.expectOwnedPublicIPs(serviceName, 2)
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(serviceName)).Return(nil).AnyTimes()
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(serviceName)).Return(nil).AnyTimes()
 
-	dt := newOutboundDiffTracker(uid, m, kube)
+	dt := newOutboundDiffTracker(serviceName, m, kube)
 	entry := &PendingPodDeletion{
-		Namespace:  podNS,
-		Name:       podName,
-		UID:        podUID,
-		ServiceUID: uid,
-		Addresses:  []string{"10.244.0.5"},
-		IsLastPod:  true,
+		Namespace:   podNS,
+		Name:        podName,
+		UID:         podUID,
+		ServiceName: serviceName,
+		Addresses:   []string{"10.244.0.5"},
+		IsLastPod:   true,
 	}
 	dt.pendingPodDeletions[podNS+"/"+podName] = entry
 
 	updater := outboundUpdater(dt, &outboundCompletion{})
-	updater.deleteOutboundService(uid, "corr-1")
+	updater.deleteOutboundService(serviceName, "corr-1")
 
 	live, err := kube.CoreV1().Pods(podNS).Get(context.Background(), podName, metav1.GetOptions{})
 	assert.NoError(t, err)
 	assert.True(t, hasPodFinalizer(live), "precondition: the failed attempt must retain the finalizer")
 
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).deleteOutboundService(uid, "corr-2")
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr-2")
 
 	_, success, completionErr := got.result()
 	assert.True(t, success, "the retried delete must succeed: %v", completionErr)
@@ -1522,8 +1610,8 @@ func TestRefreshOperationGauges_ReflectsPodDrivenAndAbortedOperations(t *testing
 // then withholds the service's endpoints - leaving a public IP with no backends until the patch
 // eventually succeeds. The successful write is the control.
 func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing.T) {
-	const rawUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-	uid := inboundServiceName(rawUID)
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	serviceName := inboundServiceName(uid)
 
 	run := func(t *testing.T, statusPatchFails bool) *DiffTracker {
 		t.Helper()
@@ -1531,7 +1619,7 @@ func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing
 		defer ctrl.Finish()
 
 		svc := &v1.Service{
-			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(rawUID)},
+			ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "default", UID: types.UID(uid)},
 			Spec: v1.ServiceSpec{
 				Type:  v1.ServiceTypeLoadBalancer,
 				Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}},
@@ -1552,14 +1640,14 @@ func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing
 
 		// PIP and LoadBalancer create succeed, and the ServiceGateway registration succeeds, so the
 		// service is genuinely live in Azure before the status write is attempted.
-		m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), nil).Return(nil, notFoundError()).Times(1)
+		m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(serviceName), nil).Return(nil, notFoundError()).Times(1)
 		m.pip.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(&armnetwork.PublicIPAddress{
-				Name:       ptr.To(PublicIPName(uid)),
+				Name:       ptr.To(PublicIPName(serviceName)),
 				Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.30.40.50")},
 			}, nil).AnyTimes()
 		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Return(&armnetwork.LoadBalancer{Name: ptr.To(uid)}, nil).AnyTimes()
+			Return(&armnetwork.LoadBalancer{Name: ptr.To(serviceName)}, nil).AnyTimes()
 		m.sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil).AnyTimes()
 
@@ -1569,14 +1657,14 @@ func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing
 		dt.kubeClient = kube
 
 		s := NewServiceUpdater(context.Background(), dt, func(string, bool, error) {}, dt.serviceUpdaterTrigger)
-		s.createInboundService(uid, makeInboundConfig(80), "corr")
+		s.createInboundService(serviceName, makeInboundConfig(80), "corr")
 		return dt
 	}
 
 	failed := run(t, true)
 	failed.mu.Lock()
-	liveAfterFailure := failed.NRPResources.LoadBalancers.Has(uid)
-	readyAfterFailure := failed.isServiceReadyToSync(uid, true)
+	liveAfterFailure := failed.NRPResources.LoadBalancers.Has(serviceName)
+	readyAfterFailure := failed.isServiceReadyToSync(serviceName, true)
 	failed.mu.Unlock()
 	assert.True(t, liveAfterFailure,
 		"the LoadBalancer is registered in NRP, so a failed Kubernetes status write must not un-track it")
@@ -1585,7 +1673,7 @@ func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing
 
 	ok := run(t, false)
 	ok.mu.Lock()
-	liveAfterSuccess := ok.NRPResources.LoadBalancers.Has(uid)
+	liveAfterSuccess := ok.NRPResources.LoadBalancers.Has(serviceName)
 	ok.mu.Unlock()
 	assert.True(t, liveAfterSuccess, "control: a successful create tracks the LoadBalancer")
 }
@@ -1598,7 +1686,7 @@ func TestCreateInboundService_StatusPatchFailureKeepsLoadBalancerLive(t *testing
 // and production logs while every deleted service kept a stale ServiceGateway association. The
 // successful disassociation is the control.
 func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T) {
-	const uid = "egress-uid-natgw"
+	const serviceName = "egress-uid-natgw"
 	cfg := testConfig()
 
 	run := func(t *testing.T, disassociationFails bool) float64 {
@@ -1611,7 +1699,7 @@ func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T
 		m := newOutboundMocks(ctrl)
 
 		gateway := &armnetwork.NatGateway{
-			Name: ptr.To(uid), Tags: managedResourceTags(),
+			Name: ptr.To(serviceName), Tags: managedResourceTags(),
 			Properties: &armnetwork.NatGatewayPropertiesFormat{
 				ServiceGateway: &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())},
 			},
@@ -1620,18 +1708,18 @@ func TestDeleteOutboundService_CountsSwallowedDisassociationFailure(t *testing.T
 		if disassociationFails {
 			unlinkErr = errors.New("NRP unavailable")
 		}
-		m.nat.EXPECT().Get(gomock.Any(), "rg", uid, nil).Return(gateway, nil).Times(1)
+		m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, nil).Return(gateway, nil).Times(1)
 		m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).Times(1)
-		m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, unlinkErr).Times(1)
+		m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", serviceName, gomock.Any()).Return(nil, unlinkErr).Times(1)
 		m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
-		m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
-		m.expectOwnedPublicIPs(uid, 1)
+		m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(nil).Times(1)
+		m.expectOwnedPublicIPs(serviceName, 1)
 		m.pip.EXPECT().Delete(gomock.Any(), "rg", gomock.Any()).Return(nil).Times(2)
 
-		dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+		dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 		completion := &outboundCompletion{}
 		s := outboundUpdater(dt, completion)
-		s.deleteOutboundService(uid, "corr")
+		s.deleteOutboundService(serviceName, "corr")
 		called, success, completionErr := completion.result()
 		assert.True(t, called)
 		assert.True(t, success)
@@ -2142,8 +2230,8 @@ func TestServiceUpdaterCreateOutboundService_ManagedToBYORetry(t *testing.T) {
 }
 
 func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
-	const uid = "byo-egress"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "byo-egress"
+	serviceName := outboundServiceName(egressIdentity)
 	cfg := testConfig()
 	serviceGatewayID := cfg.ServiceGatewayResourceID()
 	forbidden := &azcore.ResponseError{StatusCode: http.StatusForbidden}
@@ -2185,28 +2273,28 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 		{name: "without the annotation a transient cluster resource group lookup error is retried without an event", nodeRGErr: boom},
 		{name: "without the annotation a cluster resource group NAT Gateway not created by this controller is rejected", nodeRGForeign: true,
 			wantEvent: egressNATGatewayRejectedReason},
-		{name: "links and registers the annotated NAT Gateway", annotation: named, wantRecorded: true, checkOrder: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+		{name: "links and registers the annotated NAT Gateway", annotation: named, wantRecorded: true, checkOrder: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
 		{name: "selection uses the configured network subscription", annotation: named, networkSubscription: "network-sub",
 			byo: func() *armnetwork.NatGateway {
-				n := byoNATGateway(uid)
-				n.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, "network-sub", byoNATGatewayRG, uid))
+				n := byoNATGateway(egressIdentity)
+				n.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, "network-sub", byoNATGatewayRG, egressIdentity))
 				return n
 			},
 			wantRecorded: true, wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
 		{name: "an unrelated node resource group name does not block explicit BYO", annotation: named, staleSnapshot: true,
-			wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
 		{name: "whitespace around the annotation, as a YAML block scalar leaves it, is ignored", annotation: " " + named + "\n", wantRecorded: true,
-			byo:      func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:      func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
 		{name: "a fresh claim reasserts an already linked gateway", annotation: named, wantRecorded: true, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(strings.ToUpper(serviceGatewayID))}
 			return n
 		}, wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
 		{name: "linked gateway that is not Succeeded is written again", annotation: named, wantRecorded: true, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(serviceGatewayID)}
 			n.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateFailed)
 			return n
@@ -2220,120 +2308,129 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 			wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"valid Azure resource group name"}},
 		{name: "whitespace-only resource group is rejected", annotation: " \n", noRead: true,
 			wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"valid Azure resource group name"}},
-		{name: "a full ID is not a resource group name", annotation: byoNATGatewayARMID(uid), noRead: true,
+		{name: "a full ID is not a resource group name", annotation: byoNATGatewayARMID(egressIdentity), noRead: true,
 			wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"valid Azure resource group name"}},
 		{name: "the node resource group is rejected case-insensitively", annotation: "RG", noRead: true,
 			wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"is the cluster resource group"}},
 		{name: "wrong SKU is rejected, also while the Service Gateway services cannot be read", annotation: named, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.SKU.Name = ptr.To(armnetwork.NatGatewaySKUNameStandard)
 			return n
 		}, servicesErr: boom, wantEvent: egressNATGatewayRejectedReason},
 		{name: "gateway linked to another Service Gateway is rejected", annotation: named, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/other/providers/Microsoft.Network/serviceGateways/sgw")}
 			return n
 		}, wantEvent: egressNATGatewayRejectedReason},
 		{name: "a gateway without IPv6 addresses is linked on a dual-stack cluster, its owner adds them", annotation: named, wantRecorded: true,
 			families: []string{"IPv4", "IPv6"}, byo: func() *armnetwork.NatGateway {
-				n := byoNATGateway(uid)
+				n := byoNATGateway(egressIdentity)
 				n.Properties.PublicIPAddressesV6, n.Properties.PublicIPPrefixesV6 = nil, nil
 				return n
 			}, wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
 		{name: "a gateway without addresses is linked, its owner adds them", annotation: named, wantRecorded: true, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.Properties.PublicIPAddresses, n.Properties.PublicIPAddressesV6 = nil, nil
 			n.Properties.PublicIPPrefixes, n.Properties.PublicIPPrefixesV6 = nil, nil
 			return n
 		}, wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
-		{name: "default outbound gateway is rejected", annotation: named, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+		{name: "default outbound gateway is rejected", annotation: named, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			services: []*armnetwork.ServiceGatewayService{{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-				IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(strings.ToLower(byoNATGatewayARMID(uid)))}}},
+				IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(strings.ToLower(byoNATGatewayARMID(egressIdentity)))}}},
+			wantEvent: egressNATGatewayRejectedReason},
+		{name: "a prelinked default outbound gateway is rejected but remains recorded for cleanup", annotation: named, wantRecorded: true,
+			byo: func() *armnetwork.NatGateway {
+				n := byoNATGateway(egressIdentity)
+				n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(serviceGatewayID)}
+				return n
+			},
+			services: []*armnetwork.ServiceGatewayService{{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+				IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(byoNATGatewayARMID(egressIdentity))}}},
 			wantEvent: egressNATGatewayRejectedReason},
 		{name: "an invalid response ID is rejected without writes", annotation: named, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.ID = ptr.To("not-an-arm-id")
 			n.Name = ptr.To("wrong-response-name")
 			return n
 		}, wantErrText: "parsing NAT Gateway ID"},
 		{name: "a missing response ID is rejected without writes", annotation: named, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.ID = nil
 			return n
 		}, wantErrText: "parsing NAT Gateway ID"},
 		{name: "an empty successful response never falls back to managed creation", annotation: named,
 			byo: func() *armnetwork.NatGateway { return &armnetwork.NatGateway{} }, wantErrText: "parsing NAT Gateway ID"},
-		{name: "its own earlier registration does not block a retry", annotation: named, wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
-			services: []*armnetwork.ServiceGatewayService{{Name: ptr.To(serviceName), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{PublicNatGatewayID: ptr.To(byoNATGatewayARMID(uid))}}},
+		{name: "its own earlier registration does not block a retry", annotation: named, wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
+			services: []*armnetwork.ServiceGatewayService{{Name: ptr.To(serviceName), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{PublicNatGatewayID: ptr.To(byoNATGatewayARMID(egressIdentity))}}},
 			wantLink: true, wantRegister: true, wantSuccess: true, wantEvent: egressNATGatewayLinkedReason},
-		{name: "a transient link failure is retried without an event", annotation: named, wantRecorded: true, checkOrder: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+		{name: "a transient link failure is retried without an event", annotation: named, wantRecorded: true, checkOrder: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: boom, wantLink: true},
-		{name: "unreadable Service Gateway services are retried, nothing linked", annotation: named, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+		{name: "unreadable Service Gateway services are retried, nothing linked", annotation: named, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			servicesErr: boom},
 		{name: "a throttled read of the annotated NAT Gateway is retried without an event", annotation: named,
 			byoErr: &azcore.ResponseError{StatusCode: http.StatusTooManyRequests}},
 		{name: "a gateway already linked here that cannot be used is rejected and stays recorded for the unlink", annotation: named,
 			wantRecorded: true, byo: func() *armnetwork.NatGateway {
-				n := byoNATGateway(uid)
+				n := byoNATGateway(egressIdentity)
 				n.SKU.Name = ptr.To(armnetwork.NatGatewaySKUNameStandard)
 				n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(serviceGatewayID)}
 				return n
 			}, wantEvent: egressNATGatewayRejectedReason},
 		{name: "a gateway already linked here stays recorded for the unlink when the Service Gateway services cannot be read", annotation: named,
 			wantRecorded: true, byo: func() *armnetwork.NatGateway {
-				n := byoNATGateway(uid)
+				n := byoNATGateway(egressIdentity)
 				n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(serviceGatewayID)}
 				return n
 			}, servicesErr: boom},
 		{name: "a link denied by Azure is rejected and forgotten, so the annotation is read again", annotation: named,
-			byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) }, linkErr: forbidden, wantLink: true, wantEvent: egressNATGatewayRejectedReason,
+			byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) }, linkErr: forbidden, wantLink: true, wantEvent: egressNATGatewayRejectedReason,
 			wantEventTexts: []string{`Egress identity "byo-egress-natgw" cannot use NAT Gateway`, "access denied when linking"}},
 		{name: "a link refused with another 4xx is rejected with Azure's error code and forgotten", annotation: named,
-			byo:     func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:     func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "InvalidNatGatewayReference"}, wantLink: true,
 			wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"Azure refused to link it to the Service Gateway (HTTP 400 InvalidNatGatewayReference)"}},
 		{name: "a refused link of a gateway already linked here keeps it recorded for the unlink", annotation: named, wantRecorded: true,
 			byo: func() *armnetwork.NatGateway {
-				n := byoNATGateway(uid)
+				n := byoNATGateway(egressIdentity)
 				n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(serviceGatewayID)}
 				n.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateFailed)
 				return n
 			}, linkErr: forbidden, wantLink: true, wantEvent: egressNATGatewayRejectedReason},
 		{name: "a link timeout is retried without an event and stays recorded", annotation: named, wantRecorded: true,
-			byo:     func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:     func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusRequestTimeout}, wantLink: true},
 		{name: "a conflicting operation on the link is retried without an event and stays recorded", annotation: named, wantRecorded: true,
-			byo:     func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:     func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusConflict, ErrorCode: "AnotherOperationInProgress"}, wantLink: true},
 		{name: "a stale first link is retried without an event or ownership record", annotation: named, checkOrder: true,
-			byo:     func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:     func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed, ErrorCode: "PreconditionFailed"}, wantLink: true},
 		{name: "a gateway without an ETag is retried without writing or recording a new link", annotation: named, checkOrder: true,
 			byo: func() *armnetwork.NatGateway {
-				n := byoNATGateway(uid)
+				n := byoNATGateway(egressIdentity)
 				n.Etag = nil
 				return n
 			}},
 		{name: "a link answered 404, its resource group gone, is rejected and forgotten", annotation: named,
-			byo:     func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:     func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusNotFound, ErrorCode: "ResourceGroupNotFound"}, wantLink: true,
 			wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"(HTTP 404 ResourceGroupNotFound)"}},
 		{name: "a link blocked by a resource lock is rejected and forgotten", annotation: named,
-			byo:     func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:     func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusConflict, ErrorCode: "ScopeLocked"}, wantLink: true,
 			wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"Azure refused to link it to the Service Gateway (HTTP 409 ScopeLocked)"}},
 		{name: "a throttled link is retried without an event and stays recorded", annotation: named, wantRecorded: true,
-			byo:     func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			byo:     func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusTooManyRequests}, wantLink: true},
 		{name: "a server error on the link is retried without an event and stays recorded, as the write may have been applied", annotation: named,
-			wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+			wantRecorded: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			linkErr: &azcore.ResponseError{StatusCode: http.StatusInternalServerError, ErrorCode: "InternalServerError"}, wantLink: true},
 		{name: "a gateway read without its properties is rejected, nothing written", annotation: named, byo: func() *armnetwork.NatGateway {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.Properties = nil
 			return n
 		}, wantEvent: egressNATGatewayRejectedReason, wantEventTexts: []string{"was read without its properties"}},
-		{name: "registration failure is retried", annotation: named, wantRecorded: true, checkOrder: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(uid) },
+		{name: "registration failure is retried", annotation: named, wantRecorded: true, checkOrder: true, byo: func() *armnetwork.NatGateway { return byoNATGateway(egressIdentity) },
 			wantLink: true, registerErr: boom, wantRegister: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2341,7 +2438,7 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 			defer ctrl.Finish()
 			config := cfg
 			config.NetworkResourceSubscriptionID = tc.networkSubscription
-			expectedID := fmt.Sprintf(consts.NatGatewayIDTemplate, config.networkResourceSubscriptionID(), byoNATGatewayRG, uid)
+			expectedID := fmt.Sprintf(consts.NatGatewayIDTemplate, config.networkResourceSubscriptionID(), byoNATGatewayRG, egressIdentity)
 			m := newOutboundMocks(ctrl)
 			var operationCtx context.Context
 			if tc.annotation != "" {
@@ -2362,7 +2459,7 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 				if tc.byo != nil {
 					gateway = tc.byo()
 				}
-				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).
+				m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).
 					DoAndReturn(func(ctx context.Context, _, _ string, _ *string) (*armnetwork.NatGateway, error) {
 						operationCtx = ctx
 						return gateway, tc.byoErr
@@ -2375,12 +2472,12 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 			}).MaxTimes(1)
 
 			linkCalls := 0
-			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).
 				DoAndReturn(func(_ context.Context, _, _ string, n armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
 					linkCalls++
 					want := tc.byo()
 					want.ID = ptr.To(expectedID)
-					want.Name = ptr.To(uid)
+					want.Name = ptr.To(egressIdentity)
 					want.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(config.ServiceGatewayResourceID())}
 					assert.Equal(t, *want, n, "only the link may change on the owner's NAT Gateway")
 					return &n, initialNATPutError(tc.linkErr)
@@ -2406,7 +2503,7 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 			dt := newTestDiffTracker()
 			dt.config = config
 			dt.networkClientFactory = m.factory
-			pod := byoPod(uid, tc.annotation)
+			pod := byoPod(egressIdentity, tc.annotation)
 			if tc.explicitEmpty {
 				pod.Annotations = map[string]string{consts.PodAnnotationServiceEgressGatewayResourceGroup: ""}
 			}
@@ -2475,17 +2572,17 @@ func TestServiceUpdaterCreateOutboundService_BYONATGateway(t *testing.T) {
 }
 
 func TestServiceUpdaterCreateOutboundService_KeepsLinkedBYONATGateway(t *testing.T) {
-	const uid = "byo-linked"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "byo-linked"
+	serviceName := outboundServiceName(egressIdentity)
 	forbidden := &azcore.ResponseError{StatusCode: http.StatusForbidden}
 	cfg := testConfig()
 	linkedHere := func() *armnetwork.NatGateway {
-		n := byoNATGateway(uid)
+		n := byoNATGateway(egressIdentity)
 		n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
 		return n
 	}
 
-	recorded := byoNATGatewayARMID(uid)
+	recorded := byoNATGatewayARMID(egressIdentity)
 	gone := func() (*armnetwork.NatGateway, error) { return nil, notFoundError() }
 
 	for _, tc := range []struct {
@@ -2520,21 +2617,21 @@ func TestServiceUpdaterCreateOutboundService_KeepsLinkedBYONATGateway(t *testing
 			wantManaged: true, wantSuccess: true},
 		{name: "a gateway its owner deleted is forgotten and the gateway the pods name now is used", linked: gone,
 			resourceGroup: "replacement-rg", readsNamed: true, wantSuccess: true,
-			wantRecord: fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", "replacement-rg", uid)},
+			wantRecord: fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", "replacement-rg", egressIdentity)},
 		{name: "a gateway its owner deleted is forgotten, and a missing gateway the pods name is rejected, never replaced by a managed one",
 			linked: gone, resourceGroup: "missing-rg", namedErr: notFoundError(), readsNamed: true, wantRejected: true},
 		{name: "a recorded gateway now used by another service is rejected but stays recorded for the unlink",
 			linked: func() (*armnetwork.NatGateway, error) { return linkedHere(), nil },
 			services: []*armnetwork.ServiceGatewayService{{Name: ptr.To("other-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-				PublicNatGatewayID: ptr.To(byoNATGatewayARMID(uid))}}},
+				PublicNatGatewayID: ptr.To(byoNATGatewayARMID(egressIdentity))}}},
 			wantRecord: recorded, wantRejected: true},
 		{name: "an unusable recorded gateway that carries no link of ours is rejected and forgotten", linked: func() (*armnetwork.NatGateway, error) {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.SKU.Name = ptr.To(armnetwork.NatGatewaySKUNameStandard)
 			return n, nil
 		}, wantRejected: true},
 		{name: "a recorded gateway its owner linked to another Service Gateway is rejected and forgotten", linked: func() (*armnetwork.NatGateway, error) {
-			n := byoNATGateway(uid)
+			n := byoNATGateway(egressIdentity)
 			n.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/other-rg/providers/Microsoft.Network/serviceGateways/other")}
 			return n, nil
 		}, wantRejected: true},
@@ -2550,23 +2647,23 @@ func TestServiceUpdaterCreateOutboundService_KeepsLinkedBYONATGateway(t *testing
 			defer ctrl.Finish()
 			m := newOutboundMocks(ctrl)
 			linked, linkedErr := tc.linked()
-			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(linked, linkedErr).Times(1)
+			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(linked, linkedErr).Times(1)
 			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(tc.services, nil).AnyTimes()
 			if tc.wantSuccess && !tc.wantManaged {
 				m.expectNoManagedOutboundResources(serviceName, 1)
 			}
 			// The recorded gateway stays selected, but creation still requires a successful reassertion.
 			if tc.wantSuccess && !tc.wantManaged && !tc.readsNamed {
-				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, nil).Times(1)
+				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(nil, nil).Times(1)
 			}
 			if tc.readsNamed {
 				var named *armnetwork.NatGateway
 				if tc.namedErr == nil {
-					named = byoNATGateway(uid)
-					named.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, cfg.networkResourceSubscriptionID(), tc.resourceGroup, uid))
+					named = byoNATGateway(egressIdentity)
+					named.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, cfg.networkResourceSubscriptionID(), tc.resourceGroup, egressIdentity))
 				}
-				m.nat.EXPECT().Get(gomock.Any(), tc.resourceGroup, uid, gomock.Any()).Return(named, tc.namedErr).Times(1)
-				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), tc.resourceGroup, uid, gomock.Any()).Return(nil, nil).Times(wantedCalls(tc.namedErr == nil))
+				m.nat.EXPECT().Get(gomock.Any(), tc.resourceGroup, egressIdentity, gomock.Any()).Return(named, tc.namedErr).Times(1)
+				m.nat.EXPECT().CreateOrUpdate(gomock.Any(), tc.resourceGroup, egressIdentity, gomock.Any()).Return(nil, nil).Times(wantedCalls(tc.namedErr == nil))
 			}
 			if tc.wantManaged {
 				m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, gomock.Any()).Return(nil, notFoundError()).Times(1)
@@ -2579,7 +2676,7 @@ func TestServiceUpdaterCreateOutboundService_KeepsLinkedBYONATGateway(t *testing
 			dt := newTestDiffTracker()
 			dt.config = testConfig()
 			dt.networkClientFactory = m.factory
-			dt.kubeClient = fake.NewSimpleClientset(byoPod(uid, tc.resourceGroup))
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(egressIdentity, tc.resourceGroup))
 			rec := &captureRecorder{FakeRecorder: *record.NewFakeRecorder(10)}
 			dt.eventRecorder = rec
 			dt.setBYONATGatewayID(serviceName, recorded)
@@ -2629,7 +2726,7 @@ func TestBYOCreationCoexistsWithRecoveredInboundIdentity(t *testing.T) {
 				m.expectNoManagedOutboundResources(outboundName, 2)
 				dt.kubeClient = fake.NewSimpleClientset(byoPod(rawIdentity, byoNATGatewayRG))
 				inboundOp := &ServiceOperationState{
-					ServiceUID: inboundName, Config: NewInboundServiceConfig(inboundName, makeInboundConfig(80)), State: StateCreated,
+					ServiceName: inboundName, Config: NewInboundServiceConfig(inboundName, makeInboundConfig(80)), State: StateCreated,
 				}
 				dt.pendingServiceOps[inboundName] = inboundOp
 				if source == "NRP" {
@@ -2665,7 +2762,7 @@ func TestBYOCreationCoexistsWithRecoveredInboundIdentity(t *testing.T) {
 				assert.Same(t, inboundOp, dt.pendingServiceOps[inboundName])
 
 				dt.pendingServiceOps[outboundName] = &ServiceOperationState{
-					ServiceUID: outboundName, Config: NewOutboundServiceConfig(outboundName, nil), State: StateDeletionInProgress,
+					ServiceName: outboundName, Config: NewOutboundServiceConfig(outboundName, nil), State: StateDeletionInProgress,
 				}
 				outboundUpdater(dt, result).deleteOutboundService(outboundName, "corr-delete")
 				_, success, err = result.result()
@@ -2684,8 +2781,8 @@ func TestBYOCreationCoexistsWithRecoveredInboundIdentity(t *testing.T) {
 }
 
 func TestServiceUpdaterCreateOutboundService_RejectsReservedOutboundService(t *testing.T) {
-	const uid = "custom-default"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "custom-default"
+	serviceName := outboundServiceName(egressIdentity)
 	for name, annotation := range map[string]string{"managed": "", "BYO": byoNATGatewayRG} {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
@@ -2696,7 +2793,7 @@ func TestServiceUpdaterCreateOutboundService_RejectsReservedOutboundService(t *t
 			dt.config = testConfig()
 			dt.networkClientFactory = m.factory
 			dt.NRPResources.ReservedOutboundServices = utilsets.NewString(strings.ToUpper(serviceName))
-			dt.kubeClient = fake.NewSimpleClientset(byoPod(uid, annotation))
+			dt.kubeClient = fake.NewSimpleClientset(byoPod(egressIdentity, annotation))
 			rec := &captureRecorder{FakeRecorder: *record.NewFakeRecorder(10)}
 			dt.eventRecorder = rec
 			got := &outboundCompletion{}
@@ -2717,15 +2814,15 @@ func TestServiceUpdaterCreateOutboundService_RejectsReservedOutboundService(t *t
 }
 
 func TestServiceUpdaterCreateOutboundService_RetriesWithoutAMemberPod(t *testing.T) {
-	const uid = "byo-egress"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "byo-egress"
+	serviceName := outboundServiceName(egressIdentity)
 	for _, tc := range []struct {
 		name    string
 		pods    []runtime.Object
 		readErr error
 		wantErr string
 	}{
-		{name: "the triggering pod cannot be read", pods: []runtime.Object{byoPod(uid, byoNATGatewayRG)},
+		{name: "the triggering pod cannot be read", pods: []runtime.Object{byoPod(egressIdentity, byoNATGatewayRG)},
 			readErr: errors.New("apiserver down"), wantErr: "apiserver down"},
 		{name: "no pod of the identity is left", wantErr: `no active member pod: "byo-egress-natgw"`},
 	} {
@@ -2761,15 +2858,15 @@ func TestServiceUpdaterCreateOutboundService_RetriesWithoutAMemberPod(t *testing
 
 func TestServiceUpdaterCreateOutboundService_NoBYOLookupWithoutTheAnnotation(t *testing.T) {
 	const rawLabel = "egress-managed"
-	uid := outboundServiceName(rawLabel)
+	serviceName := outboundServiceName(rawLabel)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := newOutboundMocks(ctrl)
-	m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
-	m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(uid), nil).Return(nil, notFoundError()).Times(1)
-	m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(uid), gomock.Any()).
-		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(uid))}, nil).Times(1)
-	m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", uid, gomock.Any()).Return(nil, nil).Times(1)
+	m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, gomock.Any()).Return(nil, notFoundError()).Times(1)
+	m.pip.EXPECT().Get(gomock.Any(), "rg", PublicIPName(serviceName), nil).Return(nil, notFoundError()).Times(1)
+	m.pip.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(serviceName), gomock.Any()).
+		Return(&armnetwork.PublicIPAddress{Name: ptr.To(PublicIPName(serviceName))}, nil).Times(1)
+	m.nat.EXPECT().CreateOrUpdate(gomock.Any(), "rg", serviceName, gomock.Any()).Return(nil, nil).Times(1)
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
 
 	dt := newTestDiffTracker()
@@ -2778,17 +2875,18 @@ func TestServiceUpdaterCreateOutboundService_NoBYOLookupWithoutTheAnnotation(t *
 	dt.networkClientFactory = m.factory
 	dt.kubeClient = fake.NewSimpleClientset(byoPod(rawLabel, ""))
 	got := &outboundCompletion{}
-	outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+	outboundUpdater(dt, got).createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 
 	_, success, err := got.result()
 	assert.True(t, success, "%v", err)
 }
 
-// Rejections allow annotation edits; an ambiguous write keeps the original gateway
-// selected so deletion can unlink it.
+// TestServiceUpdaterCreateOutboundService_UsesAFixedAnnotationAfterARejection checks
+// that rejections allow annotation edits, while an ambiguous write keeps the original
+// gateway selected so deletion can unlink it.
 func TestServiceUpdaterCreateOutboundService_UsesAFixedAnnotationAfterARejection(t *testing.T) {
-	const uid = "byo-fixed"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "byo-fixed"
+	serviceName := outboundServiceName(egressIdentity)
 	for _, tc := range []struct {
 		name         string
 		firstGetErr  error
@@ -2811,17 +2909,17 @@ func TestServiceUpdaterCreateOutboundService_UsesAFixedAnnotationAfterARejection
 			defer ctrl.Finish()
 			m := newOutboundMocks(ctrl)
 			m.expectNoManagedOutboundResources(serviceName, 1+wantedCalls(tc.firstLinkErr != nil))
-			m.nat.EXPECT().Get(gomock.Any(), gomock.Any(), uid, gomock.Any()).DoAndReturn(
+			m.nat.EXPECT().Get(gomock.Any(), gomock.Any(), egressIdentity, gomock.Any()).DoAndReturn(
 				func(_ context.Context, resourceGroup, _ string, _ *string) (*armnetwork.NatGateway, error) {
 					if resourceGroup == "first" && tc.firstGetErr != nil {
 						return nil, tc.firstGetErr
 					}
-					n := byoNATGateway(uid)
-					n.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", resourceGroup, uid))
+					n := byoNATGateway(egressIdentity)
+					n.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", resourceGroup, egressIdentity))
 					return n, nil
 				}).AnyTimes()
 			links := map[string]int{}
-			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), uid, gomock.Any()).DoAndReturn(
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), egressIdentity, gomock.Any()).DoAndReturn(
 				func(_ context.Context, resourceGroup, _ string, n armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
 					links[resourceGroup]++
 					if resourceGroup == "first" && links[resourceGroup] == 1 && tc.firstLinkErr != nil {
@@ -2835,10 +2933,10 @@ func TestServiceUpdaterCreateOutboundService_UsesAFixedAnnotationAfterARejection
 			dt := newTestDiffTracker()
 			dt.config = testConfig()
 			dt.networkClientFactory = m.factory
-			kube := fake.NewSimpleClientset(byoPod(uid, "first"))
+			kube := fake.NewSimpleClientset(byoPod(egressIdentity, "first"))
 			dt.kubeClient = kube
 			if tc.triggerPhase != "" {
-				_, err := kube.CoreV1().Pods("ns").Create(context.Background(), egressTestPod("remaining", "member-uid", uid, "first"), metav1.CreateOptions{})
+				_, err := kube.CoreV1().Pods("ns").Create(context.Background(), egressTestPod("remaining", "member-uid", egressIdentity, "first"), metav1.CreateOptions{})
 				if !assert.NoError(t, err) {
 					return
 				}
@@ -2854,11 +2952,11 @@ func TestServiceUpdaterCreateOutboundService_UsesAFixedAnnotationAfterARejection
 			}
 			assert.False(t, isTerminalError(err), "%v", err)
 
-			trigger := byoPod(uid, "second")
+			trigger := byoPod(egressIdentity, "second")
 			if tc.triggerPhase != "" {
-				trigger = byoPod(uid, "first")
+				trigger = byoPod(egressIdentity, "first")
 				trigger.Status.Phase = tc.triggerPhase
-				_, err = kube.CoreV1().Pods("ns").Update(context.Background(), egressTestPod("remaining", "member-uid", uid, "second"), metav1.UpdateOptions{})
+				_, err = kube.CoreV1().Pods("ns").Update(context.Background(), egressTestPod("remaining", "member-uid", egressIdentity, "second"), metav1.UpdateOptions{})
 				if !assert.NoError(t, err) {
 					return
 				}
@@ -2870,15 +2968,15 @@ func TestServiceUpdaterCreateOutboundService_UsesAFixedAnnotationAfterARejection
 			updater.createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 			_, success, err = got.result()
 			assert.True(t, success, "%v", err)
-			assert.Equal(t, fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", tc.want, uid), dt.byoNATGatewayID(serviceName))
+			assert.Equal(t, fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", tc.want, egressIdentity), dt.byoNATGatewayID(serviceName))
 			assert.Equal(t, tc.want == "second", links["second"] > 0, "links of the same-named gateway in the second resource group")
 		})
 	}
 }
 
 func TestServiceUpdaterCreateOutboundService_RecordsEventsOnTheDecidingPod(t *testing.T) {
-	const uid = "byo-events"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "byo-events"
+	serviceName := outboundServiceName(egressIdentity)
 	named := byoNATGatewayRG
 	for _, tc := range []struct {
 		name     string
@@ -2887,16 +2985,16 @@ func TestServiceUpdaterCreateOutboundService_RecordsEventsOnTheDecidingPod(t *te
 		buffered []string
 		known    []string
 	}{
-		{name: "a creation started at start-up", pods: []runtime.Object{egressTestPod("member", "member-uid", uid, named)}, known: []string{"ns/member"}},
+		{name: "a creation started at start-up", pods: []runtime.Object{egressTestPod("member", "member-uid", egressIdentity, named)}, known: []string{"ns/member"}},
 		{name: "a triggering pod that left the identity", trigger: "pod",
-			pods:     []runtime.Object{egressTestPod("pod", "pod-uid", "other", ""), egressTestPod("member", "member-uid", uid, named)},
+			pods:     []runtime.Object{egressTestPod("pod", "pod-uid", "other", ""), egressTestPod("member", "member-uid", egressIdentity, named)},
 			buffered: []string{"ns/member"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := newOutboundMocks(ctrl)
-			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, notFoundError()).Times(1)
+			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(nil, notFoundError()).Times(1)
 
 			dt := newTestDiffTracker()
 			dt.config = testConfig()
@@ -2933,7 +3031,7 @@ func TestServiceUpdaterCreateOutboundService_RecordsEventsOnTheDecidingPod(t *te
 	}
 }
 
-// API read failures must not fall through to another member or to managed creation.
+// TestEgressMemberPod verifies API read failures do not fall through to another member or managed creation.
 func TestEgressMemberPod(t *testing.T) {
 	identity := outboundServiceName("egress-a")
 	member := func(name string) *v1.Pod { return egressTestPod(name, types.UID(name+"-uid"), "Egress-A", "id-"+name) }
@@ -3056,7 +3154,7 @@ func TestEgressMemberPod(t *testing.T) {
 	}
 }
 
-// Pod API reads must not hold dt.mu.
+// TestEgressMemberPod_ReadsTheTriggeringPodWithoutTheLock verifies Pod API reads do not hold dt.mu.
 func TestEgressMemberPod_ReadsTheTriggeringPodWithoutTheLock(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.kubeClient = fake.NewSimpleClientset(egressTestPod("a", "a-uid", "egress-a", "id-a"))
@@ -3155,8 +3253,8 @@ func TestValidateBYONATGatewayID(t *testing.T) {
 }
 
 func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
-	const uid = "byo-egress"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "byo-egress"
+	serviceName := outboundServiceName(egressIdentity)
 	cfg := testConfig()
 	serviceGatewayID := cfg.ServiceGatewayResourceID()
 	boom := errors.New("ARM failure")
@@ -3173,6 +3271,7 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 		clearErr      error
 
 		referenceCleared bool
+		noRegistration   bool
 		sharedWith       string
 		wantNATCleared   bool
 		wantUnregister   bool
@@ -3188,10 +3287,14 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 			wantNATCleared: true, wantUnregister: true, wantSuccess: true, wantWrites: []string{"unlink", "unregister"}},
 		{name: "gateway linked elsewhere is left alone", linkedTo: "/subscriptions/sub/resourceGroups/x/providers/Microsoft.Network/serviceGateways/other",
 			wantUnregister: true, wantSuccess: true},
-		{name: "gateway already gone", natGetErr: notFoundError(), wantUnregister: true, wantSuccess: true},
-		{name: "gateway shared with the default outbound service keeps its link", linkedTo: serviceGatewayID, sharedWith: "default-natgw",
-			wantUnregister: true, wantSuccess: true},
+		{name: "gateway already gone", natGetErr: notFoundError(), wantUnregister: true, wantSuccess: true,
+			wantWrites: []string{"unregister"}},
+		{name: "gateway used by the default outbound service is left untouched", linkedTo: serviceGatewayID, sharedWith: "default-natgw",
+			wantUnregister: true, wantSuccess: true, wantWrites: []string{"unregister"}},
+		{name: "unregistered identity leaves the default outbound gateway untouched", linkedTo: serviceGatewayID, noRegistration: true, sharedWith: "default-natgw",
+			wantUnregister: true, wantSuccess: true, wantWrites: []string{"unregister"}},
 		{name: "unlink failure is retried before unregistering", natGetErr: boom},
+		{name: "service reference read failure is retried", linkedTo: serviceGatewayID, servicesErr: boom},
 		{name: "access denied while unlinking does not block the delete", natGetErr: &azcore.ResponseError{StatusCode: http.StatusForbidden},
 			wantUnregister: true, wantSuccess: true},
 		{name: "write access denied while unlinking does not block the delete", linkedTo: serviceGatewayID, linkErr: &azcore.ResponseError{StatusCode: http.StatusForbidden},
@@ -3218,22 +3321,24 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 			services := []*armnetwork.ServiceGatewayService{
 				{Name: ptr.To(inboundServiceName("11111111-1111-1111-1111-111111111111")), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)}},
 				{Name: ptr.To(strings.ToUpper(serviceName)), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-					ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), PublicNatGatewayID: ptr.To(byoNATGatewayARMID(uid))}},
+					ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), PublicNatGatewayID: ptr.To(byoNATGatewayARMID(egressIdentity))}},
 			}
 			if tc.referenceCleared {
 				services[1].Properties.PublicNatGatewayID = nil
 			}
+			if tc.noRegistration {
+				services = services[:1]
+			}
 			if tc.sharedWith != "" {
 				services = append(services, &armnetwork.ServiceGatewayService{Name: ptr.To(tc.sharedWith), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-					IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(strings.ToUpper(byoNATGatewayARMID(uid)))}})
+					IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(strings.ToUpper(byoNATGatewayARMID(egressIdentity)))}})
 			}
 			if tc.servicesErr != nil {
 				services = nil
 			}
-			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(services, tc.servicesErr).Times(1)
 			var natGateway *armnetwork.NatGateway
 			if tc.natGetErr == nil {
-				natGateway = byoNATGateway(uid)
+				natGateway = byoNATGateway(egressIdentity)
 				natGateway.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(tc.linkedTo)}
 				if tc.noETag {
 					natGateway.Etag = nil
@@ -3242,19 +3347,17 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 					natGateway.Properties = nil
 				}
 			}
-			natReads := 1
-			if tc.sharedWith != "" || tc.clearErr != nil {
-				natReads = 0
-			}
-			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(natGateway, tc.natGetErr).Times(natReads)
+			natRead := m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(natGateway, tc.natGetErr).Times(1)
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(services, tc.servicesErr).
+				Times(wantedCalls(tc.natGetErr == nil)).After(natRead)
 			m.expectNoManagedOutboundResources(serviceName, wantedCalls(tc.wantSuccess))
 			cleared := false
 			var writes []string
-			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).
 				DoAndReturn(func(_ context.Context, _, _ string, n armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
 					cleared = true
 					writes = append(writes, "unlink")
-					want := byoNATGateway(uid)
+					want := byoNATGateway(egressIdentity)
 					want.Properties.ServiceGateway = azcore.NullValue[*armnetwork.SubResource]()
 					assert.Equal(t, *want, n, "only the link may change on the owner's NAT Gateway")
 					return &n, tc.linkErr
@@ -3274,16 +3377,21 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 					}
 					writes = append(writes, "unregister")
 					unregistered = true
+					assert.Len(t, req.ServiceRequests, 1)
+					assert.Equal(t, serviceName, derefString(req.ServiceRequests[0].Service.Name))
 					return tc.unregisterErr
 				}).AnyTimes()
 
 			dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 			dt.config = testConfig()
-			dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(uid))
+			if tc.noRegistration {
+				dt.NRPResources.NATGateways.Delete(serviceName)
+			}
+			dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(egressIdentity))
 			got := &outboundCompletion{}
 			updater := outboundUpdater(dt, got)
 			updater.onComplete = func(identity string, success bool, err error) {
-				assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(identity),
+				assert.Equal(t, byoNATGatewayARMID(egressIdentity), dt.byoNATGatewayID(identity),
 					"the worker must leave binding retirement to the engine")
 				got.record(success, err)
 				dt.OnServiceCreationComplete(identity, success, err)
@@ -3297,11 +3405,16 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGateway(t *testing.T) {
 			if tc.wantWrites != nil {
 				assert.Equal(t, tc.wantWrites, writes)
 			}
+			if tc.sharedWith != "" {
+				otherService := services[len(services)-1]
+				assert.Equal(t, tc.sharedWith, derefString(otherService.Name))
+				assert.Equal(t, strings.ToUpper(byoNATGatewayARMID(egressIdentity)), derefString(otherService.Properties.PublicNatGatewayID))
+			}
 			assert.Equal(t, !tc.wantSuccess, dt.NRPResources.NATGateways.Has(serviceName))
 			if tc.wantSuccess {
 				assert.Empty(t, dt.byoNATGatewayID(serviceName))
 			} else {
-				assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(serviceName), "a failed delete must keep the BYO gateway so the retry unlinks it")
+				assert.Equal(t, byoNATGatewayARMID(egressIdentity), dt.byoNATGatewayID(serviceName), "a failed delete must keep the BYO gateway so the retry unlinks it")
 			}
 		})
 	}
@@ -3361,7 +3474,7 @@ func TestServiceUpdaterDeleteOutboundService_BYOBindingSurvivesLateFinalizers(t 
 			dt := newOutboundDiffTracker(identity, m, kube)
 			dt.setBYONATGatewayID(identity, natGatewayID)
 			dt.pendingPodDeletions["ns/old"] = &PendingPodDeletion{
-				Namespace: "ns", Name: "old", UID: string(old.UID), ServiceUID: identity, IsLastPod: true,
+				Namespace: "ns", Name: "old", UID: string(old.UID), ServiceName: identity, IsLastPod: true,
 			}
 			injected := false
 			kube.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
@@ -3415,19 +3528,19 @@ func TestServiceUpdaterDeleteOutboundService_BYOBindingSurvivesLateFinalizers(t 
 	}
 }
 
-// A finalizer retry must retain the selected BYO gateway.
+// TestServiceUpdaterDeleteOutboundService_BYONATGatewayKeptUntilFinalizersReleased checks
+// that a finalizer retry retains the selected BYO gateway.
 func TestServiceUpdaterDeleteOutboundService_BYONATGatewayKeptUntilFinalizersReleased(t *testing.T) {
 	const (
-		uid     = "byo-finalizer"
-		podNS   = "default"
-		podName = "egress-last-pod"
+		egressIdentity = "byo-finalizer"
+		podNS          = "default"
+		podName        = "egress-last-pod"
 	)
-	serviceName := outboundServiceName(uid)
+	serviceName := outboundServiceName(egressIdentity)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	m := newOutboundMocks(ctrl)
-	m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).Times(1)
-	m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, nil).Return(nil, notFoundError()).Times(1)
+	m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, nil).Return(nil, notFoundError()).Times(1)
 	m.expectNoManagedOutboundResources(serviceName, 1)
 	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
 
@@ -3439,32 +3552,32 @@ func TestServiceUpdaterDeleteOutboundService_BYONATGatewayKeptUntilFinalizersRel
 	})
 	dt := newOutboundDiffTracker(serviceName, m, kube)
 	dt.config = testConfig()
-	dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(uid))
+	dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(egressIdentity))
 	dt.pendingPodDeletions[podNS+"/"+podName] = &PendingPodDeletion{
-		Namespace: podNS, Name: podName, UID: "pod-uid", ServiceUID: serviceName, Addresses: []string{"10.244.0.5"}, IsLastPod: true,
+		Namespace: podNS, Name: podName, UID: "pod-uid", ServiceName: serviceName, Addresses: []string{"10.244.0.5"}, IsLastPod: true,
 	}
 	got := &outboundCompletion{}
 	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 	_, success, _ := got.result()
 	assert.False(t, success, "a failed finalizer release must be retried")
-	assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(serviceName), "the retry must still take the unlink-only path")
+	assert.Equal(t, byoNATGatewayARMID(egressIdentity), dt.byoNATGatewayID(serviceName), "the retry must still take the unlink-only path")
 }
 
 func TestServiceUpdaterDeleteOutboundService_KeepsNATGatewayNotOwnedByIdentity(t *testing.T) {
-	uid := outboundServiceName("custom-default")
+	serviceName := outboundServiceName("custom-default")
 	usedByDefault := []*armnetwork.ServiceGatewayService{{
 		Name: ptr.To("default-natgw"),
 		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-			IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + uid)},
+			IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + serviceName)},
 	}}
-	ownAddressesOnly := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{
-		{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(uid))}}}}
-	tagged := &armnetwork.NatGateway{Name: ptr.To(uid), Tags: managedResourceTags(), Properties: &armnetwork.NatGatewayPropertiesFormat{}}
+	ownAddressesOnly := &armnetwork.NatGateway{Name: ptr.To(serviceName), Properties: &armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{
+		{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(serviceName))}}}}
+	tagged := &armnetwork.NatGateway{Name: ptr.To(serviceName), Tags: managedResourceTags(), Properties: &armnetwork.NatGatewayPropertiesFormat{}}
 	// An RP-prelinked gateway is not controller-owned.
-	foreign := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{
+	foreign := &armnetwork.NatGateway{Name: ptr.To(serviceName), Properties: &armnetwork.NatGatewayPropertiesFormat{
 		ServiceGateway: &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/serviceGateways/sgw")}}}
-	userModified := &armnetwork.NatGateway{Name: ptr.To(uid), Properties: &armnetwork.NatGatewayPropertiesFormat{
+	userModified := &armnetwork.NatGateway{Name: ptr.To(serviceName), Properties: &armnetwork.NatGatewayPropertiesFormat{
 		PublicIPAddresses: ownAddressesOnly.Properties.PublicIPAddresses,
 		PublicIPPrefixes:  []*armnetwork.SubResource{{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPPrefixes/user")}}}}
 
@@ -3492,7 +3605,7 @@ func TestServiceUpdaterDeleteOutboundService_KeepsNATGatewayNotOwnedByIdentity(t
 			m := newOutboundMocks(ctrl)
 			unregistered := 0
 			if !tc.reserved {
-				m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(tc.gateway, nil).AnyTimes()
+				m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, gomock.Any()).Return(tc.gateway, nil).AnyTimes()
 				m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(tc.services, tc.servicesErr).AnyTimes()
 				m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
 					DoAndReturn(func(_ context.Context, _, _ string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
@@ -3501,22 +3614,22 @@ func TestServiceUpdaterDeleteOutboundService_KeepsNATGatewayNotOwnedByIdentity(t
 						return nil
 					}).AnyTimes()
 			}
-			dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+			dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 			if tc.unmanaged {
-				dt.NRPResources.UnmanagedNATGateways = utilsets.NewString(uid)
+				dt.NRPResources.UnmanagedNATGateways = utilsets.NewString(serviceName)
 			}
 			if tc.reserved {
-				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(uid)
+				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(serviceName)
 			}
 			if tc.rejected {
-				dt.NRPResources.NATGateways.Delete(uid)
+				dt.NRPResources.NATGateways.Delete(serviceName)
 			}
 			got := &outboundCompletion{}
-			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+			outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 			_, success, err := got.result()
 			assert.Equal(t, !tc.wantRetry, success, "%v", err)
-			assert.Equal(t, tc.wantRetry, dt.NRPResources.NATGateways.Has(uid))
+			assert.Equal(t, tc.wantRetry, dt.NRPResources.NATGateways.Has(serviceName))
 			wantUnregistered := 1
 			if tc.reserved || tc.wantRetry {
 				wantUnregistered = 0
@@ -3527,8 +3640,8 @@ func TestServiceUpdaterDeleteOutboundService_KeepsNATGatewayNotOwnedByIdentity(t
 }
 
 func TestServiceUpdaterDeleteOutboundService_DeletesItsOwnNATGateway(t *testing.T) {
-	uid := outboundServiceName("managed-egress")
-	own := &armnetwork.NatGateway{Name: ptr.To(uid), Tags: managedResourceTags(), Properties: &armnetwork.NatGatewayPropertiesFormat{}}
+	serviceName := outboundServiceName("managed-egress")
+	own := &armnetwork.NatGateway{Name: ptr.To(serviceName), Tags: managedResourceTags(), Properties: &armnetwork.NatGatewayPropertiesFormat{}}
 	for _, tc := range []struct {
 		name          string
 		services      []*armnetwork.ServiceGatewayService
@@ -3539,9 +3652,9 @@ func TestServiceUpdaterDeleteOutboundService_DeletesItsOwnNATGateway(t *testing.
 	}{
 		{name: "nothing registered any more: deleted", wantDeleted: true, wantSuccess: true},
 		{name: "a stale unmanaged snapshot cannot veto live ownership", staleSnapshot: true, wantDeleted: true, wantSuccess: true},
-		{name: "its own registration still names it: deleted", services: []*armnetwork.ServiceGatewayService{{Name: ptr.To(uid),
+		{name: "its own registration still names it: deleted", services: []*armnetwork.ServiceGatewayService{{Name: ptr.To(serviceName),
 			Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-				PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + uid)}}},
+				PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + serviceName)}}},
 			wantDeleted: true, wantSuccess: true},
 		{name: "its users cannot be read: retried, nothing deleted", servicesErr: errors.New("NRP unavailable")},
 		{name: "the Service Gateway is gone: deleted", servicesErr: &azcore.ResponseError{StatusCode: http.StatusNotFound}, wantDeleted: true, wantSuccess: true},
@@ -3550,23 +3663,23 @@ func TestServiceUpdaterDeleteOutboundService_DeletesItsOwnNATGateway(t *testing.
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := newOutboundMocks(ctrl)
-			m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(own, nil).AnyTimes()
+			m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, gomock.Any()).Return(own, nil).AnyTimes()
 			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(tc.services, tc.servicesErr).AnyTimes()
 			m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
 			if tc.wantDeleted {
-				m.nat.EXPECT().Delete(gomock.Any(), "rg", uid).Return(nil).Times(1)
-				m.expectOwnedPublicIPs(uid, 1)
-				m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(uid)).Return(nil).Times(1)
-				m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(uid)).Return(nil).Times(1)
+				m.nat.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(nil).Times(1)
+				m.expectOwnedPublicIPs(serviceName, 1)
+				m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(serviceName)).Return(nil).Times(1)
+				m.pip.EXPECT().Delete(gomock.Any(), "rg", PublicIPNameV6(serviceName)).Return(nil).Times(1)
 			}
 
-			dt := newOutboundDiffTracker(uid, m, fake.NewSimpleClientset())
+			dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 			if tc.staleSnapshot {
-				dt.NRPResources.UnmanagedNATGateways = utilsets.NewString(uid)
-				dt.NRPResources.NATGateways.Delete(uid)
+				dt.NRPResources.UnmanagedNATGateways = utilsets.NewString(serviceName)
+				dt.NRPResources.NATGateways.Delete(serviceName)
 			}
 			got := &outboundCompletion{}
-			outboundUpdater(dt, got).deleteOutboundService(uid, "corr")
+			outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
 
 			_, success, err := got.result()
 			assert.Equal(t, tc.wantSuccess, success, "%v", err)
@@ -3576,25 +3689,25 @@ func TestServiceUpdaterDeleteOutboundService_DeletesItsOwnNATGateway(t *testing.
 
 func TestServiceUpdaterCreateOutboundService_RejectsClusterNATGatewayNotOurs(t *testing.T) {
 	const rawLabel = "custom-default"
-	uid := outboundServiceName(rawLabel)
+	serviceName := outboundServiceName(rawLabel)
 	ownAddresses := &armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{
-		{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(uid))}}}
+		{ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/" + PublicIPName(serviceName))}}}
 	usedByDefault := []*armnetwork.ServiceGatewayService{{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
-		IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + uid)}}}
+		IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/" + serviceName)}}}
 	for _, tc := range []struct {
 		name     string
 		gateway  *armnetwork.NatGateway
 		services []*armnetwork.ServiceGatewayService
 	}{
-		{name: "untagged with only its own address, as created before tagging", gateway: &armnetwork.NatGateway{Name: ptr.To(uid), Properties: ownAddresses}},
+		{name: "untagged with only its own address, as created before tagging", gateway: &armnetwork.NatGateway{Name: ptr.To(serviceName), Properties: ownAddresses}},
 		{name: "tagged as ours but used by the default outbound service", services: usedByDefault,
-			gateway: &armnetwork.NatGateway{Name: ptr.To(uid), Tags: managedResourceTags(), Properties: ownAddresses}},
+			gateway: &armnetwork.NatGateway{Name: ptr.To(serviceName), Tags: managedResourceTags(), Properties: ownAddresses}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := newOutboundMocks(ctrl)
-			m.nat.EXPECT().Get(gomock.Any(), "rg", uid, gomock.Any()).Return(tc.gateway, nil)
+			m.nat.EXPECT().Get(gomock.Any(), "rg", serviceName, gomock.Any()).Return(tc.gateway, nil)
 			if tc.services != nil {
 				m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(tc.services, nil)
 			}
@@ -3605,7 +3718,7 @@ func TestServiceUpdaterCreateOutboundService_RejectsClusterNATGatewayNotOurs(t *
 			rec := &captureRecorder{FakeRecorder: *record.NewFakeRecorder(10)}
 			dt.eventRecorder = rec
 			got := &outboundCompletion{}
-			outboundUpdater(dt, got).createOutboundService(uid, &OutboundConfig{}, "corr", "ns", "pod")
+			outboundUpdater(dt, got).createOutboundService(serviceName, &OutboundConfig{}, "corr", "ns", "pod")
 
 			_, success, err := got.result()
 			assert.False(t, success)
@@ -3618,10 +3731,11 @@ func TestServiceUpdaterCreateOutboundService_RejectsClusterNATGatewayNotOurs(t *
 	}
 }
 
-// Permission/lock refusals are not retried, so their leftover links must be counted.
+// TestDeleteBYOOutboundService_CountsSwallowedUnlinkFailure checks that leftover links
+// from non-retried permission/lock refusals are counted.
 func TestDeleteBYOOutboundService_CountsSwallowedUnlinkFailure(t *testing.T) {
-	const uid = "byo-metric"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "byo-metric"
+	serviceName := outboundServiceName(egressIdentity)
 	run := func(t *testing.T, readErr error, completesUnlink bool) float64 {
 		t.Helper()
 		RegisterMetrics()
@@ -3630,13 +3744,12 @@ func TestDeleteBYOOutboundService_CountsSwallowedUnlinkFailure(t *testing.T) {
 		defer ctrl.Finish()
 		m := newOutboundMocks(ctrl)
 		m.expectNoManagedOutboundResources(serviceName, wantedCalls(completesUnlink))
-		m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil)
-		m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, uid, gomock.Any()).Return(nil, readErr)
+		m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(nil, readErr)
 		m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
 
 		dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
 		dt.config = testConfig()
-		dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(uid))
+		dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(egressIdentity))
 		NewServiceUpdater(context.Background(), dt, func(string, bool, error) {}, dt.serviceUpdaterTrigger).deleteOutboundService(serviceName, "corr")
 
 		got, err := testutil.GetCounterMetricValue(deleteSubstepFailuresTotal.WithLabelValues(deleteStepDisassociateNAT))
@@ -3659,10 +3772,11 @@ func (r *captureRecorder) Event(object runtime.Object, eventType, reason, messag
 	r.FakeRecorder.Event(object, eventType, reason, message)
 }
 
-// Other-user checks must use the network subscription, not the cluster subscription.
+// TestOutboundServiceWithSeparateNetworkSubscription verifies other-user checks use
+// the network subscription, not the cluster subscription.
 func TestOutboundServiceWithSeparateNetworkSubscription(t *testing.T) {
-	const uid = "custom-default"
-	serviceName := outboundServiceName(uid)
+	const egressIdentity = "custom-default"
+	serviceName := outboundServiceName(egressIdentity)
 	defaultUsing := func(natGatewayID string) []*armnetwork.ServiceGatewayService {
 		return []*armnetwork.ServiceGatewayService{{Name: ptr.To("default-natgw"), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
 			IsDefault: ptr.To(true), PublicNatGatewayID: ptr.To(natGatewayID)}}}
@@ -3693,11 +3807,16 @@ func TestOutboundServiceWithSeparateNetworkSubscription(t *testing.T) {
 		defer ctrl.Finish()
 		m := newOutboundMocks(ctrl)
 		m.expectNoManagedOutboundResources(serviceName, 1)
-		byoID := "/subscriptions/netsub/resourceGroups/" + byoNATGatewayRG + "/providers/Microsoft.Network/natGateways/" + uid
+		byoID := "/subscriptions/netsub/resourceGroups/" + byoNATGatewayRG + "/providers/Microsoft.Network/natGateways/" + egressIdentity
+		cfg := netConfig(testConfig())
+		gateway := byoNATGateway(egressIdentity)
+		gateway.ID = ptr.To(byoID)
+		gateway.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+		m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, egressIdentity, gomock.Any()).Return(gateway, nil).Times(1)
 		m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(defaultUsing(byoID), nil).Times(1)
 		m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).Times(1)
 		dt := newOutboundDiffTracker(serviceName, m, fake.NewSimpleClientset())
-		dt.config = netConfig(testConfig())
+		dt.config = cfg
 		dt.setBYONATGatewayID(serviceName, byoID)
 		got := &outboundCompletion{}
 		outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")

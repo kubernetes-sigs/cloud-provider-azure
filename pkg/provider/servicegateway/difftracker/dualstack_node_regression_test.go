@@ -222,8 +222,8 @@ func TestColdStart_DualStackNode_RestartConvergence(t *testing.T) {
 	// Both services already exist in NRP and are tracked StateCreated (post-create steady state).
 	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(svcV4UID))
 	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(svcV6UID))
-	dt.pendingServiceOps[inboundServiceName(svcV4UID)] = &ServiceOperationState{ServiceUID: inboundServiceName(svcV4UID), State: StateCreated, Config: NewInboundServiceConfig(inboundServiceName(svcV4UID), nil)}
-	dt.pendingServiceOps[inboundServiceName(svcV6UID)] = &ServiceOperationState{ServiceUID: inboundServiceName(svcV6UID), State: StateCreated, Config: NewInboundServiceConfig(inboundServiceName(svcV6UID), nil)}
+	dt.pendingServiceOps[inboundServiceName(svcV4UID)] = &ServiceOperationState{ServiceName: inboundServiceName(svcV4UID), State: StateCreated, Config: NewInboundServiceConfig(inboundServiceName(svcV4UID), nil)}
+	dt.pendingServiceOps[inboundServiceName(svcV6UID)] = &ServiceOperationState{ServiceName: inboundServiceName(svcV6UID), State: StateCreated, Config: NewInboundServiceConfig(inboundServiceName(svcV6UID), nil)}
 
 	// Reflect into NRP exactly the family-matched locations the previous run published.
 	dt.NRPResources.Locations[nodeV4] = NRPLocation{Addresses: map[string]NRPAddress{

@@ -62,12 +62,12 @@ func TestGuardCheckPendingPodDeletions_TransientGetErrorKeepsEntryForRetry(t *te
 		NRPResources:        NRPState{Locations: make(map[string]NRPLocation)}, // address already drained from NRP
 	}
 	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
-		Namespace:  "ns",
-		Name:       "p",
-		ServiceUID: "egress-1",
-		Addresses:  []string{"10.244.0.1"},
-		IsLastPod:  false,
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Namespace:   "ns",
+		Name:        "p",
+		ServiceName: "egress-1",
+		Addresses:   []string{"10.244.0.1"},
+		IsLastPod:   false,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	dt.CheckPendingPodDeletions(ctx)
@@ -89,9 +89,9 @@ func TestGuardDeletePod_PodDeletedWhileBuffered_EnqueuesNoRecord(t *testing.T) {
 
 	// Service creation has not reached Azure yet; the pod is buffered (never reached live state/NRP).
 	dt.pendingServiceOps[svc] = &ServiceOperationState{
-		ServiceUID: svc,
-		Config:     NewOutboundServiceConfig(svc, nil),
-		State:      StateNotStarted,
+		ServiceName: svc,
+		Config:      NewOutboundServiceConfig(svc, nil),
+		State:       StateNotStarted,
 	}
 	dt.pendingPods[svc] = []PendingPodUpdate{{
 		PodKey:    ns + "/" + name,
@@ -119,7 +119,7 @@ func TestGuardDeletePod_PodDeletedAfterCreateDispatchIsDrainGated(t *testing.T) 
 
 	config := NewOutboundServiceConfig(svc, nil)
 	dt.pendingServiceOps[svc] = &ServiceOperationState{
-		ServiceUID:     svc,
+		ServiceName:    svc,
 		Config:         config,
 		InFlightConfig: &config,
 		State:          StateCreationInProgress,
@@ -149,7 +149,7 @@ func TestGuardDeletePod_NonLastBufferedPodAfterCreateDispatchIsDrainGated(t *tes
 
 	config := NewOutboundServiceConfig(svc, nil)
 	dt.pendingServiceOps[svc] = &ServiceOperationState{
-		ServiceUID:     svc,
+		ServiceName:    svc,
 		Config:         config,
 		InFlightConfig: &config,
 		State:          StateCreationInProgress,
@@ -198,12 +198,12 @@ func TestGuardLocationsUpdaterReschedulesOnReadyFinalizerRemovalFailure(t *testi
 	// A ready, non-last pending pod deletion: its address is NOT in NRP (empty Locations), so
 	// CheckPendingPodDeletions attempts the removal this cycle and fails transiently.
 	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
-		Namespace:  "ns",
-		Name:       "p",
-		ServiceUID: "egress-1",
-		Addresses:  []string{"10.244.0.1"},
-		IsLastPod:  false,
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Namespace:   "ns",
+		Name:        "p",
+		ServiceName: "egress-1",
+		Addresses:   []string{"10.244.0.1"},
+		IsLastPod:   false,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 	// No K8s nodes / NRP locations -> GetSyncLocationsAddresses returns no diff -> no-diff branch.
 
@@ -231,12 +231,12 @@ func TestGuardLocationsUpdaterReschedulesOnReadyFinalizerRemovalFailure(t *testi
 // through the inbound orphan-delete path. deleteInboundService then deletes the PIP and removes the
 // stuck Service finalizer, so the Service no longer strands in Terminating after a restart.
 func TestGuardOrphanCleanup_PIPOnlyServiceScheduledForDeletion(t *testing.T) {
-	uid := inboundServiceName("11111111-1111-1111-1111-111111111111")
+	serviceName := inboundServiceName("11111111-1111-1111-1111-111111111111")
 	dt := newTestDiffTracker()
 
-	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), utilsets.NewString(), utilsets.NewString(uid+"-pip"))
+	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), utilsets.NewString(), utilsets.NewString(serviceName+"-pip"))
 
-	op, ok := dt.pendingServiceOps[uid]
+	op, ok := dt.pendingServiceOps[serviceName]
 	if !assert.True(t, ok, "a PIP-only orphan must be scheduled for deletion, not ignored") {
 		return
 	}
@@ -250,27 +250,27 @@ func TestGuardOrphanCleanup_PIPOnlyServiceScheduledForDeletion(t *testing.T) {
 // LoadBalancer, must not be scheduled by the PIP path, and an orphaned LB is scheduled exactly once
 // via the LB path (its PIP is deleted there, not double-scheduled).
 func TestGuardOrphanCleanup_PIPNotScheduledWhenDesiredOrHasLB(t *testing.T) {
-	uidDesired := inboundServiceName("22222222-2222-2222-2222-222222222222")
-	uidHasLB := inboundServiceName("33333333-3333-3333-3333-333333333333")
-	uidHasNRPLB := inboundServiceName("44444444-4444-4444-4444-444444444444")
+	desiredServiceName := inboundServiceName("22222222-2222-2222-2222-222222222222")
+	serviceNameWithLB := inboundServiceName("33333333-3333-3333-3333-333333333333")
+	serviceNameWithNRPLB := inboundServiceName("44444444-4444-4444-4444-444444444444")
 
 	dt := newTestDiffTracker()
-	dt.K8sResources.Services.Insert(uidDesired)       // desired in K8s -> reconcileServices owns it
-	dt.NRPResources.LoadBalancers.Insert(uidHasNRPLB) // registered LB -> not orphaned
+	dt.K8sResources.Services.Insert(desiredServiceName)        // desired in K8s -> reconcileServices owns it
+	dt.NRPResources.LoadBalancers.Insert(serviceNameWithNRPLB) // registered LB -> not orphaned
 
-	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(uidHasLB), utilsets.NewString(), utilsets.NewString(
-		uidDesired+"-pip",
-		uidHasLB+"-pip", // its LB is the orphan; the LB path deletes the PIP
-		uidHasNRPLB+"-pip",
+	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(serviceNameWithLB), utilsets.NewString(), utilsets.NewString(
+		desiredServiceName+"-pip",
+		serviceNameWithLB+"-pip", // its LB is the orphan; the LB path deletes the PIP
+		serviceNameWithNRPLB+"-pip",
 	))
 
-	_, desiredScheduled := dt.pendingServiceOps[uidDesired]
+	_, desiredScheduled := dt.pendingServiceOps[desiredServiceName]
 	assert.False(t, desiredScheduled, "a PIP whose service is desired in K8s must not be scheduled for deletion")
 
-	_, nrpLBScheduled := dt.pendingServiceOps[uidHasNRPLB]
+	_, nrpLBScheduled := dt.pendingServiceOps[serviceNameWithNRPLB]
 	assert.False(t, nrpLBScheduled, "a PIP whose service has a registered NRP LoadBalancer must not be scheduled by the PIP path")
 
-	op, ok := dt.pendingServiceOps[uidHasLB]
+	op, ok := dt.pendingServiceOps[serviceNameWithLB]
 	assert.True(t, ok, "an orphaned LB (with its PIP) must still be scheduled via the LB path")
 	if ok {
 		assert.True(t, op.IsOrphan)

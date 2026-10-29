@@ -161,7 +161,7 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 }
 
 // SetServiceLister publishes the provider's shared-informer-backed Service lister to the engine.
-// It is called from SetInformers once the lister exists; getServiceByUID uses it for O(1) cached
+// It is called from SetInformers once the lister exists; getServiceBySGWName uses it for O(1) cached
 // reads instead of listing every Service. Safe to call from a different goroutine than the engine
 // workers because the write is serialized under mu.
 func (dt *DiffTracker) SetServiceLister(lister corelisters.ServiceLister) {

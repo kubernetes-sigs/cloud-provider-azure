@@ -76,7 +76,7 @@ func (lb *LoadBalancer) GetLoadBalancer(ctx context.Context, _ string, service *
 	if err != nil {
 		return nil, false, err
 	}
-	if !tracker.IsServiceTracked(ServiceUID(service)) {
+	if !tracker.IsServiceTracked(ServiceName(service)) {
 		return nil, false, nil
 	}
 
