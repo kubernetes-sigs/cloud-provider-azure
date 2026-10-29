@@ -22,7 +22,7 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.26.4; darwin)
         url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PublicIPAddress?api-version=2021-04-01
         method: PUT
       response:
@@ -49,6 +49,8 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2999"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -73,8 +75,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -87,7 +89,7 @@ interactions:
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":4,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}'
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -105,6 +107,10 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2998"
         status: 201 Created
         code: 201
         duration: 200ms
@@ -123,8 +129,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -153,6 +159,10 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -171,8 +181,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -203,6 +213,8 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3748"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -223,8 +235,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -255,6 +267,8 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3747"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -275,8 +289,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResourcenotfound?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResourcenotfound?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -328,8 +342,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -341,8 +355,6 @@ interactions:
         uncompressed: false
         body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":4,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}'
         headers:
-            Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -360,6 +372,10 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2997"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -377,9 +393,11 @@ interactions:
         body: ""
         form: {}
         headers:
+            Accept:
+                - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -410,6 +428,8 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3745"
         status: 200 OK
         code: 200
         duration: 200ms
@@ -418,26 +438,26 @@ interactions:
         proto: HTTP/1.1
         proto_major: 1
         proto_minor: 1
-        content_length: 42
+        content_length: 549
         transfer_encoding: []
         trailer: {}
         host: management.chinacloudapi.cn
         remote_addr: ""
         request_uri: ""
-        body: '{"etag":"invalid","location":"chinaeast2"}'
+        body: '{"etag":"W/\"00000000-0000-0000-0000-000000000000\"","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","location":"chinaeast2","name":"testResource","properties":{"idleTimeoutInMinutes":5,"ipTags":[],"provisioningState":"Succeeded","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","resourceGuid":"00000000-0000-0000-0000-000000000000"},"sku":{"name":"Basic","tier":"Regional"},"type":"Microsoft.Network/publicIPAddresses"}'
         form: {}
         headers:
             Accept:
                 - application/json
             Content-Length:
-                - "42"
+                - "549"
             Content-Type:
                 - application/json
             If-Match:
-                - invalid
+                - W/"00000000-0000-0000-0000-000000000000"
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -445,14 +465,16 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 429
+        content_length: 548
         uncompressed: false
-        body: '{"error":{"code":"PreconditionFailed","message":"Precondition failed.","details":[{"code":"PreconditionFailedEtagMismatch","message":"Etag provided in if-match header W/\"invalid\" does not match etag W/\"00000000-0000-0000-0000-000000000000\" of resource /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource in NRP data store."}]}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":5,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}'
         headers:
+            Azure-Asyncoperation:
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "429"
+                - "548"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -466,10 +488,178 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2996"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 9
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 22
+        uncompressed: false
+        body: '{"status":"Succeeded"}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "22"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3744"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 10
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 0
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: ""
+        form: {}
+        headers:
+            User-Agent:
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
+        method: GET
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 549
+        uncompressed: false
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":5,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "549"
+            Content-Type:
+                - application/json; charset=utf-8
+            Etag:
+                - W/"00000000-0000-0000-0000-000000000000"
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3743"
+        status: 200 OK
+        code: 200
+        duration: 200ms
+    - id: 11
+      request:
+        proto: HTTP/1.1
+        proto_major: 1
+        proto_minor: 1
+        content_length: 549
+        transfer_encoding: []
+        trailer: {}
+        host: management.chinacloudapi.cn
+        remote_addr: ""
+        request_uri: ""
+        body: '{"etag":"W/\"00000000-0000-0000-0000-000000000000\"","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","location":"chinaeast2","name":"testResource","properties":{"idleTimeoutInMinutes":6,"ipTags":[],"provisioningState":"Succeeded","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","resourceGuid":"00000000-0000-0000-0000-000000000000"},"sku":{"name":"Basic","tier":"Regional"},"type":"Microsoft.Network/publicIPAddresses"}'
+        form: {}
+        headers:
+            Accept:
+                - application/json
+            Content-Length:
+                - "549"
+            Content-Type:
+                - application/json
+            If-Match:
+                - W/"00000000-0000-0000-0000-000000000000"
+            User-Agent:
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
+        method: PUT
+      response:
+        proto: HTTP/2.0
+        proto_major: 2
+        proto_minor: 0
+        transfer_encoding: []
+        trailer: {}
+        content_length: 458
+        uncompressed: false
+        body: '{"error":{"code":"PreconditionFailed","message":"Precondition failed.","details":[{"code":"PreconditionFailedEtagMismatch","message":"Etag provided in if-match header W/\"00000000-0000-0000-0000-000000000000\" does not match etag W/\"00000000-0000-0000-0000-000000000000\" of resource /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource in NRP data store."}]}}'
+        headers:
+            Cache-Control:
+                - no-cache
+            Content-Length:
+                - "458"
+            Content-Type:
+                - application/json; charset=utf-8
+            Expires:
+                - "-1"
+            Pragma:
+                - no-cache
+            Server:
+                - Microsoft-HTTPAPI/2.0
+                - Microsoft-HTTPAPI/2.0
+            Strict-Transport-Security:
+                - max-age=31536000; includeSubDomains
+            X-Content-Type-Options:
+                - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
+                - "2995"
         status: 412 Precondition Failed
         code: 412
         duration: 200ms
-    - id: 9
+    - id: 12
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -486,8 +676,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -497,7 +687,7 @@ interactions:
         trailer: {}
         content_length: 561
         uncompressed: false
-        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":4,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}]}'
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"chinaeast2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Dynamic","idleTimeoutInMinutes":5,"ipTags":[]},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Basic","tier":"Regional"}}]}'
         headers:
             Cache-Control:
                 - no-cache
@@ -516,10 +706,14 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Original-Request-Ids:
+                - 00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3742"
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 10
+    - id: 13
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -536,8 +730,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddressnotfound/providers/Microsoft.Network/publicIPAddresses?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddressnotfound/providers/Microsoft.Network/publicIPAddresses?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -568,7 +762,7 @@ interactions:
         status: 404 Not Found
         code: 404
         duration: 200ms
-    - id: 11
+    - id: 14
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -582,11 +776,9 @@ interactions:
         body: ""
         form: {}
         headers:
-            Accept:
-                - application/json
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-01-01
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-PublicIPAddress/providers/Microsoft.Network/publicIPAddresses/testResource?api-version=2026-03-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -599,7 +791,7 @@ interactions:
         body: ""
         headers:
             Azure-Asyncoperation:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -607,7 +799,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Server:
@@ -617,10 +809,14 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "2999"
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 12
+    - id: 15
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -635,8 +831,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v6.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - ccm-PublicIPAddress-clie azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/chinaeast2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -665,10 +861,14 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Operation-Identifier:
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/chinaeast/00000000-0000-0000-0000-000000000000
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3748"
         status: 200 OK
         code: 200
         duration: 200ms
-    - id: 13
+    - id: 16
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -685,7 +885,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.26.4; darwin)
         url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-PublicIPAddress?api-version=2021-04-01
         method: DELETE
       response:
@@ -705,17 +905,19 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQVUJMSUNJUEFERFJFU1MtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQVUJMSUNJUEFERFJFU1MtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiIsImpvYlN0b3JhZ2VBY2NvdW50IjoiL2NzbS9zdG9yYWdlYWNjb3VudHMvZ2xvYmFsL3JwZmRsam9iMDBwcm9kc2hhMjAyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
+                - "2998"
         status: 202 Accepted
         code: 202
         duration: 200ms
-    - id: 14
+    - id: 17
       request:
         proto: HTTP/1.1
         proto_major: 1
@@ -730,8 +932,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.0; linux)
-        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQVUJMSUNJUEFERFJFU1MtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiJ9?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.26.4; darwin)
+        url: https://management.chinacloudapi.cn/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkRQVUJMSUNJUEFERFJFU1MtQ0hJTkFFQVNUMiIsImpvYkxvY2F0aW9uIjoiY2hpbmFlYXN0MiIsImpvYlN0b3JhZ2VBY2NvdW50IjoiL2NzbS9zdG9yYWdlYWNjb3VudHMvZ2xvYmFsL3JwZmRsam9iMDBwcm9kc2hhMjAyIn0?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -755,6 +957,8 @@ interactions:
                 - max-age=31536000; includeSubDomains
             X-Content-Type-Options:
                 - nosniff
+            X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
+                - "3749"
         status: 200 OK
         code: 200
         duration: 200ms

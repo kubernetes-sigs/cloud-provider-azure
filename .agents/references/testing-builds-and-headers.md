@@ -17,6 +17,31 @@ over `make test-unit` for faster feedback.
 - Mock external dependencies.
 - Match the existing test style in the file being edited.
 
+### azclient Recording Cleanup
+
+Private DNS zones may still report deleted virtual-network links briefly after
+the link deletion poller completes. Both affected recording suites use
+`recording.DeletePrivateDNSZone`, which retries only HTTP 409
+`CannotDeleteResource`, including deletion-poller errors, for at most five
+minutes or the caller's deadline. Other errors fail immediately.
+
+Offline cleanup and public-IP ETag regression tests do not require Azure
+credentials. Live suites need fresh recordings after their request sequences
+change. Preserve successful fixtures and re-record only affected package/cloud
+pairs; a fixture saved by a failed test is not a successful recording.
+
+### Service Gateway in Azure China
+
+The generated Service Gateway `TestClient` explicitly skips when
+`AZURE_CLOUD=AZURECHINACLOUD`, before running Ginkgo setup or cleanup. Its
+required `Microsoft.Network/AllowServiceGateways` feature cannot currently be
+self-service registered in the available China test subscriptions. This is a
+test-environment limitation, not a claim that the service is unavailable
+throughout Azure China. Public-Azure recording tests and offline Service Gateway
+unit tests remain enabled. The exception lives in the client generator so
+regeneration preserves it; revisit it when an enabled China subscription is
+available.
+
 ## Building Images
 
 Before building images, ask the user for `IMAGE_REGISTRY` and `IMAGE_TAG`. For

@@ -22,7 +22,7 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.5; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.26.4; darwin)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-NatGateway?api-version=2021-04-01
         method: PUT
       response:
@@ -31,14 +31,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 284
+        content_length: 234
         uncompressed: false
-        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway","name":"aks-cit-NatGateway","type":"Microsoft.Resources/resourceGroups","location":"eastus2","tags":{"Created":"2001-02-03T04:05:06Z"},"properties":{"provisioningState":"Succeeded"}}'
+        body: '{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway","name":"aks-cit-NatGateway","type":"Microsoft.Resources/resourceGroups","location":"eastus2","properties":{"provisioningState":"Succeeded"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "284"
+                - "234"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -53,8 +53,8 @@ interactions:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
                 - "11999"
-        status: 200 OK
-        code: 200
+        status: 201 Created
+        code: 201
         duration: 200ms
     - id: 1
       request:
@@ -77,8 +77,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2026-01-01
+                - ccm-pip-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2026-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -86,18 +86,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 615
+        content_length: 586
         uncompressed: false
-        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"172.200.53.164","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "615"
+                - "586"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -111,11 +111,13 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/eastus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
                 - "11999"
-        status: 200 OK
-        code: 200
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.1, operationConcurrencyPct=0.3, subscriptionWriteRatePct=1.9, etc
+        status: 201 Created
+        code: 201
         duration: 200ms
     - id: 2
       request:
@@ -132,8 +134,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - ccm-pip-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -162,9 +164,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.1, operationConcurrencyPct=0.5, subscriptionReadRatePct=2.6, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -183,8 +187,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2026-01-01
+                - ccm-pip-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -192,14 +196,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 616
+        content_length: 615
         uncompressed: false
-        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"172.200.53.164","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"pip1","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1","etag":"W/\"00000000-0000-0000-0000-000000000000\"","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","ipAddress":"20.97.180.134","publicIPAddressVersion":"IPv4","publicIPAllocationMethod":"Static","idleTimeoutInMinutes":4,"ipTags":[],"ddosSettings":{"protectionMode":"VirtualNetworkInherited"}},"type":"Microsoft.Network/publicIPAddresses","sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "616"
+                - "615"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -216,6 +220,8 @@ interactions:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationConcurrencyPct=0.5, subscriptionReadRatePct=2.6, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -240,8 +246,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -249,18 +255,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 634
+        content_length: 635
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Updating","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"scope":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "634"
+                - "635"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -274,9 +280,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/eastus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
                 - "11999"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.1, operationConcurrencyPct=0.3, subscriptionWriteRatePct=1.9, etc
         status: 201 Created
         code: 201
         duration: 200ms
@@ -295,8 +303,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -325,9 +333,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationConcurrencyPct=0.5, subscriptionReadRatePct=2.5, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -346,8 +356,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -355,14 +365,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 635
+        content_length: 636
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"scope":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "635"
+                - "636"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -379,6 +389,8 @@ interactions:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.2, operationConcurrencyPct=0.5, subscriptionReadRatePct=2.6, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -399,8 +411,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -408,14 +420,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 635
+        content_length: 636
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"scope":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "635"
+                - "636"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -432,6 +444,8 @@ interactions:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.2, operationConcurrencyPct=0.5, subscriptionReadRatePct=2.6, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -452,8 +466,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResourcenotfound?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResourcenotfound?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -507,8 +521,8 @@ interactions:
             Content-Type:
                 - application/json
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-03-01
         method: PUT
       response:
         proto: HTTP/2.0
@@ -516,18 +530,18 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 635
+        content_length: 636
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"scope":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "635"
+                - "636"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -541,9 +555,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/eastus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Writes:
                 - "11999"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.2, operationConcurrencyPct=0.3, subscriptionWriteRatePct=2.0, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -562,8 +578,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -571,14 +587,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 635
+        content_length: 636
         uncompressed: false
-        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
+        body: '{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"scope":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "635"
+                - "636"
             Content-Type:
                 - application/json; charset=utf-8
             Etag:
@@ -595,6 +611,8 @@ interactions:
                 - nosniff
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.3, operationConcurrencyPct=0.5, subscriptionReadRatePct=2.6, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -615,8 +633,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -624,14 +642,14 @@ interactions:
         proto_minor: 0
         transfer_encoding: []
         trailer: {}
-        content_length: 647
+        content_length: 648
         uncompressed: false
-        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"type":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}]}'
+        body: '{"value":[{"name":"testResource","id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource","etag":"W/\"00000000-0000-0000-0000-000000000000\"","type":"Microsoft.Network/natGateways","location":"eastus2","properties":{"provisioningState":"Succeeded","resourceGuid":"00000000-0000-0000-0000-000000000000","idleTimeoutInMinutes":4,"scope":"Public","publicIpAddresses":[{"id":"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1"}]},"sku":{"name":"Standard","tier":"Regional"}}]}'
         headers:
             Cache-Control:
                 - no-cache
             Content-Length:
-                - "647"
+                - "648"
             Content-Type:
                 - application/json; charset=utf-8
             Expires:
@@ -648,6 +666,8 @@ interactions:
                 - 00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationConcurrencyPct=0.5, subscriptionReadRatePct=2.6, subscriptionListRatePct=0.3, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -668,8 +688,8 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGatewaynotfound/providers/Microsoft.Network/natGateways?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGatewaynotfound/providers/Microsoft.Network/natGateways?api-version=2026-03-01
         method: GET
       response:
         proto: HTTP/2.0
@@ -716,11 +736,9 @@ interactions:
         body: ""
         form: {}
         headers:
-            Accept:
-                - application/json
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-01-01
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/natGateways/testResource?api-version=2026-03-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -735,7 +753,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -743,7 +761,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -753,9 +771,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/eastus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
                 - "11999"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.1, operationConcurrencyPct=0.3, subscriptionWriteRatePct=2.1, etc
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -774,8 +794,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-NatGateway-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - ccm-NatGateway-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -804,9 +824,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationConcurrencyPct=0.5, subscriptionReadRatePct=2.7, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -824,11 +846,9 @@ interactions:
         body: ""
         form: {}
         headers:
-            Accept:
-                - application/json
             User-Agent:
-                - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2026-01-01
+                - ccm-pip-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/aks-cit-NatGateway/providers/Microsoft.Network/publicIPAddresses/pip1?api-version=2026-03-01
         method: DELETE
       response:
         proto: HTTP/2.0
@@ -843,7 +863,7 @@ interactions:
             Azure-Asyncnotification:
                 - Enabled
             Azure-Asyncoperation:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Cache-Control:
                 - no-cache
             Content-Length:
@@ -851,7 +871,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operationResults/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -861,9 +881,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/eastus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Deletes:
                 - "11999"
+            X-Ms-Throttle-Levels:
+                - operationRatePct=0.1, operationConcurrencyPct=0.3, subscriptionWriteRatePct=2.3, etc
         status: 202 Accepted
         code: 202
         duration: 200ms
@@ -882,8 +904,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-pip-client azsdk-go-armnetwork/v6.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2026-01-01&c=c&h=h&s=s&t=t
+                - ccm-pip-client azsdk-go-armnetwork/v12.1.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/providers/Microsoft.Network/locations/eastus2/operations/00000000-0000-0000-0000-000000000000?api-version=2025-07-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0
@@ -912,9 +934,11 @@ interactions:
             X-Content-Type-Options:
                 - nosniff
             X-Ms-Operation-Identifier:
-                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westeurope/00000000-0000-0000-0000-000000000000
+                - tenantId=00000000-0000-0000-0000-000000000000,objectId=00000000-0000-0000-0000-000000000000/westus2/00000000-0000-0000-0000-000000000000
             X-Ms-Ratelimit-Remaining-Subscription-Global-Reads:
                 - "16499"
+            X-Ms-Throttle-Levels:
+                - operationConcurrencyPct=0.5, subscriptionReadRatePct=2.5, etc
         status: 200 OK
         code: 200
         duration: 200ms
@@ -935,7 +959,7 @@ interactions:
             Accept:
                 - application/json
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.5; linux)
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.26.4; darwin)
         url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/aks-cit-NatGateway?api-version=2021-04-01
         method: DELETE
       response:
@@ -955,7 +979,7 @@ interactions:
             Expires:
                 - "-1"
             Location:
-                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkROQVRHQVRFV0FZLUVBU1RVUzIiLCJqb2JMb2NhdGlvbiI6ImVhc3R1czIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkROQVRHQVRFV0FZLUVBU1RVUzIiLCJqb2JMb2NhdGlvbiI6ImVhc3R1czIiLCJqb2JTdG9yYWdlQWNjb3VudCI6Ii9jc20vc3RvcmFnZWFjY291bnRzL2dsb2JhbC9ycGZkbGpvYjAwcHJvZGJuMDgifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
             Pragma:
                 - no-cache
             Strict-Transport-Security:
@@ -984,8 +1008,8 @@ interactions:
         form: {}
         headers:
             User-Agent:
-                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.24.5; linux)
-        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkROQVRHQVRFV0FZLUVBU1RVUzIiLCJqb2JMb2NhdGlvbiI6ImVhc3R1czIifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
+                - ccm-resource-group-clien azsdk-go-armresources/v1.2.0 (go1.26.4; darwin)
+        url: https://management.azure.com/subscriptions/00000000-0000-0000-0000-000000000000/operationresults/eyJqb2JJZCI6IlJFU09VUkNFR1JPVVBERUxFVElPTkpPQi1BS1M6MkRDSVQ6MkROQVRHQVRFV0FZLUVBU1RVUzIiLCJqb2JMb2NhdGlvbiI6ImVhc3R1czIiLCJqb2JTdG9yYWdlQWNjb3VudCI6Ii9jc20vc3RvcmFnZWFjY291bnRzL2dsb2JhbC9ycGZkbGpvYjAwcHJvZGJuMDgifQ?api-version=2021-04-01&c=c&h=h&s=s&t=t
         method: GET
       response:
         proto: HTTP/2.0

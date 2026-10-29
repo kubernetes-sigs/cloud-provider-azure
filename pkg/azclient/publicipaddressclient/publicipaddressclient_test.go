@@ -19,8 +19,11 @@ package publicipaddressclient
 
 import (
 	"context"
+	"errors"
+	"net/http"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/onsi/ginkgo/v2"
@@ -73,10 +76,36 @@ var _ = ginkgo.Describe("PublicIPAddressesClient", ginkgo.Ordered, func() {
 			gomega.Expect(newResource).NotTo(gomega.BeNil())
 		})
 
-		ginkgo.It("should return error", func(ctx context.Context) {
-			newResource.Etag = to.Ptr("invalid")
-			_, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *newResource)
+		ginkgo.It("should return 412 for a stale ETag", func(ctx context.Context) {
+			resource, err := realClient.Get(ctx, resourceGroupName, resourceName, nil)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(resource).NotTo(gomega.BeNil())
+			gomega.Expect(resource.Etag).NotTo(gomega.BeNil())
+			gomega.Expect(resource.Properties).NotTo(gomega.BeNil())
+			staleETag := *resource.Etag
+
+			idleTimeout := int32(4)
+			if resource.Properties.IdleTimeoutInMinutes != nil && *resource.Properties.IdleTimeoutInMinutes == idleTimeout {
+				idleTimeout = 5
+			}
+			resource.Properties.IdleTimeoutInMinutes = to.Ptr(idleTimeout)
+			updated, err := realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *resource)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(updated).NotTo(gomega.BeNil())
+			gomega.Expect(updated.Etag).NotTo(gomega.BeNil())
+			gomega.Expect(updated.Properties).NotTo(gomega.BeNil())
+			// Recording sanitization replaces ETag UUIDs with the same placeholder.
+			if recorder.IsNewCassette() {
+				gomega.Expect(*updated.Etag).NotTo(gomega.Equal(staleETag))
+			}
+
+			updated.Etag = to.Ptr(staleETag)
+			updated.Properties.IdleTimeoutInMinutes = to.Ptr(idleTimeout + 1)
+			_, err = realClient.CreateOrUpdate(ctx, resourceGroupName, resourceName, *updated)
 			gomega.Expect(err).To(gomega.HaveOccurred())
+			var responseError *azcore.ResponseError
+			gomega.Expect(errors.As(err, &responseError)).To(gomega.BeTrue())
+			gomega.Expect(responseError.StatusCode).To(gomega.Equal(http.StatusPreconditionFailed))
 		})
 	})
 

@@ -19,6 +19,7 @@ package servicegatewayclient
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -35,6 +36,9 @@ import (
 )
 
 func TestClient(t *testing.T) {
+	if os.Getenv("AZURE_CLOUD") == "AZURECHINACLOUD" {
+		t.Skip("Service Gateway recording tests require Microsoft.Network/AllowServiceGateways, which is not self-service registrable in Azure China")
+	}
 	gomega.RegisterFailHandler(ginkgo.Fail)
 	ginkgo.RunSpecs(t, "Client Suite")
 }
