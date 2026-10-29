@@ -118,6 +118,23 @@ if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceled
 2. **`*_repo.go`** files: read from cache for operations, invalidate on errors or cross-resource changes
 3. **azclient/policy/etag**: HTTP pipeline policy that extracts the ETag from the request body JSON and sets the `If-Match` header for optimistic concurrency
 
+## NIC Update-Only Writes
+
+CCM only updates existing node NICs. All provider NIC writes go through
+`Cloud.updateInterface` in `pkg/provider/azure_interface_repo.go`, which sets
+`If-Match: *` through the Azure SDK request context. This includes adding and
+removing backend-pool membership for standalone and VMSS Flex nodes. If a VM
+deletion removes the NIC after CCM reads it, NRP rejects the delayed PUT with
+HTTP 412 instead of recreating a VM-less NIC with stale backend membership.
+Callers propagate the error through their existing reconciliation paths.
+
+The wildcard checks existence, not the fetched resource version; it does not
+prevent lost updates between concurrent writers. The shared azclient Interface
+client remains create-capable for non-CCM consumers. Live validation against
+NIC API version `2025-05-01` confirmed successful updates to an existing NIC
+and `PreconditionFailedResourceDoesNotExist` for a deleted NIC, which remained
+absent after the rejected PUT. This does not clean up previously orphaned NICs.
+
 ## Public-IP Recording Tests
 
 The generated public-IP concurrency test uses a real stale ETag rather than a
