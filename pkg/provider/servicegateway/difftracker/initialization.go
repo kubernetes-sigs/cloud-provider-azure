@@ -104,6 +104,15 @@ func waitForInitialSyncReportingProgress(ctx context.Context, dt *DiffTracker, l
 		case err := <-done:
 			return err
 		case <-ticker.C:
+			// Updaters signal completion only after finishing work; re-check in case none did, taking dt.mu,
+			// which this loop does not hold. Once the re-check completes initialization, WaitForInitialSync
+			// returns and ends this loop.
+			dt.checkInitializationComplete()
+			if atomic.LoadInt32(&dt.isInitializing) == 0 {
+				logger.Info("ServiceGateway initial sync completed on the periodic re-check",
+					"elapsed", time.Since(started).Round(time.Second))
+				continue
+			}
 			logger.Error(nil, "ServiceGateway initial sync has not completed; retrying and blocking cloud-controller-manager startup until it succeeds",
 				"elapsed", time.Since(started).Round(time.Second))
 		}
@@ -213,6 +222,7 @@ func InitializeFromCluster(
 	//   2. NO services exist at all (no-op, but harmless to trigger)
 	// The key insight: when Additions > 0, OnServiceCreationComplete will trigger the sync,
 	// so we don't need an explicit trigger here. When Additions == 0, no such callback exists.
+	// An addition declined by admission is never dispatched, so no callback follows.
 	hasOnlyExistingServices := syncOperations.LoadBalancerUpdates.Additions.Len() == 0 && syncOperations.NATGatewayUpdates.Additions.Len() == 0
 
 	// Check if we have pending items from recoverStuckFinalizers, and whether NRP already tracks a
@@ -229,6 +239,11 @@ func InitializeFromCluster(
 		logger.V(2).Info("Triggered initial location sync", "deletions", hasDeletions, "onlyExisting", hasOnlyExistingServices, "recoveredItems", hasRecoveredItems, "existingNRPServices", hasExistingNRPServices)
 		diffTracker.triggerLocationsUpdater()
 	}
+
+	// All startup work is counted by now; if none was dispatched, no updater would signal completion.
+	// Without this check, initialization would only complete at the first progress tick of
+	// waitForInitialSyncReportingProgress, a minute later.
+	diffTracker.checkInitializationComplete()
 
 	// Wait for all async operations to complete (service creations/deletions + location syncs + orphan deletions)
 	// WaitForInitialSync monitors:
