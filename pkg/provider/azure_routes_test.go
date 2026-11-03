@@ -20,10 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -32,6 +34,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/routetableclient/mock_routetableclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/routetable"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -606,6 +609,7 @@ func TestListRoutes(t *testing.T) {
 		routeTableRepo: mockRTRepo,
 		VMSet:          mockVMSet,
 		Config: config.Config{
+			ResourceGroup:           "foo",
 			RouteTableResourceGroup: "foo",
 			RouteTableName:          "bar",
 			Location:                "location",
@@ -687,10 +691,8 @@ func TestListRoutes(t *testing.T) {
 			},
 		},
 		{
-			name:           "ListRoutes should return nil if routeTable don't exist",
+			name:           "ListRoutes should return no routes if routeTable doesn't exist",
 			routeTableName: "rt3",
-			routeTable:     &armnetwork.RouteTable{},
-			getErr:         errors.New("dummy"),
 			expectedRoutes: []*cloudprovider.Route{},
 		},
 		{
@@ -727,16 +729,116 @@ func TestListRoutes(t *testing.T) {
 		cloud.RouteTableName = test.routeTableName
 		mockRTRepo.EXPECT().Get(gomock.Any(), test.routeTableName, gomock.Any()).Return(test.routeTable, test.getErr)
 
-		routes, err := cloud.ListRoutes(context.TODO(), "cluster")
-		if len(test.expectedRoutes) == 0 {
-			assert.Empty(t, routes, test.name)
-		} else {
-			assert.Equal(t, test.expectedRoutes, routes, test.name)
+		var routes []*cloudprovider.Route
+		var err error
+		if !assert.NotPanics(t, func() {
+			routes, err = cloud.ListRoutes(context.TODO(), "cluster")
+		}, test.name) {
+			continue
 		}
+		assert.Equal(t, test.expectedRoutes, routes, test.name)
 		if test.expectedErrMsg != nil {
-			assert.Error(t, err)
-			assert.EqualError(t, test.expectedErrMsg, err.Error(), test.name)
+			assert.EqualError(t, err, test.expectedErrMsg.Error(), test.name)
+		} else {
+			assert.NoError(t, err, test.name)
 		}
+	}
+}
+
+func TestListRoutesCreatesAndTagsMissingRouteTable(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name              string
+		tags              string
+		tagsMap           map[string]string
+		hasUnmanagedNodes bool
+	}{
+		{
+			name: "configured string tags",
+			tags: "a=b,c=d",
+		},
+		{
+			name:    "configured tagsMap",
+			tagsMap: map[string]string{"a": "b", "c": "d"},
+		},
+		{
+			name:              "preserves routes for unmanaged nodes",
+			tags:              "a=b,c=d",
+			hasUnmanagedNodes: true,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			client := mock_routetableclient.NewMockInterface(ctrl)
+			repo, err := routetable.NewRepo(client, "foo", time.Minute, false)
+			if !assert.NoError(t, err) {
+				return
+			}
+			cloud := &Cloud{
+				routeTableRepo: repo,
+				Config: config.Config{
+					ResourceGroup:           "foo",
+					RouteTableResourceGroup: "foo",
+					RouteTableName:          "bar",
+					Location:                "location",
+					Tags:                    test.tags,
+					TagsMap:                 test.tagsMap,
+				},
+				unmanagedNodes:     utilsets.NewString(),
+				nodeInformerSynced: func() bool { return true },
+			}
+			expectedRoutes := []*cloudprovider.Route{}
+			if test.hasUnmanagedNodes {
+				cloud.unmanagedNodes.Insert("unmanaged-node")
+				cloud.routeCIDRs = map[string]string{"unmanaged-node": "2.2.3.4/24"}
+				expectedRoutes = append(expectedRoutes, &cloudprovider.Route{
+					Name:            "unmanaged-node",
+					TargetNode:      MapRouteNameToNodeName(false, "unmanaged-node"),
+					DestinationCIDR: "2.2.3.4/24",
+				})
+			}
+
+			emptyTable := armnetwork.RouteTable{
+				Name:       ptr.To("bar"),
+				Location:   ptr.To("location"),
+				Properties: &armnetwork.RouteTablePropertiesFormat{},
+			}
+			taggedTable := emptyTable
+			taggedTable.Tags = map[string]*string{"a": ptr.To("b"), "c": ptr.To("d")}
+			notFound := &azcore.ResponseError{StatusCode: http.StatusNotFound, ErrorCode: "ResourceNotFound"}
+			gomock.InOrder(
+				// "create and tag": ListRoutes and the updater both observe 404, then create/reload/tag.
+				client.EXPECT().Get(gomock.Any(), "foo", "bar").Return(nil, notFound).Times(2),
+				client.EXPECT().CreateOrUpdate(gomock.Any(), "foo", "bar", emptyTable).Return(&emptyTable, nil),
+				client.EXPECT().Get(gomock.Any(), "foo", "bar").Return(&emptyTable, nil),
+				client.EXPECT().CreateOrUpdate(gomock.Any(), "foo", "bar", taggedTable).Return(&taggedTable, nil),
+				// "refresh cache": refetch the table after the tag update invalidates the cache.
+				client.EXPECT().Get(gomock.Any(), "foo", "bar").Return(&taggedTable, nil),
+				// "cache hit": no further Azure client calls are expected.
+			)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cloud.routeUpdater = newDelayedRouteUpdater(cloud, 100*time.Millisecond)
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				cloud.routeUpdater.run(ctx)
+			}()
+			defer func() {
+				cancel()
+				<-done
+			}()
+
+			for _, phase := range []string{"create and tag", "refresh cache", "cache hit"} {
+				routes, err := cloud.ListRoutes(ctx, "cluster")
+				assert.NoError(t, err, phase)
+				assert.Equal(t, expectedRoutes, routes, phase)
+			}
+		})
 	}
 }
 
@@ -833,6 +935,19 @@ func TestEnsureRouteTableTagged(t *testing.T) {
 	tags, changed := cloud.ensureRouteTableTagged(rt)
 	assert.Equal(t, expectedTags, tags)
 	assert.True(t, changed)
+	assert.Equal(t, expectedTags, rt.Tags)
+
+	tags, changed = cloud.ensureRouteTableTagged(rt)
+	assert.Equal(t, expectedTags, tags)
+	assert.False(t, changed)
+
+	t.Run("skips nil route table", func(t *testing.T) {
+		assert.NotPanics(t, func() {
+			tags, changed := cloud.ensureRouteTableTagged(nil)
+			assert.Nil(t, tags)
+			assert.False(t, changed)
+		})
+	})
 
 	cloud.RouteTableResourceGroup = "rg1"
 	rt = &armnetwork.RouteTable{}
