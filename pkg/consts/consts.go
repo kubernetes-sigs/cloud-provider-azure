@@ -377,7 +377,7 @@ const (
 
 	NetworkProviderNamespace    = "Microsoft.Network"
 	PublicIPAddressResourceType = "publicIPAddresses"
-	LoadBalancerResourceType    = "loadBalancers"
+	VirtualMachineResourceType  = "virtualMachines"
 
 	// FrontendIPConfigIDTemplate is the template of the frontend IP configuration
 	FrontendIPConfigIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s"

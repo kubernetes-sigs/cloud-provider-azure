@@ -44,12 +44,6 @@ func TestRepo_ListZones(t *testing.T) {
 			expected:     map[string][]string{"eastus2": {"1", "2", "3", "4"}},
 		},
 		{
-			name:         "load balancer zones remain independent",
-			resourceType: consts.LoadBalancerResourceType,
-			provider:     networkProviderWithZones(),
-			expected:     map[string][]string{"eastus2": {"1", "2", "3", "5"}},
-		},
-		{
 			name:         "resource type matching is case insensitive",
 			resourceType: "PUBLICIPADDRESSES",
 			provider:     networkProviderWithZones(),
@@ -86,6 +80,50 @@ func TestRepo_ListZones(t *testing.T) {
 		})
 	}
 
+	for _, tc := range []struct {
+		name         string
+		resourceType string
+		zones        map[string][]*string
+		err          error
+		expected     map[string][]string
+	}{
+		{
+			name:         "virtual machine zones use existing compute discovery",
+			resourceType: consts.VirtualMachineResourceType,
+			zones:        map[string][]*string{"eastus2": to.SliceOfPtrs("1", "2", "3", "4", "5")},
+			expected:     map[string][]string{"eastus2": {"1", "2", "3", "4", "5"}},
+		},
+		{
+			name:         "virtual machine resource type matching is case insensitive",
+			resourceType: "VIRTUALMACHINES",
+			zones:        map[string][]*string{"eastus2": to.SliceOfPtrs("1", "2", "3")},
+			expected:     map[string][]string{"eastus2": {"1", "2", "3"}},
+		},
+		{
+			name:         "missing virtual machine mappings have no zones",
+			resourceType: consts.VirtualMachineResourceType,
+			expected:     map[string][]string{},
+		},
+		{
+			name:         "virtual machine discovery returns errors",
+			resourceType: consts.VirtualMachineResourceType,
+			err:          fmt.Errorf("compute zone discovery error"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			client := mock_providerclient.NewMockInterface(ctrl)
+			repo, err := NewRepo(client)
+			assert.NoError(t, err)
+
+			client.EXPECT().GetVirtualMachineSupportedZones(gomock.Any()).Return(tc.zones, tc.err)
+
+			zones, err := repo.ListZones(context.Background(), tc.resourceType)
+			assert.ErrorIs(t, err, tc.err)
+			assert.Equal(t, tc.expected, zones)
+		})
+	}
+
 	t.Run("return error", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -116,11 +154,6 @@ func networkProviderWithZones() *armresources.Provider {
 				{Location: to.Ptr("East US 2"), Zones: to.SliceOfPtrs("1", "2", "3", "4")},
 			},
 		},
-		{
-			ResourceType: to.Ptr("loadBalancers"),
-			ZoneMappings: []*armresources.ZoneMapping{
-				{Location: to.Ptr("East US 2"), Zones: to.SliceOfPtrs("1", "2", "3", "5")},
-			},
-		},
+		{ResourceType: to.Ptr("loadBalancers")},
 	}}
 }

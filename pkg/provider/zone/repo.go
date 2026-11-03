@@ -43,6 +43,19 @@ func NewRepo(client providerclient.Interface) (Repository, error) {
 }
 
 func (r *repo) ListZones(ctx context.Context, resourceType string) (map[string][]string, error) {
+	if strings.EqualFold(resourceType, consts.VirtualMachineResourceType) {
+		zones, err := r.client.GetVirtualMachineSupportedZones(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		rv := make(map[string][]string, len(zones))
+		for region, z := range zones {
+			rv[region] = fnutil.Map(func(s *string) string { return *s }, z)
+		}
+		return rv, nil
+	}
+
 	provider, err := r.client.GetProvider(ctx, consts.NetworkProviderNamespace)
 	if err != nil {
 		return nil, err

@@ -9483,7 +9483,7 @@ func TestEnsurePublicIPExistsUsesPublicIPCapabilities(t *testing.T) {
 	az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 	az.regionZonesMap = map[string]map[string][]string{
 		consts.PublicIPAddressResourceType: {az.Location: {"1", "2", "3", "4"}},
-		consts.LoadBalancerResourceType:    {az.Location: {"1", "2", "3", "5"}},
+		consts.VirtualMachineResourceType:  {az.Location: {"1", "2", "3", "5"}},
 	}
 
 	client := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
@@ -11414,13 +11414,13 @@ func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 	})
 }
 
-func TestGetFrontendZonesUsesLoadBalancerCapabilities(t *testing.T) {
+func TestGetFrontendZonesUsesVirtualMachineCapabilities(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	az := GetTestCloud(ctrl)
 	az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 	az.regionZonesMap = map[string]map[string][]string{
 		consts.PublicIPAddressResourceType: {az.Location: {"1", "2", "3", "4"}},
-		consts.LoadBalancerResourceType:    {az.Location: {"1", "2", "3", "5"}},
+		consts.VirtualMachineResourceType:  {az.Location: {"1", "2", "3", "5"}},
 	}
 
 	fip := &armnetwork.FrontendIPConfiguration{}
@@ -11551,7 +11551,7 @@ func TestReconcileZonesForFrontendIPConfigs(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			cloud.regionZonesMap = map[string]map[string][]string{
 				consts.PublicIPAddressResourceType: tc.regionZonesMap,
-				consts.LoadBalancerResourceType:    tc.regionZonesMap,
+				consts.VirtualMachineResourceType:  tc.regionZonesMap,
 			}
 			cloud.LoadBalancerSKU = string(armnetwork.LoadBalancerSKUNameStandard)
 

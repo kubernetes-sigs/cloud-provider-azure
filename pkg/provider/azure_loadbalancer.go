@@ -3249,7 +3249,7 @@ func (az *Cloud) getFrontendZones(
 	if !isFipChanged { // fetch zone information from API for new frontends
 		// only add zone information for new internal frontend IP configurations for standard load balancer not deployed to an edge zone.
 		location := az.Location
-		zones, err := az.getRegionZonesBackoff(ctx, location, consts.LoadBalancerResourceType)
+		zones, err := az.getRegionZonesBackoff(ctx, location, consts.VirtualMachineResourceType)
 		if err != nil {
 			return err
 		}

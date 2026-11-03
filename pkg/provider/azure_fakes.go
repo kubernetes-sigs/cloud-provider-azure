@@ -169,7 +169,7 @@ func GetTestCloud(ctrl *gomock.Controller) (az *Cloud) {
 	az.zoneRepo = zone.NewMockRepository(ctrl)
 	az.regionZonesMap = map[string]map[string][]string{
 		consts.PublicIPAddressResourceType: {az.Location: {"1", "2", "3"}},
-		consts.LoadBalancerResourceType:    {az.Location: {"1", "2", "3"}},
+		consts.VirtualMachineResourceType:  {az.Location: {"1", "2", "3"}},
 	}
 
 	{

@@ -263,22 +263,22 @@ func TestSyncRegionZonesMap(t *testing.T) {
 			description: "syncRegionZonesMap should not report an error if the given zones map is empty",
 			zones: map[string]map[string][]string{
 				consts.PublicIPAddressResourceType: {},
-				consts.LoadBalancerResourceType:    {},
+				consts.VirtualMachineResourceType:  {},
 			},
 			expectedZones: map[string]map[string][]string{
 				consts.PublicIPAddressResourceType: {},
-				consts.LoadBalancerResourceType:    {},
+				consts.VirtualMachineResourceType:  {},
 			},
 		},
 		{
 			description: "syncRegionZonesMap should replace stale zones independently for each resource type",
 			zones: map[string]map[string][]string{
 				consts.PublicIPAddressResourceType: {"eastus2": {"1", "2", "3", "4"}},
-				consts.LoadBalancerResourceType:    {"eastus2": {"1", "2", "3", "5"}},
+				consts.VirtualMachineResourceType:  {"eastus2": {"1", "2", "3", "5"}},
 			},
 			expectedZones: map[string]map[string][]string{
 				consts.PublicIPAddressResourceType: {"eastus2": {"1", "2", "3", "4"}},
-				consts.LoadBalancerResourceType:    {"eastus2": {"1", "2", "3", "5"}},
+				consts.VirtualMachineResourceType:  {"eastus2": {"1", "2", "3", "5"}},
 			},
 		},
 	} {
@@ -292,9 +292,9 @@ func TestSyncRegionZonesMap(t *testing.T) {
 			if testCase.getZonesErr == nil {
 				az.regionZonesMap = map[string]map[string][]string{
 					consts.PublicIPAddressResourceType: {"stale": {"5"}},
-					consts.LoadBalancerResourceType:    {"stale": {"5"}},
+					consts.VirtualMachineResourceType:  {"stale": {"5"}},
 				}
-				m.EXPECT().ListZones(gomock.Any(), consts.LoadBalancerResourceType).Return(testCase.zones[consts.LoadBalancerResourceType], nil)
+				m.EXPECT().ListZones(gomock.Any(), consts.VirtualMachineResourceType).Return(testCase.zones[consts.VirtualMachineResourceType], nil)
 			}
 
 			err := az.syncRegionZonesMap(context.TODO())
@@ -329,7 +329,7 @@ func TestGetRegionZonesBackoff(t *testing.T) {
 			az := &Cloud{
 				zoneRepo: m,
 				regionZonesMap: map[string]map[string][]string{
-					consts.LoadBalancerResourceType: {"eastus2": {"1", "2", "3", "5"}},
+					consts.VirtualMachineResourceType: {"eastus2": {"1", "2", "3", "5"}},
 				},
 			}
 			m.EXPECT().ListZones(gomock.Any(), consts.PublicIPAddressResourceType).Return(testCase.zones, testCase.getZonesErr)
@@ -348,9 +348,9 @@ func TestGetRegionZonesBackoff(t *testing.T) {
 					assert.Empty(t, nonZonal)
 				}
 			}
-			lbZones, err := az.getRegionZonesBackoff(context.TODO(), "eastus2", consts.LoadBalancerResourceType)
+			vmZones, err := az.getRegionZonesBackoff(context.TODO(), "eastus2", consts.VirtualMachineResourceType)
 			assert.NoError(t, err)
-			assert.Equal(t, to.SliceOfPtrs("1", "2", "3", "5"), lbZones)
+			assert.Equal(t, to.SliceOfPtrs("1", "2", "3", "5"), vmZones)
 		})
 	}
 }
