@@ -18,17 +18,29 @@ package provider
 
 import (
 	"context"
+	"net/http"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 )
+
+// updateInterface updates the NIC but will not create it if it doesn't exist.
+func (az *Cloud) updateInterface(ctx context.Context, nic *armnetwork.Interface) (*armnetwork.Interface, error) {
+	ctx = policy.WithHTTPHeader(ctx, http.Header{
+		consts.IfMatchHeader: []string{consts.ETagAny},
+	})
+	return az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, az.ResourceGroup, ptr.Deref(nic.Name, ""), *nic)
+}
 
 // CreateOrUpdateInterface invokes az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate with exponential backoff retry
 func (az *Cloud) CreateOrUpdateInterface(ctx context.Context, service *v1.Service, nic *armnetwork.Interface) error {
 	logger := log.FromContextOrBackground(ctx).WithName("CreateOrUpdateInterface")
-	_, rerr := az.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, az.ResourceGroup, *nic.Name, *nic)
+	_, rerr := az.updateInterface(ctx, nic)
 	logger.V(10).Info("InterfacesClient.CreateOrUpdate: end", "nicName", *nic.Name)
 	if rerr != nil {
 		logger.Error(rerr, "InterfacesClient.CreateOrUpdate failed", "nicName", *nic.Name)

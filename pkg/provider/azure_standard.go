@@ -1105,7 +1105,7 @@ func (as *availabilitySet) EnsureBackendPoolDeleted(ctx context.Context, service
 		nic.Properties.IPConfigurations = newIPConfigs
 		nicUpdaters = append(nicUpdaters, func() error {
 			logger.V(2).Info("begins to CreateOrUpdate for NIC with backendPoolIDs", "resourceGroup", as.ResourceGroup, "nicName", ptr.Deref(nic.Name, ""), "backendPoolIDs", backendPoolIDs)
-			_, rerr := as.ComputeClientFactory.GetInterfaceClient().CreateOrUpdate(ctx, as.ResourceGroup, ptr.Deref(nic.Name, ""), *nic)
+			_, rerr := as.updateInterface(ctx, nic)
 			if rerr != nil {
 				logger.Error(rerr, "CreateOrUpdate for NIC failed", "resourceGroup", as.ResourceGroup, "nicName", ptr.Deref(nic.Name, ""))
 				return rerr
