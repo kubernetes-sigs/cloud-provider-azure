@@ -177,7 +177,7 @@ func InitializeFromCluster(
 	// Recover resources stuck with finalizers from a previous crash
 	// This must happen BEFORE informers start to avoid race conditions
 	// Reuse lists from buildK8sState (avoids duplicate API calls)
-	recoverStuckFinalizers(ctx, diffTracker, serviceList, egressPodList, endpointSliceList, currentLoadBalancersInNRP, pipNamesInAzure)
+	serviceFinalizerRetries := recoverStuckFinalizers(ctx, diffTracker, serviceList, egressPodList, endpointSliceList, currentLoadBalancersInNRP, pipNamesInAzure)
 
 	// Counter already initialized from K8s state during buildK8sState
 	// After initialization sync completes, NRP will match K8s, so counter reflects final state
@@ -194,7 +194,7 @@ func InitializeFromCluster(
 	logSyncOperations(syncOperations)
 
 	// Setup initialization mode and start updaters
-	if err := startInitialization(ctx, diffTracker); err != nil {
+	if err := startInitialization(ctx, diffTracker, serviceFinalizerRetries); err != nil {
 		return nil, err
 	}
 
@@ -510,8 +510,9 @@ func recoverStuckFinalizers(
 	endpointSlices *discoveryv1.EndpointSliceList,
 	currentLBsInAzure *utilsets.IgnoreCaseSet,
 	azurePIPNames *utilsets.IgnoreCaseSet,
-) {
+) []v1.ObjectReference {
 	logger := log.FromContextOrBackground(ctx)
+	var serviceFinalizerRetries []v1.ObjectReference
 
 	servicesRecovered := 0
 	podsRecovered := 0
@@ -545,7 +546,7 @@ func recoverStuckFinalizers(
 
 			// Keyed on our finalizer, not spec.type: the finalizer survives a retype, and a Service that
 			// processK8sServices does not keep as desired is released by nothing else, even while alive.
-			if svc.DeletionTimestamp == nil && svc.Spec.Type == v1.ServiceTypeLoadBalancer && svc.Spec.LoadBalancerClass == nil {
+			if !serviceNeedsFinalizerRecovery(svc) {
 				continue
 			}
 			if !hasFinalizer(svc.Finalizers, ServiceGatewayServiceCleanupFinalizer) {
@@ -575,17 +576,19 @@ func recoverStuckFinalizers(
 				recordFinalizerRecoveryScheduled()
 			} else {
 				// No Azure resource - directly remove finalizer since there's nothing to clean up
-				logger.V(4).Info("Removed service finalizer without Azure resource", "namespace", svc.Namespace, "service", svc.Name, "uid", serviceName)
-				if err := dt.removeServiceGatewayFinalizer(ctx, svc); err != nil {
-					// Nothing re-drives this: the Service is excluded from desired state and has no NRP
-					// entry, so no operation is scheduled for it. It is retried only on the next CCM
-					// restart; until then deleting the Service blocks its namespace deletion.
+				completed, err := dt.removeServiceFinalizers(ctx, svc, true)
+				if err != nil {
+					serviceFinalizerRetries = append(serviceFinalizerRetries, v1.ObjectReference{
+						Namespace: svc.Namespace, Name: svc.Name, UID: svc.UID,
+					})
 					RecordServiceFinalizerRemoveFailed()
-					logger.Error(err, "Service keeps its cleanup finalizer; removing it failed and will not be retried until CCM restart",
+					recordFinalizerRecoveryScheduled()
+					logger.Error(err, "Could not remove Service cleanup finalizers; queued for retry",
 						"namespace", svc.Namespace, "service", svc.Name, "uid", serviceName)
-				} else {
+				} else if completed {
 					servicesDirectCleaned++
 					recordFinalizerRecovered()
+					logger.V(4).Info("Removed service finalizer without Azure resource", "namespace", svc.Namespace, "service", svc.Name, "uid", serviceName)
 				}
 			}
 		}
@@ -700,11 +703,12 @@ func recoverStuckFinalizers(
 	// The pending items will be picked up when the existing location sync trigger
 	// fires after startInitialization() completes.
 
-	if servicesRecovered > 0 || servicesDirectCleaned > 0 || podsRecovered > 0 || podsDirectCleaned > 0 {
-		logger.V(2).Info("Recovered stuck finalizers", "services", servicesRecovered, "directCleanedServices", servicesDirectCleaned, "pods", podsRecovered, "directCleanedPods", podsDirectCleaned)
+	if servicesRecovered > 0 || servicesDirectCleaned > 0 || len(serviceFinalizerRetries) > 0 || podsRecovered > 0 || podsDirectCleaned > 0 {
+		logger.V(2).Info("Recovered stuck finalizers", "services", servicesRecovered, "directCleanedServices", servicesDirectCleaned, "retryServices", len(serviceFinalizerRetries), "pods", podsRecovered, "directCleanedPods", podsDirectCleaned)
 	} else {
 		logger.V(2).Info("Found no stuck finalizers")
 	}
+	return serviceFinalizerRetries
 }
 
 // processK8sServices fetches and processes LoadBalancer services from K8s
@@ -1193,7 +1197,7 @@ func logSyncOperations(syncOps *SyncDiffTrackerReturnType) {
 }
 
 // startInitialization sets up initialization mode and starts updaters
-func startInitialization(ctx context.Context, diffTracker *DiffTracker) error {
+func startInitialization(ctx context.Context, diffTracker *DiffTracker, serviceFinalizerRetries []v1.ObjectReference) error {
 	logger := log.FromContextOrBackground(ctx)
 	diffTracker.mu.Lock()
 	atomic.StoreInt32(&diffTracker.isInitializing, 1)
@@ -1203,6 +1207,14 @@ func startInitialization(ctx context.Context, diffTracker *DiffTracker) error {
 	logger.V(2).Info("Started ServiceUpdater and LocationsUpdater")
 	diffTracker.serviceUpdater = NewServiceUpdater(ctx, diffTracker, diffTracker.OnServiceCreationComplete, diffTracker.GetServiceUpdaterTrigger())
 	diffTracker.locationsUpdater = NewLocationsUpdater(ctx, diffTracker)
+	if len(serviceFinalizerRetries) > 0 {
+		updater := diffTracker.serviceUpdater
+		updater.wg.Add(1)
+		go func() {
+			defer updater.wg.Done()
+			updater.retryServiceFinalizers(serviceFinalizerRetries)
+		}()
+	}
 	go diffTracker.serviceUpdater.Run()
 	go diffTracker.locationsUpdater.Run()
 
