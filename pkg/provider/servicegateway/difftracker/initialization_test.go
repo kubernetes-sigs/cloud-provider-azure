@@ -1898,19 +1898,44 @@ func progressLog() (logr.Logger, *[]string) {
 	return funcr.New(func(_, args string) { logs = append(logs, args) }, funcr.Options{}), &logs
 }
 
-func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *testing.T) {
-	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+func TestWaitForInitialSyncReportingProgress_CompletesImmediatelyWhenNoWorkRemains(t *testing.T) {
+	withInitialSyncProgressInterval(t, time.Hour)
 	dt := initializingDiffTracker()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	logger, logs := progressLog()
 	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
 	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
 	logged := strings.Join(*logs, "\n")
-	assert.Contains(t, logged, "initial sync completed on the periodic re-check")
+	assert.NotContains(t, logged, "initial sync completed on the periodic re-check")
 	assert.NotContains(t, logged, "initial sync has not completed")
+}
+
+func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *testing.T) {
+	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+	dt := initializingDiffTracker()
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{State: StateCreationInProgress}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var logs []string
+	logger := funcr.New(func(_, args string) {
+		logs = append(logs, args)
+		if strings.Contains(args, "initial sync has not completed") {
+			// Leave completion unsignaled so the next tick must detect it.
+			dt.mu.Lock()
+			delete(dt.pendingServiceOps, "svc")
+			dt.mu.Unlock()
+		}
+	}, funcr.Options{})
+	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
+	logged := strings.Join(logs, "\n")
+	assert.Contains(t, logged, "initial sync completed on the periodic re-check")
+	assert.Contains(t, logged, "initial sync has not completed")
 }
 
 func TestWaitForInitialSyncReportingProgress_TickDoesNotCompleteOutstandingWork(t *testing.T) {
