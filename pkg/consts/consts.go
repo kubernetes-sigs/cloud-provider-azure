@@ -384,6 +384,14 @@ const (
 	LoadBalancerBackendPoolConfigurationTypePODIP = "podIP"
 )
 
+// Node event reasons and messages.
+const (
+	// LoadBalancerBackendNodeSkipped is the event reason for VMSS node validation failures.
+	LoadBalancerBackendNodeSkipped = "LoadBalancerBackendNodeSkipped"
+	// LoadBalancerBackendNodeSkippedMessagePrefix describes the skipped backend update.
+	LoadBalancerBackendNodeSkippedMessagePrefix = "Skipping load-balancer backend-pool updates for this node because "
+)
+
 // error messages
 const (
 	// VmssVMNotActiveErrorMessage not active means the instance is under deleting from Azure VMSS.
