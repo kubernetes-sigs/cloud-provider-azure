@@ -321,7 +321,11 @@ func (az *Cloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudpr
 		}
 	}
 
-	// ensure the route table is tagged as configured
+	// If the route table is missing, use an empty object so a tag update can be queued.
+	// The updater creates the Azure table before applying those tags.
+	if routeTable == nil {
+		routeTable = &armnetwork.RouteTable{}
+	}
 	tags, changed := az.ensureRouteTableTagged(routeTable)
 	if changed {
 		logger.V(2).Info("updating tags on route table", "routeTableName", ptr.Deref(routeTable.Name, ""))
@@ -570,7 +574,7 @@ func cidrtoRfc1035(cidr string) string {
 
 // ensureRouteTableTagged ensures the route table is tagged as configured
 func (az *Cloud) ensureRouteTableTagged(rt *armnetwork.RouteTable) (map[string]*string, bool) {
-	if !strings.EqualFold(az.RouteTableResourceGroup, az.ResourceGroup) {
+	if rt == nil || !strings.EqualFold(az.RouteTableResourceGroup, az.ResourceGroup) {
 		return nil, false
 	}
 
