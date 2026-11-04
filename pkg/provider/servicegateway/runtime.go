@@ -82,8 +82,16 @@ func diffTrackerConfig(config providerconfig.Config) difftracker.Config {
 
 	serviceGatewayName := consts.DefaultServiceGatewayResourceName
 	locationsUpdateIntervalInMilliseconds := config.ServiceGatewayLocationsUpdateIntervalInMilliseconds
-	if locationsUpdateIntervalInMilliseconds == 0 {
+	switch locationsUpdateIntervalInMilliseconds {
+	case 0:
 		locationsUpdateIntervalInMilliseconds = consts.DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds
+	case consts.DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds:
+		locationsUpdateIntervalInMilliseconds = 0
+	}
+	locationsUpdateInterval := time.Duration(locationsUpdateIntervalInMilliseconds)
+	// Keep invalid negatives negative for validation; multiplying them could overflow to zero.
+	if locationsUpdateInterval > 0 {
+		locationsUpdateInterval *= time.Millisecond
 	}
 	return difftracker.Config{
 		SubscriptionID:                config.SubscriptionID,
@@ -93,7 +101,7 @@ func diffTrackerConfig(config providerconfig.Config) difftracker.Config {
 		VNetName:                      config.VnetName,
 		VNetResourceGroup:             config.VnetResourceGroup,
 		ServiceGatewayResourceName:    serviceGatewayName,
-		LocationsUpdateInterval:       time.Duration(locationsUpdateIntervalInMilliseconds) * time.Millisecond,
+		LocationsUpdateInterval:       locationsUpdateInterval,
 	}
 }
 

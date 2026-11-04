@@ -600,6 +600,9 @@ const (
 	// DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds is the default minimum time between
 	// consecutive ServiceGateway address-location updates sent to NRP.
 	DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds = 400
+
+	// DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds disables additional NRP update spacing.
+	DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds = -1
 )
 
 // Azure resource lock
