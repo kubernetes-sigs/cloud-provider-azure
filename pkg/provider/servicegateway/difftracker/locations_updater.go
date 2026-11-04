@@ -381,11 +381,9 @@ func isTerminalLocationSyncStatus(httpStatus int) bool {
 	return httpStatus == http.StatusBadRequest || httpStatus == http.StatusUnprocessableEntity
 }
 
-// waitForRunInterval waits until config.LocationsUpdateInterval has passed since the last
-// address-location update sent to NRP returned, so updates are never sent back to back and changes
-// that arrive in between are batched into the next one. It does not wait before the first update or
-// after an idle period, and a run with nothing to send does not restart the interval. It returns false
-// if the updater is stopped while waiting.
+// waitForRunInterval waits for the configured interval after the last NRP update returns. Zero disables it.
+// It does not wait before the first update or after an idle period, and a run with nothing to send
+// does not restart the interval. It returns false if the updater is stopped while waiting.
 func (lu *LocationsUpdater) waitForRunInterval() bool {
 	interval := lu.diffTracker.config.LocationsUpdateInterval
 	if interval <= 0 || lu.lastUpdateEnd.IsZero() {
