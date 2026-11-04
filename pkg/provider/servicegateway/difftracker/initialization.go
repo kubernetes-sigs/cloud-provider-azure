@@ -92,6 +92,7 @@ func getInitialSyncProgressInterval() time.Duration {
 // reporting at getInitialSyncProgressInterval() while it waits. The report is logged at error level
 // with the elapsed time: the CCM cannot finish starting until this clears, so a stalled sync must be
 // alertable even though it is not fatal.
+// Call only after all startup work has been queued.
 func waitForInitialSyncReportingProgress(ctx context.Context, dt *DiffTracker, logger logr.Logger) error {
 	done := make(chan error, 1)
 	go func() { done <- dt.WaitForInitialSync(ctx) }()
@@ -251,9 +252,7 @@ func InitializeFromCluster(
 		diffTracker.DeleteService(identity, false, true)
 	}
 
-	// All startup work is counted by now; if none was dispatched, no updater would signal completion.
-	// Without this check, initialization would only complete at the first progress tick of
-	// waitForInitialSyncReportingProgress, a minute later.
+	// Rejected additions can leave no work and therefore no completion callback.
 	diffTracker.checkInitializationComplete()
 
 	// Wait for all async operations to complete (service creations/deletions + location syncs + orphan deletions)

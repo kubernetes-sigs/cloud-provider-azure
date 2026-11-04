@@ -2785,7 +2785,7 @@ func newInitClients(t *testing.T, lbs []*armnetwork.LoadBalancer, onLBDelete fun
 
 	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
 		Name:       ptr.To(DefaultOutboundNATGatewayName),
-		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound)},
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), IsDefault: ptr.To(true)},
 	}}, nil).AnyTimes()
 	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
 	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
@@ -2805,6 +2805,7 @@ func newInitClients(t *testing.T, lbs []*armnetwork.LoadBalancer, onLBDelete fun
 		}).AnyTimes()
 	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", gomock.Any(), nil).Return(nil, notFoundError()).AnyTimes()
 	mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
 			c.provisionings.Add(1)
@@ -2867,9 +2868,10 @@ func TestInitializeFromCluster_CompletesWhenEveryAdditionIsDeclinedByAdmission(t
 	case r := <-initializeAsync(ctx, clients, internalLBService()):
 		assert.NoError(t, r.err)
 		if assert.NotNil(t, r.dt) {
+			defer cleanupOnError(r.dt)
 			assert.True(t, r.dt.InitialSyncDone)
 			r.dt.mu.Lock()
-			assert.True(t, r.dt.K8sResources.Services.Has("11111111-1111-1111-1111-111111111111"))
+			assert.True(t, r.dt.K8sResources.Services.Has(inboundServiceName("11111111-1111-1111-1111-111111111111")))
 			assert.Empty(t, r.dt.pendingServiceOps)
 			r.dt.mu.Unlock()
 		}
@@ -2883,7 +2885,7 @@ func TestInitializeFromCluster_CompletesWhenEveryAdditionIsDeclinedByAdmission(t
 // completion check runs after orphan deletions are scheduled.
 func TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined(t *testing.T) {
 	withInitialSyncProgressInterval(t, time.Hour)
-	const orphan = "22222222-2222-2222-2222-222222222222"
+	const orphan = "22222222-2222-2222-2222-222222222222-lb"
 
 	deleting := make(chan struct{})
 	release := make(chan struct{})
@@ -2901,6 +2903,9 @@ func TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined(t
 	case <-deleting:
 	case r := <-result:
 		close(release)
+		if r.dt != nil {
+			defer cleanupOnError(r.dt)
+		}
 		t.Fatalf("InitializeFromCluster returned (err=%v) before the orphan deletion started", r.err)
 	case <-time.After(10 * time.Second):
 		close(release)
@@ -2910,6 +2915,9 @@ func TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined(t
 	select {
 	case r := <-result:
 		close(release)
+		if r.dt != nil {
+			defer cleanupOnError(r.dt)
+		}
 		t.Fatalf("InitializeFromCluster returned (err=%v) while an orphan deletion was in flight", r.err)
 	case <-time.After(300 * time.Millisecond):
 	}
@@ -2917,6 +2925,9 @@ func TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined(t
 	close(release)
 	select {
 	case r := <-result:
+		if r.dt != nil {
+			defer cleanupOnError(r.dt)
+		}
 		assert.NoError(t, r.err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("InitializeFromCluster did not complete after the orphan deletion finished")
@@ -2936,25 +2947,51 @@ func progressLog() (logr.Logger, *[]string) {
 	return funcr.New(func(_, args string) { logs = append(logs, args) }, funcr.Options{}), &logs
 }
 
-func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *testing.T) {
-	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+func TestWaitForInitialSyncReportingProgress_AlreadyCompletedDoesNotLogStall(t *testing.T) {
+	withInitialSyncProgressInterval(t, time.Hour)
 	dt := initializingDiffTracker()
+	dt.checkInitializationComplete()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	logger, logs := progressLog()
 	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
 	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
 	logged := strings.Join(*logs, "\n")
-	assert.Contains(t, logged, "initial sync completed on the periodic re-check")
+	assert.NotContains(t, logged, "initial sync completed on the periodic re-check")
 	assert.NotContains(t, logged, "initial sync has not completed")
+}
+
+func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *testing.T) {
+	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+	dt := initializingDiffTracker()
+	dt.pendingServiceOps["svc-lb"] = &ServiceOperationState{State: StateCreationInProgress}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var logs []string
+	logger := funcr.New(func(_, args string) {
+		logs = append(logs, args)
+		if strings.Contains(args, "initial sync has not completed") {
+			// Leave completion unsignaled so the next tick must detect it.
+			dt.mu.Lock()
+			delete(dt.pendingServiceOps, "svc-lb")
+			dt.mu.Unlock()
+		}
+	}, funcr.Options{})
+	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
+	logged := strings.Join(logs, "\n")
+	assert.Contains(t, logged, "initial sync completed on the periodic re-check")
+	assert.Contains(t, logged, "initial sync has not completed")
 }
 
 func TestWaitForInitialSyncReportingProgress_TickDoesNotCompleteOutstandingWork(t *testing.T) {
 	withInitialSyncProgressInterval(t, 20*time.Millisecond)
 	dt := initializingDiffTracker()
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{State: StateCreationInProgress}
+	dt.pendingServiceOps["svc-lb"] = &ServiceOperationState{State: StateCreationInProgress}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
