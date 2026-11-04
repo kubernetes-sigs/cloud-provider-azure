@@ -1270,10 +1270,9 @@ func startInitialization(ctx context.Context, diffTracker *DiffTracker) (deferre
 	return deferredLocationsTrigger, deferredServiceTrigger, nil
 }
 
-// beginInitializationLocked enters initialization mode. Startup recovery runs before the updaters
-// start and may already have buffered untracked trigger tokens. They are drained here and reported so
-// the caller re-sends them after the startup reconciliation is queued; consuming them earlier could
-// signal completion before that work exists. Requires dt.mu.
+// beginInitializationLocked enters initialization mode and drains pending updater triggers.
+// The caller re-sends them after startup reconciliation is queued to avoid premature completion.
+// Requires dt.mu.
 func (dt *DiffTracker) beginInitializationLocked() (deferredLocationsTrigger, deferredServiceTrigger bool) {
 	select {
 	case <-dt.locationsUpdaterTrigger:
