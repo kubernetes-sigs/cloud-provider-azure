@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -680,6 +681,19 @@ func TestConfigValidate(t *testing.T) {
 				ServiceGatewayResourceName: "sgw",
 			},
 			shouldError: false,
+		},
+		{
+			name: "negative locations update interval",
+			config: Config{
+				SubscriptionID:             "sub1",
+				ResourceGroup:              "rg1",
+				Location:                   "eastus",
+				VNetName:                   "test-vnet",
+				ServiceGatewayResourceName: "sgw",
+				LocationsUpdateInterval:    -time.Millisecond,
+			},
+			shouldError: true,
+			errorMsg:    "LocationsUpdateInterval must not be negative",
 		},
 		{
 			name: "missing subscription ID",
