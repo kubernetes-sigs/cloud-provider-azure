@@ -601,7 +601,8 @@ const (
 	// consecutive ServiceGateway address-location updates sent to NRP.
 	DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds = 400
 
-	// DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds disables additional NRP update spacing.
+	// DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds is the configuration value
+	// indicating that no additional spacing should be applied between NRP address-location updates.
 	DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds = -1
 )
 
