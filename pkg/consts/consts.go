@@ -22,6 +22,11 @@ import (
 )
 
 const (
+	// IfMatchHeader is the HTTP conditional-update header.
+	IfMatchHeader = "If-Match"
+	// ETagAny requires an existing resource without matching a specific version.
+	ETagAny = "*"
+
 	// VMTypeVMSS is the vmss vm type
 	VMTypeVMSS = "vmss"
 	// VMTypeStandard is the vmas vm type
