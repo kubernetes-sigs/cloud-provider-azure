@@ -177,27 +177,27 @@ func TestServiceConfigValidate(t *testing.T) {
 		{
 			name: "valid inbound config",
 			config: ServiceConfig{
-				UID:       "test-uid",
-				IsInbound: true,
+				ServiceName: "test-uid",
+				IsInbound:   true,
 			},
 			shouldError: false,
 		},
 		{
 			name: "valid outbound config",
 			config: ServiceConfig{
-				UID:       "test-uid",
-				IsInbound: false,
+				ServiceName: "test-uid",
+				IsInbound:   false,
 			},
 			shouldError: false,
 		},
 		{
 			name: "empty UID",
 			config: ServiceConfig{
-				UID:       "",
-				IsInbound: true,
+				ServiceName: "",
+				IsInbound:   true,
 			},
 			shouldError: true,
-			errorMsg:    "service UID cannot be empty",
+			errorMsg:    "service name cannot be empty",
 		},
 	}
 
@@ -221,10 +221,10 @@ func TestUpdatePendingOperationOldestAgeMetric_IncludesUpdateInProgress(t *testi
 	RegisterMetrics()
 	dt := newTestDiffTracker()
 	dt.pendingServiceOps["svc"] = &ServiceOperationState{
-		ServiceUID: "svc",
-		Config:     NewInboundServiceConfig("svc", nil),
-		State:      StateUpdateInProgress,
-		CreatedAt:  time.Now().Add(-time.Hour),
+		ServiceName: "svc",
+		Config:      NewInboundServiceConfig("svc", nil),
+		State:       StateUpdateInProgress,
+		CreatedAt:   time.Now().Add(-time.Hour),
 	}
 
 	updatePendingOperationOldestAgeMetric(dt)
@@ -243,24 +243,24 @@ func TestOnServiceCreationComplete_PreEmptRecordsCompletedInFlightOperation(t *t
 	serviceOperationTotal.Reset()
 
 	dt := newTestDiffTracker()
-	uid := "svc-preempt-metric"
+	serviceName := "svc-preempt-metric"
 	// Preempt fixture: a concurrent DeleteService changed the state while a create was in flight
 	// (InFlightConfig != nil). StateDeletionPending is one of the preempt triggers.
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         cfg,
 		InFlightConfig: &inflight,
 		State:          StateDeletionPending,
 	}
-	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
 
 	// The in-flight create completes successfully. The preempt branch fires.
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	// The preempt branch took the path (InFlightConfig is cleared and state moved off pending).
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if assert.NotNil(t, op, "op must remain tracked through the preempt") {
 		assert.Nil(t, op.InFlightConfig, "preempt must clear InFlightConfig")
 	}
@@ -288,23 +288,23 @@ func TestOnServiceCreationComplete_PreEmptRecordsInFlightUpdate(t *testing.T) {
 	serviceOperationTotal.Reset()
 
 	dt := newTestDiffTracker()
-	uid := "svc-preempt-update-metric"
+	serviceName := "svc-preempt-update-metric"
 	// A service that was already applied once (LastAppliedConfig != nil) had an UPDATE in flight
 	// (InFlightConfig != nil) when a Delete preempted it. The completed in-flight op is an UPDATE.
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	applied := cfg
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:        uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:       serviceName,
 		Config:            cfg,
 		LastAppliedConfig: &applied,
 		InFlightConfig:    &inflight,
 		State:             StateDeletionPending,
 	}
-	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
 
 	// The in-flight update completes successfully; the preempt branch fires.
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	got, err := testutil.GetCounterMetricValue(
 		serviceOperationTotal.WithLabelValues("update", "inbound", "success", "", "false"),
@@ -326,13 +326,13 @@ func TestOnServiceCreationComplete_OrphanDeleteSuccessCountsOrphanCleanup(t *tes
 	RegisterMetrics()
 
 	dt := newTestDiffTracker()
-	uid := "svc-orphan-delete-metric"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     cfg,
-		State:      StateDeletionInProgress,
-		IsOrphan:   true,
+	serviceName := "svc-orphan-delete-metric"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      cfg,
+		State:       StateDeletionInProgress,
+		IsOrphan:    true,
 	}
 
 	// orphanedResourcesCleanedTotal has no labels and cannot be Reset between tests, so measure a delta.
@@ -340,7 +340,7 @@ func TestOnServiceCreationComplete_OrphanDeleteSuccessCountsOrphanCleanup(t *tes
 	assert.NoError(t, err)
 
 	// The orphan's asynchronous deletion completes successfully.
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	after, err := testutil.GetCounterMetricValue(orphanedResourcesCleanedTotal)
 	assert.NoError(t, err)
@@ -380,9 +380,9 @@ func TestServiceOperationRetries_ObservedOncePerOperation(t *testing.T) {
 	dt := newTestDiffTracker()
 	cfg := NewInboundServiceConfig("svc-retry-metric", makeInboundConfig(80))
 	dt.pendingServiceOps["svc-retry-metric"] = &ServiceOperationState{
-		ServiceUID: "svc-retry-metric",
-		Config:     cfg,
-		State:      StateCreationInProgress,
+		ServiceName: "svc-retry-metric",
+		Config:      cfg,
+		State:       StateCreationInProgress,
 	}
 
 	// Two retryable failures, then a success on the third attempt.
@@ -408,9 +408,9 @@ func TestServiceOperationRetries_ObservedOncePerOperation(t *testing.T) {
 
 	// A first-attempt success must still be represented, as an explicit zero.
 	dt.pendingServiceOps["svc-retry-first-try"] = &ServiceOperationState{
-		ServiceUID: "svc-retry-first-try",
-		Config:     NewInboundServiceConfig("svc-retry-first-try", makeInboundConfig(80)),
-		State:      StateCreationInProgress,
+		ServiceName: "svc-retry-first-try",
+		Config:      NewInboundServiceConfig("svc-retry-first-try", makeInboundConfig(80)),
+		State:       StateCreationInProgress,
 	}
 	dt.OnServiceCreationComplete("svc-retry-first-try", true, nil)
 
@@ -431,14 +431,14 @@ func TestOnServiceCreationComplete_RefreshesPendingDeletionsGauge(t *testing.T) 
 	RegisterMetrics()
 
 	dt := newTestDiffTracker()
-	uid := "svc-gauge-delete"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateDeletionInProgress,
+	serviceName := "svc-gauge-delete"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateDeletionInProgress,
 	}
-	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
-	dt.pendingServiceDeletions["other"] = &PendingServiceDeletion{ServiceUID: "other", IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
+	dt.pendingServiceDeletions["other"] = &PendingServiceDeletion{ServiceName: "other", IsInbound: true}
 
 	// Prime the gauge to the pre-completion count, as DeleteService would have left it.
 	updatePendingServiceDeletionsMetric(dt)
@@ -447,7 +447,7 @@ func TestOnServiceCreationComplete_RefreshesPendingDeletionsGauge(t *testing.T) 
 	assert.Equal(t, 2.0, primed)
 
 	// The deletion completes and its pendingServiceDeletions entry is removed.
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	dt.mu.Lock()
 	remaining := len(dt.pendingServiceDeletions)
@@ -470,20 +470,20 @@ func TestOnServiceCreationComplete_OutboundUpdateRecordsNoAzureWrite(t *testing.
 	serviceOperationDuration.Reset()
 
 	dt := newTestDiffTracker()
-	uid := "svc-outbound-update-metric"
-	cfg := NewOutboundServiceConfig(uid, &OutboundConfig{})
+	serviceName := "svc-outbound-update-metric"
+	cfg := NewOutboundServiceConfig(serviceName, &OutboundConfig{})
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         cfg,
 		InFlightConfig: &inflight,
 		State:          StateUpdateInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	dt.mu.Lock()
-	state := dt.pendingServiceOps[uid].State
+	state := dt.pendingServiceOps[serviceName].State
 	dt.mu.Unlock()
 	assert.Equal(t, StateCreated, state, "the update completion must still advance the state machine")
 

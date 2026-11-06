@@ -258,19 +258,19 @@ func TestUpdateK8sPodRemovePreservesInboundIdentities(t *testing.T) {
 // whose node IP was not yet cached produces no state, and skipping the later update would strand it.
 func TestUpdateEndpoints_AddIsIdempotentWhenPriorAddWasMissed(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-endpoint-readd"
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	serviceName := "svc-endpoint-readd"
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
 	const podIP = "10.244.1.7"
 	const node = "10.0.0.20"
 
-	dt.UpdateEndpoints(uid, map[string]string{podIP: node}, map[string]string{podIP: node})
+	dt.UpdateEndpoints(serviceName, map[string]string{podIP: node}, map[string]string{podIP: node})
 
 	n, ok := dt.K8sResources.Nodes[node]
 	if assert.True(t, ok, "node must be registered by the self-healing add") {
 		pod, onNode := n.Pods[podIP]
 		if assert.True(t, onNode, "pod must be recorded even though the update reported old == new") {
-			assert.True(t, pod.InboundIdentities.Has(uid), "pod must carry the inbound identity")
+			assert.True(t, pod.InboundIdentities.Has(serviceName), "pod must carry the inbound identity")
 		}
 	}
 }

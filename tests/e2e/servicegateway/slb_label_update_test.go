@@ -207,8 +207,8 @@ var _ = Describe("SLB - Label Updates", Label(slbTestLabel), func() {
 			"service should be reconciled in Azure and the Service Gateway")
 
 		serviceUID := string(createdService.UID)
-		publicIPName := fmt.Sprintf("%s-pip", serviceUID)
-		loadBalancerName := serviceUID
+		loadBalancerName := inboundServiceName(serviceUID)
+		publicIPName := loadBalancerName + "-pip"
 
 		By("Verifying Public IP in Azure")
 		pipOutput, err := runAz("network", "public-ip", "list",
@@ -251,7 +251,7 @@ var _ = Describe("SLB - Label Updates", Label(slbTestLabel), func() {
 
 		var ourService *ServiceGatewayService
 		for i := range sgResponse.Value {
-			if sgResponse.Value[i].Name == serviceUID {
+			if sgResponse.Value[i].Name == inboundServiceName(serviceUID) {
 				ourService = &sgResponse.Value[i]
 				break
 			}
@@ -308,12 +308,9 @@ var _ = Describe("SLB - Label Updates", Label(slbTestLabel), func() {
 		utils.Logf("Found %d address location(s) in Service Gateway", len(alResponse.Value))
 
 		// Build mapping of expected node IP -> pod IPs
-		expectedNodeToPods := make(map[string][]string)
-		for _, pod := range podList.Items {
-			nodeIP := pod.Status.HostIP
-			podIP := pod.Status.PodIP
-			expectedNodeToPods[nodeIP] = append(expectedNodeToPods[nodeIP], podIP)
-		}
+		expectedNodeToPods, err := inboundPodAddressLocations(cs, podList.Items, createdService.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(servicePodsReconciledErr(cs, ns.Name, serviceUID, numPods)).To(Succeed())
 
 		utils.Logf("Expected address locations (Node IP -> Pod IPs):")
 		for nodeIP, podIPs := range expectedNodeToPods {
@@ -351,7 +348,7 @@ var _ = Describe("SLB - Label Updates", Label(slbTestLabel), func() {
 				// Verify the service reference
 				foundServiceRef := false
 				for _, svcID := range addr.Services {
-					if svcID == serviceUID {
+					if svcID == inboundServiceName(serviceUID) {
 						foundServiceRef = true
 						utils.Logf("    ✓ References service: %s", svcID)
 						break

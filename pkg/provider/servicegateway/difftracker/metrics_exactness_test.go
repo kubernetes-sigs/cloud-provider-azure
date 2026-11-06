@@ -107,8 +107,8 @@ func TestGuardMetrics_PendingServiceDeletionsGauge_NeverNegative(t *testing.T) {
 	assert.Equal(t, 0.0, v, "empty pendingServiceDeletions must report 0")
 
 	// Add two pending deletions → gauge must be 2.
-	dt.pendingServiceDeletions["a"] = &PendingServiceDeletion{ServiceUID: "a"}
-	dt.pendingServiceDeletions["b"] = &PendingServiceDeletion{ServiceUID: "b"}
+	dt.pendingServiceDeletions["a"] = &PendingServiceDeletion{ServiceName: "a"}
+	dt.pendingServiceDeletions["b"] = &PendingServiceDeletion{ServiceName: "b"}
 	updatePendingServiceDeletionsMetric(dt)
 	v, _ = testutil.GetGaugeMetricValue(pendingServiceDeletions)
 	assert.Equal(t, 2.0, v, "gauge must exactly equal len(pendingServiceDeletions)")
@@ -132,19 +132,19 @@ func TestGuardMetrics_PendingServiceOperationsGauge_NeverNegative(t *testing.T) 
 	dt := newTestDiffTracker()
 
 	dt.pendingServiceOps["a"] = &ServiceOperationState{
-		ServiceUID: "a",
-		Config:     NewInboundServiceConfig("a", nil),
-		State:      StateCreationInProgress,
+		ServiceName: "a",
+		Config:      NewInboundServiceConfig("a", nil),
+		State:       StateCreationInProgress,
 	}
 	dt.pendingServiceOps["b"] = &ServiceOperationState{
-		ServiceUID: "b",
-		Config:     NewInboundServiceConfig("b", nil),
-		State:      StateCreated,
+		ServiceName: "b",
+		Config:      NewInboundServiceConfig("b", nil),
+		State:       StateCreated,
 	}
 	dt.pendingServiceOps["c"] = &ServiceOperationState{
-		ServiceUID: "c",
-		Config:     NewOutboundServiceConfig("c", nil),
-		State:      StateDeletionPending,
+		ServiceName: "c",
+		Config:      NewOutboundServiceConfig("c", nil),
+		State:       StateDeletionPending,
 	}
 
 	updatePendingServiceOperationsMetric(dt)
@@ -172,9 +172,9 @@ func TestGuardMetrics_PendingServiceOperationsGauge_OutOfRangeStateNoPanic(t *te
 	dt := newTestDiffTracker()
 
 	dt.pendingServiceOps["bad"] = &ServiceOperationState{
-		ServiceUID: "bad",
-		Config:     NewInboundServiceConfig("bad", nil),
-		State:      ResourceState(99), // out of the seeded enum range
+		ServiceName: "bad",
+		Config:      NewInboundServiceConfig("bad", nil),
+		State:       ResourceState(99), // out of the seeded enum range
 	}
 
 	assert.NotPanics(t, func() {
@@ -211,7 +211,7 @@ func TestGuardMetrics_LocationsAndAddressesTotals_ReflectNRPTotalsEveryCycle(t *
 	dt := newTestDiffTracker()
 	dt.config = testConfig()
 	dt.networkClientFactory = mockFactory
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 	dt.NRPResources.LoadBalancers.Insert("svc")
 
 	// In-sync state: one location (node 10.0.0.1) with one address (10.244.0.1) present in BOTH
@@ -266,19 +266,19 @@ func TestGuardMetrics_LocationsAndAddressesTotals_ReflectNRPTotalsEveryCycle(t *
 func TestTrackedServicesMetric_RefreshedOnServiceCompletion(t *testing.T) {
 	RegisterMetrics()
 	dt := newTestDiffTracker()
-	uid := "svc-tracked-refresh"
+	serviceName := "svc-tracked-refresh"
 
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 	updateTrackedServicesMetric(dt) // baseline: gauge reflects one tracked NRP LB
 	v, err := testutil.GetGaugeMetricValue(trackedServices.WithLabelValues("nrp_loadbalancers"))
 	assert.NoError(t, err)
 	assert.Equal(t, float64(1), v)
 
 	// The NRP set shrinks on delete (as UpdateNRPLoadBalancers does) with no explicit metric refresh.
-	dt.NRPResources.LoadBalancers.Delete(uid)
+	dt.NRPResources.LoadBalancers.Delete(serviceName)
 
 	// A service completion callback must refresh the tracked gauge to match the mutated set.
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	v, err = testutil.GetGaugeMetricValue(trackedServices.WithLabelValues("nrp_loadbalancers"))
 	assert.NoError(t, err)
@@ -322,9 +322,9 @@ func TestGuardMetrics_ServiceOperationTotal_ExactlyOncePerCompletion(t *testing.
 				config = NewOutboundServiceConfig("svc", nil)
 			}
 			dt.pendingServiceOps["svc"] = &ServiceOperationState{
-				ServiceUID: "svc",
-				Config:     config,
-				State:      tc.state,
+				ServiceName: "svc",
+				Config:      config,
+				State:       tc.state,
 			}
 
 			dt.OnServiceCreationComplete("svc", tc.success, tc.err)

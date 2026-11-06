@@ -144,7 +144,7 @@ var _ = Describe("SLB - ExternalTrafficPolicy Provisioning", Label(slbTestLabel)
 			By("Verifying the Azure LB/PIP/Service Gateway entry and all pod registrations")
 			// serviceReconciledErr asserts the PIP, LB (SKU=Service + backend pool) and Service
 			// Gateway entry all exist and exactly numPods pod IPs are registered.
-			eventuallyServiceReconciled(serviceUID, numPods, provisionTimeout)
+			eventuallyServiceReconciled(cs, ns.Name, serviceUID, numPods, provisionTimeout)
 
 			By("Verifying the service is assigned an external IP")
 			var externalIP string

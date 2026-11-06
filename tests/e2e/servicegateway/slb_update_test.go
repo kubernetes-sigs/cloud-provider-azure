@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package network: this file exercises the Engine.UpdateService path end-to-end:
 //   - port edits go through UpdateService -> StateUpdateInProgress -> updateInboundService
-//   - the LB ARM resource is re-PUT in place (same name == same UID, no recreation)
+//   - the LB ARM resource is re-PUT in place (same canonical name, no recreation)
 //   - the SGW Service registration stays stable across port edits (LB backend pool ID
 //     is the same), so SGW state should not flap
 //   - rapid consecutive updates converge on the latest desired config (drift handling)
@@ -48,11 +48,11 @@ type azureLBRule struct {
 }
 
 // getLoadBalancerFrontendPorts reads all frontend ports configured on the LB
-// whose name == serviceUID. Returns sorted list for deterministic comparison.
+// for the raw service UID. Returns sorted list for deterministic comparison.
 func getLoadBalancerFrontendPorts(serviceUID string) ([]int32, error) {
 	output, err := runAz("network", "lb", "rule", "list",
 		"--resource-group", resourceGroupName,
-		"--lb-name", serviceUID,
+		"--lb-name", inboundServiceName(serviceUID),
 		"--output", "json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list LB rules for %s: %w, output: %s", serviceUID, err, string(output))
@@ -77,7 +77,7 @@ func getServiceGatewayBackendPoolID(serviceUID string) (string, error) {
 		return "", err
 	}
 	for _, s := range resp.Value {
-		if s.Name == serviceUID {
+		if s.Name == inboundServiceName(serviceUID) {
 			if len(s.Properties.LoadBalancerBackendPools) == 0 {
 				return "", fmt.Errorf("service %s in SGW has no backend pools", serviceUID)
 			}
@@ -95,7 +95,7 @@ func getServiceGatewayServiceEtag(serviceUID string) (string, error) {
 		return "", err
 	}
 	for _, s := range resp.Value {
-		if s.Name == serviceUID {
+		if s.Name == inboundServiceName(serviceUID) {
 			return s.Etag, nil
 		}
 	}
@@ -226,7 +226,7 @@ var _ = Describe("Container Load Balancer Update", Label(slbTestLabel), func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Verifying the LB still exists under the SAME UID (no recreation)")
-		// verifyAzureResources looks up LB by name == serviceUID; if the engine had
+		// verifyAzureResources looks up the LB by its canonical name; if the engine had
 		// recreated the LB under a different name, this would fail.
 		Expect(verifyAzureResources(serviceUID)).To(Succeed())
 
@@ -745,12 +745,9 @@ var _ = Describe("Container Load Balancer Update", Label(slbTestLabel), func() {
 		serviceUID := string(created.UID)
 
 		By("Waiting until all pods are registered as backends")
-		Eventually(func() (int, error) {
-			if verr := verifyAzureResources(serviceUID); verr != nil {
-				return 0, verr
-			}
-			return countRegisteredEndpoints(serviceUID)
-		}, provision, 5*time.Second).Should(Equal(numPods),
+		Eventually(func() error {
+			return servicePodsReconciledErr(cs, ns.Name, serviceUID, numPods)
+		}, provision, 5*time.Second).Should(Succeed(),
 			"all pods must be registered as backends before the terminal update")
 
 		By("Applying a terminal-failing update: switch targetPort to a named port")
@@ -778,10 +775,12 @@ var _ = Describe("Container Load Balancer Update", Label(slbTestLabel), func() {
 		By("Capturing the surviving pods' IPs before forcing a locations sync")
 		doomed, err := cs.CoreV1().Pods(ns.Name).Get(context.TODO(), fmt.Sprintf("%s-pod-0", serviceName), metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		doomedIPs := podIPSet([]v1.Pod{*doomed})
+		doomedIPs, err := inboundPodIPSet(cs, []v1.Pod{*doomed}, created.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 		allPods, err := cs.CoreV1().Pods(ns.Name).List(context.TODO(), metav1.ListOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		survivorIPs := podIPSet(allPods.Items)
+		survivorIPs, err := inboundPodIPSet(cs, allPods.Items, created.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 		for ip := range doomedIPs {
 			delete(survivorIPs, ip)
 		}
@@ -795,7 +794,7 @@ var _ = Describe("Container Load Balancer Update", Label(slbTestLabel), func() {
 		// Assert the exact surviving address set: a count of numPods-1 is also satisfied by
 		// dropping a live backend while the deleted pod's address leaks.
 		Eventually(func() error {
-			return registeredAddressesMatchErr(serviceUID, survivorIPs)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), survivorIPs)
 		}, 3*time.Minute, defaultPollInterval).Should(Succeed(),
 			"a terminal update must not drain the live LB's remaining backends")
 		Expect(verifyAzureResources(serviceUID)).To(Succeed(),

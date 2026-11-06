@@ -377,26 +377,26 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 			if err != nil {
 				return err
 			}
-			want := make(map[string]struct{})
+			var healthyPods []v1.Pod
 			for i := range healthy.Items {
 				pod := &healthy.Items[i]
 				if !strings.Contains(pod.Name, "-healthy-") {
 					continue
 				}
-				for _, ip := range pod.Status.PodIPs {
-					if ip.IP != "" {
-						want[ip.IP] = struct{}{}
-					}
-				}
+				healthyPods = append(healthyPods, *pod)
 			}
-			if len(want) != totalPods-crashPods {
-				return fmt.Errorf("expected %d healthy pod IPs, got %d", totalPods-crashPods, len(want))
+			if len(healthyPods) != totalPods-crashPods {
+				return fmt.Errorf("expected %d healthy pods, got %d", totalPods-crashPods, len(healthyPods))
 			}
-			return registeredAddressesMatchErr(serviceUID, want)
+			want, err := inboundPodIPSet(cs, healthyPods, createdService.Spec.IPFamilies)
+			if err != nil {
+				return err
+			}
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"the Service Gateway must register exactly the healthy pods' IPs and drain the crashing ones")
 
-		utils.Logf("\n✓ Pod failure handling test passed: exactly the %d healthy pod IPs are registered", totalPods-crashPods)
+		utils.Logf("\n✓ Pod failure handling test passed: eligible addresses of the %d healthy pods are registered", totalPods-crashPods)
 	})
 
 	It("should handle service selector updates", func() {
@@ -521,11 +521,12 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		wantAddrs := podIPSet(v2Pods.Items)
+		wantAddrs, err := inboundPodIPSet(cs, v2Pods.Items, createdService.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(wantAddrs).NotTo(BeEmpty(), "the v2 pods must have IPs to compare against")
 
 		Eventually(func() error {
-			return registeredAddressesMatchErr(serviceUID, wantAddrs)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), wantAddrs)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"the Service Gateway must register exactly the v2 pod IPs and drop every v1 pod IP")
 

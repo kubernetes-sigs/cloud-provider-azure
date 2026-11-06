@@ -25,7 +25,6 @@ import (
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
@@ -170,12 +169,12 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 		// traffic to the wrong workload.
 		Eventually(func() error {
 			for _, svcConfig := range services {
-				want, err := livePodIPsFor(cs, ns.Name, svcConfig.name)
+				want, podCount, err := livePodIPsFor(cs, ns.Name, svcConfig.name)
 				if err != nil {
 					return err
 				}
-				if len(want) != svcConfig.podCount {
-					return fmt.Errorf("service %s: expected %d live pod IPs, got %d", svcConfig.name, svcConfig.podCount, len(want))
+				if podCount != svcConfig.podCount {
+					return fmt.Errorf("service %s: expected %d Ready pods, got %d", svcConfig.name, svcConfig.podCount, podCount)
 				}
 				if err := serviceReconciledMatchErr(serviceUIDs[svcConfig.name], want); err != nil {
 					return fmt.Errorf("service %s: %w", svcConfig.name, err)
@@ -192,7 +191,7 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 		foundServices := 0
 		for _, sgSvc := range sgResponse.Value {
 			for svcName, uid := range serviceUIDs {
-				if sgSvc.Name == uid {
+				if sgSvc.Name == inboundServiceName(uid) {
 					foundServices++
 					utils.Logf("Found service %s (UID: %s) in Service Gateway", svcName, uid)
 					break
@@ -204,11 +203,11 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 
 		By("Verifying each service registered exactly its own pod IPs")
 		for svcName, uid := range serviceUIDs {
-			want, err := livePodIPsFor(cs, ns.Name, svcName)
+			want, podCount, err := livePodIPsFor(cs, ns.Name, svcName)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(registeredAddressesMatchErr(uid, want)).To(Succeed(),
+			Expect(registeredAddressesMatchErr(inboundServiceName(uid), want)).To(Succeed(),
 				"service %s must register exactly its own pods' IPs", svcName)
-			utils.Logf("Service %s: %d pod IPs registered and matched exactly", svcName, len(want))
+			utils.Logf("Service %s: %d eligible IPs matched for %d Ready pods", svcName, len(want), podCount)
 		}
 
 		utils.Logf("\n✓ Mixed workload test passed: 10 services, %d total pods", totalPods)
@@ -344,12 +343,12 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 		By("Waiting for Azure provisioning")
 		Eventually(func() error {
 			for svcName, uid := range serviceUIDs {
-				want, err := livePodIPsFor(cs, ns.Name, svcName)
+				want, podCount, err := livePodIPsFor(cs, ns.Name, svcName)
 				if err != nil {
 					return err
 				}
-				if len(want) != podsPerService {
-					return fmt.Errorf("service %s: expected %d live pod IPs, got %d", svcName, podsPerService, len(want))
+				if podCount != podsPerService {
+					return fmt.Errorf("service %s: expected %d Ready pods, got %d", svcName, podsPerService, podCount)
 				}
 				if err := serviceReconciledMatchErr(uid, want); err != nil {
 					return fmt.Errorf("service %s: %w", svcName, err)
@@ -366,7 +365,7 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 		foundServices := 0
 		for _, sgSvc := range sgResponse.Value {
 			for svcName, uid := range serviceUIDs {
-				if sgSvc.Name == uid {
+				if sgSvc.Name == inboundServiceName(uid) {
 					foundServices++
 					utils.Logf("Found service %s (UID: %s) in Service Gateway", svcName, uid)
 					break
@@ -378,11 +377,11 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 
 		By("Verifying all pod IPs registered")
 		for svcName, uid := range serviceUIDs {
-			want, err := livePodIPsFor(cs, ns.Name, svcName)
+			want, podCount, err := livePodIPsFor(cs, ns.Name, svcName)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(registeredAddressesMatchErr(uid, want)).To(Succeed(),
+			Expect(registeredAddressesMatchErr(inboundServiceName(uid), want)).To(Succeed(),
 				"service %s must register exactly its own pods' IPs regardless of traffic policy", svcName)
-			utils.Logf("Service %s: %d pod IPs registered and matched exactly", svcName, len(want))
+			utils.Logf("Service %s: %d eligible IPs matched for %d Ready pods", svcName, len(want), podCount)
 		}
 
 		utils.Logf("\n✓ Mixed traffic policy test passed: %d services (%d Local, %d Cluster), %d total pods",
@@ -486,12 +485,12 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 		By("Waiting for Azure to provision all resources")
 		Eventually(func() error {
 			for _, svcConfig := range services {
-				want, err := livePodIPsFor(cs, ns.Name, svcConfig.name)
+				want, podCount, err := livePodIPsFor(cs, ns.Name, svcConfig.name)
 				if err != nil {
 					return err
 				}
-				if len(want) != svcConfig.podCount {
-					return fmt.Errorf("service %s: expected %d live pod IPs, got %d", svcConfig.name, svcConfig.podCount, len(want))
+				if podCount != svcConfig.podCount {
+					return fmt.Errorf("service %s: expected %d Ready pods, got %d", svcConfig.name, svcConfig.podCount, podCount)
 				}
 				if err := serviceReconciledMatchErr(serviceUIDs[svcConfig.name], want); err != nil {
 					return fmt.Errorf("service %s: %w", svcConfig.name, err)
@@ -508,7 +507,7 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 		foundServices := 0
 		for _, sgSvc := range sgResponse.Value {
 			for _, uid := range serviceUIDs {
-				if sgSvc.Name == uid {
+				if sgSvc.Name == inboundServiceName(uid) {
 					foundServices++
 					break
 				}
@@ -517,8 +516,9 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 
 		Expect(foundServices).To(Equal(len(services)), fmt.Sprintf("Expected %d services, found %d", len(services), foundServices))
 
-		By("Verifying all 120 pod IPs registered")
+		By("Verifying eligible addresses for all 120 pods")
 		totalRegisteredIPs := 0
+		totalReadyPods := 0
 		for svcName, uid := range serviceUIDs {
 			expectedPods := 0
 			for _, svcConfig := range services {
@@ -528,15 +528,17 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 				}
 			}
 
-			want, err := livePodIPsFor(cs, ns.Name, svcName)
+			want, podCount, err := livePodIPsFor(cs, ns.Name, svcName)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(want).To(HaveLen(expectedPods), "service %s should have %d live pods", svcName, expectedPods)
-			Expect(registeredAddressesMatchErr(uid, want)).To(Succeed(),
+			Expect(podCount).To(Equal(expectedPods), "service %s should have %d live pods", svcName, expectedPods)
+			Expect(registeredAddressesMatchErr(inboundServiceName(uid), want)).To(Succeed(),
 				"service %s must register exactly its own pods' IPs", svcName)
 			totalRegisteredIPs += len(want)
+			totalReadyPods += podCount
 		}
 
-		Expect(totalRegisteredIPs).To(Equal(120), "Should have exactly 120 pod IPs registered")
+		Expect(totalReadyPods).To(Equal(120), "Should have exactly 120 Ready pods")
+		utils.Logf("Verified %d eligible addresses for %d Ready pods", totalRegisteredIPs, totalReadyPods)
 
 		utils.Logf("\n✓ Combined large-scale workload test passed: %d services, 120 pods", len(services))
 	})
@@ -545,21 +547,10 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 // livePodIPsFor returns the address set the given service's pods should have registered. Specs
 // compare against this set rather than a per-service count, which cannot detect one service's pods
 // being registered under another service's name.
-func livePodIPsFor(cs clientset.Interface, namespace, serviceName string) (map[string]struct{}, error) {
-	pods, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: labels.SelectorFromSet(map[string]string{"app": serviceName}).String(),
-	})
+func livePodIPsFor(cs clientset.Interface, namespace, serviceName string) (map[string]struct{}, int, error) {
+	service, err := cs.CoreV1().Services(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	readyPods := make([]v1.Pod, 0, len(pods.Items))
-	for i := range pods.Items {
-		// Skip pods that are already Terminating: their addresses are being drained, so they
-		// are not part of the set the Service Gateway should still hold. Counting them makes
-		// a scale-down transiently expect one address too many.
-		if pods.Items[i].DeletionTimestamp == nil {
-			readyPods = append(readyPods, pods.Items[i])
-		}
-	}
-	return podIPSet(readyPods), nil
+	return livePodIPsForSelector(cs, namespace, service.Spec.Selector, service.Spec.IPFamilies)
 }

@@ -62,8 +62,8 @@ func TestReconcileNodeIPChange(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		t.Cleanup(ctrl.Finish)
 		dt := seedDiffTracker(t, mock_azclient.NewMockClientFactory(ctrl), fake.NewSimpleClientset(),
-			K8sState{Services: utilsets.NewString(svcUID), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
-			NRPState{LoadBalancers: utilsets.NewString(svcUID), NATGateways: utilsets.NewString(), Locations: map[string]NRPLocation{}})
+			K8sState{Services: utilsets.NewString(inboundServiceName(svcUID)), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
+			NRPState{LoadBalancers: utilsets.NewString(inboundServiceName(svcUID)), NATGateways: utilsets.NewString(), Locations: map[string]NRPLocation{}})
 		return dt
 	}
 
@@ -86,7 +86,7 @@ func TestReconcileNodeIPChange(t *testing.T) {
 	t.Run("node InternalIP change moves the pod off the stale location", func(t *testing.T) {
 		dt := newTracker(t)
 		dt.ReconcileEndpointSlice(nil, singleEndpointSlice())
-		dt.UpdateEndpoints(svcUID, nil, map[string]string{podIP: oldLoc})
+		dt.UpdateEndpoints(inboundServiceName(svcUID), nil, map[string]string{podIP: oldLoc})
 
 		dt.ReconcileNodeIPChange("node1", []string{oldLoc}, []string{newLoc})
 
@@ -112,7 +112,7 @@ func TestReconcileNodeIPChange(t *testing.T) {
 	t.Run("node deletion drains the pod", func(t *testing.T) {
 		dt := newTracker(t)
 		dt.ReconcileEndpointSlice(nil, singleEndpointSlice())
-		dt.UpdateEndpoints(svcUID, nil, map[string]string{podIP: oldLoc})
+		dt.UpdateEndpoints(inboundServiceName(svcUID), nil, map[string]string{podIP: oldLoc})
 
 		dt.ReconcileNodeIPChange("node1", []string{oldLoc}, nil)
 
@@ -159,9 +159,9 @@ func TestAddServiceSeedsInboundEndpointsFromCache(t *testing.T) {
 		}},
 	})
 
-	dt.AddService(NewInboundServiceConfig(svcUID, makeInboundConfig(80)))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(inboundServiceName(svcUID), makeInboundConfig(80))))
 
-	updates := dt.pendingEndpoints[svcUID]
+	updates := dt.pendingEndpoints[inboundServiceName(svcUID)]
 	if assert.Len(t, updates, 1, "AddService must replay unchanged EndpointSlices into the creation buffer") {
 		assert.Equal(t, map[string]string{podIP: nodeIP}, updates[0].PodIPToNodeIP)
 	}
@@ -196,7 +196,7 @@ func TestReconcileEndpointSlice(t *testing.T) {
 	)
 
 	dt := newTestDiffTracker()
-	dt.NRPResources.LoadBalancers.Insert(svcUID)
+	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(svcUID))
 	setTestNodeLister(t, dt, &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
 		Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
@@ -434,12 +434,12 @@ func TestSeedInboundEndpointsFromCache_DoesNotOvertakeRemoval(t *testing.T) {
 			return false
 		}
 		pod, ok := n.Pods[podIP]
-		return ok && pod.InboundIdentities.Has(svcUID)
+		return ok && pod.InboundIdentities.Has(inboundServiceName(svcUID))
 	}
 
 	newTracker := func(t *testing.T) (*DiffTracker, *blockingNodeLister) {
 		dt := newTestDiffTracker()
-		dt.NRPResources.LoadBalancers.Insert(svcUID)
+		dt.NRPResources.LoadBalancers.Insert(inboundServiceName(svcUID))
 		setTestNodeLister(t, dt, node)
 		// Register the endpoint with the plain lister first, so the blocking one is only consumed
 		// by the seed under test.
@@ -459,7 +459,7 @@ func TestSeedInboundEndpointsFromCache_DoesNotOvertakeRemoval(t *testing.T) {
 		seedDone := make(chan struct{})
 		go func() {
 			defer close(seedDone)
-			dt.seedInboundEndpointsFromCache(svcUID)
+			dt.seedInboundEndpointsFromCache(inboundServiceName(svcUID))
 		}()
 
 		select {
@@ -498,7 +498,7 @@ func TestSeedInboundEndpointsFromCache_DoesNotOvertakeRemoval(t *testing.T) {
 		dt, blocking := newTracker(t)
 		close(blocking.release)
 
-		dt.seedInboundEndpointsFromCache(svcUID)
+		dt.seedInboundEndpointsFromCache(inboundServiceName(svcUID))
 
 		assert.True(t, registered(dt),
 			"the replay must still seed endpoints for a newly registered service")
