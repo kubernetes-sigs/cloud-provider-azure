@@ -218,17 +218,30 @@ func (dt *DiffTracker) addServiceGatewayFinalizer(ctx context.Context, service *
 // NOTE: We also remove the K8s LoadBalancerCleanupFinalizer that we added in addServiceGatewayFinalizer
 // Implements retry with exponential backoff for resilience against transient API failures.
 func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, service *v1.Service) error {
+	_, err := dt.removeServiceFinalizers(ctx, service, false)
+	return err
+}
+
+func serviceNeedsFinalizerRecovery(service *v1.Service) bool {
+	return service.DeletionTimestamp != nil || service.Spec.Type != v1.ServiceTypeLoadBalancer || service.Spec.LoadBalancerClass != nil
+}
+
+// removeServiceFinalizers reports whether cleanup completed, rather than becoming unnecessary
+// because the Service is managed again.
+func (dt *DiffTracker) removeServiceFinalizers(ctx context.Context, service *v1.Service, recovering bool) (bool, error) {
 	namespace := service.Namespace
 	name := service.Name
 	intendedUID := string(service.UID)
 	var lastErr error
+	completed := false
 
-	retryErr := wait.ExponentialBackoff(finalizerRetryBackoff, func() (bool, error) {
+	retryErr := wait.ExponentialBackoffWithContext(ctx, finalizerRetryBackoff, func(ctx context.Context) (bool, error) {
 		// Get fresh service to avoid conflicts
 		currentSvc, err := dt.kubeClient.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				// Service already deleted, finalizer effectively removed
+				completed = true
 				return true, nil
 			}
 			lastErr = err
@@ -238,12 +251,28 @@ func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, servic
 
 		if intendedUID != "" && string(currentSvc.UID) != intendedUID {
 			dt.logger.V(4).Info("Service UID changed (replacement Service); not removing finalizers", "namespace", namespace, "name", name, "wantUID", intendedUID, "gotUID", string(currentSvc.UID))
+			completed = true
 			return true, nil
+		}
+
+		if recovering {
+			if !hasServiceGatewayFinalizer(currentSvc) {
+				completed = true
+				return true, nil
+			}
+			if !serviceNeedsFinalizerRecovery(currentSvc) {
+				dt.logger.V(4).Info("Service is managed again; keeping its cleanup finalizers", "namespace", namespace, "name", name)
+				return true, nil
+			}
+			if dt.IsServiceTracked(strings.ToLower(string(currentSvc.UID))) {
+				return false, fmt.Errorf("service %s/%s is still tracked", namespace, name)
+			}
 		}
 
 		// Decide from the fresh object. A stale lister object can omit finalizers that still exist on
 		// the live Service, and treating that as success would strand the Service in Terminating.
 		if !hasServiceGatewayFinalizer(currentSvc) && !servicehelper.HasLBFinalizer(currentSvc) {
+			completed = true
 			return true, nil
 		}
 
@@ -263,13 +292,68 @@ func (dt *DiffTracker) removeServiceGatewayFinalizer(ctx context.Context, servic
 			return false, nil // Retry
 		}
 
+		completed = true
 		return true, nil // Success
 	})
 
 	if retryErr != nil {
-		return fmt.Errorf("failed to remove finalizer after retries: %w (last error: %w)", retryErr, lastErr)
+		return false, fmt.Errorf("failed to remove finalizer after retries: %w", errors.Join(retryErr, lastErr))
 	}
-	return nil
+	return completed, nil
+}
+
+// retryServiceFinalizers only retries Kubernetes cleanup already cleared by startup's resource checks.
+func (s *ServiceUpdater) retryServiceFinalizers(services []v1.ObjectReference) {
+	ctx := s.ctx
+	dt := s.diffTracker
+	for attempt := 1; len(services) > 0; attempt++ {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(computeRetryBackoff(attempt)):
+		}
+
+		remaining := services[:0]
+		for _, ref := range services {
+			if ctx.Err() != nil {
+				return
+			}
+			uid := strings.ToLower(string(ref.UID))
+			// Reserve the worker slot so new Azure work cannot race the finalizer update.
+			s.mu.Lock()
+			if s.activeOps[uid] {
+				s.mu.Unlock()
+				remaining = append(remaining, ref)
+				continue
+			}
+			s.activeOps[uid] = true
+			s.mu.Unlock()
+			service := &v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: ref.Namespace, Name: ref.Name, UID: ref.UID}}
+			attemptCtx, cancel := context.WithTimeout(ctx, getNRPOperationTimeout())
+			completed, err := dt.removeServiceFinalizers(attemptCtx, service, true)
+			cancel()
+			s.mu.Lock()
+			delete(s.activeOps, uid)
+			s.mu.Unlock()
+			if ctx.Err() == nil && dt.IsServiceTracked(uid) {
+				s.requeueIfMoreWork(uid)
+			}
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				remaining = append(remaining, ref)
+				RecordServiceFinalizerRemoveFailed()
+				dt.logger.Error(err, "Could not remove Service cleanup finalizers; will retry",
+					"namespace", ref.Namespace, "service", ref.Name, "uid", ref.UID)
+			} else if completed {
+				recordFinalizerRecovered()
+				dt.logger.V(2).Info("Recovered Service cleanup finalizers", "namespace", ref.Namespace, "service", ref.Name, "uid", ref.UID)
+			}
+		}
+		clear(services[len(remaining):])
+		services = remaining
+	}
 }
 
 // ================================================================================================
