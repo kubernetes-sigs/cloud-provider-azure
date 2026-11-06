@@ -465,6 +465,7 @@ func TestNodeAddresses(t *testing.T) {
 		ipV4Public          string
 		ipV6Public          string
 		loadBalancerSKU     string
+		nodeIPFamilies      []string
 		expectedAddress     []v1.NodeAddress
 		useInstanceMetadata bool
 		useCustomImsCache   bool
@@ -573,6 +574,41 @@ func TestNodeAddresses(t *testing.T) {
 			},
 		},
 		{
+			name:                "NodeAddresses should report the IPv6 addresses first when nodeIPFamilies is IPv6-primary",
+			nodeName:            "vm1",
+			metadataName:        "vm1",
+			vmType:              consts.VMTypeStandard,
+			ipV4:                "10.240.0.1",
+			ipV4Public:          "192.168.1.12",
+			ipV6:                "1111:11111:00:00:1111:1111:000:111",
+			ipV6Public:          "2222:22221:00:00:2222:2222:000:111",
+			loadBalancerSKU:     "basic",
+			nodeIPFamilies:      []string{"ipv6", "ipv4"},
+			useInstanceMetadata: true,
+			expectedAddress: []v1.NodeAddress{
+				{
+					Type:    v1.NodeHostName,
+					Address: "vm1",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "1111:11111:00:00:1111:1111:000:111",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "2222:22221:00:00:2222:2222:000:111",
+				},
+				{
+					Type:    v1.NodeInternalIP,
+					Address: "10.240.0.1",
+				},
+				{
+					Type:    v1.NodeExternalIP,
+					Address: "192.168.1.12",
+				},
+			},
+		},
+		{
 			name:                "NodeAddresses should get IP addresses from local IMDS for standard LoadBalancer if node's name is equal to metadataName",
 			nodeName:            "vm1",
 			metadataName:        "vm1",
@@ -616,6 +652,7 @@ func TestNodeAddresses(t *testing.T) {
 		}
 		cloud.VMType = test.vmType
 		cloud.UseInstanceMetadata = test.useInstanceMetadata
+		cloud.NodeIPFamilies = test.nodeIPFamilies
 		listener, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Errorf("Test [%s] unexpected error: %v", test.name, err)
@@ -669,6 +706,107 @@ func TestNodeAddresses(t *testing.T) {
 		ipAddresses, err := cloud.NodeAddresses(context.Background(), types.NodeName(test.nodeName))
 		assert.Equal(t, test.expectedErrMsg, err, test.name)
 		assert.Equal(t, test.expectedAddress, ipAddresses, test.name)
+	}
+}
+
+func TestNodeAddressesFromARMByIPFamily(t *testing.T) {
+	expectedVM := &armcompute.VirtualMachine{
+		Properties: &armcompute.VirtualMachineProperties{
+			NetworkProfile: &armcompute.NetworkProfile{
+				NetworkInterfaces: []*armcompute.NetworkInterfaceReference{
+					{
+						Properties: &armcompute.NetworkInterfaceReferenceProperties{
+							Primary: ptr.To(true),
+						},
+						ID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic"),
+					},
+				},
+			},
+		},
+	}
+
+	expectedPIP := &armnetwork.PublicIPAddress{
+		Name: ptr.To("pip1"),
+		ID:   ptr.To("/subscriptions/subscriptionID/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/pip1"),
+		Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+			IPAddress: ptr.To("192.168.1.12"),
+		},
+	}
+
+	// Azure only allows an IPv4 IP configuration to be the primary one, so a
+	// dual-stack NIC always has its IPv6 address on a secondary configuration.
+	dualStackInterface := &armnetwork.Interface{
+		Properties: &armnetwork.InterfacePropertiesFormat{
+			IPConfigurations: []*armnetwork.InterfaceIPConfiguration{
+				{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+						Primary:          ptr.To(true),
+						PrivateIPAddress: ptr.To("172.1.0.3"),
+						PublicIPAddress:  expectedPIP,
+					},
+				},
+				{
+					Properties: &armnetwork.InterfaceIPConfigurationPropertiesFormat{
+						Primary:          ptr.To(false),
+						PrivateIPAddress: ptr.To("fd00::3"),
+					},
+				},
+			},
+		},
+	}
+
+	testcases := []struct {
+		name            string
+		nodeIPFamilies  []string
+		nic             *armnetwork.Interface
+		expectedAddress []v1.NodeAddress
+	}{
+		{
+			name: "NodeAddresses should report only the primary IP configuration when nodeIPFamilies is unset",
+			nic:  dualStackInterface,
+			expectedAddress: []v1.NodeAddress{
+				{Type: v1.NodeInternalIP, Address: "172.1.0.3"},
+				{Type: v1.NodeHostName, Address: "vm1"},
+				{Type: v1.NodeExternalIP, Address: "192.168.1.12"},
+			},
+		},
+		{
+			name:           "NodeAddresses should report the IPv6 address first when nodeIPFamilies is IPv6-primary",
+			nodeIPFamilies: []string{"ipv6", "ipv4"},
+			nic:            dualStackInterface,
+			expectedAddress: []v1.NodeAddress{
+				{Type: v1.NodeInternalIP, Address: "fd00::3"},
+				{Type: v1.NodeInternalIP, Address: "172.1.0.3"},
+				{Type: v1.NodeHostName, Address: "vm1"},
+				{Type: v1.NodeExternalIP, Address: "192.168.1.12"},
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			cloud := GetTestCloud(ctrl)
+			cloud.VMSet, _ = newAvailabilitySet(cloud)
+			cloud.VMType = consts.VMTypeStandard
+			cloud.UseInstanceMetadata = false
+			cloud.NodeIPFamilies = test.nodeIPFamilies
+
+			mockVMClient := cloud.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+			mockVMClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "vm1", gomock.Any()).Return(expectedVM, nil).AnyTimes()
+
+			mockInterfaceClient := cloud.ComputeClientFactory.GetInterfaceClient().(*mock_interfaceclient.MockInterface)
+			mockInterfaceClient.EXPECT().Get(gomock.Any(), cloud.ResourceGroup, "nic", gomock.Any()).Return(test.nic, nil).AnyTimes()
+
+			pipClient := cloud.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+			pipClient.EXPECT().List(gomock.Any(), cloud.ResourceGroup).Return([]*armnetwork.PublicIPAddress{expectedPIP}, nil).AnyTimes()
+
+			ipAddresses, err := cloud.NodeAddresses(context.Background(), types.NodeName("vm1"))
+			assert.NoError(t, err)
+			assert.Equal(t, test.expectedAddress, ipAddresses)
+		})
 	}
 }
 

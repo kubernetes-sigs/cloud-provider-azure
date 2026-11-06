@@ -35,11 +35,16 @@ type IMDSNodeProvider struct {
 }
 
 // NewIMDSNodeProvider creates a new IMDSNodeProvider.
-func NewIMDSNodeProvider(ctx context.Context) *IMDSNodeProvider {
+//
+// The IMDS path does not read a cloud config file, so every setting it needs
+// must be supplied here. nodeIPFamilies orders the IP families reported in a
+// node's status.addresses; an empty list means the default of IPv4 first.
+func NewIMDSNodeProvider(ctx context.Context, nodeIPFamilies []string) *IMDSNodeProvider {
 	logger := log.FromContextOrBackground(ctx).WithName("NewIMDSNodeProvider")
 	az, err := azureprovider.NewCloud(ctx, nil, &config.Config{
 		UseInstanceMetadata: true,
 		VMType:              "vmss",
+		NodeIPFamilies:      nodeIPFamilies,
 	}, false)
 	if err != nil {
 		logger.Error(err, "Failed to initialize Azure cloud provider")

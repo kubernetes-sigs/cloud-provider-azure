@@ -2490,6 +2490,18 @@ func TestInitializeCloudFromConfig(t *testing.T) {
 		assert.Equal(t, fmt.Errorf("InitializeCloudFromConfig: cannot initialize from nil config"), err)
 
 	})
+	t.Run("single-stack IPv6 nodeIPFamilies is not supported", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		az := GetTestCloud(ctrl)
+
+		azureconfig := providerconfig.Config{
+			NodeIPFamilies: []string{"ipv6"},
+		}
+
+		err := az.InitializeCloudFromConfig(context.Background(), &azureconfig, false, true)
+		assert.EqualError(t, err, `nodeIPFamilies: single-stack IPv6 is not supported`)
+	})
 	t.Run("disableAvailabilitySetNodes true is only supported when vmType is 'vmss'", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()

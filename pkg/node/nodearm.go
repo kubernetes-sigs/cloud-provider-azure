@@ -35,7 +35,11 @@ type ARMNodeProvider struct {
 }
 
 // NewARMNodeProvider creates a new ARMNodeProvider.
-func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string) *ARMNodeProvider {
+//
+// nodeIPFamilies orders the IP families reported in a node's status.addresses.
+// When non-empty it overrides any nodeIPFamilies set in the cloud config file;
+// an empty list leaves the config file's value, or the default, in place.
+func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string, nodeIPFamilies []string) *ARMNodeProvider {
 	logger := log.FromContextOrBackground(ctx).WithName("NewARMNodeProvider")
 	var err error
 	var az cloudprovider.Interface
@@ -45,8 +49,13 @@ func NewARMNodeProvider(ctx context.Context, cloudConfigFilePath string) *ARMNod
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
+	azureCloud := az.(*azureprovider.Cloud)
+	if len(nodeIPFamilies) > 0 {
+		azureCloud.NodeIPFamilies = nodeIPFamilies
+	}
+
 	return &ARMNodeProvider{
-		azure: az.(*azureprovider.Cloud),
+		azure: azureCloud,
 	}
 }
 

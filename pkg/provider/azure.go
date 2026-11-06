@@ -283,6 +283,13 @@ func (az *Cloud) InitializeCloudFromConfig(ctx context.Context, config *azurecon
 		config.RouteUpdateWaitingInSeconds = defaultRouteUpdateWaitingInSeconds
 	}
 
+	// Azure requires the primary IP configuration of a NIC to be IPv4, so a node
+	// can only report IPv6 alongside IPv4. An IPv6-only list would make the node
+	// single-stack IPv6, which is not supported.
+	if len(config.NodeIPFamilies) == 1 && strings.EqualFold(strings.TrimSpace(config.NodeIPFamilies[0]), consts.IPVersionIPv6StringLower) {
+		return fmt.Errorf("nodeIPFamilies: single-stack IPv6 is not supported")
+	}
+
 	if config.DisableAvailabilitySetNodes && config.VMType != consts.VMTypeVMSS {
 		return fmt.Errorf("disableAvailabilitySetNodes %v is only supported when vmType is 'vmss'", config.DisableAvailabilitySetNodes)
 	}
