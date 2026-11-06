@@ -19,13 +19,18 @@ package servicegateway
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
@@ -438,6 +443,257 @@ var _ = Describe("Container Load Balancer Crash Recovery", Label(slbTestLabel, s
 		}
 		utils.Logf("Final endpoint count: %d (expected: %d)", totalAddresses, numPods)
 		Expect(totalAddresses).To(Equal(numPods), "All pods should be in endpoints after multiple crashes")
+	})
+
+	It("should remove endpoints that were scaled away while the CCM was starting up", func() {
+		const (
+			initialReplicas  = 6
+			scaledReplicas   = 2
+			extraServices    = 20
+			servicePort      = int32(8080)
+			targetPort       = 8080
+			provisionTimeout = 3 * time.Minute
+			listTimeout      = 3 * time.Minute
+			initTimeout      = 10 * time.Minute
+			reconcileTimeout = 5 * time.Minute
+			// Deleting the additional services takes longer than the shared AfterEach allows.
+			extraCleanupTimeout = 8 * time.Minute
+			// Logged by the restarted CCM after its startup EndpointSlice LIST, and when its blocking
+			// initial sync returns; its shared informers start only after the latter.
+			endpointSlicesListedLog = `"Processed Kubernetes EndpointSlices"`
+			initCompletedLog        = `"Completed initialization"`
+		)
+
+		ctx := context.Background()
+		serviceLabels := map[string]string{
+			"app": serviceName,
+		}
+
+		By(fmt.Sprintf("Creating a deployment with %d replicas", initialReplicas))
+		replicas := int32(initialReplicas)
+		deployment := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: ns.Name,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{MatchLabels: serviceLabels},
+				Template: v1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: serviceLabels},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{
+							{
+								Name:            "test-app",
+								Image:           utils.AgnhostImage,
+								ImagePullPolicy: v1.PullIfNotPresent,
+								Args:            []string{"netexec", fmt.Sprintf("--http-port=%d", targetPort)},
+							},
+						},
+					},
+				},
+			},
+		}
+		_, err := cs.AppsV1().Deployments(ns.Name).Create(ctx, deployment, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for pods to be ready")
+		Eventually(func() (int32, error) {
+			d, err := cs.AppsV1().Deployments(ns.Name).Get(ctx, serviceName, metav1.GetOptions{})
+			if err != nil {
+				return 0, err
+			}
+			return d.Status.ReadyReplicas, nil
+		}, provisionTimeout, 5*time.Second).Should(Equal(replicas),
+			"deployment %s should have %d ready replicas", serviceName, initialReplicas)
+
+		By("Creating LoadBalancer service")
+		service := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: ns.Name,
+				Annotations: map[string]string{
+					"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
+				},
+			},
+			Spec: v1.ServiceSpec{
+				Type:     v1.ServiceTypeLoadBalancer,
+				Selector: serviceLabels,
+				Ports: []v1.ServicePort{
+					{
+						Name:       "http",
+						Protocol:   v1.ProtocolTCP,
+						Port:       servicePort,
+						TargetPort: intstr.FromInt(targetPort),
+					},
+				},
+			},
+		}
+		createdService, err := cs.CoreV1().Services(ns.Name).Create(ctx, service, metav1.CreateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		serviceUID := string(createdService.UID)
+		utils.Logf("Service UID: %s", serviceUID)
+
+		By(fmt.Sprintf("Waiting for the Service Gateway to register exactly the %d ready endpoints", initialReplicas))
+		Eventually(func() error {
+			want, err := readyEndpointIPs(cs, ns.Name, serviceName)
+			if err != nil {
+				return err
+			}
+			if len(want) != initialReplicas {
+				return fmt.Errorf("service %s has %d ready endpoint addresses, want %d", serviceName, len(want), initialReplicas)
+			}
+			return serviceReconciledMatchErr(serviceUID, want)
+		}, provisionTimeout, defaultPollInterval).Should(Succeed(),
+			"Service Gateway should register every ready endpoint before the CCM crash")
+
+		By("Crashing CCM and waiting until it is genuinely down")
+		crashedUIDs, err := ccmClient.CrashCCMAndWaitForDown(ctx, CCMRecoveryTimeout)
+		Expect(err).NotTo(HaveOccurred())
+
+		By(fmt.Sprintf("Creating %d additional LoadBalancer services while CCM is down", extraServices))
+		// The restarted CCM must provision these inside its blocking initial sync, which widens the
+		// window between its startup EndpointSlice LIST and the start of its informers.
+		var extraServiceNames, extraServiceUIDs []string
+		// A Go defer, unlike DeferCleanup, runs before the shared AfterEach and on every exit path,
+		// including Skip.
+		defer func() {
+			By(fmt.Sprintf("Deleting the %d additional services and waiting for the Service Gateway to drop them", len(extraServiceNames)))
+			for _, name := range extraServiceNames {
+				Expect(cs.CoreV1().Services(ns.Name).Delete(ctx, name, metav1.DeleteOptions{})).To(Succeed())
+			}
+			Eventually(func() error {
+				return inboundServicesCleanupErr(extraServiceUIDs)
+			}, extraCleanupTimeout, defaultPollInterval).Should(Succeed(),
+				"the additional services should be removed from the Service Gateway")
+		}()
+		for i := 0; i < extraServices; i++ {
+			extraService := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-extra-%d", serviceName, i),
+					Namespace: ns.Name,
+					Annotations: map[string]string{
+						"service.beta.kubernetes.io/azure-load-balancer-backend-pool-type": "slb",
+					},
+				},
+				Spec: v1.ServiceSpec{
+					Type:     v1.ServiceTypeLoadBalancer,
+					Selector: serviceLabels,
+					Ports: []v1.ServicePort{
+						{
+							Name:       "http",
+							Protocol:   v1.ProtocolTCP,
+							Port:       servicePort + int32(i) + 1,
+							TargetPort: intstr.FromInt(targetPort),
+						},
+					},
+				},
+			}
+			createdExtra, err := cs.CoreV1().Services(ns.Name).Create(ctx, extraService, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			extraServiceNames = append(extraServiceNames, createdExtra.Name)
+			extraServiceUIDs = append(extraServiceUIDs, string(createdExtra.UID))
+		}
+
+		By("Waiting for CCM to recover")
+		err = ccmClient.WaitForCCMReady(ctx, CCMRecoveryTimeout, crashedUIDs...)
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the restarted CCM to list EndpointSlices")
+		// Scaling as soon as the LIST is logged, rather than after a fixed delay, keeps the scale-down
+		// inside the initial sync even when that sync is short.
+		var ccmPodName string
+		err = wait.PollUntilContextTimeout(ctx, time.Second, listTimeout, true, func(ctx context.Context) (bool, error) {
+			pods, err := ccmClient.GetCCMPods(ctx)
+			if err != nil {
+				return false, nil
+			}
+			for _, pod := range pods {
+				if slices.Contains(crashedUIDs, pod.UID) {
+					continue
+				}
+				logs, err := ccmClient.GetCCMLogs(ctx, pod.Name, ccmContainerName)
+				if err != nil {
+					continue
+				}
+				if _, found := ccmLogLineTime(logs, endpointSlicesListedLog); found {
+					ccmPodName = pod.Name
+					return true, nil
+				}
+			}
+			return false, nil
+		})
+		if err != nil {
+			Skip(fmt.Sprintf("scale-down could not be placed inside the CCM startup window; no restarted CCM pod logged %s within %v",
+				endpointSlicesListedLog, listTimeout))
+		}
+
+		By(fmt.Sprintf("Scaling the deployment to %d replicas while CCM pod %s is in its initial sync", scaledReplicas, ccmPodName))
+		scaledAt := time.Now()
+		_, err = cs.AppsV1().Deployments(ns.Name).UpdateScale(ctx, serviceName, &autoscalingv1.Scale{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: ns.Name,
+			},
+			Spec: autoscalingv1.ScaleSpec{
+				Replicas: scaledReplicas,
+			},
+		}, metav1.UpdateOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Waiting for the scaled-away endpoints to stop being ready")
+		Eventually(func() (int, error) {
+			addrs, err := readyEndpointIPs(cs, ns.Name, serviceName)
+			return len(addrs), err
+		}, time.Minute, time.Second).Should(Equal(scaledReplicas),
+			"service %s should have %d ready endpoint addresses after the scale-down", serviceName, scaledReplicas)
+		landedAt := time.Now()
+		utils.Logf("Scale-down issued at %s; EndpointSlices reflected it by %s",
+			scaledAt.Format(time.RFC3339Nano), landedAt.Format(time.RFC3339Nano))
+
+		By("Waiting for the restarted CCM to complete its initial sync")
+		var listedAt, initCompletedAt time.Time
+		err = wait.PollUntilContextTimeout(ctx, CCMRecoveryPollInterval, initTimeout, true, func(ctx context.Context) (bool, error) {
+			logs, err := ccmClient.GetCCMLogs(ctx, ccmPodName, ccmContainerName)
+			if err != nil {
+				return false, nil
+			}
+			var listed, completed bool
+			listedAt, listed = ccmLogLineTime(logs, endpointSlicesListedLog)
+			initCompletedAt, completed = ccmLogLineTime(logs, initCompletedLog)
+			return listed && completed, nil
+		})
+		if err != nil {
+			Skip(fmt.Sprintf("scale-down did not land inside the CCM startup window; CCM pod %s did not log %s within %v",
+				ccmPodName, initCompletedLog, initTimeout))
+		}
+		utils.Logf("CCM pod %s listed EndpointSlices at %s and completed initialization at %s",
+			ccmPodName, listedAt.Format(time.RFC3339Nano), initCompletedAt.Format(time.RFC3339Nano))
+
+		// Checked before the assertion, so a stale registration fails the spec whenever the window was hit.
+		// The bound is landedAt: a change the informers' initial list misses arrives as an ordinary
+		// Update, which removes the endpoints even without the fix.
+		if !listedAt.Before(scaledAt) || !landedAt.Before(initCompletedAt) {
+			Skip(fmt.Sprintf("scale-down did not land inside the CCM startup window; it ran from %s to %s, but CCM pod %s "+
+				"listed EndpointSlices at %s and completed initialization at %s; raise extraServices to lengthen the initial sync",
+				scaledAt.Format(time.RFC3339Nano), landedAt.Format(time.RFC3339Nano), ccmPodName,
+				listedAt.Format(time.RFC3339Nano), initCompletedAt.Format(time.RFC3339Nano)))
+		}
+
+		By(fmt.Sprintf("Verifying the Service Gateway holds exactly the %d remaining ready endpoints", scaledReplicas))
+		Eventually(func() error {
+			want, err := readyEndpointIPs(cs, ns.Name, serviceName)
+			if err != nil {
+				return err
+			}
+			if len(want) != scaledReplicas {
+				return fmt.Errorf("service %s has %d ready endpoint addresses, want %d", serviceName, len(want), scaledReplicas)
+			}
+			return serviceReconciledMatchErr(serviceUID, want)
+		}, reconcileTimeout, defaultPollInterval).Should(Succeed(),
+			"endpoints scaled away while the CCM was starting up must not stay registered in the Service Gateway")
+
+		utils.Logf("✓ Endpoints scaled away during CCM startup were removed from the Service Gateway")
 	})
 })
 
@@ -897,3 +1153,56 @@ var _ = Describe("Container Load Balancer Outbound Crash Recovery", Label(slbTes
 		}
 	})
 })
+
+// readyEndpointIPs returns the addresses of the ready endpoints in the Service's EndpointSlices,
+// which is the address set the Service Gateway should hold for it.
+func readyEndpointIPs(cs clientset.Interface, namespace, serviceName string) (map[string]struct{}, error) {
+	endpointSlices, err := cs.DiscoveryV1().EndpointSlices(namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", discoveryv1.LabelServiceName, serviceName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list EndpointSlices of service %s: %w", serviceName, err)
+	}
+	addrs := make(map[string]struct{})
+	for _, endpointSlice := range endpointSlices.Items {
+		for _, endpoint := range endpointSlice.Endpoints {
+			// A nil Ready condition means ready, as in the CCM.
+			if endpoint.Conditions.Ready != nil && !*endpoint.Conditions.Ready {
+				continue
+			}
+			for _, addr := range endpoint.Addresses {
+				addrs[addr] = struct{}{}
+			}
+		}
+	}
+	return addrs, nil
+}
+
+// inboundServicesCleanupErr returns nil once none of the given inbound services is registered in the
+// Service Gateway or referenced by an address location, while other services may remain.
+func inboundServicesCleanupErr(serviceUIDs []string) error {
+	sgResponse, err := queryServiceGatewayServices()
+	if err != nil {
+		return fmt.Errorf("query Service Gateway services: %w", err)
+	}
+	for _, svc := range sgResponse.Value {
+		if slices.Contains(serviceUIDs, svc.Name) {
+			return fmt.Errorf("service %s still registered in Service Gateway", svc.Name)
+		}
+	}
+	alResponse, err := queryServiceGatewayAddressLocations()
+	if err != nil {
+		return fmt.Errorf("query Service Gateway address locations: %w", err)
+	}
+	for _, location := range alResponse.Value {
+		for _, addr := range location.Addresses {
+			for _, svc := range addr.Services {
+				if slices.Contains(serviceUIDs, svc) {
+					return fmt.Errorf("address %s in location %s still references service %s",
+						addr.Address, location.AddressLocation, svc)
+				}
+			}
+		}
+	}
+	return nil
+}

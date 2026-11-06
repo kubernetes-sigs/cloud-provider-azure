@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	discoverylisters "k8s.io/client-go/listers/discovery/v1"
 	k8scache "k8s.io/client-go/tools/cache"
 	"k8s.io/utils/ptr"
 
@@ -503,4 +504,436 @@ func TestSeedInboundEndpointsFromCache_DoesNotOvertakeRemoval(t *testing.T) {
 		assert.True(t, registered(dt),
 			"the replay must still seed endpoints for a newly registered service")
 	})
+}
+
+const (
+	gapSvcUID  = "5afe0000-0000-0000-0000-00000000000b"
+	gapPodA    = "10.244.1.10"
+	gapPodB    = "10.244.2.20"
+	gapNode1IP = "10.0.0.1"
+	gapNode2IP = "10.0.0.2"
+	gapNode3IP = "10.0.0.3"
+)
+
+type gapEndpoint struct {
+	podIP    string
+	nodeName string
+	ready    bool
+}
+
+func gapNode(name, ip string) *v1.Node {
+	return &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: name},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: ip}}},
+	}
+}
+
+func gapSlice(name, resourceVersion string, endpoints ...gapEndpoint) *discovery_v1.EndpointSlice {
+	es := &discovery_v1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "ns",
+			Name:            name,
+			ResourceVersion: resourceVersion,
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID(gapSvcUID)}},
+		},
+		AddressType: discovery_v1.AddressTypeIPv4,
+	}
+	for _, ep := range endpoints {
+		es.Endpoints = append(es.Endpoints, discovery_v1.Endpoint{
+			Addresses:  []string{ep.podIP},
+			NodeName:   ptr.To(ep.nodeName),
+			Conditions: discovery_v1.EndpointConditions{Ready: ptr.To(ep.ready)},
+		})
+	}
+	return es
+}
+
+// startupSliceV1 is the EndpointSlice initialization listed: A on node1 and B on node2, both ready.
+func startupSliceV1() *discovery_v1.EndpointSlice {
+	return gapSlice("eps1", "1", gapEndpoint{gapPodA, "node1", true}, gapEndpoint{gapPodB, "node2", true})
+}
+
+// newStartupGapTracker mirrors InitializeFromCluster: the startup slices are registered under the
+// node IPs initialization listed and seeded into the EndpointSlice cache before any informer event.
+// listedNodes are the nodes the Node informer has listed when the events arrive.
+func newStartupGapTracker(t *testing.T, startupSlices []*discovery_v1.EndpointSlice, listedNodes ...*v1.Node) *DiffTracker {
+	t.Helper()
+	dt := newTestDiffTracker()
+	dt.NRPResources.LoadBalancers.Insert(gapSvcUID)
+	dt.startupNodeIPs = map[string][]string{"node1": {gapNode1IP}, "node2": {gapNode2IP}, "node3": {gapNode3IP}}
+	list := &discovery_v1.EndpointSliceList{}
+	for _, es := range startupSlices {
+		list.Items = append(list.Items, *es)
+		for _, ep := range es.Endpoints {
+			if ptr.Deref(ep.Conditions.Ready, true) {
+				dt.UpdateEndpoints(gapSvcUID, nil, map[string]string{ep.Addresses[0]: dt.startupNodeIPs[*ep.NodeName][0]})
+			}
+		}
+	}
+	dt.initializeEndpointSlicesCache(list)
+	setTestNodeLister(t, dt, listedNodes...)
+	return dt
+}
+
+func gapRegistered(dt *DiffTracker, nodeIP, podIP string) bool {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	node, ok := dt.K8sResources.Nodes[nodeIP]
+	if !ok {
+		return false
+	}
+	pod, ok := node.Pods[podIP]
+	return ok && pod.InboundIdentities.Has(gapSvcUID)
+}
+
+// TestReconcileEndpointSlice_InitialAddDiffsAgainstStartupSnapshot pins that the informer's first
+// Add for a slice initialization already listed applies what changed while initialization ran. The
+// Add used to only add, so an endpoint removed or made not-ready in that window stayed registered
+// (later updates saw it absent from both old and new) until the next restart.
+func TestReconcileEndpointSlice_InitialAddDiffsAgainstStartupSnapshot(t *testing.T) {
+	allNodes := []*v1.Node{gapNode("node1", gapNode1IP), gapNode("node2", gapNode2IP), gapNode("node3", gapNode3IP)}
+	testCases := []struct {
+		name        string
+		live        *discovery_v1.EndpointSlice
+		listedNodes []*v1.Node
+		wantB       string
+	}{
+		{
+			name:        "endpoint made not-ready",
+			live:        gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}, gapEndpoint{gapPodB, "node2", false}),
+			listedNodes: allNodes,
+		},
+		{
+			name:        "endpoint removed",
+			live:        gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}),
+			listedNodes: allNodes,
+		},
+		{
+			name:        "endpoint moved to another node",
+			live:        gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}, gapEndpoint{gapPodB, "node3", true}),
+			listedNodes: allNodes,
+			wantB:       gapNode3IP,
+		},
+		{
+			// The Node informer syncs independently; the removal must not depend on it having listed
+			// the endpoint's node yet.
+			name:        "endpoint made not-ready on a node the Node informer has not listed yet",
+			live:        gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}, gapEndpoint{gapPodB, "node2", false}),
+			listedNodes: []*v1.Node{gapNode("node1", gapNode1IP)},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()}, tc.listedNodes...)
+
+			dt.ReconcileEndpointSlice(nil, tc.live)
+
+			assert.True(t, gapRegistered(dt, gapNode1IP, gapPodA), "an unchanged endpoint must stay registered")
+			assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB),
+				"a change made while initialization ran must remove the endpoint from its startup location")
+			if tc.wantB != "" {
+				assert.True(t, gapRegistered(dt, tc.wantB, gapPodB), "a moved endpoint must be registered at its new location")
+			}
+			cached, ok := dt.endpointSlicesCache.Load("ns/eps1")
+			if assert.True(t, ok) {
+				assert.Equal(t, "2", cached.(*discovery_v1.EndpointSlice).ResourceVersion)
+			}
+		})
+	}
+}
+
+// TestReconcileEndpointSlice_InitialAddKeepsEndpointsOnUnlistedNodes pins that the startup-snapshot
+// diff resolves the live slice the way initialization registered it. The Node and EndpointSlice
+// informers list in parallel, so a node may be missing from the lister when its slice's Add arrives;
+// an unchanged ready endpoint there must not be read as removed.
+func TestReconcileEndpointSlice_InitialAddKeepsEndpointsOnUnlistedNodes(t *testing.T) {
+	const podC = "10.244.1.30"
+	dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()}, gapNode("node1", gapNode1IP))
+
+	dt.ReconcileEndpointSlice(nil, gapSlice("eps1", "2",
+		gapEndpoint{gapPodA, "node1", true}, gapEndpoint{gapPodB, "node2", true}, gapEndpoint{podC, "node1", true}))
+
+	assert.True(t, gapRegistered(dt, gapNode2IP, gapPodB), "an unchanged endpoint on an unlisted node must stay registered")
+	assert.True(t, gapRegistered(dt, gapNode1IP, podC))
+}
+
+// TestReconcileEndpointSlice_GapRemovalOnNodeWithChangedIP pins that until a node's first Add is
+// replayed, its endpoints are resolved under the IPs initialization registered them under, even when
+// the Node lister already has the node's new InternalIP; and through the lister once it is replayed.
+func TestReconcileEndpointSlice_GapRemovalOnNodeWithChangedIP(t *testing.T) {
+	const (
+		changedIP = "10.0.0.22"
+		podE      = "10.244.2.50"
+	)
+	startup := gapSlice("eps1", "1",
+		gapEndpoint{gapPodA, "node1", true}, gapEndpoint{gapPodB, "node2", true}, gapEndpoint{podE, "node2", true})
+	dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startup},
+		gapNode("node1", gapNode1IP), gapNode("node2", changedIP))
+
+	// B was removed while initialization ran; the slice Add arrives before node2's replay.
+	dt.ReconcileEndpointSlice(nil, gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}, gapEndpoint{podE, "node2", true}))
+	assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB), "the removal must apply where initialization registered B")
+	assert.True(t, gapRegistered(dt, gapNode2IP, podE))
+
+	dt.ReconcileNodeAdd("node2", []string{changedIP})
+	assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB))
+	assert.False(t, gapRegistered(dt, changedIP, gapPodB))
+	assert.True(t, gapRegistered(dt, changedIP, podE), "the replay must move E to the node's current IP")
+	assert.False(t, gapRegistered(dt, gapNode2IP, podE))
+
+	// Once replayed, the node is resolved through the lister.
+	dt.ReconcileEndpointSlice(gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}, gapEndpoint{podE, "node2", true}),
+		gapSlice("eps1", "3", gapEndpoint{gapPodA, "node1", true}))
+	assert.False(t, gapRegistered(dt, changedIP, podE), "a removal after the replay must apply at the node's current IP")
+}
+
+// TestReconcileEndpointSlice_NewSliceRemovalOnNodeWithChangedIP pins that a slice initialization did
+// not list resolves an unreplayed node through its startup IPs as well, so a removal arriving before
+// the node's replay finds the address the slice's Add registered.
+func TestReconcileEndpointSlice_NewSliceRemovalOnNodeWithChangedIP(t *testing.T) {
+	const changedIP = "10.0.0.22"
+	dt := newStartupGapTracker(t, nil, gapNode("node2", changedIP))
+	added := gapSlice("eps9", "1", gapEndpoint{gapPodB, "node2", true})
+
+	dt.ReconcileEndpointSlice(nil, added)
+	dt.ReconcileEndpointSlice(added, gapSlice("eps9", "2"))
+	dt.ReconcileNodeAdd("node2", []string{changedIP})
+
+	assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB))
+	assert.False(t, gapRegistered(dt, changedIP, gapPodB), "a removal before the replay must not leave the added address behind")
+}
+
+func TestReconcileEndpointSlice_RuntimeAddWithoutCacheUnchanged(t *testing.T) {
+	dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()},
+		gapNode("node1", gapNode1IP), gapNode("node2", gapNode2IP), gapNode("node3", gapNode3IP))
+	const podC = "10.244.3.30"
+
+	dt.ReconcileEndpointSlice(nil, gapSlice("eps2", "7", gapEndpoint{podC, "node3", true}))
+
+	assert.True(t, gapRegistered(dt, gapNode3IP, podC), "a new slice must register its endpoints")
+	assert.True(t, gapRegistered(dt, gapNode1IP, gapPodA), "a new slice must not touch another slice's endpoints")
+	assert.True(t, gapRegistered(dt, gapNode2IP, gapPodB), "a new slice must not touch another slice's endpoints")
+}
+
+// TestStartupNodeReplayDoesNotResurrectGapRemovals pins that the node replay the Node informer's
+// initial list triggers cannot re-add an endpoint the startup-snapshot diff removed. The replay
+// re-adds every cached address on the node, so it must see either the stale snapshot before the
+// removal or the live slice after it, never apply the stale snapshot after the removal.
+func TestStartupNodeReplayDoesNotResurrectGapRemovals(t *testing.T) {
+	live := func() *discovery_v1.EndpointSlice {
+		return gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}, gapEndpoint{gapPodB, "node2", false})
+	}
+	newTracker := func(t *testing.T) *DiffTracker {
+		return newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()},
+			gapNode("node1", gapNode1IP), gapNode("node2", gapNode2IP))
+	}
+	assertRemoved := func(t *testing.T, dt *DiffTracker) {
+		assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB), "the node replay must not resurrect a removed endpoint")
+		assert.True(t, gapRegistered(dt, gapNode1IP, gapPodA))
+	}
+
+	t.Run("slice add then node replay", func(t *testing.T) {
+		dt := newTracker(t)
+		dt.ReconcileEndpointSlice(nil, live())
+		dt.ReconcileNodeAdd("node2", []string{gapNode2IP})
+		assertRemoved(t, dt)
+	})
+
+	t.Run("node replay then slice add", func(t *testing.T) {
+		dt := newTracker(t)
+		dt.ReconcileNodeAdd("node2", []string{gapNode2IP})
+		dt.ReconcileEndpointSlice(nil, live())
+		assertRemoved(t, dt)
+	})
+
+	t.Run("slice add applied while the node replay is in flight", func(t *testing.T) {
+		dt := newTracker(t)
+
+		// Hold the lock the slice add takes, start the replay, then apply the slice add exactly as
+		// ReconcileEndpointSlice does under that lock. A replay that walks the cache before taking
+		// the lock snapshots the stale slice here and re-adds B once the lock is released.
+		// ReconcileNodeAdd runs the same walk, already under the lock it takes for startupNodeIPs.
+		dt.mu.Lock()
+		replayDone := make(chan struct{})
+		go func() {
+			defer close(replayDone)
+			dt.ReconcileNodeIPChange("node2", []string{gapNode2IP}, []string{gapNode2IP})
+		}()
+		time.Sleep(200 * time.Millisecond)
+		cached, _ := dt.endpointSlicesCache.Load("ns/eps1")
+		dt.reconcileEndpointSliceLocked(cached.(*discovery_v1.EndpointSlice), live())
+		dt.mu.Unlock()
+
+		select {
+		case <-replayDone:
+		case <-time.After(10 * time.Second):
+			t.Fatal("node replay did not finish")
+		}
+		assertRemoved(t, dt)
+	})
+}
+
+// TestStartupNodeReconciliationDoesNotStrandGapRemovals pins that a node's startup replay or drain
+// cannot run between a slice event's cache swap and its apply. The swap hides the removed endpoint
+// from the node's cache walk, which then releases the node's startup IPs, so the apply resolves the
+// endpoint through the lister and leaves it registered where initialization put it.
+func TestStartupNodeReconciliationDoesNotStrandGapRemovals(t *testing.T) {
+	const changedIP = "10.0.0.22"
+	testCases := []struct {
+		name        string
+		listedNodes []*v1.Node
+		// oldSlice is the event's old slice; nil makes it the slice's initial-list Add.
+		oldSlice *discovery_v1.EndpointSlice
+		// reconcileNode2 runs node2's startup reconciliation as its caller does under dt.mu.
+		reconcileNode2 func(dt *DiffTracker)
+	}{
+		{
+			name:        "initial-list add during the replay of a node whose InternalIP changed during initialization",
+			listedNodes: []*v1.Node{gapNode("node1", gapNode1IP), gapNode("node2", changedIP)},
+			reconcileNode2: func(dt *DiffTracker) { // ReconcileNodeAdd
+				startupIPs := dt.startupNodeIPs["node2"]
+				delete(dt.startupNodeIPs, "node2")
+				dt.reconcileNodeIPChangeLocked("node2", startupIPs, []string{changedIP})
+			},
+		},
+		{
+			// The drain runs once the initial-list adds are processed, so it races later updates.
+			name:        "update during the drain of a node deleted during initialization",
+			listedNodes: []*v1.Node{gapNode("node1", gapNode1IP)},
+			oldSlice:    startupSliceV1(),
+			reconcileNode2: func(dt *DiffTracker) { // CompleteStartupReconciliation
+				dt.reconcileNodeIPChangeLocked("node2", dt.startupNodeIPs["node2"], nil)
+				dt.startupNodeIPs = nil
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()}, tc.listedNodes...)
+
+			// Hold the lock, start the event removing B, then reconcile node2 under the lock. An
+			// event that swaps the cache before taking the lock hides B from this walk.
+			dt.mu.Lock()
+			eventDone := make(chan struct{})
+			go func() {
+				defer close(eventDone)
+				dt.ReconcileEndpointSlice(tc.oldSlice, gapSlice("eps1", "2", gapEndpoint{gapPodA, "node1", true}))
+			}()
+			time.Sleep(200 * time.Millisecond)
+			tc.reconcileNode2(dt)
+			dt.mu.Unlock()
+
+			select {
+			case <-eventDone:
+			case <-time.After(10 * time.Second):
+				t.Fatal("slice event did not finish")
+			}
+			assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB), "a removed endpoint must not stay at its startup IP")
+			assert.False(t, gapRegistered(dt, changedIP, gapPodB))
+			assert.True(t, gapRegistered(dt, gapNode1IP, gapPodA))
+		})
+	}
+}
+
+func TestReconcileNodeAdd(t *testing.T) {
+	t.Run("initial-list add moves endpoints off an InternalIP changed during initialization", func(t *testing.T) {
+		const changedIP = "10.0.0.22"
+		dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()},
+			gapNode("node1", gapNode1IP), gapNode("node2", changedIP))
+
+		dt.ReconcileNodeAdd("node2", []string{changedIP})
+
+		assert.True(t, gapRegistered(dt, changedIP, gapPodB), "the endpoint must move to the node's current IP")
+		assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB), "the startup location must not be left behind")
+	})
+
+	t.Run("a node unknown to initialization registers its cached endpoints", func(t *testing.T) {
+		const (
+			node4IP = "10.0.0.4"
+			podD    = "10.244.4.40"
+		)
+		dt := newStartupGapTracker(t, nil, gapNode("node4", node4IP))
+		dt.initializeEndpointSlicesCache(&discovery_v1.EndpointSliceList{Items: []discovery_v1.EndpointSlice{
+			*gapSlice("eps4", "1", gapEndpoint{podD, "node4", true}),
+		}})
+
+		dt.ReconcileNodeAdd("node4", []string{node4IP})
+
+		assert.True(t, gapRegistered(dt, node4IP, podD))
+	})
+}
+
+// TestCompleteStartupReconciliation_RemovesSlicesDeletedDuringInit pins that a slice deleted while
+// initialization ran, which never produces a Delete event, is reconciled as deleted once the
+// handlers have received the initial list.
+func TestCompleteStartupReconciliation_RemovesSlicesDeletedDuringInit(t *testing.T) {
+	t.Run("slice deleted", func(t *testing.T) {
+		kept := gapSlice("eps1", "1", gapEndpoint{gapPodA, "node1", true})
+		deleted := gapSlice("eps2", "1", gapEndpoint{gapPodB, "node2", true})
+		dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{kept, deleted},
+			gapNode("node1", gapNode1IP), gapNode("node2", gapNode2IP))
+		dt.ReconcileNodeAdd("node1", []string{gapNode1IP})
+		dt.ReconcileNodeAdd("node2", []string{gapNode2IP})
+		sliceIndexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{k8scache.NamespaceIndex: k8scache.MetaNamespaceIndexFunc})
+		assert.NoError(t, sliceIndexer.Add(kept))
+
+		dt.CompleteStartupReconciliation(discoverylisters.NewEndpointSliceLister(sliceIndexer))
+
+		assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB), "a deleted slice's endpoints must be removed")
+		_, ok := dt.endpointSlicesCache.Load("ns/eps2")
+		assert.False(t, ok, "a deleted slice must be evicted from the cache")
+		assert.True(t, gapRegistered(dt, gapNode1IP, gapPodA), "a live slice must be kept")
+		_, ok = dt.endpointSlicesCache.Load("ns/eps1")
+		assert.True(t, ok)
+	})
+
+	// node2's drain walks the cache after the prune evicted the slice, so the prune itself must
+	// resolve node2, which the lister no longer has, through its startup IPs.
+	t.Run("slice deleted along with one of its nodes", func(t *testing.T) {
+		dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()}, gapNode("node1", gapNode1IP))
+		dt.ReconcileNodeAdd("node1", []string{gapNode1IP})
+		sliceIndexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{k8scache.NamespaceIndex: k8scache.MetaNamespaceIndexFunc})
+
+		dt.CompleteStartupReconciliation(discoverylisters.NewEndpointSliceLister(sliceIndexer))
+
+		assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB), "a deleted slice's endpoints on a deleted node must be removed")
+		assert.False(t, gapRegistered(dt, gapNode1IP, gapPodA))
+	})
+}
+
+// TestCompleteStartupReconciliation_DrainsNodesDeletedDuringInit pins that a node deleted while
+// initialization ran, which never produces a Node Delete, has its endpoints drained, and that the
+// startup node IPs are released once startup reconciliation is done.
+func TestCompleteStartupReconciliation_DrainsNodesDeletedDuringInit(t *testing.T) {
+	dt := newStartupGapTracker(t, []*discovery_v1.EndpointSlice{startupSliceV1()}, gapNode("node1", gapNode1IP))
+	dt.ReconcileNodeAdd("node1", []string{gapNode1IP})
+	sliceIndexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{k8scache.NamespaceIndex: k8scache.MetaNamespaceIndexFunc})
+	assert.NoError(t, sliceIndexer.Add(startupSliceV1()))
+
+	dt.CompleteStartupReconciliation(discoverylisters.NewEndpointSliceLister(sliceIndexer))
+
+	assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB), "a deleted node's endpoints must be drained")
+	assert.True(t, gapRegistered(dt, gapNode1IP, gapPodA), "a listed node's endpoints must be kept")
+	assert.Nil(t, dt.startupNodeIPs)
+}
+
+// TestSeedInboundEndpointsFromCache_ResolvesUnreplayedNodesThroughStartupIPs pins that a service
+// registered before a node's first Add is replayed is seeded under the IPs the slice events resolve
+// that node through until then, so a removal arriving before the replay finds the address.
+func TestSeedInboundEndpointsFromCache_ResolvesUnreplayedNodesThroughStartupIPs(t *testing.T) {
+	const changedIP = "10.0.0.22"
+	dt := newTestDiffTracker()
+	dt.NRPResources.LoadBalancers.Insert(gapSvcUID)
+	dt.startupNodeIPs = map[string][]string{"node2": {gapNode2IP}}
+	dt.initializeEndpointSlicesCache(&discovery_v1.EndpointSliceList{Items: []discovery_v1.EndpointSlice{
+		*gapSlice("eps1", "1", gapEndpoint{gapPodB, "node2", true}),
+	}})
+	setTestNodeLister(t, dt, gapNode("node2", changedIP))
+
+	dt.seedInboundEndpointsFromCache(gapSvcUID)
+	dt.ReconcileEndpointSlice(gapSlice("eps1", "1", gapEndpoint{gapPodB, "node2", true}), gapSlice("eps1", "2"))
+	dt.ReconcileNodeAdd("node2", []string{changedIP})
+
+	assert.False(t, gapRegistered(dt, gapNode2IP, gapPodB))
+	assert.False(t, gapRegistered(dt, changedIP, gapPodB), "a removal before the replay must not leave the seeded address behind")
 }

@@ -19,25 +19,35 @@ package servicegateway
 import (
 	"context"
 	"errors"
+	"maps"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -252,11 +262,12 @@ func TestRegisterInformers_DeliversEndpointSliceEventsToTracker(t *testing.T) {
 	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
 	tracker.SetNodeLister(informerFactory.Core().V1().Nodes().Lister())
 
-	unregister, err := RegisterInformers(informerFactory, tracker)
+	unregister, synced, err := RegisterInformers(informerFactory, tracker)
 	if !assert.NoError(t, err) {
 		return
 	}
 	assert.NotNil(t, unregister, "a successful registration must return an unregister func")
+	assert.NotNil(t, synced, "a successful registration must return a synced func")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -298,6 +309,479 @@ func TestRegisterInformers_DeliversEndpointSliceEventsToTracker(t *testing.T) {
 			"tracker; without it the pod address never reaches Azure")
 
 	unregister()
+}
+
+// TestRegisterInformers_SyncedWaitsForInitialList pins that the returned synced func reports true
+// only once both handlers have received the initial list. Startup reconciliation runs as soon as it
+// does and treats every cached slice and startup node the handlers have not seen as deleted.
+func TestRegisterInformers_SyncedWaitsForInitialList(t *testing.T) {
+	testCases := []struct {
+		name string
+		// failingList is the resource whose list fails, so its handler never receives the initial list.
+		failingList string
+	}{
+		{name: "both lists succeed"},
+		{name: "node list fails", failingList: "nodes"},
+		{name: "endpointslice list fails", failingList: "endpointslices"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			kubeClient := fake.NewSimpleClientset(
+				&v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}},
+				&discoveryv1.EndpointSlice{ObjectMeta: metav1.ObjectMeta{Name: "eps1", Namespace: "default"}},
+			)
+			if tc.failingList != "" {
+				kubeClient.PrependReactor("list", tc.failingList, func(k8stesting.Action) (bool, runtime.Object, error) {
+					return true, nil, errors.New("list failed")
+				})
+			}
+			tracker, err := difftracker.New(
+				logr.Discard(),
+				difftracker.K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]difftracker.Node{}},
+				difftracker.NRPState{LoadBalancers: utilsets.NewString(), NATGateways: utilsets.NewString(), Locations: map[string]difftracker.NRPLocation{}},
+				testDiffTrackerConfig(),
+				mock_azclient.NewMockClientFactory(ctrl),
+				kubeClient,
+			)
+			if !assert.NoError(t, err) {
+				return
+			}
+			informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+			tracker.SetNodeLister(informerFactory.Core().V1().Nodes().Lister())
+
+			_, synced, err := RegisterInformers(informerFactory, tracker)
+			if !assert.NoError(t, err) {
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			informerFactory.Start(ctx.Done())
+			if tc.failingList == "" {
+				assert.True(t, cache.WaitForCacheSync(ctx.Done(), synced), "handlers that received the initial list must report synced")
+				return
+			}
+			assert.Never(t, synced, time.Second, 20*time.Millisecond,
+				"handlers must not report synced while one has not received the initial list")
+		})
+	}
+}
+
+// blockingNodeLister blocks Get until release is closed. entered is closed by the first Get.
+type blockingNodeLister struct {
+	corelisters.NodeLister
+	entered     chan struct{}
+	enteredOnce sync.Once
+	release     chan struct{}
+}
+
+func (l *blockingNodeLister) Get(name string) (*v1.Node, error) {
+	l.enteredOnce.Do(func() { close(l.entered) })
+	<-l.release
+	return l.NodeLister.Get(name)
+}
+
+// TestRegisterInformers_SyncedWaitsForHandlers pins that synced waits for each handler to process
+// the initial list, not only for its informer's store to hold it. A handler lags its store, and
+// startup reconciliation would then drain the startup nodes whose Add is still queued.
+func TestRegisterInformers_SyncedWaitsForHandlers(t *testing.T) {
+	newSlice := func(name string) *discoveryv1.EndpointSlice {
+		return &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            name,
+				Namespace:       "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: "svc-handler-sync"}},
+			},
+			AddressType: discoveryv1.AddressTypeIPv4,
+			Endpoints: []discoveryv1.Endpoint{{
+				Addresses:  []string{"10.244.1.10"},
+				NodeName:   ptr.To("node1"),
+				Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)},
+			}},
+		}
+	}
+	testCases := []struct {
+		name string
+		// listed is the only object listed, so only the handler of its kind has an initial list.
+		listed runtime.Object
+	}{
+		{name: "Node handler behind its store", listed: &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}},
+		{name: "EndpointSlice handler behind its store", listed: newSlice("eps1")},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			kubeClient := fake.NewSimpleClientset(tc.listed)
+			tracker, err := difftracker.New(
+				logr.Discard(),
+				difftracker.K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]difftracker.Node{}},
+				difftracker.NRPState{LoadBalancers: utilsets.NewString(), NATGateways: utilsets.NewString(), Locations: map[string]difftracker.NRPLocation{}},
+				testDiffTrackerConfig(),
+				mock_azclient.NewMockClientFactory(ctrl),
+				kubeClient,
+			)
+			if !assert.NoError(t, err) {
+				return
+			}
+			informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+			nodeLister := &blockingNodeLister{
+				NodeLister: informerFactory.Core().V1().Nodes().Lister(),
+				entered:    make(chan struct{}),
+				release:    make(chan struct{}),
+			}
+			tracker.SetNodeLister(nodeLister)
+			_, synced, err := RegisterInformers(informerFactory, tracker)
+			if !assert.NoError(t, err) {
+				return
+			}
+
+			// A reconciliation blocked in the lister holds the tracker lock, so the handler with an
+			// initial list blocks on it.
+			reconcileDone := make(chan struct{})
+			go func() {
+				defer close(reconcileDone)
+				tracker.ReconcileEndpointSlice(nil, newSlice("held"))
+			}()
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			select {
+			case <-nodeLister.entered:
+			case <-ctx.Done():
+				t.Fatal("the reconciliation did not reach the node lister")
+			}
+
+			informerFactory.Start(ctx.Done())
+			for informerType, ok := range informerFactory.WaitForCacheSync(ctx.Done()) {
+				assert.True(t, ok, "the %v store must sync", informerType)
+			}
+			assert.Never(t, synced, time.Second, 20*time.Millisecond,
+				"synced must wait for the handlers to process the initial list, not only for the stores to hold it")
+
+			close(nodeLister.release)
+			assert.True(t, cache.WaitForCacheSync(ctx.Done(), synced), "handlers that processed the initial list must report synced")
+			<-reconcileDone
+		})
+	}
+}
+
+// TestRuntimeStart_AppliesEndpointSliceChangesMadeDuringInitialization pins that the handlers
+// installed after initialization reconcile what changed while it ran. The tracker is seeded with
+// the slices initialization listed; one endpoint then goes not-ready and another slice is deleted
+// before the informers start. Neither change produces an event the tracker could diff on its own:
+// the first event per slice is an Add, and a deleted slice produces none.
+func TestRuntimeStart_AppliesEndpointSliceChangesMadeDuringInitialization(t *testing.T) {
+	originalInitialize := initializeRuntimeDiffTracker
+	originalStartPodInformer := startRuntimePodInformer
+	t.Cleanup(func() {
+		initializeRuntimeDiffTracker = originalInitialize
+		startRuntimePodInformer = originalStartPodInformer
+	})
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		serviceUID = "svc-startup-gap"
+		node1IP    = "10.0.0.1"
+		node2IP    = "10.0.0.2"
+		podA       = "10.244.1.10"
+		podB       = "10.244.2.20"
+		podC       = "10.244.2.30"
+	)
+	newNode := func(name, ip string) *v1.Node {
+		return &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: ip}}},
+		}
+	}
+	type endpoint struct {
+		podIP, nodeName string
+		ready           bool
+	}
+	newSlice := func(name, resourceVersion string, endpoints ...endpoint) *discoveryv1.EndpointSlice {
+		es := &discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            name,
+				Namespace:       "default",
+				ResourceVersion: resourceVersion,
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID(serviceUID)}},
+			},
+			AddressType: discoveryv1.AddressTypeIPv4,
+		}
+		for _, ep := range endpoints {
+			es.Endpoints = append(es.Endpoints, discoveryv1.Endpoint{
+				Addresses:  []string{ep.podIP},
+				NodeName:   ptr.To(ep.nodeName),
+				Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(ep.ready)},
+			})
+		}
+		return es
+	}
+
+	node1, node2 := newNode("node1", node1IP), newNode("node2", node2IP)
+	changed := newSlice("changed", "1", endpoint{podA, "node1", true}, endpoint{podB, "node2", true})
+	deleted := newSlice("deleted", "1", endpoint{podC, "node2", true})
+	kubeClient := fake.NewSimpleClientset(node1, node2, changed, deleted)
+
+	tracker, err := difftracker.New(
+		logr.Discard(),
+		difftracker.K8sState{Services: utilsets.NewString(serviceUID), Egresses: utilsets.NewString(), Nodes: map[string]difftracker.Node{}},
+		difftracker.NRPState{LoadBalancers: utilsets.NewString(serviceUID), NATGateways: utilsets.NewString(), Locations: map[string]difftracker.NRPLocation{}},
+		testDiffTrackerConfig(),
+		mock_azclient.NewMockClientFactory(ctrl),
+		kubeClient,
+	)
+	if !assert.NoError(t, err) {
+		return
+	}
+	registered := func() map[string]string {
+		addresses := map[string]string{}
+		for nodeIP, location := range tracker.GetSyncLocationsAddresses().Locations {
+			for podIP := range location.Addresses {
+				addresses[podIP] = nodeIP
+			}
+		}
+		return addresses
+	}
+
+	// Initialization: the slices it listed are registered and cached.
+	nodeIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	assert.NoError(t, nodeIndexer.Add(node1))
+	assert.NoError(t, nodeIndexer.Add(node2))
+	tracker.SetNodeLister(corelisters.NewNodeLister(nodeIndexer))
+	tracker.ReconcileEndpointSlice(nil, changed.DeepCopy())
+	tracker.ReconcileEndpointSlice(nil, deleted.DeepCopy())
+	if !assert.Equal(t, map[string]string{podA: node1IP, podB: node2IP, podC: node2IP}, registered()) {
+		return
+	}
+
+	// While initialization runs, B goes not-ready and the second slice is deleted.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = kubeClient.DiscoveryV1().EndpointSlices("default").Update(ctx,
+		newSlice("changed", "2", endpoint{podA, "node1", true}, endpoint{podB, "node2", false}), metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	assert.NoError(t, kubeClient.DiscoveryV1().EndpointSlices("default").Delete(ctx, "deleted", metav1.DeleteOptions{}))
+
+	initializeRuntimeDiffTracker = func(context.Context, difftracker.Config, azclient.ClientFactory, kubernetes.Interface) (*difftracker.DiffTracker, error) {
+		return tracker, nil
+	}
+	startRuntimePodInformer = func(context.Context, *difftracker.DiffTracker) error { return nil }
+	runtime := NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
+	runtime.SetEventRecorder(record.NewFakeRecorder(1))
+	// List nodes before slices so the slice events resolve every node through the lister. The
+	// tracker was not built by InitializeFromCluster, so it has no startup node IPs to fall back on.
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+	informerFactory.Core().V1().Nodes().Informer()
+	informerFactory.Start(ctx.Done())
+	informerFactory.WaitForCacheSync(ctx.Done())
+	if !assert.NoError(t, runtime.Start(ctx, informerFactory)) {
+		return
+	}
+	informerFactory.Start(ctx.Done())
+
+	assert.Eventually(t, func() bool {
+		addresses := registered()
+		return len(addresses) == 1 && addresses[podA] == node1IP
+	}, 15*time.Second, 50*time.Millisecond,
+		"endpoints made not-ready or deleted during initialization must not stay registered")
+}
+
+// TestRuntimeStart_DrainsOnlyNodesDeletedDuringInitialization pins that after a restart a node the
+// informer replays keeps the endpoints initialization registered for it. Initialization records
+// every node it lists and startup reconciliation drains each one whose informer Add never arrived,
+// so a Node handler that did not consume the record would drain every endpoint after each restart.
+// node2 is deleted before the informers start; it is drained in the same pass as any other node,
+// so its removal marks that the pass has run.
+func TestRuntimeStart_DrainsOnlyNodesDeletedDuringInitialization(t *testing.T) {
+	originalStartPodInformer := startRuntimePodInformer
+	t.Cleanup(func() { startRuntimePodInformer = originalStartPodInformer })
+	startRuntimePodInformer = func(context.Context, *difftracker.DiffTracker) error { return nil }
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		serviceUID = "svc-restart"
+		node1IP    = "10.0.0.1"
+		node2IP    = "10.0.0.2"
+		podA       = "10.244.1.10"
+		podB       = "10.244.2.20"
+	)
+	newNode := func(name, ip string) *v1.Node {
+		return &v1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: name},
+			Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: ip}}},
+		}
+	}
+	newEndpoint := func(podIP, nodeName string) discoveryv1.Endpoint {
+		return discoveryv1.Endpoint{
+			Addresses:  []string{podIP},
+			NodeName:   ptr.To(nodeName),
+			Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)},
+		}
+	}
+	kubeClient := fake.NewSimpleClientset(
+		newNode("node1", node1IP),
+		newNode("node2", node2IP),
+		&v1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "default", UID: types.UID(serviceUID)},
+			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
+		},
+		&discoveryv1.EndpointSlice{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "svc-eps",
+				Namespace:       "default",
+				OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID(serviceUID)}},
+			},
+			AddressType: discoveryv1.AddressTypeIPv4,
+			Endpoints:   []discoveryv1.Endpoint{newEndpoint(podA, "node1"), newEndpoint(podB, "node2")},
+		},
+	)
+
+	// NRP already has the Service's load balancer. nrpAddresses (pod IP -> node IP) replays the
+	// location updates the tracker sends.
+	var mu sync.Mutex
+	nrpAddresses := map[string]string{}
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*armnetwork.ServiceGatewayService{{
+		Name:       ptr.To(serviceUID),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)},
+	}}, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, location := range request.AddressLocations {
+				if len(location.Addresses) == 0 || *location.AddressUpdateAction == armnetwork.AddressUpdateActionFullUpdate {
+					for podIP, nodeIP := range nrpAddresses {
+						if nodeIP == *location.AddressLocation {
+							delete(nrpAddresses, podIP)
+						}
+					}
+				}
+				for _, address := range location.Addresses {
+					if len(address.Services) == 0 {
+						delete(nrpAddresses, *address.Address)
+					} else {
+						nrpAddresses[*address.Address] = *location.AddressLocation
+					}
+				}
+			}
+			return nil
+		}).AnyTimes()
+	mockLB.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().List(gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
+	registered := func() map[string]string {
+		mu.Lock()
+		defer mu.Unlock()
+		return maps.Clone(nrpAddresses)
+	}
+
+	// Start runs the real InitializeFromCluster against the mocked Azure clients.
+	config := providerconfig.Config{ServiceGatewayEnabled: true}
+	config.SubscriptionID = "sub"
+	config.ResourceGroup = "rg"
+	config.Location = "eastus"
+	config.VnetName = "vnet"
+	runtime := NewRuntime(config, mockFactory, kubeClient)
+	runtime.SetEventRecorder(record.NewFakeRecorder(1))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+	if !assert.NoError(t, runtime.Start(ctx, informerFactory)) {
+		return
+	}
+	if !assert.Equal(t, map[string]string{podA: node1IP, podB: node2IP}, registered()) {
+		return
+	}
+
+	assert.NoError(t, kubeClient.CoreV1().Nodes().Delete(ctx, "node2", metav1.DeleteOptions{}))
+	informerFactory.Start(ctx.Done())
+
+	assert.Eventually(t, func() bool {
+		_, ok := registered()[podB]
+		return !ok
+	}, 15*time.Second, 50*time.Millisecond, "a node deleted during initialization must be drained once the handlers sync")
+	assert.Equal(t, map[string]string{podA: node1IP}, registered(),
+		"a node the informer replayed must keep the endpoints initialization registered for it")
+}
+
+// TestCompleteStartupReconciliationOnSync_WaitsForHandlerSync pins that startup reconciliation does
+// not run before the handlers have received the initial list: against an unsynced lister every
+// cached slice looks deleted, so running early would drain live endpoints.
+func TestCompleteStartupReconciliationOnSync_WaitsForHandlerSync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	const (
+		serviceUID = "svc-wait-for-sync"
+		nodeIP     = "10.0.0.1"
+		podIP      = "10.244.1.10"
+	)
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: nodeIP}}},
+	}
+	kubeClient := fake.NewSimpleClientset()
+	tracker, err := difftracker.New(
+		logr.Discard(),
+		difftracker.K8sState{Services: utilsets.NewString(serviceUID), Egresses: utilsets.NewString(), Nodes: map[string]difftracker.Node{}},
+		difftracker.NRPState{LoadBalancers: utilsets.NewString(serviceUID), NATGateways: utilsets.NewString(), Locations: map[string]difftracker.NRPLocation{}},
+		testDiffTrackerConfig(),
+		mock_azclient.NewMockClientFactory(ctrl),
+		kubeClient,
+	)
+	if !assert.NoError(t, err) {
+		return
+	}
+	nodeIndexer := cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{})
+	assert.NoError(t, nodeIndexer.Add(node))
+	tracker.SetNodeLister(corelisters.NewNodeLister(nodeIndexer))
+	tracker.ReconcileEndpointSlice(nil, &discoveryv1.EndpointSlice{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "eps1",
+			Namespace:       "default",
+			OwnerReferences: []metav1.OwnerReference{{Kind: "Service", UID: types.UID(serviceUID)}},
+		},
+		AddressType: discoveryv1.AddressTypeIPv4,
+		Endpoints: []discoveryv1.Endpoint{{
+			Addresses:  []string{podIP},
+			NodeName:   ptr.To("node1"),
+			Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)},
+		}},
+	})
+	registered := func() bool {
+		_, ok := tracker.GetSyncLocationsAddresses().Locations[nodeIP].Addresses[podIP]
+		return ok
+	}
+	if !assert.True(t, registered()) {
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	completeStartupReconciliationOnSync(ctx, func() bool { return false },
+		informers.NewSharedInformerFactory(kubeClient, 0), tracker)
+
+	assert.True(t, registered(), "startup reconciliation must not run before the handlers have synced")
+	// The slice is still cached: a node replay re-registers it after a drain.
+	tracker.ReconcileNodeIPChange("node1", []string{nodeIP}, nil)
+	tracker.ReconcileNodeIPChange("node1", nil, []string{nodeIP})
+	assert.True(t, registered(), "the cached slice must survive an aborted startup reconciliation")
 }
 
 func testDiffTrackerConfig() difftracker.Config {

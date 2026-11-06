@@ -450,6 +450,10 @@ type DiffTracker struct {
 	// endpointSlicesCache is owned by difftracker and stores snapshots from forwarded informer
 	// events. It is replayed when a service is registered and by ReconcileNodeIPChange.
 	endpointSlicesCache sync.Map
+	// startupNodeIPs maps each node initialization listed, until its first informer Add is replayed,
+	// to the InternalIPs its endpoints are registered under. Cleared by CompleteStartupReconciliation.
+	// Guarded by mu.
+	startupNodeIPs map[string][]string
 
 	// Engine state management
 	pendingServiceOps       map[string]*ServiceOperationState
