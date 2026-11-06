@@ -49,5 +49,20 @@ var _ = ginkgo.Describe("Cloud", func() {
 				gomega.Expect(cloudConfig.Services[cloud.ResourceManager].Audience).To(gomega.Equal("https://management.core.chinacloudapi.cn/"))
 			})
 		})
+		ginkgo.When("cloud name is AzureUSSecCloud", func() {
+			ginkgo.It("should return the AzureUSSecCloud placeholder", func() {
+				cloudConfig := AzureCloudConfigFromName("AzureUSSecCloud")
+				gomega.Expect(cloudConfig).ToNot(gomega.BeNil())
+				gomega.Expect(cloudConfig).To(gomega.Equal(&AzureUSSecCloud))
+				gomega.Expect(cloudConfig.ActiveDirectoryAuthorityHost).To(gomega.BeEmpty())
+				gomega.Expect(cloudConfig.Services).To(gomega.BeEmpty())
+			})
+		})
+		ginkgo.When("cloud name is AZUREUSSECCLOUD uppercase", func() {
+			ginkgo.It("should return the AzureUSSecCloud placeholder", func() {
+				cloudConfig := AzureCloudConfigFromName("AZUREUSSECCLOUD")
+				gomega.Expect(cloudConfig).To(gomega.Equal(&AzureUSSecCloud))
+			})
+		})
 	})
 })
