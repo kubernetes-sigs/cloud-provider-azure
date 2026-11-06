@@ -41,10 +41,8 @@ package difftracker
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -575,87 +573,12 @@ func convertLocationDTOsToAddressLocations(locations []LocationDTO) []*armnetwor
 	return armLocations
 }
 
-// synchronousCompletionStatus is the HTTP status NRP returns when it completes a ServiceGateway
-// long-running operation inline instead of handing back a poller.
-const synchronousCompletionStatus = http.StatusOK
-
-// isSynchronousCompletion reports whether err is only the Azure SDK refusing an HTTP 200 response
-// to the *initial* request.
-//
-// The generated armnetwork ServiceGateways client accepts just 202 and 204 for the updateServices
-// and updateAddressLocations long-running operations, but NRP finishes both synchronously and
-// answers 200 OK. The SDK converts that into a ResponseError before a poller is ever created, so
-// the request in fact succeeded and there is nothing left to poll.
-//
-// A 200 alone is not sufficient. azcore reports a genuinely FAILED long-running operation as a
-// ResponseError built from the last poll response (pollers/async.Poller.Result), and for
-// Azure-AsyncOperation polling that terminal poll is itself HTTP 200 carrying
-// {"status":"Failed",...}. Matching on the status code alone therefore reports every async NRP
-// failure as success. The two cases separate on the request method:
-//
-//	NRP synchronous 200 : Method=POST -> tolerate
-//	failed async LRO    : Method=GET  -> propagate
-//
-// The polling headers cannot be used to tell the two apart. NRP stamps Azure-AsyncOperation and
-// Location onto the synchronous 200 it returns for updateServices even though the operation has
-// already completed, so treating their presence as "still in flight" rejects every successful
-// Service registration.
-//
-// This compensates for the vendored SDK; drop it once the generator accepts 200 for these
-// operations.
-//
-// Known side effect: the azclient wrapper records its ARM request metric before this tolerance is
-// applied, so a synchronous 200 is still counted in ARMRequestErrors with status_code=200. The
-// request did succeed; the counter is noise that disappears with the SDK fix.
-func isSynchronousCompletion(err error) bool {
-	var respErr *azcore.ResponseError
-	if !errors.As(err, &respErr) {
-		return false
-	}
-	if respErr.StatusCode != synchronousCompletionStatus {
-		return false
-	}
-	raw := respErr.RawResponse
-	if raw == nil || raw.Request == nil {
-		// Cannot prove this was the initial call, so it cannot be proven complete.
-		return false
-	}
-	// A body that names an error is NRP reporting failure inline, whatever the status code says.
-	// azcore fills ErrorCode from that body, so an empty one is the documented completion shape and
-	// stays tolerated; anything else would mark the service registered while NRP holds no entry.
-	if respErr.ErrorCode != "" {
-		return false
-	}
-	// Every LRO poll is a GET; only the initial updateServices/updateAddressLocations call is a POST.
-	return raw.Request.Method == http.MethodPost
-}
-
-// updateNRPServices calls UpdateServices, tolerating NRP's synchronous 200 OK completion.
+// updateNRPServices calls UpdateServices on the Service Gateway.
 func (dt *DiffTracker) updateNRPServices(ctx context.Context, serviceGatewayName string, req armnetwork.ServiceGatewayUpdateServicesRequest) error {
-	err := dt.networkClientFactory.GetServiceGatewayClient().UpdateServices(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
-	return dt.tolerateSynchronousCompletion(err, "UpdateServices", serviceGatewayName)
+	return dt.networkClientFactory.GetServiceGatewayClient().UpdateServices(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
 }
 
-// updateNRPAddressLocations calls UpdateAddressLocations, tolerating NRP's synchronous 200 OK.
+// updateNRPAddressLocations calls UpdateAddressLocations on the Service Gateway.
 func (dt *DiffTracker) updateNRPAddressLocations(ctx context.Context, serviceGatewayName string, req armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
-	err := dt.networkClientFactory.GetServiceGatewayClient().UpdateAddressLocations(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
-	return dt.tolerateSynchronousCompletion(err, "UpdateAddressLocations", serviceGatewayName)
-}
-
-func (dt *DiffTracker) tolerateSynchronousCompletion(err error, operation, serviceGatewayName string) error {
-	if isSynchronousCompletion(err) {
-		dt.logger.V(4).Info("ServiceGateway operation completed synchronously with 200 OK",
-			"operation", operation, "serviceGateway", serviceGatewayName)
-		return nil
-	}
-
-	// A 200 that is not a provable synchronous completion is an asynchronous operation that either
-	// failed or is still in flight. Reporting it as success would leave the tracker believing NRP
-	// holds state it does not, so log it as it propagates.
-	var respErr *azcore.ResponseError
-	if errors.As(err, &respErr) && respErr.StatusCode == synchronousCompletionStatus {
-		dt.logger.Error(err, "ServiceGateway operation returned 200 OK that is not a synchronous completion; propagating as a failure",
-			"operation", operation, "serviceGateway", serviceGatewayName, "errorCode", respErr.ErrorCode)
-	}
-	return err
+	return dt.networkClientFactory.GetServiceGatewayClient().UpdateAddressLocations(ctx, dt.config.ResourceGroup, serviceGatewayName, req)
 }
