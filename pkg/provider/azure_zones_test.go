@@ -335,3 +335,68 @@ func TestRefreshZones(t *testing.T) {
 	}()
 	az.refreshZones(ctx, az.syncRegionZonesMap)
 }
+
+func TestGetPublicIPZones(t *testing.T) {
+	t.Run("return the cached zones without calling ARM", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+		// GetTestCloud already fills the public IP zone map, so a call to the repository
+		// would fail this test.
+		zones, err := az.getPublicIPZones(context.TODO(), az.Location)
+		assert.NoError(t, err)
+		assert.Equal(t, to.SliceOfPtrs("1", "2", "3"), zones)
+	})
+
+	t.Run("fetch and cache the zones when the map is not initialized", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+		az.publicIPZonesMap = nil
+		repo := az.zoneRepo.(*zone.MockRepository)
+		repo.EXPECT().ListNetworkResourceZones(gomock.Any(), zone.PublicIPResourceType).
+			Return(map[string][]string{az.Location: {"2", "1"}}, nil).Times(1)
+
+		zones, err := az.getPublicIPZones(context.TODO(), az.Location)
+		assert.NoError(t, err)
+		assert.Equal(t, to.SliceOfPtrs("2", "1"), zones)
+
+		// The second lookup is served from the map, so no further call is expected.
+		zones, err = az.getPublicIPZones(context.TODO(), az.Location)
+		assert.NoError(t, err)
+		assert.Equal(t, to.SliceOfPtrs("2", "1"), zones)
+	})
+
+	t.Run("return no zones for a region publicIPAddresses does not support", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+		az.publicIPZonesMap = nil
+		repo := az.zoneRepo.(*zone.MockRepository)
+		repo.EXPECT().ListNetworkResourceZones(gomock.Any(), zone.PublicIPResourceType).
+			Return(map[string][]string{"westeurope": {"1", "2", "3"}}, nil).Times(1)
+
+		zones, err := az.getPublicIPZones(context.TODO(), az.Location)
+		assert.NoError(t, err)
+		assert.Empty(t, zones)
+	})
+
+	t.Run("report the error and leave the map uninitialized", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		az := GetTestCloud(ctrl)
+		az.publicIPZonesMap = nil
+		repo := az.zoneRepo.(*zone.MockRepository)
+		expectedErr := fmt.Errorf("error")
+		repo.EXPECT().ListNetworkResourceZones(gomock.Any(), zone.PublicIPResourceType).
+			Return(nil, expectedErr).Times(1)
+
+		_, err := az.getPublicIPZones(context.TODO(), az.Location)
+		assert.ErrorIs(t, err, expectedErr)
+		assert.Nil(t, az.publicIPZonesMap)
+	})
+}

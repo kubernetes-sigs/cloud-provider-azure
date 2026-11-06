@@ -1536,7 +1536,7 @@ func (az *Cloud) ensurePublicIPExists(ctx context.Context, service *v1.Service, 
 			// skip adding zone info since edge zones doesn't support multiple availability zones.
 			if !az.HasExtendedLocation() {
 				// only add zone information for the new standard pips
-				zones, err := az.getRegionZonesBackoff(ctx, ptr.Deref(pip.Location, ""))
+				zones, err := az.getPublicIPZones(ctx, ptr.Deref(pip.Location, ""))
 				if err != nil {
 					return nil, err
 				}

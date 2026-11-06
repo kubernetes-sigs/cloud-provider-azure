@@ -16052,3 +16052,62 @@ func TestRemoveServiceFromLB(t *testing.T) {
 		})
 	}
 }
+
+// TestEnsurePublicIPExistsUsesPublicIPZones covers the zones put on a newly created Standard
+// public IP. ARM validates that PUT against the zone mappings of Microsoft.Network
+// publicIPAddresses, not the ones of the region's virtual machines, and rejects a zone only
+// the latter supports with InvalidAvailabilityZone.
+func TestEnsurePublicIPExistsUsesPublicIPZones(t *testing.T) {
+	testCases := []struct {
+		desc          string
+		vmZones       []string
+		publicIPZones []string
+		expectedZones []*string
+	}{
+		{
+			desc:          "use the public IP zones when the virtual machines support more",
+			vmZones:       []string{"1", "2", "3", "4"},
+			publicIPZones: []string{"1", "2", "3"},
+			expectedZones: to.SliceOfPtrs("1", "2", "3"),
+		},
+		{
+			desc:          "leave the zones unset where public IP addresses support none",
+			vmZones:       []string{"1", "2", "3"},
+			publicIPZones: []string{},
+			expectedZones: nil,
+		},
+		{
+			desc:          "keep the zones unchanged where both resource types agree",
+			vmZones:       []string{"1", "2", "3"},
+			publicIPZones: []string{"1", "2", "3"},
+			expectedZones: to.SliceOfPtrs("1", "2", "3"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			az := GetTestCloud(ctrl)
+			az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			az.regionZonesMap = map[string][]string{az.Location: tc.vmZones}
+			az.publicIPZonesMap = map[string][]string{az.Location: tc.publicIPZones}
+
+			var putZones []*string
+			mockPIPsClient := az.NetworkClientFactory.GetPublicIPAddressClient().(*mock_publicipaddressclient.MockInterface)
+			mockPIPsClient.EXPECT().Get(gomock.Any(), "rg", "pip1", gomock.Any()).Return(nil, nil).MaxTimes(1)
+			mockPIPsClient.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.PublicIPAddress{}, nil).AnyTimes()
+			mockPIPsClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "pip1", gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ string, _ string, parameters armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+					putZones = parameters.Zones
+					return nil, nil
+				}).Times(1)
+
+			service := getTestService("test1", v1.ProtocolTCP, nil, false, 80)
+			_, err := az.ensurePublicIPExists(context.TODO(), &service, "pip1", "", "", false, false, false)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedZones, putZones)
+		})
+	}
+}
