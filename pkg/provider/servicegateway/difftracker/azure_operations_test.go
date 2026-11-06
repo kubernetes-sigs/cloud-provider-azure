@@ -313,6 +313,100 @@ func TestUpdateServiceLoadBalancerStatus_DualStackSafeThroughLister(t *testing.T
 	assert.Contains(t, hosts, "example.com")
 }
 
+// TestRemoveServiceLoadBalancerIngressIP_ReadsPastTheInformerCache pins that the withdrawal reads
+// the Service from the API server: a cache that has not yet observed the published address must not
+// hide it.
+func TestRemoveServiceLoadBalancerIngressIP_ReadsPastTheInformerCache(t *testing.T) {
+	live := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"},
+		Status:     v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}}},
+	}
+	cached := live.DeepCopy()
+	cached.Status.LoadBalancer.Ingress = nil
+	kube := fake.NewSimpleClientset(live)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.serviceLister = serviceListerWith(t, cached)
+	dt.trackService("uid-1", "ns", "svc")
+
+	assert.NoError(t, dt.removeServiceLoadBalancerIngressIP(context.Background(), "uid-1", "20.1.2.3"))
+
+	assert.Zero(t, serviceLists(kube), "the Service must be read by name, not by listing every Service")
+	got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+	if assert.NoError(t, err) {
+		assert.Empty(t, got.Status.LoadBalancer.Ingress)
+	}
+}
+
+// TestRemoveServiceLoadBalancerIngressIP_FallsBackToListWhenTheReadFails pins that a transient
+// failure to read the Service by namespace/name falls back to the UID scan instead of failing.
+func TestRemoveServiceLoadBalancerIngressIP_FallsBackToListWhenTheReadFails(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"},
+		Status:     v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}}},
+	}
+	kube := fake.NewSimpleClientset(svc)
+	kube.PrependReactor("get", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("apiserver unavailable")
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.trackService("uid-1", "ns", "svc")
+
+	assert.NoError(t, dt.removeServiceLoadBalancerIngressIP(context.Background(), "uid-1", "20.1.2.3"))
+
+	got, err := kube.Tracker().Get(v1.SchemeGroupVersion.WithResource("services"), "ns", "svc")
+	if assert.NoError(t, err) {
+		assert.Empty(t, got.(*v1.Service).Status.LoadBalancer.Ingress)
+	}
+}
+
+// TestRemoveServiceLoadBalancerIngressIP_KeepsAConcurrentStatusWrite pins that the withdrawal never
+// overwrites a status write that lands between its read and its write: the API server rejects the
+// write as a conflict, and the withdrawal re-reads the Service and removes only its address.
+func TestRemoveServiceLoadBalancerIngressIP_KeepsAConcurrentStatusWrite(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1", ResourceVersion: "1"},
+		Status: v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{
+			Ingress: []v1.LoadBalancerIngress{{IP: "20.1.2.3"}, {IP: "2001:db8::1"}},
+		}},
+	}
+	kube := fake.NewSimpleClientset(svc)
+	services := v1.SchemeGroupVersion.WithResource("services")
+	concurrentWrite := true
+	kube.PrependReactor("update", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if concurrentWrite {
+			concurrentWrite = false
+			changed := svc.DeepCopy()
+			changed.ResourceVersion = "2"
+			changed.Status.LoadBalancer.Ingress = append(changed.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname: "example.com"})
+			if err := kube.Tracker().Update(services, changed, "ns"); err != nil {
+				return true, nil, err
+			}
+		}
+		// Like the API server, reject a write that carries an outdated resourceVersion.
+		stored, err := kube.Tracker().Get(services, "ns", "svc")
+		if err != nil {
+			return true, nil, err
+		}
+		written := action.(k8stesting.UpdateAction).GetObject().(*v1.Service)
+		if written.ResourceVersion != "" && written.ResourceVersion != stored.(*v1.Service).ResourceVersion {
+			return true, nil, apierrors.NewConflict(v1.Resource("services"), "svc", errors.New("the object has been modified"))
+		}
+		return false, nil, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.trackService("uid-1", "ns", "svc")
+
+	assert.NoError(t, dt.removeServiceLoadBalancerIngressIP(context.Background(), "uid-1", "20.1.2.3"))
+
+	got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+	if assert.NoError(t, err) {
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2001:db8::1"}, {Hostname: "example.com"}}, got.Status.LoadBalancer.Ingress)
+	}
+}
+
 // responseError builds the shape azcore produces for the INITIAL updateServices/
 // updateAddressLocations call: a POST. isSynchronousCompletion requires the POST, because a 200 is
 // also how azcore reports a FAILED asynchronous operation (the terminal poll is a GET returning

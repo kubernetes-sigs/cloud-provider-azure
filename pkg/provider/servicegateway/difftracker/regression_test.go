@@ -250,6 +250,7 @@ func TestDeleteInboundServiceLastErrMonotonic(t *testing.T) {
 	sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	lb.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(errors.New("simulated-lb-delete-failure"))
+	pip.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, notFoundError())
 	pip.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 
 	kube := fake.NewSimpleClientset(deletionTestService())

@@ -130,6 +130,41 @@ func TestDeletePublicIP_Mock(t *testing.T) {
 	})
 }
 
+func TestGetPublicIPAddress_Mock(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		pip     *armnetwork.PublicIPAddress
+		err     error
+		want    string
+		wantErr bool
+	}{
+		{name: "allocated address", pip: publicIPWithAddress("20.1.2.3"), want: "20.1.2.3"},
+		{name: "no address allocated", pip: &armnetwork.PublicIPAddress{Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}},
+		{name: "no properties", pip: &armnetwork.PublicIPAddress{}},
+		{name: "no public IP returned"},
+		{name: "not-found is no address", err: notFoundError()},
+		{name: "error", err: errors.New("boom"), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+			mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+			mockPIP.EXPECT().Get(gomock.Any(), "rg", "svc-pip", nil).Return(tc.pip, tc.err)
+
+			dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+			got, err := dt.getPublicIPAddress(context.Background(), "rg", "svc-pip")
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
 func TestCreateOrUpdateLB_Mock(t *testing.T) {
 	lb := armnetwork.LoadBalancer{Name: ptr.To("svc")}
 
