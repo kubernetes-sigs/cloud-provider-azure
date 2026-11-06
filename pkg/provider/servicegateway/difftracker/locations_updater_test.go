@@ -299,22 +299,13 @@ func TestLocationsUpdater_TerminalErrorStillDrainsUnrelatedDeletions(t *testing.
 		"a Service with no NRP addresses must still drain when an unrelated Service poisons the batch")
 }
 
-// TestLocationsUpdater_InitDoesNotHangOnSustainedTransientError verifies that a retryable NRP error
-// which never clears cannot block initialization indefinitely.
-//
-// backoffAndRetry re-triggers before the in-flight trigger counter is decremented, so
-// initialization stays blocked until a sync succeeds. Unbounded, a sustained 503 keeps
-// pendingUpdaterTriggers above zero, WaitForInitialSync never returns, and InitializeFromCluster,
-// Runtime.Start and startServiceController all hang. startControllers runs sequentially and starts
-// informers only afterwards, so every remaining CCM controller is left unstarted.
-// TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError pins that a never-clearing
+// TestLocationsUpdater_InitKeepsRetryingOnSustainedTransientError pins that a never-clearing
 // transient NRP error is never abandoned during initialization. Abandoning retired the in-flight
 // trigger, which let WaitForInitialSync return success and startup proceed against NRP state the
 // sync had never reconciled - and discarded an NRP recovery arriving moments later.
 //
-// The contract is now: keep retrying, and if NRP has not recovered by the initial-sync deadline,
-// surface that as an error so InitializeFromCluster fails loudly rather than silently continuing.
-func TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError(t *testing.T) {
+// The contract is now: keep retrying and keep initialization blocked until NRP recovers.
+func TestLocationsUpdater_InitKeepsRetryingOnSustainedTransientError(t *testing.T) {
 	prev := maxInitLocationSyncAttempts.Load()
 	maxInitLocationSyncAttempts.Store(1)
 	defer maxInitLocationSyncAttempts.Store(prev)
