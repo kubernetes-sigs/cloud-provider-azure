@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -172,8 +173,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		targetIPs := []*string{}
 		ipNames := []string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 
-		createBYOPIP := func(isIPv6 bool) func() {
+		createBYOPIP := func(isIPv6 bool) {
 			ipName := utils.GetNameWithSuffix(ipNameBase, utils.Suffixes[isIPv6])
 			ipNames = append(ipNames, ipName)
 			pip := defaultPublicIPAddress(ipName, isIPv6)
@@ -181,32 +185,29 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			pips = append(pips, pip)
 			pip, err := utils.WaitCreatePIP(tc, ipName, tc.GetResourceGroup(), pip)
 			Expect(err).NotTo(HaveOccurred())
-			deleteFunc := func() {
+			deleteFuncs = append(deleteFuncs, func() {
 				err := utils.DeletePIPWithRetry(tc, ipName, tc.GetResourceGroup())
 				Expect(err).To(BeNil())
-			}
+			})
 			Expect(pip.Tags).To(Equal(expectedTags))
 			targetIPs = append(targetIPs, pip.Properties.IPAddress)
 			utils.Logf("created pip with address %s", *pip.Properties.IPAddress)
-			return deleteFunc
 		}
 		if v4Enabled {
-			deleteFuncs = append(deleteFuncs, createBYOPIP(false))
+			createBYOPIP(false)
 		}
 		if v6Enabled {
-			deleteFuncs = append(deleteFuncs, createBYOPIP(true))
+			createBYOPIP(true)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("creating a service referencing the public IP")
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
 		service = updateServiceLBIPs(service, false, targetIPs)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			Expect(utils.DeleteService(cs, ns.Name, testServiceName)).NotTo(HaveOccurred())
+		}()
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -267,6 +268,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		targetIPs := []*string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			defer runCleanupActions(deleteFuncs...)
+			By("Cleaning up Service")
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
 			targetIPs = append(targetIPs, &targetIP)
@@ -277,15 +284,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
-
-		defer func() {
-			By("Cleaning up Service")
-			err = utils.DeleteService(cs, ns.Name, testServiceName)
-			Expect(err).NotTo(HaveOccurred())
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Waiting for exposure of the original service without assigned lb IP")
 		ips1, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
@@ -314,6 +312,13 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.Background(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		deleteFuncs := []func(){}
+		defer func() {
+			slices.Reverse(deleteFuncs)
+			defer runCleanupActions(deleteFuncs...)
+			By("Cleaning up Service")
+			Expect(utils.DeleteService(cs, ns.Name, testServiceName)).NotTo(HaveOccurred())
+		}()
 
 		By("Waiting for the managed public IP to be ready")
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
@@ -324,7 +329,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		rg, deleteRG := utils.CreateTestResourceGroup(tc)
 		otherRG := ptr.Deref(rg.Name, "")
 		Expect(rg).NotTo(BeNil())
-		defer deleteRG(otherRG)
+		deleteFuncs = append(deleteFuncs, func() { deleteRG(otherRG) })
 
 		var pipName, pipNameV6 string
 		if v4Enabled {
@@ -332,11 +337,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			pip := defaultPublicIPAddress(pipName, false)
 			createdPIP, err := utils.WaitCreatePIP(tc, pipName, otherRG, pip)
 			Expect(err).NotTo(HaveOccurred())
+			deleteFuncs = append(deleteFuncs, func() {
+				Expect(utils.DeletePIPWithRetry(tc, pipName, otherRG)).NotTo(HaveOccurred())
+			})
 			Expect(createdPIP).NotTo(BeNil())
 			Expect(createdPIP.Properties.IPAddress).NotTo(BeNil())
-			defer func() {
-				_ = utils.DeletePIPWithRetry(tc, pipName, otherRG)
-			}()
 			targetIPs = append(targetIPs, createdPIP.Properties.IPAddress)
 		}
 		if v6Enabled {
@@ -344,11 +349,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			pipV6 := defaultPublicIPAddress(pipNameV6, true)
 			createdPIPV6, err := utils.WaitCreatePIP(tc, pipNameV6, otherRG, pipV6)
 			Expect(err).NotTo(HaveOccurred())
+			deleteFuncs = append(deleteFuncs, func() {
+				Expect(utils.DeletePIPWithRetry(tc, pipNameV6, otherRG)).NotTo(HaveOccurred())
+			})
 			Expect(createdPIPV6).NotTo(BeNil())
 			Expect(createdPIPV6.Properties.IPAddress).NotTo(BeNil())
-			defer func() {
-				_ = utils.DeletePIPWithRetry(tc, pipNameV6, otherRG)
-			}()
 			targetIPs = append(targetIPs, createdPIPV6.Properties.IPAddress)
 		}
 
@@ -367,12 +372,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		}
 		_, err = cs.CoreV1().Services(ns.Name).Update(context.Background(), service, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-
-		defer func() {
-			By("Cleaning up Service")
-			err = utils.DeleteService(cs, ns.Name, testServiceName)
-			Expect(err).NotTo(HaveOccurred())
-		}()
 
 		By("Waiting for the service to be updated with the user-assigned public IP")
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
@@ -441,6 +440,12 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		targetIPs := []*string{}
 		deleteFuncs := []func(){}
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
+		defer func() {
+			defer runCleanupActions(deleteFuncs...)
+			By("Cleaning up")
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
 			targetIPs = append(targetIPs, &targetIP)
@@ -451,15 +456,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
-
-		defer func() {
-			By("Cleaning up")
-			err = utils.DeleteService(cs, ns.Name, testServiceName)
-			Expect(err).NotTo(HaveOccurred())
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Waiting for exposure of the original service without assigned lb private IP")
 		ips1, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
@@ -490,6 +486,9 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 
 		targetIPs := []*string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
@@ -512,9 +511,6 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			By("Cleaning up")
 			err = utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
 		}()
 
 		By("Waiting for exposure of the original service with assigned lb private IP")
@@ -806,11 +802,11 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
 		_, err = cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
 		defer func() {
 			deleteSvcErr := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(deleteSvcErr).NotTo(HaveOccurred())
 		}()
+		publicIPs, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(publicIPs)).NotTo(BeZero())
 		publicIP := publicIPs[0]
@@ -885,6 +881,10 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		targetIPs := []*string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			By("Clean up PIPs")
+			runCleanupActions(deleteFuncs...)
+		}()
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
 			targetIPs = append(targetIPs, &targetIP)
@@ -895,26 +895,18 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelLB), func() {
 			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
-		defer func() {
-			By("Clean up PIPs")
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("creating a service referencing the public IP")
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, serviceAnnotationDisableLoadBalancerFloatingIP, labels, ns.Name, ports)
 		service = updateServiceLBIPs(service, false, targetIPs)
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
-		Expect(err).NotTo(HaveOccurred())
-
 		defer func() {
 			By("Clean up Service")
 			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
 		Expect(err).NotTo(HaveOccurred())
@@ -1012,14 +1004,14 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		}
 
 		ips := createAndExposeDefaultServiceWithAnnotation(cs, tc.IPFamily, testServiceName, ns.Name, labels, annotation, ports)
-		Expect(len(ips)).NotTo(BeZero())
-		ip := ips[0]
-		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		Expect(len(ips)).NotTo(BeZero())
+		ip := ips[0]
+		service, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Update the service and without significant changes and compare etags")
@@ -1032,6 +1024,10 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
 		targetIPs := []*string{}
 		deleteFuncs := []func(){}
+		defer func() {
+			By("Clean up PIPs")
+			runCleanupActions(deleteFuncs...)
+		}()
 		if v4Enabled {
 			targetIP, deleteFunc := createPIP(tc, ipNameBase, false)
 			targetIPs = append(targetIPs, &targetIP)
@@ -1042,12 +1038,6 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			targetIPs = append(targetIPs, &targetIP)
 			deleteFuncs = append(deleteFuncs, deleteFunc)
 		}
-		defer func() {
-			By("Clean up PIPs")
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		customHealthProbeConfigPrefix := "service.beta.kubernetes.io/port_" + strconv.Itoa(int(ports[0].Port)) + "_health-probe_"
 		By("Creating a service and expose it")
@@ -1075,15 +1065,15 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		service.Spec.SessionAffinity = "ClientIP"
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
-		Expect(err).NotTo(HaveOccurred())
-
-		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		defer func() {
 			By("Cleaning up")
 			err := utils.DeleteService(cs, ns.Name, testServiceName)
 			Expect(err).NotTo(HaveOccurred())
 		}()
+		_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, targetIPs)
+		Expect(err).NotTo(HaveOccurred())
+
+		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Update the service and without significant changes and compare etags")
@@ -1103,12 +1093,16 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 		By("Creating BYO public IP prefixes")
 		prefixNameBase := "prefix"
 		v4Enabled, v6Enabled := utils.IfIPFamiliesEnabled(tc.IPFamily)
-		createPIPPrefix := func(isIPv6 bool) func() {
+		deleteFuncs := []func(){}
+		defer func() {
+			runCleanupActions(deleteFuncs...)
+		}()
+		createPIPPrefix := func(isIPv6 bool) {
 			prefixName := utils.GetNameWithSuffix(prefixNameBase, utils.Suffixes[isIPv6])
 			prefix, err := utils.WaitCreatePIPPrefix(tc, prefixName, tc.GetResourceGroup(), defaultPublicIPPrefix(prefixName, isIPv6))
-			deleteFunc := func() {
+			deleteFuncs = append(deleteFuncs, func() {
 				Expect(utils.DeletePIPPrefixWithRetry(tc, prefixName)).NotTo(HaveOccurred())
-			}
+			})
 			Expect(err).NotTo(HaveOccurred())
 
 			if tc.IPFamily == utils.DualStack {
@@ -1116,37 +1110,30 @@ var _ = Describe("EnsureLoadBalancer should not update any resources when servic
 			} else {
 				annotation[consts.ServiceAnnotationPIPPrefixIDDualStack[false]] = ptr.Deref(prefix.ID, "")
 			}
-			return deleteFunc
 		}
-		deleteFuncs := []func(){}
 		if v4Enabled {
-			deleteFuncs = append(deleteFuncs, createPIPPrefix(false))
+			createPIPPrefix(false)
 		}
 		if v6Enabled {
-			deleteFuncs = append(deleteFuncs, createPIPPrefix(true))
+			createPIPPrefix(true)
 		}
-		defer func() {
-			for _, deleteFunc := range deleteFuncs {
-				deleteFunc()
-			}
-		}()
 
 		By("Creating a service and expose it")
 		service := utils.CreateLoadBalancerServiceManifest(testServiceName, annotation, labels, ns.Name, ports)
 		service.Spec.ExternalTrafficPolicy = "Local"
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), service, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			By("Cleaning up")
+			err := utils.DeleteService(cs, ns.Name, testServiceName)
+			Expect(err).NotTo(HaveOccurred())
+		}()
 		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(ips)).NotTo(BeZero())
 		ip := ips[0]
 
 		service, err = cs.CoreV1().Services(ns.Name).Get(context.TODO(), testServiceName, metav1.GetOptions{})
-		defer func() {
-			By("Cleaning up")
-			err := utils.DeleteService(cs, ns.Name, testServiceName)
-			Expect(err).NotTo(HaveOccurred())
-		}()
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Update the service and without significant changes and compare etags")
@@ -1487,6 +1474,29 @@ func defaultPublicIPPrefix(name string, isIPv6 bool) armnetwork.PublicIPPrefix {
 			PublicIPAddressVersion: to.Ptr(pipAddrVersion),
 		},
 	}
+}
+
+// runCleanupActions runs every action in order, even if some of them panic, and
+// re-raises the first failure (or a panic already in flight, when invoked via
+// defer) after all actions have run, so a later cleanup action never masks an
+// earlier failure.
+func runCleanupActions(actions ...func()) {
+	primary := recover()
+	for _, action := range actions {
+		if p := runAndRecover(action); p != nil && primary == nil {
+			primary = p
+		}
+	}
+	if primary != nil {
+		panic(primary)
+	}
+}
+
+// runAndRecover runs action and returns the value of any panic it raised.
+func runAndRecover(action func()) (recovered any) {
+	defer func() { recovered = recover() }()
+	action()
+	return nil
 }
 
 func createPIP(tc *utils.AzureTestClient, ipNameBase string, isIPv6 bool) (string, func()) {
