@@ -31,6 +31,10 @@ import (
 
 	"go.uber.org/mock/gomock"
 
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
+	k8scache "k8s.io/client-go/tools/cache"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
 
@@ -175,6 +179,8 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 	testCases := []struct {
 		description                 string
 		nodeName                    string
+		providerID                  string
+		nodeListerNil               bool
 		DisableAvailabilitySetNodes bool
 		EnableVmssFlexNodes         bool
 		vmListErr                   error
@@ -203,8 +209,28 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 			expectedErr:              nil,
 		},
 		{
-			description:                 "getVMManagementTypeByNodeName should return ManagedByVmssUniform if DisableAvailabilitySetNodes is set to true and EnableVmssFlexNodes is set to false",
+			description:                 "getVMManagementTypeByNodeName should return ManagedByAvSet for standalone VM when availability set nodes are disabled",
+			nodeName:                    "standalone-vm",
+			providerID:                  "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/standalone-vm",
+			DisableAvailabilitySetNodes: true,
+			EnableVmssFlexNodes:         false,
+			vmListErr:                   nil,
+			expectedVMManagementType:    ManagedByAvSet,
+			expectedErr:                 nil,
+		},
+		{
+			description:                 "getVMManagementTypeByNodeName should fall back to ManagedByVmssUniform when node metadata is unavailable",
 			nodeName:                    "anyName",
+			DisableAvailabilitySetNodes: true,
+			EnableVmssFlexNodes:         false,
+			vmListErr:                   nil,
+			expectedVMManagementType:    ManagedByVmssUniform,
+			expectedErr:                 nil,
+		},
+		{
+			description:                 "getVMManagementTypeByNodeName should fall back to ManagedByVmssUniform when node lister is unavailable",
+			nodeName:                    "anyName",
+			nodeListerNil:               true,
 			DisableAvailabilitySetNodes: true,
 			EnableVmssFlexNodes:         false,
 			vmListErr:                   nil,
@@ -230,6 +256,18 @@ func TestGetVMManagementTypeByNodeName(t *testing.T) {
 
 			ss.DisableAvailabilitySetNodes = tc.DisableAvailabilitySetNodes
 			ss.EnableVmssFlexNodes = tc.EnableVmssFlexNodes
+			if tc.nodeListerNil {
+				ss.nodeLister = nil
+			}
+			if tc.providerID != "" {
+				indexer := k8scache.NewIndexer(k8scache.MetaNamespaceKeyFunc, k8scache.Indexers{})
+				err = indexer.Add(&v1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: tc.nodeName},
+					Spec:       v1.NodeSpec{ProviderID: tc.providerID},
+				})
+				assert.NoError(t, err, tc.description)
+				ss.nodeLister = corelisters.NewNodeLister(indexer)
+			}
 
 			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
