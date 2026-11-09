@@ -579,7 +579,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 				if err != nil {
 					return fmt.Errorf("get service %s: %w", serviceName, err)
 				}
-				if err := serviceReconciledErr(string(svc.UID), podsPerSvc); err != nil {
+				if err := servicePodsReconciledErr(cs, ns.Name, string(svc.UID), podsPerSvc); err != nil {
 					return fmt.Errorf("service %s: %w", serviceName, err)
 				}
 			}
@@ -667,7 +667,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 			for _, serviceUID := range serviceUIDs {
 				found := false
 				for _, svc := range sgResponse.Value {
-					if svc.Name == serviceUID {
+					if svc.Name == inboundServiceName(serviceUID) {
 						found = true
 						break
 					}
@@ -808,7 +808,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 		// reconciled with NAT Gateways and their pods are registered.
 		Eventually(func() error {
 			for _, egressName := range egressGateways {
-				if err := egressRegisteredErr(egressName, podsPerGateway); err != nil {
+				if err := egressPodsRegisteredErr(cs, ns.Name, egressName, podsPerGateway); err != nil {
 					return err
 				}
 			}
@@ -870,7 +870,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 			for _, egressName := range egressGateways {
 				found := false
 				for _, svc := range sgResponse.Value {
-					if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+					if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 						found = true
 						break
 					}
@@ -935,7 +935,7 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 			}
 			for _, egressName := range egressGateways {
 				for _, svc := range sgResponse.Value {
-					if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+					if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 						return fmt.Errorf("outbound service for %s still exists", egressName)
 					}
 				}
@@ -1252,17 +1252,13 @@ var _ = Describe("Container Load Balancer Initialization Tests", Label(slbTestLa
 			if err != nil {
 				return fmt.Errorf("get service %s: %w", baselineServices[1], err)
 			}
-			got, err := countRegisteredEndpoints(string(existingSvc.UID))
-			if err != nil {
+			if err := servicePodsReconciledErr(cs, ns.Name, string(existingSvc.UID), expectedPods); err != nil {
 				return err
-			}
-			if got != expectedPods {
-				return fmt.Errorf("service %s has %d endpoints, want %d", baselineServices[1], got, expectedPods)
 			}
 
 			// Both new egress gateways must exist with their pods registered.
 			for _, egressName := range newEgressGateways {
-				if err := egressRegisteredErr(egressName, newEgressPods); err != nil {
+				if err := egressPodsRegisteredErr(cs, ns.Name, egressName, newEgressPods); err != nil {
 					return err
 				}
 			}

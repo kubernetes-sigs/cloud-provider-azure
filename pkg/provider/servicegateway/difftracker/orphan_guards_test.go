@@ -48,7 +48,7 @@ func TestGuardDefaultNATGatewayIsNeverScheduledForOrphanDeletion(t *testing.T) {
 
 	// Exactly the startup shape: the default gateway is live in Azure, is not in NRP state
 	// (excluded at parse time) and is not a K8s egress identity (rejected as a pod label).
-	azureNATs := utilsets.NewString(DefaultOutboundNATGatewayName, "real-orphan-egress")
+	azureNATs := utilsets.NewString(DefaultOutboundNATGatewayName, "real-orphan-egress-natgw")
 
 	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), azureNATs, utilsets.NewString())
 
@@ -60,7 +60,7 @@ func TestGuardDefaultNATGatewayIsNeverScheduledForOrphanDeletion(t *testing.T) {
 		"BUG CASE: the RP-owned %q was scheduled for deletion; deleting it is a cluster-wide egress outage",
 		DefaultOutboundNATGatewayName)
 
-	_, orphanScheduled := dt.pendingServiceOps["real-orphan-egress"]
+	_, orphanScheduled := dt.pendingServiceOps["real-orphan-egress-natgw"]
 	assert.True(t, orphanScheduled,
 		"CONTROL: a genuine unreferenced NAT Gateway must still be collected, otherwise this probe proves nothing")
 }
@@ -73,13 +73,13 @@ func TestGuardOrphanedNATGatewayUsesOutboundDeletionPath(t *testing.T) {
 
 	scheduleOrphanedResourceDeletions(dt,
 		utilsets.NewString(),
-		utilsets.NewString("orphan-egress"),
+		utilsets.NewString("orphan-egress-natgw"),
 		utilsets.NewString())
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 
-	opState, ok := dt.pendingServiceOps["orphan-egress"]
+	opState, ok := dt.pendingServiceOps["orphan-egress-natgw"]
 	if !assert.True(t, ok, "precondition: the orphaned NAT Gateway must be scheduled at all") {
 		return
 	}
@@ -88,7 +88,7 @@ func TestGuardOrphanedNATGatewayUsesOutboundDeletionPath(t *testing.T) {
 
 	// CONTROL: an orphaned LoadBalancer in the same call must be inbound.
 	dt2 := newTestDiffTracker()
-	const orphanLB = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	const orphanLB = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa-lb"
 	scheduleOrphanedResourceDeletions(dt2,
 		utilsets.NewString(orphanLB),
 		utilsets.NewString(),
@@ -105,21 +105,21 @@ func TestGuardOrphanedNATGatewayUsesOutboundDeletionPath(t *testing.T) {
 // guards on both buffered pods and the live pod ref-count; this pins the ref-count guard.
 func TestGuardOutboundTeardownRespectsLivePodRefCount(t *testing.T) {
 	dt := newTestDiffTracker()
-	const svcUID = "egress-identity"
+	const serviceName = "egress-identity"
 
-	dt.pendingServiceOps[svcUID] = &ServiceOperationState{
-		ServiceUID: svcUID,
-		Config:     NewOutboundServiceConfig(svcUID, nil),
-		State:      StateNotStarted,
-		RetryCount: 3, // a create that already reached Azure
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateNotStarted,
+		RetryCount:  3, // a create that already reached Azure
 	}
 	// No buffered pods, but three LIVE pods are still registered against this identity.
-	dt.outboundIdentityPodRefCount.Store(svcUID, 3)
+	dt.outboundIdentityPodRefCount.Store(serviceName, 3)
 
 	dt.mu.Lock()
-	retained := dt.handleEmptyOutboundServiceLocked(svcUID)
-	_, scheduled := dt.pendingServiceDeletions[svcUID]
-	state := dt.pendingServiceOps[svcUID].State
+	retained := dt.handleEmptyOutboundServiceLocked(serviceName)
+	_, scheduled := dt.pendingServiceDeletions[serviceName]
+	state := dt.pendingServiceOps[serviceName].State
 	dt.mu.Unlock()
 
 	assert.False(t, scheduled,
@@ -130,16 +130,16 @@ func TestGuardOutboundTeardownRespectsLivePodRefCount(t *testing.T) {
 	// CONTROL: with the ref-count at zero the same call MUST schedule the teardown, so the probe
 	// is not passing because handleEmptyOutboundServiceLocked never does anything.
 	dt2 := newTestDiffTracker()
-	dt2.pendingServiceOps[svcUID] = &ServiceOperationState{
-		ServiceUID: svcUID,
-		Config:     NewOutboundServiceConfig(svcUID, nil),
-		State:      StateNotStarted,
-		RetryCount: 3,
+	dt2.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateNotStarted,
+		RetryCount:  3,
 	}
-	dt2.outboundIdentityPodRefCount.Store(svcUID, 0)
+	dt2.outboundIdentityPodRefCount.Store(serviceName, 0)
 	dt2.mu.Lock()
-	retained2 := dt2.handleEmptyOutboundServiceLocked(svcUID)
-	_, scheduled2 := dt2.pendingServiceDeletions[svcUID]
+	retained2 := dt2.handleEmptyOutboundServiceLocked(serviceName)
+	_, scheduled2 := dt2.pendingServiceDeletions[serviceName]
 	dt2.mu.Unlock()
 	assert.True(t, scheduled2, "CONTROL: with no live pods the failed create must be torn down")
 	assert.True(t, retained2, "CONTROL: teardown in flight must retain the pod finalizer")
@@ -160,10 +160,10 @@ func TestGuardRemoveLastPodFinalizersIsScopedToItsService(t *testing.T) {
 	dt := newTestDiffTracker()
 	dt.kubeClient = kubeClient
 	dt.pendingPodDeletions["ns/pod-a"] = &PendingPodDeletion{
-		Namespace: "ns", Name: "pod-a", UID: "uid-a", ServiceUID: "egress-a", IsLastPod: true,
+		Namespace: "ns", Name: "pod-a", UID: "uid-a", ServiceName: "egress-a", IsLastPod: true,
 	}
 	dt.pendingPodDeletions["ns/pod-b"] = &PendingPodDeletion{
-		Namespace: "ns", Name: "pod-b", UID: "uid-b", ServiceUID: "egress-b", IsLastPod: true,
+		Namespace: "ns", Name: "pod-b", UID: "uid-b", ServiceName: "egress-b", IsLastPod: true,
 	}
 
 	// egress-b's NAT Gateway has NOT been deleted, so pod-b must keep its finalizer.
@@ -209,9 +209,10 @@ func TestGuardDefaultNATGatewayPIPSurvivesOrphanSweep(t *testing.T) {
 	dt.networkClientFactory = mockFactory
 
 	detached := func(name string) *armnetwork.PublicIPAddress {
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Etag: ptr.To(`W/"pip-version"`), Tags: managedResourceTags(), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
-	const managedOrphan = "33333333-3333-3333-3333-333333333333-pip"
+	const managedOrphan = "33333333-3333-3333-3333-333333333333-lb-pip"
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", managedOrphan, nil).Return(detached(managedOrphan), nil).Times(1)
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
 		detached(PublicIPName(DefaultOutboundNATGatewayName)),
 		detached(managedOrphan),
@@ -225,17 +226,17 @@ func TestGuardDefaultNATGatewayPIPSurvivesOrphanSweep(t *testing.T) {
 
 // Orphan cleanup must never delete a resource Kubernetes still wants.
 func TestGuardOrphanCleanupSkipsResourcesStillDesiredInKubernetes(t *testing.T) {
-	const desiredLB = "11111111-1111-1111-1111-111111111111"
-	const orphanLB = "22222222-2222-2222-2222-222222222222"
+	const desiredLB = "11111111-1111-1111-1111-111111111111-lb"
+	const orphanLB = "22222222-2222-2222-2222-222222222222-lb"
 
 	dt := newTestDiffTracker()
 	// Crash-mid-create shape: live in Azure and desired in K8s, but SGW registration never ran.
 	dt.K8sResources.Services.Insert(desiredLB)
-	dt.K8sResources.Egresses.Insert("desired-egress")
+	dt.K8sResources.Egresses.Insert("desired-egress-natgw")
 
 	scheduleOrphanedResourceDeletions(dt,
 		utilsets.NewString(desiredLB, orphanLB),
-		utilsets.NewString("desired-egress", "orphan-egress"),
+		utilsets.NewString("desired-egress-natgw", "orphan-egress-natgw"),
 		utilsets.NewString())
 
 	dt.mu.Lock()
@@ -244,13 +245,13 @@ func TestGuardOrphanCleanupSkipsResourcesStillDesiredInKubernetes(t *testing.T) 
 	_, lbScheduled := dt.pendingServiceOps[desiredLB]
 	assert.False(t, lbScheduled,
 		"BUG CASE: a LoadBalancer Kubernetes still wants was scheduled for orphan deletion; isOrphan=true skips every existence check")
-	_, natScheduled := dt.pendingServiceOps["desired-egress"]
+	_, natScheduled := dt.pendingServiceOps["desired-egress-natgw"]
 	assert.False(t, natScheduled,
 		"BUG CASE: a NAT Gateway Kubernetes still wants was scheduled for orphan deletion")
 
 	_, orphanLBScheduled := dt.pendingServiceOps[orphanLB]
 	assert.True(t, orphanLBScheduled, "CONTROL: a genuinely undesired LoadBalancer must still be collected")
-	_, orphanNATScheduled := dt.pendingServiceOps["orphan-egress"]
+	_, orphanNATScheduled := dt.pendingServiceOps["orphan-egress-natgw"]
 	assert.True(t, orphanNATScheduled, "CONTROL: a genuinely undesired NAT Gateway must still be collected")
 }
 
@@ -271,7 +272,7 @@ func TestGuardDefaultNATGatewayNeverEntersNRPSnapshotOrRemovalDiff(t *testing.T)
 	mockSGW.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).Return(
 		[]*armnetwork.ServiceGatewayService{
 			svc(DefaultOutboundNATGatewayName, armnetwork.ServiceTypeOutbound),
-			svc("team-egress", armnetwork.ServiceTypeOutbound),
+			svc("team-egress-natgw", armnetwork.ServiceTypeOutbound),
 		}, nil).AnyTimes()
 
 	nrp := &NRPState{LoadBalancers: utilsets.NewString(), NATGateways: utilsets.NewString()}
@@ -279,7 +280,7 @@ func TestGuardDefaultNATGatewayNeverEntersNRPSnapshotOrRemovalDiff(t *testing.T)
 
 	assert.False(t, nrp.NATGateways.Has(DefaultOutboundNATGatewayName),
 		"BUG CASE: the RP-owned default outbound gateway entered the NRP snapshot")
-	assert.True(t, nrp.NATGateways.Has("team-egress"),
+	assert.True(t, nrp.NATGateways.Has("team-egress-natgw"),
 		"CONTROL: a managed outbound service must still be tracked")
 
 	// Second half: prove the consequence. Feed the snapshot into the diff with an empty K8s egress
@@ -290,7 +291,7 @@ func TestGuardDefaultNATGatewayNeverEntersNRPSnapshotOrRemovalDiff(t *testing.T)
 	removals := dt.GetSyncNRPNATGateways().Removals.UnsortedList()
 	assert.NotContains(t, removals, DefaultOutboundNATGatewayName,
 		"BUG CASE: the diff marked the RP-owned default NAT Gateway for removal")
-	assert.Contains(t, removals, "team-egress",
+	assert.Contains(t, removals, "team-egress-natgw",
 		"CONTROL: an outbound service K8s no longer wants must still be marked for removal")
 }
 
@@ -302,20 +303,20 @@ func TestGuardDeleteInboundServiceRetriesOnTransientServiceLookupFailure(t *test
 
 		kube := fake.NewSimpleClientset(deletionTestService())
 		if getErr != nil {
-			// getServiceByUID resolves the Service by listing/getting; fail every read.
+			// getServiceBySGWName resolves the Service by listing/getting; fail every read.
 			fail := func(k8stesting.Action) (bool, runtime.Object, error) { return true, nil, getErr }
 			kube.PrependReactor("get", "services", fail)
 			kube.PrependReactor("list", "services", fail)
 		}
 
 		dt := deletionTestDiffTracker(kube, deletionTestFactory(ctrl))
-		su := deletionTestUpdater(dt, func(uid string, ok bool, err error) {
+		su := deletionTestUpdater(dt, func(serviceName string, ok bool, err error) {
 			v := ok
 			reported = &v
-			dt.OnServiceCreationComplete(uid, ok, err)
+			dt.OnServiceCreationComplete(serviceName, ok, err)
 		})
-		su.deleteInboundService("uid-1", "corr-1")
-		_, tracked = dt.pendingServiceOps["uid-1"]
+		su.deleteInboundService("uid-1-lb", "corr-1")
+		_, tracked = dt.pendingServiceOps["uid-1-lb"]
 		return reported, tracked
 	}
 
@@ -366,14 +367,17 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 	dt.networkClientFactory = mockFactory
 
 	pip := func(name string) *armnetwork.PublicIPAddress {
-		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
+		return &armnetwork.PublicIPAddress{Name: ptr.To(name), Etag: ptr.To(`W/"pip-version"`), Tags: managedResourceTags(), Properties: &armnetwork.PublicIPAddressPropertiesFormat{}}
 	}
 
-	const egress = "team-egress"
-	const desired = "still-wanted-egress"
+	const egress = "team-egress-natgw"
+	const desired = "still-wanted-egress-natgw"
+	for _, name := range OutboundPublicIPNames(egress) {
+		mockPIP.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(pip(name), nil).Times(1)
+	}
 	dt.K8sResources.Egresses = newIgnoreCaseSetFromSlice([]string{desired})
 
-	attached := pip(PublicIPName("still-in-use"))
+	attached := pip(PublicIPName("still-in-use-natgw"))
 	attached.Properties.NatGateway = &armnetwork.NatGateway{ID: ptr.To("/natGateways/still-in-use")}
 
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
@@ -392,6 +396,20 @@ func TestGuardEgressPublicIPsAreSweptOnceNATGatewayIsGone(t *testing.T) {
 		"BUG CASE: an address for an egress identity Kubernetes still wants was deleted")
 	assert.NotContains(t, deleted, PublicIPName(DefaultOutboundNATGatewayName),
 		"BUG CASE: the cluster's default egress Public IP was deleted")
-	assert.NotContains(t, deleted, PublicIPName("still-in-use"),
+	assert.NotContains(t, deleted, PublicIPName("still-in-use-natgw"),
 		"BUG CASE: a Public IP still attached to a NAT Gateway was scheduled for deletion")
+}
+
+func TestGuardUnmanagedNATGatewayIsNeverScheduledForOrphanDeletion(t *testing.T) {
+	dt := newTestDiffTracker()
+	dt.NRPResources.UnmanagedNATGateways = utilsets.NewString("BYO-NAT-NATGW")
+
+	scheduleOrphanedResourceDeletions(dt, utilsets.NewString(), utilsets.NewString("byo-nat-natgw", "real-orphan-egress-natgw"), utilsets.NewString())
+
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	_, scheduled := dt.pendingServiceOps["byo-nat-natgw"]
+	assert.False(t, scheduled, "a NAT Gateway not created by this controller must not be deleted")
+	_, orphanScheduled := dt.pendingServiceOps["real-orphan-egress-natgw"]
+	assert.True(t, orphanScheduled, "control: a NAT Gateway this controller created must still be swept")
 }

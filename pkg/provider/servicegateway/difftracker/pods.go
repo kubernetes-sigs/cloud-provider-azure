@@ -287,20 +287,20 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 		return
 	}
 
-	egressName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
-	if !IsValidEgressIdentity(egressName) {
-		// The label becomes the NAT Gateway name/ARM resource ID; an invalid value would produce
-		// malformed ARM requests (endless retries), and a reserved value would make this
-		// controller manage a resource it does not own.
-		reason, message := "ServiceGatewayInvalidEgressLabel",
-			fmt.Sprintf("Invalid egress gateway label %q: must be a valid Azure resource name (alphanumerics, '-', '_', '.'; start alphanumeric; 1-%d chars)", egressName, maxEgressIdentityLength)
-		if IsReservedEgressIdentity(egressName) {
-			reason, message = "ServiceGatewayReservedEgressLabel",
-				fmt.Sprintf("Egress gateway label %q is reserved for the cluster's default outbound gateway and cannot be used; choose a different value", egressName)
-		}
+	egressLabel := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
+	if !egressIdentityRegex.MatchString(egressLabel) {
+		// The label is encoded into the NAT Gateway name/ARM resource ID; an invalid value
+		// would produce malformed ARM requests (endless retries).
 		klog.Warningf("podInformerAddPod: pod %s/%s has an unusable egress gateway label %q; skipping egress registration",
-			pod.Namespace, pod.Name, egressName)
-		dt.recordEvent(pod, v1.EventTypeWarning, reason, message)
+			pod.Namespace, pod.Name, egressLabel)
+		dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayInvalidEgressLabel",
+			fmt.Sprintf("Invalid egress gateway label %q: must be a valid Azure resource name (alphanumerics, '-', '_', '.'; start alphanumeric; 1-%d chars)", egressLabel, maxEgressIdentityLength))
+		return
+	}
+	egressName := outboundServiceName(egressLabel)
+	if IsReservedEgressIdentity(egressLabel) || dt.isReservedOutboundService(egressName) {
+		dt.recordEvent(pod, v1.EventTypeWarning, "ServiceGatewayReservedEgressLabel",
+			fmt.Sprintf("Egress label %q is reserved for a default service; choose a different value", egressLabel))
 		return
 	}
 	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
@@ -367,7 +367,7 @@ func (dt *DiffTracker) podInformerRemovePod(pod *v1.Pod) {
 		return
 	}
 
-	egressName := strings.ToLower(pod.Labels[consts.PodLabelServiceEgressGateway])
+	egressName := outboundServiceName(pod.Labels[consts.PodLabelServiceEgressGateway])
 	podKey := fmt.Sprintf("%s/%s", pod.Namespace, pod.Name)
 	podIPs := PodEgressAddresses(pod)
 
@@ -428,7 +428,7 @@ func (dt *DiffTracker) podInformerDrainForReplace(oldPod, newPod *v1.Pod) {
 		return
 	}
 
-	oldEgress := strings.ToLower(oldPod.Labels[consts.PodLabelServiceEgressGateway])
+	oldEgress := outboundServiceName(oldPod.Labels[consts.PodLabelServiceEgressGateway])
 	podKey := fmt.Sprintf("%s/%s", oldPod.Namespace, oldPod.Name)
 	oldAddrs := PodEgressAddresses(oldPod)
 	if oldPod.Status.HostIP == "" || len(oldAddrs) == 0 {
@@ -437,7 +437,7 @@ func (dt *DiffTracker) podInformerDrainForReplace(oldPod, newPod *v1.Pod) {
 
 	var newEgress string
 	if newPod.Labels != nil {
-		newEgress = strings.ToLower(newPod.Labels[consts.PodLabelServiceEgressGateway])
+		newEgress = outboundServiceName(newPod.Labels[consts.PodLabelServiceEgressGateway])
 	}
 
 	// Drain each old address that will not stay at its current family node location (removed or

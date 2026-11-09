@@ -114,14 +114,14 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for the NAT gateway to be provisioned and pods registered")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressPodsRegistered(cs, ns.Name, egressName, numPods, waitTime)
 
 		By("Resolving the NAT gateway public IP(s) from Azure")
 		natGatewayID := ""
 		sgResponse, err := queryServiceGatewayServices()
 		Expect(err).NotTo(HaveOccurred())
 		for _, svc := range sgResponse.Value {
-			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				break
 			}
@@ -134,10 +134,10 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		utils.Logf("NAT gateway %s public IP(s): %v", natGatewayID, natGatewayPIPs)
 
 		By("Confirming all egress pod IPs are registered as Service Gateway address locations")
-		registered, err := countRegisteredEndpoints(egressName)
+		registered, err := countRegisteredEndpoints(outboundServiceName(egressName))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(registered).To(Equal(numPods),
-			"all egress pod IPs should be registered for the outbound service")
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, numPods)).To(Succeed(),
+			"all eligible egress pod IPs should be registered for the outbound service")
 
 		// Best-effort dataplane observation only. The actual SNAT through the NAT gateway is
 		// programmed by Azure NRP from the registrations above and is not part of the
@@ -209,7 +209,7 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		sgResponse, err := queryServiceGatewayServices()
 		Expect(err).NotTo(HaveOccurred())
 		for _, svc := range sgResponse.Value {
-			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				break
 			}

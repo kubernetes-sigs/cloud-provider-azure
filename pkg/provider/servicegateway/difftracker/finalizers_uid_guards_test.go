@@ -52,22 +52,22 @@ func TestGuardPendingPodDeletion_DoesNotStripReplacementPodFinalizer(t *testing.
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	euid := "egress-uid-confusion"
-	dt.NRPResources.NATGateways.Insert(euid)
-	dt.pendingServiceOps[euid] = &ServiceOperationState{
-		ServiceUID: euid,
-		Config:     NewOutboundServiceConfig(euid, nil),
-		State:      StateCreated,
+	egressName := "egress-uid-confusion"
+	dt.NRPResources.NATGateways.Insert(egressName)
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreated,
 	}
 
 	// Seed a PendingPodDeletion for the OLD pod (same ns/name, but the predecessor's UID).
 	dt.pendingPodDeletions["default/foo"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "foo",
-		UID:        "uid-OLD",
-		ServiceUID: euid,
-		Addresses:  []string{"10.244.0.7"},
-		IsLastPod:  false,
+		Namespace:   "default",
+		Name:        "foo",
+		UID:         "uid-OLD",
+		ServiceName: egressName,
+		Addresses:   []string{"10.244.0.7"},
+		IsLastPod:   false,
 	}
 
 	// Address has been removed from NRP (location-sync complete) so
@@ -87,18 +87,18 @@ func TestGuardLastPodFinalizer_DoesNotStripReplacementPod(t *testing.T) {
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	euid := "egress-last-pod-uid"
+	egressName := "egress-last-pod-uid"
 
 	dt.pendingPodDeletions["default/foo"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "foo",
-		UID:        "uid-OLD",
-		ServiceUID: euid,
-		Addresses:  []string{"10.244.0.7"},
-		IsLastPod:  true,
+		Namespace:   "default",
+		Name:        "foo",
+		UID:         "uid-OLD",
+		ServiceName: egressName,
+		Addresses:   []string{"10.244.0.7"},
+		IsLastPod:   true,
 	}
 
-	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), euid))
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), egressName))
 
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "foo", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -113,18 +113,18 @@ func TestGuardFinalizers_PositiveStripRemovesFinalizer(t *testing.T) {
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	euid := "egress-positive-strip"
+	egressName := "egress-positive-strip"
 
 	dt.pendingPodDeletions["default/foo"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "foo",
-		UID:        "uid-LIVE",
-		ServiceUID: euid,
-		Addresses:  []string{"10.244.0.7"},
-		IsLastPod:  true,
+		Namespace:   "default",
+		Name:        "foo",
+		UID:         "uid-LIVE",
+		ServiceName: egressName,
+		Addresses:   []string{"10.244.0.7"},
+		IsLastPod:   true,
 	}
 
-	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), euid))
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), egressName))
 
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "foo", metav1.GetOptions{})
 	assert.NoError(t, err)

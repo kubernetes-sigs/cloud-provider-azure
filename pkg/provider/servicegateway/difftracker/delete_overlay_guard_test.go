@@ -52,13 +52,13 @@ func TestIsServiceOverlayMappingsError(t *testing.T) {
 // pendingServiceDeletions, triggers the LocationsUpdater, and sets a retry backoff.
 func TestOnServiceCreationComplete_OverlayMappingsErrorReDrainsLocations(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-overlay"
+	serviceName := "svc-overlay"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, nil),
-		State:      StateDeletionInProgress,
-		RetryCount: 0,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateDeletionInProgress,
+		RetryCount:  0,
 	}
 
 	overlayErr := &azcore.ResponseError{
@@ -66,11 +66,11 @@ func TestOnServiceCreationComplete_OverlayMappingsErrorReDrainsLocations(t *test
 		ErrorCode:  serviceOverlayMappingsErrorCode,
 	}
 
-	dt.OnServiceCreationComplete(uid, false, overlayErr)
+	dt.OnServiceCreationComplete(serviceName, false, overlayErr)
 
 	dt.mu.Lock()
-	op := dt.pendingServiceOps[uid]
-	_, pending := dt.pendingServiceDeletions[uid]
+	op := dt.pendingServiceOps[serviceName]
+	_, pending := dt.pendingServiceDeletions[serviceName]
 	retry := op.RetryCount
 	state := op.State
 	nextRetryAt := op.NextRetryAt
@@ -95,20 +95,20 @@ func TestOnServiceCreationComplete_OverlayMappingsErrorReDrainsLocations(t *test
 // does NOT re-gate behind a locations drain.
 func TestOnServiceCreationComplete_NonOverlayDeleteErrorRetriesNormally(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-generic"
+	serviceName := "svc-generic"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, nil),
-		State:      StateDeletionInProgress,
-		RetryCount: 0,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateDeletionInProgress,
+		RetryCount:  0,
 	}
 
-	dt.OnServiceCreationComplete(uid, false, fmt.Errorf("transient ServiceGateway error"))
+	dt.OnServiceCreationComplete(serviceName, false, fmt.Errorf("transient ServiceGateway error"))
 
 	dt.mu.Lock()
-	op := dt.pendingServiceOps[uid]
-	_, pending := dt.pendingServiceDeletions[uid]
+	op := dt.pendingServiceOps[serviceName]
+	_, pending := dt.pendingServiceDeletions[serviceName]
 	state := op.State
 	dt.mu.Unlock()
 

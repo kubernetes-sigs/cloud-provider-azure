@@ -566,6 +566,33 @@ func TestSyncServicesReturnTypeEquals(t *testing.T) {
 	}
 }
 
+func TestCanonicalServiceNamesRemainDistinctOnWire(t *testing.T) {
+	const raw = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, outboundName := inboundServiceName(raw), outboundServiceName(raw)
+	dto := MapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(
+		SyncServicesReturnType{Additions: sets.NewString(inboundName)},
+		SyncServicesReturnType{Additions: sets.NewString(outboundName)}, "sub", "rg")
+	requests, err := convertServiceDTOsToServiceRequests(dto.Services, testConfig())
+	if !assert.NoError(t, err) || !assert.Len(t, requests, 2) {
+		return
+	}
+	assert.Equal(t, raw+"-lb", derefString(requests[0].Service.Name))
+	assert.Equal(t, raw+"-natgw", derefString(requests[1].Service.Name))
+	assert.Contains(t, derefString(requests[0].Service.Properties.LoadBalancerBackendPools[0].ID),
+		"/loadBalancers/"+raw+"-lb/backendAddressPools/"+raw+"-lb")
+	assert.Contains(t, derefString(requests[1].Service.Properties.PublicNatGatewayID), "/natGateways/"+raw+"-natgw")
+
+	locations := convertLocationDTOsToAddressLocations([]LocationDTO{{
+		Location: "10.0.0.1", AddressUpdateAction: PartialUpdate,
+		Addresses: []AddressDTO{{Address: "10.244.0.2", ServiceNames: sets.NewString(inboundName, outboundName)}},
+	}})
+	var names []string
+	for _, name := range locations[0].Addresses[0].Services {
+		names = append(names, derefString(name))
+	}
+	assert.ElementsMatch(t, []string{raw + "-lb", raw + "-natgw"}, names)
+}
+
 // TestMapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO tests the DTO mapping function
 func TestMapLoadBalancerAndNATGatewayUpdatesToServicesDataDTO(t *testing.T) {
 	tests := []struct {

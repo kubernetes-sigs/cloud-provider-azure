@@ -400,7 +400,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 
 		By(fmt.Sprintf("Waiting for CCM to complete NAT Gateway provisioning (%v)", recoveryTimeout))
 		Eventually(func() error {
-			if err := egressRegisteredErr(egressName, podCount); err != nil {
+			if err := egressPodsRegisteredErr(cs, ns.Name, egressName, podCount); err != nil {
 				return err
 			}
 			podsWithFinalizer := 0
@@ -447,7 +447,7 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 		var foundEgress bool
 		var natGatewayID string
 		for _, svc := range sgResponse.Value {
-			if svc.Name == egressName && svc.Properties.ServiceType == "Outbound" {
+			if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
 				foundEgress = true
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				break
@@ -661,11 +661,11 @@ var _ = Describe("Container Load Balancer Creation Crash Recovery Tests", Label(
 				if err != nil {
 					return fmt.Errorf("get service %s: %w", serviceName, err)
 				}
-				if err := serviceReconciledErr(string(svc.UID), 1); err != nil {
+				if err := servicePodsReconciledErr(cs, ns.Name, string(svc.UID), 1); err != nil {
 					return fmt.Errorf("service %s: %w", serviceName, err)
 				}
 			}
-			if err := egressRegisteredErr(egressName, egressPodCount); err != nil {
+			if err := egressPodsRegisteredErr(cs, ns.Name, egressName, egressPodCount); err != nil {
 				return err
 			}
 			return nil
