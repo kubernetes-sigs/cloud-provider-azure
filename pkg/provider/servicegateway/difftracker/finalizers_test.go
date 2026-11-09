@@ -876,7 +876,7 @@ func TestCheckPendingPodDeletions_PreservesReplacementPodEntry(t *testing.T) {
 	}
 	// Original entry (uid-a); its address is not in NRP, so it is collected for finalizer removal.
 	dt.pendingPodDeletions[key] = &PendingPodDeletion{
-		Namespace: "default", Name: "test-pod", ServiceUID: "egress-1",
+		Namespace: "default", Name: "test-pod", ServiceName: "egress-1",
 		Addresses: []string{"10.0.0.1"}, IsLastPod: false,
 		UID: "uid-a", Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -888,7 +888,7 @@ func TestCheckPendingPodDeletions_PreservesReplacementPodEntry(t *testing.T) {
 			swapped = true
 			dt.mu.Lock()
 			dt.pendingPodDeletions[key] = &PendingPodDeletion{
-				Namespace: "default", Name: "test-pod", ServiceUID: "egress-1",
+				Namespace: "default", Name: "test-pod", ServiceName: "egress-1",
 				Addresses: []string{"10.0.0.2"}, IsLastPod: false,
 				UID: "uid-b", Timestamp: time.Now().Format(time.RFC3339),
 			}
@@ -930,12 +930,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion - address NOT in NRP
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -977,12 +977,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion - address IS in NRP
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -1016,12 +1016,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion for LAST pod
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  true, // Last pod!
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   true, // Last pod!
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -1047,12 +1047,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion for non-existent pod
 		dt.pendingPodDeletions["default/missing-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "missing-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "missing-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -1102,12 +1102,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 		// A dual-stack pod contributes both its IPv4 and IPv6 addresses; only the IPv6 address is
 		// still mapped in NRP.
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1", "fd00::1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1", "fd00::1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		// The IPv4 address has drained but IPv6 has not: the finalizer must stay.
@@ -1135,7 +1135,7 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 // address to the service's NAT Gateway.
 func TestGuardNonLastPodFinalizerRemovedOnlyAfterNRPDrain(t *testing.T) {
 	ctx := context.Background()
-	uid := "egress-drain-gate"
+	serviceName := "egress-drain-gate"
 
 	// Pod "a" is the non-last pod we delete; pod "b" keeps the service (NAT Gateway) alive.
 	podA := &v1.Pod{
@@ -1149,25 +1149,25 @@ func TestGuardNonLastPodFinalizerRemovedOnlyAfterNRPDrain(t *testing.T) {
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	dt.NRPResources.NATGateways.Insert(uid)
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewOutboundServiceConfig(uid, nil),
-		State:      StateCreated,
+	dt.NRPResources.NATGateways.Insert(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateCreated,
 	}
-	dt.AddPod(uid, "ns/a", "10.0.0.1", "10.244.0.1")
-	dt.AddPod(uid, "ns/b", "10.0.0.1", "10.244.0.2")
+	dt.AddPod(serviceName, "ns/a", "10.0.0.1", "10.244.0.1")
+	dt.AddPod(serviceName, "ns/b", "10.0.0.1", "10.244.0.2")
 
 	// NRP currently still maps both addresses (the location sync has not drained "a" yet).
 	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			"10.244.0.1": {Services: utilsets.NewString(uid)},
-			"10.244.0.2": {Services: utilsets.NewString(uid)},
+			"10.244.0.1": {Services: utilsets.NewString(serviceName)},
+			"10.244.0.2": {Services: utilsets.NewString(serviceName)},
 		},
 	}
 
 	// Delete the non-last pod "a".
-	res := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.1"}, "ns", "a", "")
+	res := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.1"}, "ns", "a", "")
 	assert.False(t, res.IsLastPod, "deleting one of two pods is not the last-pod case")
 
 	// It must be enqueued for drain-gated finalizer removal, not stripped inline.
@@ -1231,12 +1231,12 @@ func TestGuardNonLastPodFinalizerRetriesOnTransientUpdateError(t *testing.T) {
 		},
 	}
 	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
-		Namespace:  "ns",
-		Name:       "p",
-		ServiceUID: "egress-1",
-		Addresses:  []string{"10.244.0.1"},
-		IsLastPod:  false,
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Namespace:   "ns",
+		Name:        "p",
+		ServiceName: "egress-1",
+		Addresses:   []string{"10.244.0.1"},
+		IsLastPod:   false,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	// First cycle: the Update fails transiently. The finalizer must remain and the pod must stay
@@ -1296,12 +1296,12 @@ func TestGuardAddPodFinalizerRetriesOnConflict(t *testing.T) {
 
 func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 	tests := []struct {
-		name       string
-		nrpState   NRPState
-		serviceUID string
-		location   string
-		address    string
-		expected   bool
+		name        string
+		nrpState    NRPState
+		serviceName string
+		location    string
+		address     string
+		expected    bool
 	}{
 		{
 			name: "address exists with service",
@@ -1316,10 +1316,10 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   true,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    true,
 		},
 		{
 			name: "address exists but different service",
@@ -1334,20 +1334,20 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 		{
 			name: "location does not exist",
 			nrpState: NRPState{
 				Locations: map[string]NRPLocation{},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 		{
 			name: "address does not exist in location",
@@ -1362,10 +1362,10 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 		{
 			name: "address exists but services is nil",
@@ -1380,10 +1380,10 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 	}
 
@@ -1393,7 +1393,7 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 				NRPResources: tt.nrpState,
 			}
 
-			result := dt.outboundAddressInAnyNRPLocationLocked(tt.serviceUID, tt.address)
+			result := dt.outboundAddressInAnyNRPLocationLocked(tt.serviceName, tt.address)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -1469,12 +1469,12 @@ func TestCheckPendingPodDeletions_Concurrent(t *testing.T) {
 	}
 
 	dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "test-pod",
-		ServiceUID: "egress-1",
-		Addresses:  []string{"10.0.0.1"},
-		IsLastPod:  false,
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Namespace:   "default",
+		Name:        "test-pod",
+		ServiceName: "egress-1",
+		Addresses:   []string{"10.0.0.1"},
+		IsLastPod:   false,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	// Run multiple concurrent checks
@@ -1513,11 +1513,11 @@ func TestAddPodPreservesFinalizerOnEgressIdentityChange(t *testing.T) {
 	dt.kubeClient = kube
 
 	dt.pendingPodDeletions["default/foo"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "foo",
-		UID:        "uid-live",
-		ServiceUID: oldEgress,
-		Addresses:  []string{address},
+		Namespace:   "default",
+		Name:        "foo",
+		UID:         "uid-live",
+		ServiceName: oldEgress,
+		Addresses:   []string{address},
 	}
 	dt.NRPResources.NATGateways.Insert(newEgress)
 
@@ -1564,7 +1564,7 @@ func TestFinalizerRecoveryGapClosesOnAsyncRemoval(t *testing.T) {
 		}
 		entry := func(name string, atStartup bool) *PendingPodDeletion {
 			return &PendingPodDeletion{
-				Namespace: "default", Name: name, ServiceUID: "egress-1",
+				Namespace: "default", Name: name, ServiceName: "egress-1",
 				Addresses:          []string{"10.0.0.1"},
 				RecoveredAtStartup: atStartup,
 				Timestamp:          time.Now().Format(time.RFC3339),
@@ -1600,7 +1600,7 @@ func TestFinalizerRecoveryGapClosesOnAsyncRemoval(t *testing.T) {
 		}
 		entry := func(name string, atStartup bool) *PendingPodDeletion {
 			return &PendingPodDeletion{
-				Namespace: "default", Name: name, ServiceUID: "egress-1",
+				Namespace: "default", Name: name, ServiceName: "egress-1",
 				IsLastPod:          true,
 				RecoveredAtStartup: atStartup,
 			}

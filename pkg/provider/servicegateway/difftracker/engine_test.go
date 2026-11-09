@@ -17,11 +17,14 @@ limitations under the License.
 package difftracker
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -82,7 +85,7 @@ func TestReconcileInboundService(t *testing.T) {
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		opState, exists := dt.pendingServiceOps["service-uid"]
+		opState, exists := dt.pendingServiceOps["service-uid-lb"]
 		if !assert.True(t, exists) {
 			t.FailNow()
 		}
@@ -93,12 +96,12 @@ func TestReconcileInboundService(t *testing.T) {
 
 	t.Run("updates an already tracked service", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		oldConfig := NewInboundServiceConfig("service-uid", &InboundConfig{
+		oldConfig := NewInboundServiceConfig("service-uid-lb", &InboundConfig{
 			FrontendPorts: []PortMapping{{Port: 80, Protocol: string(v1.ProtocolTCP)}},
 			BackendPorts:  []PortMapping{{Port: 80, Protocol: string(v1.ProtocolTCP)}},
 		})
-		dt.pendingServiceOps["service-uid"] = &ServiceOperationState{
-			ServiceUID:        "service-uid",
+		dt.pendingServiceOps["service-uid-lb"] = &ServiceOperationState{
+			ServiceName:       "service-uid-lb",
 			Config:            oldConfig,
 			LastAppliedConfig: &oldConfig,
 			State:             StateCreated,
@@ -110,7 +113,7 @@ func TestReconcileInboundService(t *testing.T) {
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		opState := dt.pendingServiceOps["service-uid"]
+		opState := dt.pendingServiceOps["service-uid-lb"]
 		assert.Equal(t, StateUpdateInProgress, opState.State)
 		assert.Equal(t, int32(443), opState.Config.InboundConfig.FrontendPorts[0].Port)
 		assert.Equal(t, service.Namespace, opState.Config.Namespace)
@@ -132,7 +135,7 @@ func TestReconcileInboundService(t *testing.T) {
 			assert.Equal(t, "UnsupportedInternalLoadBalancer", reason)
 			assert.Contains(t, message, consts.ServiceAnnotationLoadBalancerInternal)
 		}
-		assert.False(t, dt.IsServiceTracked("service-uid"))
+		assert.False(t, dt.IsServiceTracked("service-uid-lb"))
 	})
 
 	t.Run("ignores a port-less service", func(t *testing.T) {
@@ -143,7 +146,7 @@ func TestReconcileInboundService(t *testing.T) {
 		err := dt.ReconcileInboundService(service)
 
 		assert.NoError(t, err)
-		assert.False(t, dt.IsServiceTracked("service-uid"))
+		assert.False(t, dt.IsServiceTracked("service-uid-lb"))
 	})
 
 	// A port-less Service is dropped without being tracked, so the reconcile that follows it must
@@ -156,14 +159,14 @@ func TestReconcileInboundService(t *testing.T) {
 		service.Spec.Ports = nil
 
 		assert.NoError(t, dt.ReconcileInboundService(service))
-		assert.False(t, dt.IsServiceTracked("service-uid"))
+		assert.False(t, dt.IsServiceTracked("service-uid-lb"))
 
 		withPorts := newService("service-uid", 80)
 		assert.NoError(t, dt.ReconcileInboundService(withPorts))
 
-		assert.True(t, dt.IsServiceTracked("service-uid"),
+		assert.True(t, dt.IsServiceTracked("service-uid-lb"),
 			"a Service that gains ports must be provisioned, not left behind by the earlier skip")
-		opState := dt.pendingServiceOps["service-uid"]
+		opState := dt.pendingServiceOps["service-uid-lb"]
 		if assert.NotNil(t, opState, "the Service must be scheduled for creation") {
 			assert.Equal(t, StateNotStarted, opState.State,
 				"the Service was never provisioned while port-less, so it must be created, not updated")
@@ -197,14 +200,14 @@ func TestDeleteInboundService(t *testing.T) {
 
 	t.Run("deletes the lowercased inbound service identity", func(t *testing.T) {
 		dt := newTestDiffTracker()
-		dt.NRPResources.LoadBalancers.Insert("service-uid")
+		dt.NRPResources.LoadBalancers.Insert("service-uid-lb")
 
 		err := dt.DeleteInboundService(newService("SERVICE-UID"))
 
 		if !assert.NoError(t, err) {
 			t.FailNow()
 		}
-		opState, exists := dt.pendingServiceOps["service-uid"]
+		opState, exists := dt.pendingServiceOps["service-uid-lb"]
 		if !assert.True(t, exists) {
 			t.FailNow()
 		}
@@ -218,7 +221,7 @@ func TestDeleteInboundService(t *testing.T) {
 		err := dt.DeleteInboundService(newService("service-uid"))
 
 		assert.NoError(t, err)
-		assert.False(t, dt.IsServiceTracked("service-uid"))
+		assert.False(t, dt.IsServiceTracked("service-uid-lb"))
 	})
 
 	t.Run("rejects a missing service identity", func(t *testing.T) {
@@ -233,15 +236,15 @@ func TestDeleteInboundService(t *testing.T) {
 // TestEngineAddService_NewService tests adding a new service that doesn't exist in NRP
 func TestEngineAddService_NewService(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-1"
+	serviceName := "service-1"
 
 	// Execute
-	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, nil)))
 
 	// Verify service is tracked
-	opState, exists := dt.pendingServiceOps[serviceUID]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	assert.True(t, exists, "Service should be tracked")
-	assert.Equal(t, serviceUID, opState.ServiceUID)
+	assert.Equal(t, serviceName, opState.ServiceName)
 	assert.True(t, opState.Config.IsInbound)
 	assert.Equal(t, StateNotStarted, opState.State)
 	assert.Equal(t, 0, opState.RetryCount)
@@ -258,16 +261,16 @@ func TestEngineAddService_NewService(t *testing.T) {
 // TestEngineAddService_ExistsInNRP tests adding a service that already exists in NRP
 func TestEngineAddService_ExistsInNRP(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-2"
+	serviceName := "service-2"
 
 	// Setup: service already exists in NRP
-	dt.NRPResources.LoadBalancers.Insert(serviceUID)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
 	// Execute
-	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, nil)))
 
 	// Verify service is NOT tracked (since it exists)
-	_, exists := dt.pendingServiceOps[serviceUID]
+	_, exists := dt.pendingServiceOps[serviceName]
 	assert.False(t, exists, "Service should not be tracked if it exists in NRP")
 
 	// Verify no trigger
@@ -282,21 +285,21 @@ func TestEngineAddService_ExistsInNRP(t *testing.T) {
 // TestEngineAddService_AlreadyTracked tests adding a service that's already being created
 func TestEngineAddService_AlreadyTracked(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-3"
+	serviceName := "service-3"
 
 	// Setup: service already tracked
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewInboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
-		RetryCount: 0,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
+		RetryCount:  0,
 	}
 
 	// Execute
-	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, nil)))
 
 	// Verify state unchanged
-	opState := dt.pendingServiceOps[serviceUID]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateCreationInProgress, opState.State)
 
 	// Verify no trigger
@@ -311,16 +314,16 @@ func TestEngineAddService_AlreadyTracked(t *testing.T) {
 // TestEngineDeleteService_NoLocations tests deleting a service without locations
 func TestEngineDeleteService_NoLocations(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-4"
+	serviceName := "service-4"
 
 	// Setup: service exists in NRP
-	dt.NRPResources.LoadBalancers.Insert(serviceUID)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
 	// Execute
-	dt.DeleteService(serviceUID, true, false)
+	dt.DeleteService(serviceName, true, false)
 
 	// Verify service is tracked for deletion
-	opState, exists := dt.pendingServiceOps[serviceUID]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	assert.True(t, exists, "Service should be tracked for deletion")
 	assert.Equal(t, StateDeletionInProgress, opState.State)
 
@@ -336,29 +339,29 @@ func TestEngineDeleteService_NoLocations(t *testing.T) {
 // TestEngineDeleteService_WithLocations tests deleting a service that has locations
 func TestEngineDeleteService_WithLocations(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-5"
+	serviceName := "service-5"
 
 	// Setup: service exists in NRP
-	dt.NRPResources.NATGateways.Insert(serviceUID)
+	dt.NRPResources.NATGateways.Insert(serviceName)
 
 	// Setup: Add a location that contains this service
 	locationKey := "node1-10.0.0.1"
 	dt.NRPResources.Locations[locationKey] = NRPLocation{
 		Addresses: map[string]NRPAddress{
 			"10.0.0.1": {
-				Services: utilsets.NewString(serviceUID),
+				Services: utilsets.NewString(serviceName),
 			},
 		},
 	}
 
 	// Execute
-	dt.DeleteService(serviceUID, false, false)
+	dt.DeleteService(serviceName, false, false)
 
 	// Verify service is in pending deletions (not immediate deletion)
-	pendingDel, exists := dt.pendingServiceDeletions[serviceUID]
+	pendingDel, exists := dt.pendingServiceDeletions[serviceName]
 	assert.True(t, exists, "Service should be in pending deletions")
 	if exists {
-		assert.Equal(t, serviceUID, pendingDel.ServiceUID)
+		assert.Equal(t, serviceName, pendingDel.ServiceName)
 		assert.False(t, pendingDel.IsInbound)
 	}
 
@@ -374,26 +377,26 @@ func TestEngineDeleteService_WithLocations(t *testing.T) {
 // TestEngineUpdateEndpoints_ServiceCreating tests endpoint buffering during service creation
 func TestEngineUpdateEndpoints_ServiceCreating(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-7"
+	serviceName := "service-7"
 
 	// Setup: service is being created
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewInboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
-		RetryCount: 0,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
+		RetryCount:  0,
 	}
 
 	// Execute
 	oldEndpoints := map[string]string{}
 	newEndpoints := map[string]string{"10.0.0.1": "node1"}
-	dt.UpdateEndpoints(serviceUID, oldEndpoints, newEndpoints)
+	dt.UpdateEndpoints(serviceName, oldEndpoints, newEndpoints)
 
 	// Verify the endpoints were buffered WITH their contents. Asserting only len>0 cannot
 	// distinguish a correctly buffered update from one that dropped the address map or the
 	// removal side: on promotion the engine replays exactly what was buffered, so a nil
 	// OldPodIPToNodeIP would silently leak an address that should have been drained.
-	buffered, exists := dt.pendingEndpoints[serviceUID]
+	buffered, exists := dt.pendingEndpoints[serviceName]
 	assert.True(t, exists, "Endpoints should be buffered")
 	if assert.Len(t, buffered, 1, "exactly the one update must be buffered") {
 		assert.Equal(t, newEndpoints, buffered[0].PodIPToNodeIP,
@@ -414,21 +417,21 @@ func TestEngineUpdateEndpoints_ServiceCreating(t *testing.T) {
 // TestEngineOnServiceCreationComplete_Failure tests failed service creation callback
 func TestEngineOnServiceCreationComplete_Failure(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "service-9"
+	serviceName := "service-9"
 
 	// Setup: service is being created
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewInboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
-		RetryCount: 0,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
+		RetryCount:  0,
 	}
 
 	// Execute
-	dt.OnServiceCreationComplete(serviceUID, false, nil)
+	dt.OnServiceCreationComplete(serviceName, false, nil)
 
 	// Verify retry count increased
-	opState, exists := dt.pendingServiceOps[serviceUID]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	assert.True(t, exists, "Failed service should remain in pending")
 	assert.Greater(t, opState.RetryCount, 0, "Retry count should increase")
 }
@@ -436,23 +439,23 @@ func TestEngineOnServiceCreationComplete_Failure(t *testing.T) {
 // TestEngineAddPod_ServiceCreating tests pod buffering during service creation
 func TestEngineAddPod_ServiceCreating(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-2"
+	egressName := "egress-2"
 
 	// Setup: service is being created
-	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
-		ServiceUID: egressUID,
-		Config:     NewOutboundServiceConfig(egressUID, nil),
-		State:      StateCreationInProgress,
-		RetryCount: 0,
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreationInProgress,
+		RetryCount:  0,
 	}
 
 	// Execute
-	dt.AddPod(egressUID, "ns1/pod2", "node2", "10.0.0.2")
+	dt.AddPod(egressName, "ns1/pod2", "node2", "10.0.0.2")
 
 	// Verify the pod was buffered WITH its identity and address. len>0 alone cannot detect
 	// buffering the wrong pod or losing the address, either of which registers the wrong IP in
 	// Azure when the buffer is replayed on promotion.
-	buffered, exists := dt.pendingPods[egressUID]
+	buffered, exists := dt.pendingPods[egressName]
 	assert.True(t, exists, "Pods should be buffered")
 	if assert.Len(t, buffered, 1, "exactly the one pod must be buffered") {
 		assert.Equal(t, "ns1/pod2", buffered[0].PodKey, "the buffered entry must identify the pod")
@@ -475,27 +478,27 @@ func TestEngineAddPod_ServiceCreating(t *testing.T) {
 func TestDeletePod_BufferedStaleDeleteKeepsSameIPReplacement(t *testing.T) {
 	dt := newTestDiffTracker()
 	const (
-		egressUID = "egress-reuse"
-		location  = "10.0.0.1"
-		address   = "10.244.0.11"
+		egressName = "egress-reuse"
+		location   = "10.0.0.1"
+		address    = "10.244.0.11"
 	)
 
 	// Service is mid-creation, so pods buffer rather than reaching live state.
-	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
-		ServiceUID: egressUID,
-		Config:     NewOutboundServiceConfig(egressUID, nil),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreationInProgress,
 	}
 
 	// Old pod buffers the address; its IP is then reused by a new pod that also buffers it.
-	dt.AddPod(egressUID, "ns1/old-pod", location, address)
-	dt.AddPod(egressUID, "ns1/new-pod", location, address)
-	assert.Len(t, dt.pendingPods[egressUID], 2, "both pods must be buffered")
+	dt.AddPod(egressName, "ns1/old-pod", location, address)
+	dt.AddPod(egressName, "ns1/new-pod", location, address)
+	assert.Len(t, dt.pendingPods[egressName], 2, "both pods must be buffered")
 
 	// A delayed delete for the OLD pod arrives.
-	dt.DeletePod(egressUID, location, []string{address}, "ns1", "old-pod", "uid-old")
+	dt.DeletePod(egressName, location, []string{address}, "ns1", "old-pod", "uid-old")
 
-	buffered := dt.pendingPods[egressUID]
+	buffered := dt.pendingPods[egressName]
 	if assert.Len(t, buffered, 1, "only the old pod's buffered entry must be cancelled, not the same-IP replacement") {
 		assert.Equal(t, "ns1/new-pod", buffered[0].PodKey,
 			"the same-IP replacement pod must remain buffered so it still gets egress on creation")
@@ -507,23 +510,80 @@ func TestDeletePod_BufferedStaleDeleteKeepsSameIPReplacement(t *testing.T) {
 func TestDeletePod_BufferedDeleteWithoutIdentityCancelsByAddress(t *testing.T) {
 	dt := newTestDiffTracker()
 	const (
-		egressUID = "egress-noident"
-		location  = "10.0.0.1"
-		address   = "10.244.0.12"
+		egressName = "egress-noident"
+		location   = "10.0.0.1"
+		address    = "10.244.0.12"
 	)
 
-	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
-		ServiceUID: egressUID,
-		Config:     NewOutboundServiceConfig(egressUID, nil),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreationInProgress,
 	}
-	dt.AddPod(egressUID, "ns1/pod", location, address)
-	assert.Len(t, dt.pendingPods[egressUID], 1)
+	dt.AddPod(egressName, "ns1/pod", location, address)
+	assert.Len(t, dt.pendingPods[egressName], 1)
 
 	// Empty namespace/name -> address-only cancellation.
-	dt.DeletePod(egressUID, location, []string{address}, "", "", "")
+	dt.DeletePod(egressName, location, []string{address}, "", "", "")
 
-	assert.Empty(t, dt.pendingPods[egressUID], "an identity-less delete must still cancel the buffered entry by address")
+	assert.Empty(t, dt.pendingPods[egressName], "an identity-less delete must still cancel the buffered entry by address")
+}
+
+func TestAddPod_ReplayOfALiveStartupPodIsNotBuffered(t *testing.T) {
+	const (
+		identity = "byo-rejected"
+		location = "10.0.0.1"
+	)
+	startedPending := func(parked bool, pods map[string]string) *DiffTracker {
+		dt := newTestDiffTracker()
+		dt.pendingServiceOps[identity] = &ServiceOperationState{ServiceName: identity, Config: NewOutboundServiceConfig(identity, nil),
+			State: StateNotStarted, RetryCount: 1, CreationRejected: !parked, RetriesExhausted: parked}
+		for address, name := range pods {
+			assert.NoError(t, dt.updateK8sPodLocked(UpdatePodInputType{PodOperation: Add, PublicOutboundIdentity: identity,
+				PodKey: "ns/" + name, PodUID: name + "-uid", Location: location, Address: address}))
+		}
+		for address, name := range pods {
+			dt.AddPodWithUID(identity, "ns/"+name, name+"-uid", location, address)
+		}
+		assert.Empty(t, dt.pendingPods[identity], "a live pod must not also be buffered")
+		return dt
+	}
+
+	for name, parked := range map[string]bool{"rejected": false, "parked": true} {
+		t.Run(name+": deleting the only pod deletes the identity", func(t *testing.T) {
+			dt := startedPending(parked, map[string]string{"10.244.0.5": "pod"})
+
+			assert.True(t, dt.DeletePod(identity, location, []string{"10.244.0.5"}, "ns", "pod", "pod-uid").IsLastPod)
+			assert.NotContains(t, dt.K8sResources.Nodes[location].Pods, "10.244.0.5")
+			_, counted := dt.outboundIdentityPodRefCount.Load(identity)
+			assert.False(t, counted, "the deleted pod must not keep the identity's ref-count")
+			assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[identity].State)
+		})
+	}
+
+	t.Run("a pod that reused a start-up pod's address takes it over", func(t *testing.T) {
+		dt := startedPending(false, map[string]string{"10.244.0.5": "old"})
+		dt.AddPodWithUID(identity, "ns/new", "new-uid", location, "10.244.0.5")
+		assert.Empty(t, dt.pendingPods[identity])
+
+		assert.True(t, dt.DeletePod(identity, location, []string{"10.244.0.5"}, "ns", "new", "new-uid").IsLastPod,
+			"the new pod's delete must remove the address it took over")
+		assert.NotContains(t, dt.K8sResources.Nodes[location].Pods, "10.244.0.5")
+	})
+
+	t.Run("a deleted pod is not published once the identity is created", func(t *testing.T) {
+		dt := startedPending(false, map[string]string{"10.244.0.5": "deleted", "10.244.0.6": "live"})
+
+		assert.False(t, dt.DeletePod(identity, location, []string{"10.244.0.5"}, "ns", "deleted", "deleted-uid").IsLastPod)
+		dt.pendingServiceOps[identity].State = StateCreated
+		addresses := dt.GetSyncLocationsAddresses().Locations[location].Addresses
+		if deleted, ok := addresses["10.244.0.5"]; ok {
+			assert.False(t, deleted.ServiceRef.Has(identity), "the deleted pod's address must not be published")
+		}
+		if assert.Contains(t, addresses, "10.244.0.6") {
+			assert.True(t, addresses["10.244.0.6"].ServiceRef.Has(identity))
+		}
+	})
 }
 
 // makeInboundConfig builds an InboundConfig with the given TCP frontend ports
@@ -556,11 +616,11 @@ func TestInboundConfig_Equals(t *testing.T) {
 // to AddService when the service is not yet known.
 func TestEngineUpdateService_NewServiceFallsThrough(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-new"
+	serviceName := "svc-update-new"
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(80))))
 
-	opState, exists := dt.pendingServiceOps[uid]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	assert.True(t, exists, "service should be tracked via AddService fallthrough")
 	assert.Equal(t, StateNotStarted, opState.State)
 
@@ -571,24 +631,86 @@ func TestEngineUpdateService_NewServiceFallsThrough(t *testing.T) {
 	}
 }
 
+func assertUpdateServiceLocks(t *testing.T, dt *DiffTracker, wantMessages ...string) func() {
+	t.Helper()
+	lockAtMessage := map[string]bool{
+		"Delegated untracked service update to add":                           false,
+		"Added service request":                                               true,
+		"Created tracking entry for existing service update":                  true,
+		"Scheduled service update":                                            true,
+		"Skipped endpoint cache replay because dependencies are unavailable":  true,
+		"Buffered service recreate intent during deletion":                    false,
+		"Sent service updater trigger":                                        false,
+		"Overwrote desired service config":                                    true,
+		"Skipped unchanged service config":                                    true,
+		"Skipped parked service with unchanged spec":                          true,
+		"Reattempted service creation after terminal failure and spec change": true,
+		"Overwrote desired config while service is updating":                  true,
+		"Found unknown service operation state while updating service":        true,
+	}
+	var messages []string
+	dt.logger = funcr.New(func(_, message string) {
+		for marker, wantLocked := range lockAtMessage {
+			if !strings.Contains(message, marker) {
+				continue
+			}
+			messages = append(messages, marker)
+			unlocked := dt.mu.TryLock()
+			if unlocked {
+				dt.mu.Unlock()
+			}
+			assert.Equal(t, !wantLocked, unlocked, "lock state at %q", marker)
+			break
+		}
+	}, funcr.Options{Verbosity: 5})
+	return func() {
+		t.Helper()
+		assert.Equal(t, wantMessages, messages)
+		if !dt.mu.TryLock() {
+			t.Error("UpdateService must return without holding its state lock")
+			return
+		}
+		dt.mu.Unlock()
+	}
+}
+
+func TestEngineUpdateService_ReleasesLockOnPanic(t *testing.T) {
+	dt := newTestDiffTracker()
+	serviceName := inboundServiceName("svc-update-panic")
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
+	dt.logger = funcr.New(func(_, message string) {
+		if strings.Contains(message, "Created tracking entry for existing service update") {
+			panic("test logger panic")
+		}
+	}, funcr.Options{Verbosity: 5})
+
+	assert.PanicsWithValue(t, "test logger panic", func() {
+		_ = dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(80)))
+	})
+	if !dt.mu.TryLock() {
+		t.Fatal("UpdateService must release its state lock when unwinding a panic")
+	}
+	dt.mu.Unlock()
+}
+
 // TestEngineUpdateService_NoOpWhenConfigUnchanged verifies that an UpdateService call
 // matching LastAppliedConfig does NOT change state and does NOT fire a trigger.
 func TestEngineUpdateService_NoOpWhenConfigUnchanged(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-noop"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-update-noop"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 
 	applied := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:        uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:       serviceName,
 		Config:            cfg,
 		LastAppliedConfig: &applied,
 		State:             StateCreated,
 	}
 
-	dt.UpdateService(cfg)
+	assert.NoError(t, dt.UpdateService(cfg))
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateCreated, opState.State, "state should remain Created")
 	select {
 	case <-dt.serviceUpdaterTrigger:
@@ -601,21 +723,21 @@ func TestEngineUpdateService_NoOpWhenConfigUnchanged(t *testing.T) {
 // service in StateCreated transitions to StateUpdateInProgress and triggers the updater.
 func TestEngineUpdateService_PortChangeSchedulesUpdate(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-port"
-	oldCfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-update-port"
+	oldCfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 
 	appliedCopy := oldCfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:        uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:       serviceName,
 		Config:            oldCfg,
 		LastAppliedConfig: &appliedCopy,
 		State:             StateCreated,
 	}
 
-	newCfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
-	dt.UpdateService(newCfg)
+	newCfg := NewInboundServiceConfig(serviceName, makeInboundConfig(8080))
+	assert.NoError(t, dt.UpdateService(newCfg))
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateUpdateInProgress, opState.State)
 	assert.True(t, opState.Config.InboundConfig.Equals(newCfg.InboundConfig))
 
@@ -630,17 +752,17 @@ func TestEngineUpdateService_PortChangeSchedulesUpdate(t *testing.T) {
 // the service is already being deleted.
 func TestEngineUpdateService_IgnoredDuringDeletion(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-deleting"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     cfg,
-		State:      StateDeletionPending,
+	serviceName := "svc-update-deleting"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      cfg,
+		State:       StateDeletionPending,
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(8080))))
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateDeletionPending, opState.State, "deletion state must not be overwritten")
 	select {
 	case <-dt.serviceUpdaterTrigger:
@@ -653,18 +775,18 @@ func TestEngineUpdateService_IgnoredDuringDeletion(t *testing.T) {
 // call during creation simply overwrites the desired Config, with no state change.
 func TestEngineUpdateService_OverwritesConfigDuringCreation(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-during-create"
-	oldCfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     oldCfg,
-		State:      StateCreationInProgress,
+	serviceName := "svc-update-during-create"
+	oldCfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      oldCfg,
+		State:       StateCreationInProgress,
 	}
 
-	newCfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
-	dt.UpdateService(newCfg)
+	newCfg := NewInboundServiceConfig(serviceName, makeInboundConfig(8080))
+	assert.NoError(t, dt.UpdateService(newCfg))
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateCreationInProgress, opState.State)
 	assert.True(t, opState.Config.InboundConfig.Equals(newCfg.InboundConfig),
 		"Config should be overwritten with the latest desired state")
@@ -681,7 +803,7 @@ func TestIsServiceTracked(t *testing.T) {
 	dt.NRPResources.NATGateways.Insert("nat-1")
 	assert.True(t, dt.IsServiceTracked("nat-1"))
 
-	dt.pendingServiceOps["pending-1"] = &ServiceOperationState{ServiceUID: "pending-1"}
+	dt.pendingServiceOps["pending-1"] = &ServiceOperationState{ServiceName: "pending-1"}
 	assert.True(t, dt.IsServiceTracked("pending-1"))
 }
 
@@ -690,21 +812,21 @@ func TestIsServiceTracked(t *testing.T) {
 // during port-only updates).
 func TestIsServiceReady_StateUpdateInProgress(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-ready-update"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateUpdateInProgress,
+	serviceName := "svc-ready-update"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateUpdateInProgress,
 	}
-	assert.True(t, dt.isServiceReadyToSync(uid, true), "StateUpdateInProgress should be ready for inbound sync")
+	assert.True(t, dt.isServiceReadyToSync(serviceName, true), "StateUpdateInProgress should be ready for inbound sync")
 
 	// And StateCreated should still work.
-	dt.pendingServiceOps[uid].State = StateCreated
-	assert.True(t, dt.isServiceReadyToSync(uid, true), "StateCreated should be ready for inbound sync")
+	dt.pendingServiceOps[serviceName].State = StateCreated
+	assert.True(t, dt.isServiceReadyToSync(serviceName, true), "StateCreated should be ready for inbound sync")
 
 	// StateCreationInProgress should NOT be ready.
-	dt.pendingServiceOps[uid].State = StateCreationInProgress
-	assert.False(t, dt.isServiceReadyToSync(uid, true), "StateCreationInProgress should NOT be ready")
+	dt.pendingServiceOps[serviceName].State = StateCreationInProgress
+	assert.False(t, dt.isServiceReadyToSync(serviceName, true), "StateCreationInProgress should NOT be ready")
 }
 
 // TestEngineDeleteService_DuringUpdate verifies that DeleteService transitions a
@@ -716,30 +838,30 @@ func TestIsServiceReady_StateUpdateInProgress(t *testing.T) {
 // completion and leak the Load Balancer, public IP and ServiceGateway registration.
 func TestEngineDeleteService_DuringUpdate(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-delete-during-update"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-delete-during-update"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         cfg,
 		InFlightConfig: &inflight,
 		State:          StateUpdateInProgress,
 	}
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 	// Pre-populate a location so deletion goes to pending (vs immediate StateDeletionInProgress)
 	dt.NRPResources.Locations["loc1"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			"10.0.0.1": {Services: utilsets.NewString(uid)},
+			"10.0.0.1": {Services: utilsets.NewString(serviceName)},
 		},
 	}
 
-	dt.DeleteService(uid, true, false)
+	dt.DeleteService(serviceName, true, false)
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateDeletionPending, opState.State, "should transition to DeletionPending")
 	assert.NotNil(t, opState.InFlightConfig, "InFlightConfig must be preserved so OnServiceCreationComplete preempt routes to deletion")
 
-	_, queued := dt.pendingServiceDeletions[uid]
+	_, queued := dt.pendingServiceDeletions[serviceName]
 	assert.True(t, queued, "service should be queued in pendingServiceDeletions")
 }
 
@@ -749,22 +871,22 @@ func TestEngineDeleteService_DuringUpdate(t *testing.T) {
 // OnServiceCreationComplete.
 func TestEngineOnServiceCreationComplete_DeletionPendingAfterUpdate(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-then-delete"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     cfg,
-		State:      StateDeletionPending, // simulating: DeleteService ran during update
+	serviceName := "svc-update-then-delete"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      cfg,
+		State:       StateDeletionPending, // simulating: DeleteService ran during update
 	}
 	// No locations -> immediate deletion should be triggered
-	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateDeletionInProgress, opState.State, "should advance to DeletionInProgress when no locations remain")
 
-	_, stillPending := dt.pendingServiceDeletions[uid]
+	_, stillPending := dt.pendingServiceDeletions[serviceName]
 	assert.False(t, stillPending, "pendingServiceDeletions entry should be consumed")
 }
 
@@ -773,19 +895,19 @@ func TestEngineOnServiceCreationComplete_DeletionPendingAfterUpdate(t *testing.T
 // retry from StateUpdateInProgress).
 func TestEngineOnServiceCreationComplete_UpdateFailureKeepsState(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-failure"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-update-failure"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         cfg,
 		InFlightConfig: &inflight,
 		State:          StateUpdateInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, false, assertErr("simulated"))
+	dt.OnServiceCreationComplete(serviceName, false, assertErr("simulated"))
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateUpdateInProgress, opState.State, "state must remain StateUpdateInProgress for retry")
 	assert.Equal(t, 1, opState.RetryCount, "retry count incremented")
 	assert.Nil(t, opState.InFlightConfig, "InFlightConfig cleared on failure")
@@ -796,19 +918,19 @@ func TestEngineOnServiceCreationComplete_UpdateFailureKeepsState(t *testing.T) {
 // to StateCreated.
 func TestEngineOnServiceCreationComplete_UpdateSuccessPersistsConfig(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-success"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
+	serviceName := "svc-update-success"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(8080))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         cfg,
 		InFlightConfig: &inflight,
 		State:          StateUpdateInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateCreated, opState.State)
 	assert.Nil(t, opState.InFlightConfig)
 	if assert.NotNil(t, opState.LastAppliedConfig, "LastAppliedConfig must be persisted") {
@@ -821,19 +943,19 @@ func TestEngineOnServiceCreationComplete_UpdateSuccessPersistsConfig(t *testing.
 // another StateUpdateInProgress run.
 func TestEngineOnServiceCreationComplete_UpdateDriftReschedules(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-drift"
-	desired := NewInboundServiceConfig(uid, makeInboundConfig(8080))
-	inflight := NewInboundServiceConfig(uid, makeInboundConfig(80)) // older
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	serviceName := "svc-update-drift"
+	desired := NewInboundServiceConfig(serviceName, makeInboundConfig(8080))
+	inflight := NewInboundServiceConfig(serviceName, makeInboundConfig(80)) // older
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         desired,
 		InFlightConfig: &inflight,
 		State:          StateUpdateInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	opState := dt.pendingServiceOps[uid]
+	opState := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateUpdateInProgress, opState.State, "drift should re-enter StateUpdateInProgress")
 	assert.Nil(t, opState.InFlightConfig, "InFlightConfig cleared between dispatch cycles")
 	if assert.NotNil(t, opState.LastAppliedConfig) {
@@ -860,17 +982,17 @@ func (a assertErr) Error() string { return string(a) }
 // "new" snapshots), otherwise a removed pod IP would leak into the synced state.
 func TestEngineUpdateEndpoints_RemovalDuringCreationIsReplayed(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "svc-endpoints-create"
+	serviceName := "svc-endpoints-create"
 	node := "node1"
 	keep, removed := "10.0.0.1", "10.0.0.2"
 
-	dt.AddService(NewInboundServiceConfig(serviceUID, nil))
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, nil)))
 
 	// While creating: both endpoints appear, then one is removed.
-	dt.UpdateEndpoints(serviceUID, nil, map[string]string{keep: node, removed: node})
-	dt.UpdateEndpoints(serviceUID, map[string]string{keep: node, removed: node}, map[string]string{keep: node})
+	dt.UpdateEndpoints(serviceName, nil, map[string]string{keep: node, removed: node})
+	dt.UpdateEndpoints(serviceName, map[string]string{keep: node, removed: node}, map[string]string{keep: node})
 
-	dt.OnServiceCreationComplete(serviceUID, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -888,12 +1010,12 @@ func TestEngineUpdateEndpoints_RemovalDuringCreationIsReplayed(t *testing.T) {
 // DeletePod must cancel the buffered add.
 func TestEngineAddPod_DeletedDuringCreationNotResurrected(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-create-delete"
+	egressName := "egress-create-delete"
 	location, address := "192.168.0.1", "10.0.0.5"
 
-	dt.AddPod(egressUID, "ns/pod", location, address) // buffers + creates StateNotStarted op
-	dt.DeletePod(egressUID, location, []string{address}, "ns", "pod", "")
-	dt.OnServiceCreationComplete(egressUID, true, nil)
+	dt.AddPod(egressName, "ns/pod", location, address) // buffers + creates StateNotStarted op
+	dt.DeletePod(egressName, location, []string{address}, "ns", "pod", "")
+	dt.OnServiceCreationComplete(egressName, true, nil)
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -901,7 +1023,7 @@ func TestEngineAddPod_DeletedDuringCreationNotResurrected(t *testing.T) {
 		_, live := n.Pods[address]
 		assert.False(t, live, "pod deleted during creation must not be resurrected after promotion")
 	}
-	if v, ok := dt.outboundIdentityPodRefCount.Load(egressUID); ok {
+	if v, ok := dt.outboundIdentityPodRefCount.Load(egressName); ok {
 		assert.Equal(t, 0, v.(int), "ref-count must not drift after cancelled buffered pod")
 	}
 }
@@ -912,33 +1034,33 @@ func TestEngineAddPod_DeletedDuringCreationNotResurrected(t *testing.T) {
 // avoiding an outbound outage when the NAT Gateway would otherwise be deleted.
 func TestEngineAddPod_DuringDeletionPendingRevivesService(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-revive"
+	egressName := "egress-revive"
 	location := "192.168.0.1"
-	dt.NRPResources.NATGateways.Insert(egressUID)
-	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
-		ServiceUID: egressUID,
-		Config:     NewOutboundServiceConfig(egressUID, nil),
-		State:      StateCreated,
+	dt.NRPResources.NATGateways.Insert(egressName)
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreated,
 	}
 
-	dt.AddPod(egressUID, "ns/pod", location, "10.0.0.10")
-	res := dt.DeletePod(egressUID, location, []string{"10.0.0.10"}, "ns", "pod", "")
+	dt.AddPod(egressName, "ns/pod", location, "10.0.0.10")
+	res := dt.DeletePod(egressName, location, []string{"10.0.0.10"}, "ns", "pod", "")
 	assert.True(t, res.IsLastPod, "removing the sole pod should be the last-pod case")
-	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[egressUID].State)
+	assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[egressName].State)
 
 	// New pod (same pod, new IP) arrives while the service is pending deletion.
-	dt.AddPod(egressUID, "ns/pod", location, "10.0.0.11")
+	dt.AddPod(egressName, "ns/pod", location, "10.0.0.11")
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	assert.Equal(t, StateCreated, dt.pendingServiceOps[egressUID].State, "service should be revived")
-	_, stillPending := dt.pendingServiceDeletions[egressUID]
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[egressName].State, "service should be revived")
+	_, stillPending := dt.pendingServiceDeletions[egressName]
 	assert.False(t, stillPending, "pending deletion should be cancelled on revive")
 	n, ok := dt.K8sResources.Nodes[location]
 	assert.True(t, ok)
 	_, live := n.Pods["10.0.0.11"]
 	assert.True(t, live, "the new pod should be live after revive (no egress outage)")
-	v, ok := dt.outboundIdentityPodRefCount.Load(egressUID)
+	v, ok := dt.outboundIdentityPodRefCount.Load(egressName)
 	assert.True(t, ok)
 	assert.Equal(t, 1, v.(int), "ref-count should be 1 after revive")
 }
@@ -949,28 +1071,28 @@ func TestEngineAddPod_DuringDeletionPendingRevivesService(t *testing.T) {
 // UpdateService clears the park and re-attempts creation.
 func TestEngineOnServiceCreationComplete_TerminalErrorParksAndRecovers(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "svc-terminal"
-	badConfig := NewInboundServiceConfig(serviceUID, &InboundConfig{
+	serviceName := "svc-terminal"
+	badConfig := NewInboundServiceConfig(serviceName, &InboundConfig{
 		FrontendPorts: []PortMapping{{Port: 65535, Protocol: "TCP"}},
 	})
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     badConfig,
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      badConfig,
+		State:       StateCreationInProgress,
 	}
 
-	dt.OnServiceCreationComplete(serviceUID, false, newTerminalError(errors.New("frontend port 65535 out of range")))
+	dt.OnServiceCreationComplete(serviceName, false, newTerminalError(errors.New("frontend port 65535 out of range")))
 
-	op := dt.pendingServiceOps[serviceUID]
+	op := dt.pendingServiceOps[serviceName]
 	assert.True(t, op.CreationFailedTerminal, "deterministic error should park the service")
 	assert.Len(t, dt.serviceUpdaterTrigger, 0, "parked service must not trigger a retry")
 
 	// Fixing the spec re-attempts creation.
-	goodConfig := NewInboundServiceConfig(serviceUID, &InboundConfig{
+	goodConfig := NewInboundServiceConfig(serviceName, &InboundConfig{
 		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
 	})
-	dt.UpdateService(goodConfig)
-	assert.False(t, dt.pendingServiceOps[serviceUID].CreationFailedTerminal, "spec fix should clear the park")
+	assert.NoError(t, dt.UpdateService(goodConfig))
+	assert.False(t, dt.pendingServiceOps[serviceName].CreationFailedTerminal, "spec fix should clear the park")
 	assert.Len(t, dt.serviceUpdaterTrigger, 1, "spec fix should trigger a fresh creation attempt")
 }
 
@@ -978,16 +1100,16 @@ func TestEngineOnServiceCreationComplete_TerminalErrorParksAndRecovers(t *testin
 // is still retried (not parked).
 func TestEngineOnServiceCreationComplete_TransientErrorRetries(t *testing.T) {
 	dt := newTestDiffTracker()
-	serviceUID := "svc-transient"
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewInboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
+	serviceName := "svc-transient"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
 	}
 
-	dt.OnServiceCreationComplete(serviceUID, false, errors.New("throttled, try again"))
+	dt.OnServiceCreationComplete(serviceName, false, errors.New("throttled, try again"))
 
-	op := dt.pendingServiceOps[serviceUID]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.CreationFailedTerminal, "transient error must not park the service")
 	assert.Greater(t, op.RetryCount, 0, "transient error should increment retry count")
 	assert.Len(t, dt.serviceUpdaterTrigger, 1, "transient error should trigger a retry")
@@ -1000,24 +1122,24 @@ func TestEngineOnServiceCreationComplete_TransientErrorRetries(t *testing.T) {
 // LB/PIP would be leaked and the Service left stuck terminating.
 func TestEngineOnServiceCreationComplete_DeleteDuringCreateRoutesToDeletion(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-delete-during-create"
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	serviceName := "svc-delete-during-create"
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
 	inflight := cfg
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         cfg,
 		InFlightConfig: &inflight,
 		State:          StateCreationInProgress,
 	}
 
-	dt.DeleteService(uid, true, false)
-	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[uid].State)
+	dt.DeleteService(serviceName, true, false)
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[serviceName].State)
 
-	dt.NRPResources.LoadBalancers.Insert(uid) // the in-flight create produced an LB
+	dt.NRPResources.LoadBalancers.Insert(serviceName) // the in-flight create produced an LB
 	drainTrigger(dt.serviceUpdaterTrigger)
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	opState, tracked := dt.pendingServiceOps[uid]
+	opState, tracked := dt.pendingServiceOps[serviceName]
 	assert.True(t, tracked, "tracking must not be dropped as a phantom delete success")
 	assert.Equal(t, StateDeletionInProgress, opState.State, "the create success must be routed to a real delete")
 	assert.Len(t, dt.serviceUpdaterTrigger, 1, "a delete must be dispatched")
@@ -1027,17 +1149,17 @@ func TestEngineOnServiceCreationComplete_DeleteDuringCreateRoutesToDeletion(t *t
 // completion (no in-flight create/update config) still clears all tracking.
 func TestEngineOnServiceCreationComplete_GenuineDeletionCleansUp(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-genuine-delete"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, nil),
-		State:      StateDeletionInProgress,
+	serviceName := "svc-genuine-delete"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateDeletionInProgress,
 	}
-	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	_, tracked := dt.pendingServiceOps[uid]
+	_, tracked := dt.pendingServiceOps[serviceName]
 	assert.False(t, tracked, "a genuine delete success must clear tracking")
 }
 
@@ -1048,46 +1170,55 @@ func TestEngineOnServiceCreationComplete_LateLastPodFinalizerRedispatches(t *tes
 	for _, tc := range []struct {
 		name              string
 		bufferReplacement bool
+		upperIdentity     bool
 	}{
 		{name: "without replacement pod"},
 		{name: "before recreating for a replacement pod", bufferReplacement: true},
+		{name: "case-insensitive binding", upperIdentity: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dt := newTestDiffTracker()
-			uid := "svc-late-last-pod"
-			dt.pendingServiceOps[uid] = &ServiceOperationState{
-				ServiceUID: uid,
-				Config:     NewOutboundServiceConfig(uid, nil),
-				State:      StateDeletionInProgress,
+			serviceName := "svc-late-last-pod"
+			if tc.upperIdentity {
+				serviceName = strings.ToUpper(serviceName)
+			}
+			natGatewayID := byoNATGatewayARMID("late-last-pod")
+			dt.setBYONATGatewayID(serviceName, natGatewayID)
+			dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+				ServiceName: serviceName,
+				Config:      NewOutboundServiceConfig(serviceName, nil),
+				State:       StateDeletionInProgress,
 			}
 			dt.pendingPodDeletions["ns/deleted"] = &PendingPodDeletion{
-				Namespace:  "ns",
-				Name:       "deleted",
-				ServiceUID: uid,
-				IsLastPod:  true,
+				Namespace:   "ns",
+				Name:        "deleted",
+				ServiceName: serviceName,
+				IsLastPod:   true,
 			}
 			if tc.bufferReplacement {
-				dt.pendingPods[uid] = []PendingPodUpdate{{
+				dt.pendingPods[serviceName] = []PendingPodUpdate{{
 					PodKey:   "ns/replacement",
 					Location: "10.0.0.1",
 					Address:  "10.244.0.8",
 				}}
 			}
 
-			dt.OnServiceCreationComplete(uid, true, nil)
+			dt.OnServiceCreationComplete(serviceName, true, nil)
 
-			op, tracked := dt.pendingServiceOps[uid]
+			op, tracked := dt.pendingServiceOps[serviceName]
 			if assert.True(t, tracked, "late last-pod work must keep service tracking alive") {
 				assert.Equal(t, StateDeletionInProgress, op.State)
 			}
 			assert.Len(t, dt.pendingPodDeletions, 1)
+			assert.Equal(t, natGatewayID, dt.byoNATGatewayID(serviceName))
 			assert.Len(t, dt.serviceUpdaterTrigger, 1, "the idempotent delete must be re-dispatched for a final sweep")
 
 			drainTrigger(dt.serviceUpdaterTrigger)
 			delete(dt.pendingPodDeletions, "ns/deleted") // Simulate the re-dispatched worker's successful sweep.
-			dt.OnServiceCreationComplete(uid, true, nil)
+			dt.OnServiceCreationComplete(serviceName, true, nil)
+			assert.Empty(t, dt.byoNATGatewayID(serviceName))
 
-			op, tracked = dt.pendingServiceOps[uid]
+			op, tracked = dt.pendingServiceOps[serviceName]
 			if tc.bufferReplacement {
 				if assert.True(t, tracked, "the replacement pod must be recreated after the final sweep") {
 					assert.Equal(t, StateNotStarted, op.State)
@@ -1105,26 +1236,26 @@ func TestEngineOnServiceCreationComplete_LateLastPodFinalizerRedispatches(t *tes
 // pod still holds the ref-count at one, instead of being mistaken for the last-pod removal.
 func TestEngineDeletePod_StaleDuplicateRemovalIsNoOp(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-stale-delete"
-	dt.NRPResources.NATGateways.Insert(egressUID)
-	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
-		ServiceUID: egressUID,
-		Config:     NewOutboundServiceConfig(egressUID, nil),
-		State:      StateCreated,
+	egressName := "egress-stale-delete"
+	dt.NRPResources.NATGateways.Insert(egressName)
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreated,
 	}
-	dt.AddPod(egressUID, "ns/live", "192.168.0.1", "10.0.0.1")
+	dt.AddPod(egressName, "ns/live", "192.168.0.1", "10.0.0.1")
 
-	res := dt.DeletePod(egressUID, "192.168.0.2", []string{"10.0.0.2"}, "ns", "gone", "")
+	res := dt.DeletePod(egressName, "192.168.0.2", []string{"10.0.0.2"}, "ns", "gone", "")
 	assert.False(t, res.IsLastPod, "a removal matching no live pod must not be the last-pod case")
 	assert.False(t, res.Enqueued, "a stale/untracked delete must NOT enqueue a pending pod deletion; the caller removes the finalizer directly so the pod is not stranded")
-	_, marked := dt.pendingServiceDeletions[egressUID]
+	_, marked := dt.pendingServiceDeletions[egressName]
 	assert.False(t, marked, "the service must not be marked for deletion while a live pod remains")
-	assert.Equal(t, StateCreated, dt.pendingServiceOps[egressUID].State)
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[egressName].State)
 
-	res = dt.DeletePod(egressUID, "192.168.0.1", []string{"10.0.0.1"}, "ns", "live", "")
+	res = dt.DeletePod(egressName, "192.168.0.1", []string{"10.0.0.1"}, "ns", "live", "")
 	assert.True(t, res.IsLastPod, "the genuine last-pod removal must still tear the service down")
 	assert.True(t, res.Enqueued, "a tracked pod removal must enqueue a pending pod deletion for drain-gated finalizer removal")
-	_, marked = dt.pendingServiceDeletions[egressUID]
+	_, marked = dt.pendingServiceDeletions[egressName]
 	assert.True(t, marked)
 }
 
@@ -1134,24 +1265,24 @@ func TestEngineDeletePod_StaleDuplicateRemovalIsNoOp(t *testing.T) {
 // finalizer). The record must carry both addresses and be marked last-pod once the ref-count empties.
 func TestEngineDeletePod_DualStackRemovesAllAddressesAtomically(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-dualstack"
-	dt.NRPResources.NATGateways.Insert(egressUID)
-	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
-		ServiceUID: egressUID,
-		Config:     NewOutboundServiceConfig(egressUID, nil),
-		State:      StateCreated,
+	egressName := "egress-dualstack"
+	dt.NRPResources.NATGateways.Insert(egressName)
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateCreated,
 	}
 
 	const nodeIP, v4, v6 = "192.168.0.1", "10.0.0.1", "fd00::1"
-	dt.AddPod(egressUID, "ns/ds", nodeIP, v4)
-	dt.AddPod(egressUID, "ns/ds", nodeIP, v6)
+	dt.AddPod(egressName, "ns/ds", nodeIP, v4)
+	dt.AddPod(egressName, "ns/ds", nodeIP, v6)
 
-	refCount, ok := dt.outboundIdentityPodRefCount.Load(egressUID)
+	refCount, ok := dt.outboundIdentityPodRefCount.Load(egressName)
 	assert.True(t, ok)
 	assert.Equal(t, 2, refCount.(int), "a dual-stack pod registers one address per IP family")
 	assert.Len(t, dt.K8sResources.Nodes[nodeIP].Pods, 2, "both pod addresses must be tracked under the node")
 
-	res := dt.DeletePod(egressUID, nodeIP, []string{v4, v6}, "ns", "ds", "uid-ds")
+	res := dt.DeletePod(egressName, nodeIP, []string{v4, v6}, "ns", "ds", "uid-ds")
 	assert.True(t, res.IsLastPod, "removing every address empties the service")
 	assert.True(t, res.Enqueued)
 
@@ -1162,7 +1293,7 @@ func TestEngineDeletePod_DualStackRemovesAllAddressesAtomically(t *testing.T) {
 		assert.True(t, entry.IsLastPod, "IsLastPod must be set once the pod's removal empties the ref-count")
 		assert.Equal(t, "uid-ds", entry.UID)
 	}
-	_, refExists := dt.outboundIdentityPodRefCount.Load(egressUID)
+	_, refExists := dt.outboundIdentityPodRefCount.Load(egressName)
 	assert.False(t, refExists, "the egress ref-count must be fully drained after both addresses are removed")
 }
 
@@ -1171,29 +1302,29 @@ func TestEngineDeletePod_DualStackRemovesAllAddressesAtomically(t *testing.T) {
 // re-created and the pod promoted once the deletion completes, avoiding an egress outage.
 func TestEngineAddPod_DuringDeletionInProgressBuffersForRecreate(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-recreate"
-	dt.NRPResources.NATGateways.Insert(egressUID)
-	dt.pendingServiceOps[egressUID] = &ServiceOperationState{
-		ServiceUID: egressUID,
-		Config:     NewOutboundServiceConfig(egressUID, nil),
-		State:      StateDeletionInProgress,
+	egressName := "egress-recreate"
+	dt.NRPResources.NATGateways.Insert(egressName)
+	dt.pendingServiceOps[egressName] = &ServiceOperationState{
+		ServiceName: egressName,
+		Config:      NewOutboundServiceConfig(egressName, nil),
+		State:       StateDeletionInProgress,
 	}
-	dt.pendingServiceDeletions[egressUID] = &PendingServiceDeletion{ServiceUID: egressUID, IsInbound: false}
+	dt.pendingServiceDeletions[egressName] = &PendingServiceDeletion{ServiceName: egressName, IsInbound: false}
 
-	dt.AddPod(egressUID, "ns/pod", "192.168.0.1", "10.0.0.9")
-	assert.Len(t, dt.pendingPods[egressUID], 1, "the pod must be buffered for re-creation")
+	dt.AddPod(egressName, "ns/pod", "192.168.0.1", "10.0.0.9")
+	assert.Len(t, dt.pendingPods[egressName], 1, "the pod must be buffered for re-creation")
 
 	drainTrigger(dt.serviceUpdaterTrigger)
-	dt.OnServiceCreationComplete(egressUID, true, nil)
-	op, tracked := dt.pendingServiceOps[egressUID]
+	dt.OnServiceCreationComplete(egressName, true, nil)
+	op, tracked := dt.pendingServiceOps[egressName]
 	assert.True(t, tracked, "a service with a buffered pod must be re-created, not torn down")
 	assert.Equal(t, StateNotStarted, op.State)
-	assert.Len(t, dt.pendingPods[egressUID], 1)
+	assert.Len(t, dt.pendingPods[egressName], 1)
 	assert.Len(t, dt.serviceUpdaterTrigger, 1)
 
 	op.State = StateCreationInProgress
-	dt.OnServiceCreationComplete(egressUID, true, nil)
-	v, ok := dt.outboundIdentityPodRefCount.Load(egressUID)
+	dt.OnServiceCreationComplete(egressName, true, nil)
+	v, ok := dt.outboundIdentityPodRefCount.Load(egressName)
 	assert.True(t, ok)
 	assert.Equal(t, 1, v.(int), "the buffered pod must be promoted to live egress after re-creation")
 }
@@ -1203,20 +1334,20 @@ func TestEngineAddPod_DuringDeletionInProgressBuffersForRecreate(t *testing.T) {
 // is routed to a real delete and the NAT Gateway is not leaked as a pod-less orphan.
 func TestEngineDeletePod_LastBufferedPodSchedulesDeletion(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-buffered-last"
+	egressName := "egress-buffered-last"
 
-	dt.AddPod(egressUID, "ns/pod", "192.168.0.1", "10.0.0.5")
-	dt.pendingServiceOps[egressUID].State = StateCreationInProgress
-	snap := dt.pendingServiceOps[egressUID].Config
-	dt.pendingServiceOps[egressUID].InFlightConfig = &snap
+	dt.AddPod(egressName, "ns/pod", "192.168.0.1", "10.0.0.5")
+	dt.pendingServiceOps[egressName].State = StateCreationInProgress
+	snap := dt.pendingServiceOps[egressName].Config
+	dt.pendingServiceOps[egressName].InFlightConfig = &snap
 
-	dt.DeletePod(egressUID, "192.168.0.1", []string{"10.0.0.5"}, "ns", "pod", "")
-	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[egressUID].State,
+	dt.DeletePod(egressName, "192.168.0.1", []string{"10.0.0.5"}, "ns", "pod", "")
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[egressName].State,
 		"cancelling the only buffered pod mid-create must schedule deletion")
 
 	drainTrigger(dt.serviceUpdaterTrigger)
-	dt.OnServiceCreationComplete(egressUID, true, nil)
-	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[egressUID].State)
+	dt.OnServiceCreationComplete(egressName, true, nil)
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[egressName].State)
 	assert.Len(t, dt.serviceUpdaterTrigger, 1)
 }
 
@@ -1225,12 +1356,12 @@ func TestEngineDeletePod_LastBufferedPodSchedulesDeletion(t *testing.T) {
 // ever created).
 func TestEngineDeletePod_LastBufferedPodBeforeCreateAbortsService(t *testing.T) {
 	dt := newTestDiffTracker()
-	egressUID := "egress-buffered-abort"
+	egressName := "egress-buffered-abort"
 
-	dt.AddPod(egressUID, "ns/pod", "192.168.0.1", "10.0.0.6")
-	dt.DeletePod(egressUID, "192.168.0.1", []string{"10.0.0.6"}, "ns", "pod", "")
+	dt.AddPod(egressName, "ns/pod", "192.168.0.1", "10.0.0.6")
+	dt.DeletePod(egressName, "192.168.0.1", []string{"10.0.0.6"}, "ns", "pod", "")
 
-	_, tracked := dt.pendingServiceOps[egressUID]
+	_, tracked := dt.pendingServiceOps[egressName]
 	assert.False(t, tracked, "cancelling the only buffered pod before creation must abort the service")
 }
 
@@ -1238,16 +1369,16 @@ func TestEngineDeletePod_LastBufferedPodBeforeCreateAbortsService(t *testing.T) 
 // (non-retryable) failure during an update parks the service rather than retrying forever.
 func TestEngineOnServiceCreationComplete_UpdateTerminalErrorParks(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-terminal"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateUpdateInProgress,
+	serviceName := "svc-update-terminal"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateUpdateInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, false, newTerminalError(errors.New("unsupported protocol SCTP")))
+	dt.OnServiceCreationComplete(serviceName, false, newTerminalError(errors.New("unsupported protocol SCTP")))
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.True(t, op.CreationFailedTerminal, "a deterministic update failure must park the service")
 	assert.Equal(t, StateNotStarted, op.State)
 	assert.Len(t, dt.serviceUpdaterTrigger, 0, "a parked service must not trigger a retry")
@@ -1297,18 +1428,18 @@ func drainTrigger(ch chan bool) {
 // an in-flight create.
 func TestOnServiceCreationCompleteClearsInFlightConfigOnFailure(t *testing.T) {
 	dt := newTestDiffTracker()
-	const uid = "svc-inflight"
+	const serviceName = "svc-inflight"
 
-	cfg := NewInboundServiceConfig(uid, makeInboundConfig(8080))
+	cfg := NewInboundServiceConfig(serviceName, makeInboundConfig(8080))
 	op := &ServiceOperationState{
-		ServiceUID:     uid,
+		ServiceName:    serviceName,
 		Config:         cfg,
 		InFlightConfig: &cfg,
 		State:          StateCreationInProgress,
 	}
-	dt.pendingServiceOps[uid] = op
+	dt.pendingServiceOps[serviceName] = op
 
-	dt.OnServiceCreationComplete(uid, false, errors.New("transient failure"))
+	dt.OnServiceCreationComplete(serviceName, false, errors.New("transient failure"))
 
 	assert.Nil(t, op.InFlightConfig, "a failed create must clear the in-flight config snapshot")
 }
@@ -1318,19 +1449,19 @@ func TestOnServiceCreationCompleteClearsInFlightConfigOnFailure(t *testing.T) {
 // provisions the new LoadBalancer instead of skipping it.
 func TestRecreateAfterDeletion_ClearsCreationFailedTerminal(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-recreate-after-terminal-park"
+	serviceName := "svc-recreate-after-terminal-park"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:             uid,
-		Config:                 NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:            serviceName,
+		Config:                 NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:                  StateDeletionInProgress,
 		CreationFailedTerminal: true,
 		RecreateAfterDeletion:  true,
 	}
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	op, ok := dt.pendingServiceOps[uid]
+	op, ok := dt.pendingServiceOps[serviceName]
 	if !assert.True(t, ok, "op must remain tracked to drive the recreate") {
 		return
 	}
@@ -1342,7 +1473,7 @@ func TestRecreateAfterDeletion_ClearsCreationFailedTerminal(t *testing.T) {
 	su := newTestServiceUpdater(dt)
 	su.processBatch()
 
-	assert.Equal(t, StateCreationInProgress, dt.pendingServiceOps[uid].State,
+	assert.Equal(t, StateCreationInProgress, dt.pendingServiceOps[serviceName].State,
 		"dispatcher must transition the recreated op to CreationInProgress")
 }
 
@@ -1351,27 +1482,27 @@ func TestRecreateAfterDeletion_ClearsCreationFailedTerminal(t *testing.T) {
 // deletion-success path does not resurrect a service meant to be deleted.
 func TestDeleteService_RedundantDeleteDoesNotResurrectService(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-redundant-delete"
+	serviceName := "svc-redundant-delete"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:            uid,
-		Config:                NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:           serviceName,
+		Config:                NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:                 StateDeletionInProgress,
 		RecreateAfterDeletion: true,
 	}
 
-	dt.DeleteService(uid, true, false)
+	dt.DeleteService(serviceName, true, false)
 
-	op, ok := dt.pendingServiceOps[uid]
+	op, ok := dt.pendingServiceOps[serviceName]
 	if !assert.True(t, ok, "op stays tracked while deletion is in flight") {
 		return
 	}
 	assert.False(t, op.RecreateAfterDeletion,
 		"a redundant delete of an already-deleting service must clear the recreate intent")
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	_, stillTracked := dt.pendingServiceOps[uid]
+	_, stillTracked := dt.pendingServiceOps[serviceName]
 	assert.False(t, stillTracked,
 		"deletion success must tear the service down after a user-issued delete, not recreate it")
 }
@@ -1381,12 +1512,12 @@ func TestDeleteService_RedundantDeleteDoesNotResurrectService(t *testing.T) {
 // would grow pendingEndpoints unbounded. AddService re-seeds from the EndpointSlice cache.
 func TestUpdateEndpoints_UntrackedServiceIsNotBuffered(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-untracked-clusterip"
+	serviceName := "svc-untracked-clusterip"
 
-	dt.UpdateEndpoints(uid, nil, map[string]string{"10.244.0.1": "10.0.0.1"})
+	dt.UpdateEndpoints(serviceName, nil, map[string]string{"10.244.0.1": "10.0.0.1"})
 
 	assert.Empty(t, dt.pendingEndpoints, "endpoints for an untracked, non-NRP service must not be buffered")
-	assert.NotContains(t, dt.pendingEndpoints, uid)
+	assert.NotContains(t, dt.pendingEndpoints, serviceName)
 }
 
 // A terminating egress pod is delivered to the informer several times (deletionTimestamp
@@ -1396,17 +1527,17 @@ func TestUpdateEndpoints_UntrackedServiceIsNotBuffered(t *testing.T) {
 // is reclaimed while NRP still maps the address to the NAT Gateway.
 func TestEngineDeletePod_DuplicateEventKeepsDrainGate(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "egress-nat"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: NewOutboundServiceConfig(uid, nil), State: StateCreated,
+	serviceName := "egress-nat"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
 	}
-	dt.NRPResources.NATGateways.Insert(uid)
-	dt.AddPod(uid, "ns/pod-a", "10.0.0.1", "10.244.0.5")
+	dt.NRPResources.NATGateways.Insert(serviceName)
+	dt.AddPod(serviceName, "ns/pod-a", "10.0.0.1", "10.244.0.5")
 
-	first := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-a-uid")
+	first := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-a-uid")
 	assert.True(t, first.Enqueued, "first delete drains the address and must drain-gate the finalizer")
 
-	second := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-a-uid")
+	second := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-a-uid")
 	assert.False(t, second.IsLastPod, "duplicate delete drains nothing new")
 	assert.True(t, second.Enqueued, "duplicate delete must keep the finalizer gated while the prior drain is pending")
 	assert.Contains(t, dt.pendingPodDeletions, "ns/pod-a", "pending drain record must survive the duplicate event")
@@ -1417,15 +1548,15 @@ func TestEngineDeletePod_DuplicateEventKeepsDrainGate(t *testing.T) {
 // would be held against a drain that isn't its own.
 func TestEngineDeletePod_ReplacementUIDNotGatedByStaleRecord(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "egress-nat"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: NewOutboundServiceConfig(uid, nil), State: StateCreated,
+	serviceName := "egress-nat"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreated,
 	}
-	dt.NRPResources.NATGateways.Insert(uid)
-	dt.AddPod(uid, "ns/pod-a", "10.0.0.1", "10.244.0.5")
-	dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-a-uid")
+	dt.NRPResources.NATGateways.Insert(serviceName)
+	dt.AddPod(serviceName, "ns/pod-a", "10.0.0.1", "10.244.0.5")
+	dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-a-uid")
 
-	replacement := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-b-uid")
+	replacement := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.5"}, "ns", "pod-a", "pod-b-uid")
 	assert.False(t, replacement.Enqueued, "a different-UID delete must not inherit the prior pod's drain gate")
 }
 
@@ -1435,16 +1566,16 @@ func TestEngineDeletePod_ReplacementUIDNotGatedByStaleRecord(t *testing.T) {
 // desired config must be re-dispatched (it may be valid) rather than parked forever.
 func TestEngineOnServiceCreationComplete_DriftDuringTerminalFailureReDispatches(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-create-drift"
-	inflight := NewInboundServiceConfig(uid, makeInboundConfig(80))  // stale spec that fails terminally
-	desired := NewInboundServiceConfig(uid, makeInboundConfig(8080)) // new spec that landed mid-flight
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: desired, InFlightConfig: &inflight, State: StateCreationInProgress,
+	serviceName := "svc-create-drift"
+	inflight := NewInboundServiceConfig(serviceName, makeInboundConfig(80))  // stale spec that fails terminally
+	desired := NewInboundServiceConfig(serviceName, makeInboundConfig(8080)) // new spec that landed mid-flight
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: desired, InFlightConfig: &inflight, State: StateCreationInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, false, newTerminalError(errors.New("unsupported protocol")))
+	dt.OnServiceCreationComplete(serviceName, false, newTerminalError(errors.New("unsupported protocol")))
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if op == nil {
 		t.Fatalf("service must remain tracked after a terminal failure")
 	}
@@ -1457,16 +1588,16 @@ func TestEngineOnServiceCreationComplete_DriftDuringTerminalFailureReDispatches(
 // TestEngineOnServiceCreationComplete_DriftDuringTerminalUpdateReDispatches is the update-path analogue.
 func TestEngineOnServiceCreationComplete_DriftDuringTerminalUpdateReDispatches(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-drift"
-	inflight := NewInboundServiceConfig(uid, makeInboundConfig(80))
-	desired := NewInboundServiceConfig(uid, makeInboundConfig(8080))
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: desired, InFlightConfig: &inflight, State: StateUpdateInProgress,
+	serviceName := "svc-update-drift"
+	inflight := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	desired := NewInboundServiceConfig(serviceName, makeInboundConfig(8080))
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: desired, InFlightConfig: &inflight, State: StateUpdateInProgress,
 	}
 
-	dt.OnServiceCreationComplete(uid, false, newTerminalError(errors.New("unsupported protocol")))
+	dt.OnServiceCreationComplete(serviceName, false, newTerminalError(errors.New("unsupported protocol")))
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if op == nil {
 		t.Fatalf("service must remain tracked after a terminal update failure")
 	}
@@ -1491,30 +1622,30 @@ func TestEngineOnServiceCreationComplete_DriftDuringTerminalUpdateReDispatches(t
 // while it is still backing the egress service.
 func TestDeletePod_StaleDeleteDoesNotDrainReplacementAddress(t *testing.T) {
 	const (
-		serviceUID = "egress-a"
-		podKey     = "ns/egress-pod"
-		location   = "10.0.0.1"
-		address    = "10.244.0.9"
-		oldUID     = "uid-old"
-		newUID     = "uid-new"
+		serviceName = "egress-a"
+		podKey      = "ns/egress-pod"
+		location    = "10.0.0.1"
+		address     = "10.244.0.9"
+		oldUID      = "uid-old"
+		newUID      = "uid-new"
 	)
 
 	dt := newTestDiffTracker()
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewOutboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
 	}
 	// The replacement pod has already buffered the address under its own UID.
-	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+	dt.pendingPods[serviceName] = []PendingPodUpdate{
 		{PodKey: podKey, PodUID: newUID, Location: location, Address: address},
 	}
 	// NRP still maps the address to the service, as it would once the create reached it.
 	dt.NRPResources.Locations[location] = NRPLocation{
-		Addresses: map[string]NRPAddress{address: {Services: utilsets.NewString(serviceUID)}},
+		Addresses: map[string]NRPAddress{address: {Services: utilsets.NewString(serviceName)}},
 	}
 
-	result := dt.DeletePod(serviceUID, location, []string{address}, "ns", "egress-pod", oldUID)
+	result := dt.DeletePod(serviceName, location, []string{address}, "ns", "egress-pod", oldUID)
 
 	assert.False(t, result.Enqueued,
 		"a stale delete must not drain-gate the live replacement pod")
@@ -1524,7 +1655,7 @@ func TestDeletePod_StaleDeleteDoesNotDrainReplacementAddress(t *testing.T) {
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	buffered := dt.pendingPods[serviceUID]
+	buffered := dt.pendingPods[serviceName]
 	if assert.Len(t, buffered, 1, "the replacement's buffered address must survive a stale delete") {
 		assert.Equal(t, newUID, buffered[0].PodUID, "the surviving entry must be the replacement's")
 		assert.Equal(t, address, buffered[0].Address)
@@ -1537,28 +1668,28 @@ func TestDeletePod_StaleDeleteDoesNotDrainReplacementAddress(t *testing.T) {
 // carrying the same UID as the buffered entry is the pod's own delete and must still take effect.
 func TestDeletePod_MatchingUIDStillCancelsBufferedAddress(t *testing.T) {
 	const (
-		serviceUID = "egress-b"
-		podKey     = "ns/egress-pod"
-		location   = "10.0.0.1"
-		address    = "10.244.0.9"
-		podUID     = "uid-1"
+		serviceName = "egress-b"
+		podKey      = "ns/egress-pod"
+		location    = "10.0.0.1"
+		address     = "10.244.0.9"
+		podUID      = "uid-1"
 	)
 
 	dt := newTestDiffTracker()
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewOutboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
 	}
-	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+	dt.pendingPods[serviceName] = []PendingPodUpdate{
 		{PodKey: podKey, PodUID: podUID, Location: location, Address: address},
 	}
 
-	dt.DeletePod(serviceUID, location, []string{address}, "ns", "egress-pod", podUID)
+	dt.DeletePod(serviceName, location, []string{address}, "ns", "egress-pod", podUID)
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	assert.Empty(t, dt.pendingPods[serviceUID],
+	assert.Empty(t, dt.pendingPods[serviceName],
 		"a pod's own delete must still cancel its buffered address")
 }
 
@@ -1570,28 +1701,28 @@ func TestDeletePod_MatchingUIDStillCancelsBufferedAddress(t *testing.T) {
 // replacement has already buffered under a different UID, silently removing a live pod's egress.
 func TestDeletePodWithoutAddresses_KeepsReplacementBufferedAddresses(t *testing.T) {
 	const (
-		serviceUID = "egress-c"
-		podKey     = "ns/egress-pod"
-		location   = "10.0.0.1"
-		oldUID     = "uid-old"
-		newUID     = "uid-new"
+		serviceName = "egress-c"
+		podKey      = "ns/egress-pod"
+		location    = "10.0.0.1"
+		oldUID      = "uid-old"
+		newUID      = "uid-new"
 	)
 
 	dt := newTestDiffTracker()
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewOutboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
 	}
-	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+	dt.pendingPods[serviceName] = []PendingPodUpdate{
 		{PodKey: podKey, PodUID: newUID, Location: location, Address: "10.244.0.9"},
 	}
 
-	dt.DeletePodWithoutAddresses(serviceUID, "ns", "egress-pod", oldUID)
+	dt.DeletePodWithoutAddresses(serviceName, "ns", "egress-pod", oldUID)
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	buffered := dt.pendingPods[serviceUID]
+	buffered := dt.pendingPods[serviceName]
 	if assert.Len(t, buffered, 1, "a no-IP delete for the old pod must not cancel the replacement") {
 		assert.Equal(t, newUID, buffered[0].PodUID)
 	}
@@ -1601,67 +1732,366 @@ func TestDeletePodWithoutAddresses_KeepsReplacementBufferedAddresses(t *testing.
 // no-IP delete must still clear its buffered entries.
 func TestDeletePodWithoutAddresses_MatchingUIDCancelsBufferedAddresses(t *testing.T) {
 	const (
-		serviceUID = "egress-d"
-		podKey     = "ns/egress-pod"
-		podUID     = "uid-1"
+		serviceName = "egress-d"
+		podKey      = "ns/egress-pod"
+		podUID      = "uid-1"
 	)
 
 	dt := newTestDiffTracker()
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewOutboundServiceConfig(serviceUID, nil),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateCreationInProgress,
 	}
-	dt.pendingPods[serviceUID] = []PendingPodUpdate{
+	dt.pendingPods[serviceName] = []PendingPodUpdate{
 		{PodKey: podKey, PodUID: podUID, Location: "10.0.0.1", Address: "10.244.0.9"},
 	}
 
-	dt.DeletePodWithoutAddresses(serviceUID, "ns", "egress-pod", podUID)
+	dt.DeletePodWithoutAddresses(serviceName, "ns", "egress-pod", podUID)
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	assert.Empty(t, dt.pendingPods[serviceUID],
+	assert.Empty(t, dt.pendingPods[serviceName],
 		"a pod's own no-IP delete must still cancel its buffered addresses")
 }
 
-// TestAddPod_RejectsEgressIdentityCollidingWithInboundService pins that an egress pod cannot attach
-// to an inbound service's operation. The key is shared by both kinds, and the egress side is a
-// user-controlled pod label, so without a kind check one tenant can attach to another tenant's
-// LoadBalancer. The ordinary egress identity is the control.
-func TestAddPod_RejectsEgressIdentityCollidingWithInboundService(t *testing.T) {
-	const inboundUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-	const egressUID = "team-egress"
+func TestInboundTeardownDoesNotBlockSameRawEgressIdentity(t *testing.T) {
+	const uid, hostIP, oldIP = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "10.0.0.1", "10.244.0.5"
+	serviceName, egressName := inboundServiceName(uid), outboundServiceName(uid)
+	for _, source := range []string{"registration", "operation", "untracked"} {
+		t.Run(source, func(t *testing.T) {
+			pod := newTestPod("ns", "fresh-egress", uid, hostIP, "10.244.0.9", v1.PodRunning, nil)
+			pod.UID = "fresh-uid"
+			pod.Annotations = map[string]string{consts.PodAnnotationServiceEgressGatewayResourceGroup: "byo-rg"}
+			dt := newTestDiffTracker()
+			dt.kubeClient = fake.NewSimpleClientset(pod)
+			dt.K8sResources.Services.Insert(serviceName)
+			dt.K8sResources.Nodes[hostIP] = Node{Pods: map[string]Pod{oldIP: {InboundIdentities: utilsets.NewString(serviceName)}}}
+			switch source {
+			case "registration":
+				dt.NRPResources.LoadBalancers.Insert(serviceName)
+				dt.NRPResources.Locations[hostIP] = NRPLocation{Addresses: map[string]NRPAddress{oldIP: {Services: utilsets.NewString(serviceName)}}}
+			case "operation":
+				dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+					ServiceName: serviceName, Config: NewInboundServiceConfig(serviceName, nil), State: StateNotStarted,
+				}
+			}
+			dt.DeleteService(serviceName, true, false)
+			assert.False(t, dt.K8sResources.Services.Has(serviceName))
+			assert.False(t, podIPTracked(&dt.K8sResources, oldIP), "untracked deletion must also remove old inbound desired addresses")
+			dt.podInformerAddPod(pod)
+			assert.Contains(t, dt.pendingServiceOps, egressName, "egress must not wait for inbound cleanup")
+			if _, tracked := dt.pendingServiceOps[serviceName]; tracked {
+				dt.NRPResources.Locations = map[string]NRPLocation{}
+				dt.CheckPendingServiceDeletions()
+				dt.UpdateNRPLoadBalancers(SyncServicesReturnType{Removals: utilsets.NewString(serviceName)})
+				dt.OnServiceCreationComplete(serviceName, true, nil)
+			}
+			if assert.Contains(t, dt.pendingServiceOps, egressName) {
+				assert.False(t, dt.pendingServiceOps[egressName].Config.IsInbound)
+				assert.Equal(t, StateNotStarted, dt.pendingServiceOps[egressName].State)
+			}
+			current, err := dt.kubeClient.CoreV1().Pods("ns").Get(context.Background(), pod.Name, metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(current), "fresh outbound admission must no longer be rejected")
+		})
+	}
+}
+
+func TestInboundDesiredMembershipTracksRecreation(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	dt := newTestDiffTracker()
+	config := NewInboundServiceConfig(uid, makeInboundConfig(80))
+	assert.NoError(t, dt.AddService(config))
+	assert.True(t, dt.K8sResources.Services.Has(uid))
+	dt.DeleteService(uid, true, false)
+	assert.False(t, dt.K8sResources.Services.Has(uid))
+	assert.NoError(t, dt.UpdateService(config))
+	assert.True(t, dt.K8sResources.Services.Has(uid))
+	assert.True(t, dt.pendingServiceOps[uid].RecreateAfterDeletion)
+	dt.DeleteService(uid, true, false)
+	assert.False(t, dt.K8sResources.Services.Has(uid))
+	assert.False(t, dt.pendingServiceOps[uid].RecreateAfterDeletion)
+}
+
+func TestInboundAndOutboundNamesCoexist(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, outboundName := inboundServiceName(uid), outboundServiceName(uid)
+	for _, inboundFirst := range []bool{true, false} {
+		dt := newTestDiffTracker()
+		inbound := NewInboundServiceConfig(inboundName, makeInboundConfig(80))
+		outbound := NewOutboundServiceConfig(outboundName, &OutboundConfig{})
+		first, second := inbound, outbound
+		if !inboundFirst {
+			first, second = outbound, inbound
+		}
+		assert.NoError(t, dt.AddService(first))
+		assert.NoError(t, dt.AddService(second))
+		assert.Len(t, dt.pendingServiceOps, 2)
+		beforeOutbound := *dt.pendingServiceOps[outboundName]
+		assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(inboundName, makeInboundConfig(8080))))
+		assert.Equal(t, beforeOutbound, *dt.pendingServiceOps[outboundName])
+		dt.DeleteService(inboundName, true, false)
+		assert.Equal(t, beforeOutbound, *dt.pendingServiceOps[outboundName])
+		assert.NotEqual(t, PublicIPName(inboundName), PublicIPName(outboundName))
+	}
+}
+
+func TestReservedServiceNamesStayProtected(t *testing.T) {
+	for _, name := range []string{
+		DefaultOutboundNATGatewayName,
+		inboundServiceName("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+		outboundServiceName("rp-owned"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			dt.NRPResources.ReservedOutboundServices = utilsets.NewString(name)
+			dt.K8sResources.Services.Insert(name)
+			dt.K8sResources.Egresses.Insert(name)
+			assert.Error(t, dt.AddService(NewInboundServiceConfig(name, nil)))
+			assert.Error(t, dt.AddService(NewOutboundServiceConfig(name, nil)))
+			assert.Error(t, dt.UpdateService(NewInboundServiceConfig(name, makeInboundConfig(80))))
+			dt.UpdateEndpoints(name, nil, map[string]string{"10.244.0.1": "10.0.0.1"})
+			dt.AddPodWithUID(name, "ns/pod", "pod-uid", "10.0.0.1", "10.244.0.1")
+			dt.DeleteService(name, true, true)
+			dt.DeleteService(name, false, true)
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.Empty(t, dt.pendingServiceDeletions)
+			assert.Empty(t, dt.pendingEndpoints)
+			assert.Empty(t, dt.pendingPods)
+			assert.Empty(t, dt.K8sResources.Nodes)
+		})
+	}
+}
+
+func TestInboundAdmissionPreservesOutboundOwner(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, serviceName := inboundServiceName(uid), outboundServiceName(uid)
+	for name, state := range map[string]ResourceState{
+		"not started": StateNotStarted, "creating": StateCreationInProgress, "created": StateCreated,
+		"deletion pending": StateDeletionPending, "deleting": StateDeletionInProgress,
+	} {
+		t.Run(name, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			op := &ServiceOperationState{ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, &OutboundConfig{}), State: state}
+			dt.pendingServiceOps[serviceName] = op
+			before := *op
+			dt.pendingPods[serviceName] = []PendingPodUpdate{{PodKey: "ns/egress", PodUID: "pod-uid", Address: "10.244.0.5", Location: "10.0.0.1"}}
+			assert.NoError(t, dt.AddService(NewInboundServiceConfig(inboundName, makeInboundConfig(80))))
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns", UID: types.UID(uid)},
+				Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+			}
+			assert.NoError(t, dt.ReconcileInboundService(svc))
+			assert.Equal(t, before, *op)
+			dt.UpdateEndpoints(inboundName, nil, map[string]string{"10.244.0.9": "10.0.0.1"})
+			assert.Empty(t, dt.pendingEndpoints[serviceName])
+			assert.NotEmpty(t, dt.pendingEndpoints[inboundName])
+			dt.DeleteService(inboundName, true, false)
+			assert.Equal(t, before, *op)
+			assert.Len(t, dt.pendingPods[serviceName], 1, "inbound deletion must not discard the outbound member")
+			assert.Empty(t, dt.pendingServiceDeletions)
+
+			distinct := svc.DeepCopy()
+			distinct.UID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+			assert.NoError(t, dt.ReconcileInboundService(distinct))
+			assert.True(t, dt.pendingServiceOps[ServiceName(distinct)].Config.IsInbound)
+		})
+	}
+}
+
+func TestOutboundCleanupPreservesSameRawInboundService(t *testing.T) {
+	const uid, hostIP, podIP = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "10.0.0.1", "10.244.0.5"
+	inboundName, serviceName := inboundServiceName(uid), outboundServiceName(uid)
+	deletionTime := metav1.Now()
+	pod := newTestPod("ns", "egress", uid, hostIP, podIP, v1.PodRunning, &deletionTime)
+	pod.UID = "pod-uid"
+	pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+	dt := newTestDiffTracker()
+	dt.kubeClient = fake.NewSimpleClientset(pod)
+	dt.NRPResources.NATGateways.Insert(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, &OutboundConfig{}), State: StateCreated,
+	}
+	dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(serviceName))
+	dt.AddPodWithUID(serviceName, "ns/egress", string(pod.UID), hostIP, podIP)
+	dt.NRPResources.Locations[hostIP] = NRPLocation{Addresses: map[string]NRPAddress{podIP: {Services: utilsets.NewString(serviceName)}}}
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns", UID: types.UID(uid)},
+		Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+	}
+	assert.NoError(t, dt.ReconcileInboundService(svc))
+	beforeInbound := *dt.pendingServiceOps[inboundName]
+	result := dt.DeletePod(serviceName, hostIP, []string{podIP}, "ns", pod.Name, string(pod.UID))
+	assert.True(t, result.IsLastPod)
+	assert.False(t, dt.pendingServiceOps[serviceName].Config.IsInbound)
+	assert.False(t, dt.outboundServiceHasLiveOrBufferedPodLocked(serviceName), "outbound deletion must still drain its desired address")
+	assert.NoError(t, dt.ReconcileInboundService(svc), "inbound is independent of outbound cleanup")
+
+	dt.NRPResources.Locations = map[string]NRPLocation{}
+	dt.CheckPendingServiceDeletions()
+	dt.UpdateNRPNATGateways(SyncServicesReturnType{Removals: utilsets.NewString(serviceName)})
+	assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), serviceName))
+	assert.Equal(t, byoNATGatewayARMID(serviceName), dt.byoNATGatewayID(serviceName))
+	dt.OnServiceCreationComplete(serviceName, true, nil)
+	assert.Empty(t, dt.byoNATGatewayID(serviceName))
+	assert.NotContains(t, dt.pendingServiceOps, serviceName)
+	assert.Equal(t, beforeInbound, *dt.pendingServiceOps[inboundName])
+	assert.NoError(t, dt.ReconcileInboundService(svc))
+	assert.True(t, dt.pendingServiceOps[inboundName].Config.IsInbound)
+	assert.Equal(t, StateNotStarted, dt.pendingServiceOps[inboundName].State)
+}
+
+func TestInboundAdmissionPreservesRecoveredOutboundOwner(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, serviceName := inboundServiceName(uid), outboundServiceName(uid)
+	for _, source := range []string{"registration", "cleanup record", "RP default"} {
+		t.Run(source, func(t *testing.T) {
+			dt := newTestDiffTracker()
+			switch source {
+			case "registration":
+				dt.NRPResources.NATGateways.Insert(serviceName)
+			case "cleanup record":
+				dt.setBYONATGatewayID(serviceName, byoNATGatewayARMID(serviceName))
+			case "RP default":
+				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(serviceName)
+			}
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "service", Namespace: "ns", UID: types.UID(uid)},
+				Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+			}
+			assert.NoError(t, dt.ReconcileInboundService(svc))
+			assert.NoError(t, dt.AddService(NewInboundServiceConfig(inboundName, makeInboundConfig(80))))
+			assert.True(t, dt.pendingServiceOps[inboundName].Config.IsInbound)
+			assert.NotContains(t, dt.pendingServiceOps, serviceName)
+			switch source {
+			case "registration":
+				assert.True(t, dt.NRPResources.NATGateways.Has(serviceName))
+			case "cleanup record":
+				assert.Equal(t, byoNATGatewayARMID(serviceName), dt.byoNATGatewayID(serviceName))
+			case "RP default":
+				assert.Error(t, dt.AddService(NewOutboundServiceConfig(serviceName, nil)))
+				assert.True(t, dt.NRPResources.ReservedOutboundServices.Has(serviceName))
+			}
+		})
+	}
+}
+
+func TestRecoveredInboundIdentityAllowsSameRawOutboundWork(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, serviceName := inboundServiceName(uid), outboundServiceName(uid)
+	for _, source := range []string{"NRP", "Kubernetes"} {
+		for _, entry := range []string{"AddService", "AddPod", "orphan deletion", "diff addition", "diff removal", "no-IP deletion"} {
+			t.Run(source+"/"+entry, func(t *testing.T) {
+				dt := newTestDiffTracker()
+				if source == "NRP" {
+					dt.NRPResources.LoadBalancers.Insert(inboundName)
+				} else {
+					dt.K8sResources.Services.Insert(inboundName)
+				}
+				switch entry {
+				case "AddService":
+					assert.NoError(t, dt.AddService(NewOutboundServiceConfig(serviceName, &OutboundConfig{})))
+				case "AddPod":
+					dt.AddPodWithUID(serviceName, "ns/pod", "pod-uid", "10.0.0.1", "10.244.0.5")
+				case "orphan deletion":
+					dt.DeleteService(serviceName, false, true)
+				case "diff addition":
+					dt.K8sResources.Egresses.Insert(serviceName)
+				case "diff removal":
+					dt.NRPResources.NATGateways.Insert(serviceName)
+				case "no-IP deletion":
+					dt.NRPResources.NATGateways.Insert(serviceName)
+					dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+						Addresses: map[string]NRPAddress{"10.244.0.5": {Services: utilsets.NewString(serviceName)}},
+					}
+					result := dt.DeletePodWithoutAddresses(serviceName, "ns", "pod", "pod-uid")
+					assert.True(t, result.Enqueued)
+					assert.True(t, result.IsLastPod)
+					assert.Equal(t, PodFinalizerDecisionHoldForServiceDeletion, result.FinalizerDecision)
+					pending := dt.pendingPodDeletions["ns/pod"]
+					if !assert.NotNil(t, pending) {
+						return
+					}
+					assert.Equal(t, serviceName, pending.ServiceName)
+					assert.Equal(t, "pod-uid", pending.UID)
+					assert.True(t, pending.VerifyServiceDrain)
+					assert.Len(t, dt.locationsUpdaterTrigger, 1)
+				}
+				diff := dt.GetSyncNRPNATGateways()
+				assert.Equal(t, entry == "diff addition", diff.Additions.Has(serviceName))
+				assert.Equal(t, entry == "diff removal" || entry == "no-IP deletion", diff.Removals.Has(serviceName))
+				assert.NotContains(t, dt.pendingServiceOps, inboundName)
+				switch entry {
+				case "AddService", "AddPod", "orphan deletion", "no-IP deletion":
+					op := dt.pendingServiceOps[serviceName]
+					if !assert.NotNil(t, op) {
+						return
+					}
+					assert.False(t, op.Config.IsInbound)
+					switch entry {
+					case "AddService", "AddPod":
+						assert.Equal(t, StateNotStarted, op.State)
+						assert.Len(t, dt.serviceUpdaterTrigger, 1)
+						if entry == "AddPod" {
+							assert.Len(t, dt.pendingPods[serviceName], 1)
+						}
+					case "orphan deletion":
+						assert.True(t, op.IsOrphan)
+						assert.Equal(t, StateDeletionInProgress, op.State)
+						assert.Len(t, dt.serviceUpdaterTrigger, 1)
+					case "no-IP deletion":
+						assert.Equal(t, StateDeletionPending, op.State)
+					}
+				default:
+					assert.NotContains(t, dt.pendingServiceOps, serviceName)
+				}
+				if source == "NRP" {
+					assert.True(t, dt.NRPResources.LoadBalancers.Has(inboundName))
+				} else {
+					assert.True(t, dt.K8sResources.Services.Has(inboundName))
+				}
+			})
+		}
+	}
+}
+
+func TestAddPod_SeparatesSameRawInboundIdentity(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, sameRawEgress := inboundServiceName(uid), outboundServiceName(uid)
+	egressName := outboundServiceName("team-egress")
 
 	dt := newTestDiffTracker()
-	dt.pendingServiceOps[inboundUID] = &ServiceOperationState{
-		ServiceUID: inboundUID,
-		Config:     NewInboundServiceConfig(inboundUID, nil),
-		State:      StateCreated,
+	dt.pendingServiceOps[inboundName] = &ServiceOperationState{
+		ServiceName: inboundName,
+		Config:      NewInboundServiceConfig(inboundName, nil),
+		State:       StateCreated,
 	}
-	dt.NRPResources.LoadBalancers.Insert(inboundUID)
+	dt.NRPResources.LoadBalancers.Insert(inboundName)
 
-	// An egress pod labelled with the inbound Service's UID.
-	dt.AddPodWithUID(inboundUID, "attacker/pod", "pod-uid-1", "10.0.0.1", "10.244.0.5")
+	dt.AddPodWithUID(sameRawEgress, "shared/pod", "pod-uid-1", "10.0.0.1", "10.244.0.5")
 
 	dt.mu.Lock()
-	op := dt.pendingServiceOps[inboundUID]
+	op := dt.pendingServiceOps[inboundName]
 	_, nodeTracked := dt.K8sResources.Nodes["10.0.0.1"]
-	bufferedPods := len(dt.pendingPods[inboundUID])
-	readyAsOutbound := dt.isServiceReadyToSync(inboundUID, false)
+	bufferedPods := len(dt.pendingPods[inboundName])
+	readyAsOutbound := dt.isServiceReadyToSync(inboundName, false)
 	dt.mu.Unlock()
 
 	assert.True(t, op.Config.IsInbound, "the inbound operation must be left untouched")
 	assert.Equal(t, StateCreated, op.State, "the inbound operation must not be re-purposed as outbound")
 	assert.False(t, nodeTracked, "the egress pod must not be published under the inbound service's identity")
 	assert.Zero(t, bufferedPods, "the colliding pod must not be buffered against the inbound operation")
+	assert.Contains(t, dt.pendingServiceOps, sameRawEgress)
+	assert.Len(t, dt.pendingPods[sameRawEgress], 1)
 	assert.False(t, readyAsOutbound,
 		"an inbound LoadBalancer must never satisfy an outbound readiness check for the same key")
 
 	// Control: a non-colliding egress identity registers as normal.
-	dt.AddPodWithUID(egressUID, "team/pod", "pod-uid-2", "10.0.0.2", "10.244.0.6")
+	dt.AddPodWithUID(egressName, "team/pod", "pod-uid-2", "10.0.0.2", "10.244.0.6")
 	dt.mu.Lock()
-	ctlOp, ctlExists := dt.pendingServiceOps[egressUID]
-	ctlBuffered := len(dt.pendingPods[egressUID])
+	ctlOp, ctlExists := dt.pendingServiceOps[egressName]
+	ctlBuffered := len(dt.pendingPods[egressName])
 	dt.mu.Unlock()
 	if assert.True(t, ctlExists, "control: an ordinary egress identity must create its own operation") {
 		assert.False(t, ctlOp.Config.IsInbound, "control: that operation must be outbound")
@@ -1678,12 +2108,12 @@ func TestAddPod_DoesNotReviveOutboundServiceWhoseDeleteWasAttempted(t *testing.T
 		dt := newTestDiffTracker()
 
 		dt.pendingServiceOps["egress"] = &ServiceOperationState{
-			ServiceUID: "egress",
-			Config:     NewOutboundServiceConfig("egress", nil),
-			State:      StateDeletionPending,
-			RetryCount: retryCount,
+			ServiceName: "egress",
+			Config:      NewOutboundServiceConfig("egress", nil),
+			State:       StateDeletionPending,
+			RetryCount:  retryCount,
 		}
-		dt.pendingServiceDeletions["egress"] = &PendingServiceDeletion{ServiceUID: "egress"}
+		dt.pendingServiceDeletions["egress"] = &PendingServiceDeletion{ServiceName: "egress"}
 		return dt
 	}
 
@@ -1737,16 +2167,16 @@ func TestReconcileInboundService_SkipsServiceBeingDeleted(t *testing.T) {
 	// A deletion is already in flight for this UID.
 	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	deleting := newTestDiffTracker()
-	deleting.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, nil),
-		State:      StateDeletionInProgress,
+	deleting.pendingServiceOps[inboundServiceName(uid)] = &ServiceOperationState{
+		ServiceName: inboundServiceName(uid),
+		Config:      NewInboundServiceConfig(inboundServiceName(uid), nil),
+		State:       StateDeletionInProgress,
 	}
 
 	assert.NoError(t, deleting.ReconcileInboundService(newSvc(uid, true)))
 
 	deleting.mu.Lock()
-	op := deleting.pendingServiceOps[uid]
+	op := deleting.pendingServiceOps[inboundServiceName(uid)]
 	deleting.mu.Unlock()
 	assert.Equal(t, StateDeletionInProgress, op.State,
 		"a Terminating Service must not disturb its own in-flight deletion")
@@ -1755,16 +2185,16 @@ func TestReconcileInboundService_SkipsServiceBeingDeleted(t *testing.T) {
 
 	// Control: the same Service, still live, records the recreate intent as designed.
 	live := newTestDiffTracker()
-	live.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, nil),
-		State:      StateDeletionInProgress,
+	live.pendingServiceOps[inboundServiceName(uid)] = &ServiceOperationState{
+		ServiceName: inboundServiceName(uid),
+		Config:      NewInboundServiceConfig(inboundServiceName(uid), nil),
+		State:       StateDeletionInProgress,
 	}
 
 	assert.NoError(t, live.ReconcileInboundService(newSvc(uid, false)))
 
 	live.mu.Lock()
-	ctlOp := live.pendingServiceOps[uid]
+	ctlOp := live.pendingServiceOps[inboundServiceName(uid)]
 	live.mu.Unlock()
 	assert.True(t, ctlOp.RecreateAfterDeletion,
 		"control: a live Service redeclared during deletion must still be re-created")
@@ -1807,15 +2237,15 @@ func TestOnServiceCreationComplete_TerminalParkEmitsWarningEvent(t *testing.T) {
 		recorder := record.NewFakeRecorder(10)
 		dt.eventRecorder = recorder
 
-		config := NewInboundServiceConfig(uid, &InboundConfig{
+		config := NewInboundServiceConfig(inboundServiceName(uid), &InboundConfig{
 			FrontendPorts: []PortMapping{{Port: 65535, Protocol: "TCP"}},
 		})
 		config.Namespace = "default"
 		config.Name = "svc"
-		dt.pendingServiceOps[uid] = &ServiceOperationState{
-			ServiceUID: uid,
-			Config:     config,
-			State:      StateCreationInProgress,
+		dt.pendingServiceOps[inboundServiceName(uid)] = &ServiceOperationState{
+			ServiceName: inboundServiceName(uid),
+			Config:      config,
+			State:       StateCreationInProgress,
 		}
 		return dt, recorder
 	}
@@ -1827,7 +2257,7 @@ func TestOnServiceCreationComplete_TerminalParkEmitsWarningEvent(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			dt.OnServiceCreationComplete(uid, false, err)
+			dt.OnServiceCreationComplete(inboundServiceName(uid), false, err)
 		}()
 		select {
 		case <-done:
@@ -1840,7 +2270,7 @@ func TestOnServiceCreationComplete_TerminalParkEmitsWarningEvent(t *testing.T) {
 		dt, recorder := newTracker("svc-parked")
 		completeWithin(t, dt, "svc-parked", newTerminalError(errors.New("frontend port 65535 out of range")))
 
-		assert.True(t, dt.pendingServiceOps["svc-parked"].CreationFailedTerminal)
+		assert.True(t, dt.pendingServiceOps[inboundServiceName("svc-parked")].CreationFailedTerminal)
 		select {
 		case event := <-recorder.Events:
 			assert.Contains(t, event, "Warning")
@@ -1854,10 +2284,10 @@ func TestOnServiceCreationComplete_TerminalParkEmitsWarningEvent(t *testing.T) {
 
 	t.Run("a parked update reports the reason on the Service", func(t *testing.T) {
 		dt, recorder := newTracker("svc-parked-update")
-		dt.pendingServiceOps["svc-parked-update"].State = StateUpdateInProgress
+		dt.pendingServiceOps[inboundServiceName("svc-parked-update")].State = StateUpdateInProgress
 		completeWithin(t, dt, "svc-parked-update", newTerminalError(errors.New("unsupported protocol SCTP")))
 
-		assert.True(t, dt.pendingServiceOps["svc-parked-update"].CreationFailedTerminal)
+		assert.True(t, dt.pendingServiceOps[inboundServiceName("svc-parked-update")].CreationFailedTerminal)
 		select {
 		case event := <-recorder.Events:
 			assert.Contains(t, event, "ServiceGatewayConfigurationRejected")
@@ -1871,7 +2301,7 @@ func TestOnServiceCreationComplete_TerminalParkEmitsWarningEvent(t *testing.T) {
 		dt, recorder := newTracker("svc-transient")
 		completeWithin(t, dt, "svc-transient", errors.New("throttled, try again"))
 
-		assert.False(t, dt.pendingServiceOps["svc-transient"].CreationFailedTerminal)
+		assert.False(t, dt.pendingServiceOps[inboundServiceName("svc-transient")].CreationFailedTerminal)
 		select {
 		case event := <-recorder.Events:
 			t.Fatalf("a retryable failure must not raise an Event, got %q", event)
@@ -1898,72 +2328,105 @@ func TestPublicEntryPointsAlwaysReleaseLock(t *testing.T) {
 		run  func(dt *DiffTracker)
 	}{
 		{"AddService invalid config", func(dt *DiffTracker) {
-			dt.AddService(ServiceConfig{})
+			assert.Error(t, dt.AddService(ServiceConfig{}))
 		}},
 		{"AddService LB already in NRP", func(dt *DiffTracker) {
 			dt.NRPResources.LoadBalancers.Insert(uid)
-			dt.AddService(inbound())
+			assert.NoError(t, dt.AddService(inbound()))
 		}},
 		{"AddService NAT already in NRP", func(dt *DiffTracker) {
 			dt.NRPResources.NATGateways.Insert(uid)
-			dt.AddService(NewOutboundServiceConfig(uid, nil))
+			assert.NoError(t, dt.AddService(NewOutboundServiceConfig(uid, nil)))
 		}},
 		{"AddService already tracked", func(dt *DiffTracker) {
-			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateCreated}
-			dt.AddService(inbound())
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceName: uid, Config: inbound(), State: StateCreated}
+			assert.NoError(t, dt.AddService(inbound()))
 		}},
 		{"AddService creates", func(dt *DiffTracker) {
-			dt.AddService(inbound())
+			assert.NoError(t, dt.AddService(inbound()))
 		}},
 		{"UpdateService invalid config", func(dt *DiffTracker) {
-			dt.UpdateService(ServiceConfig{})
+			assert.Error(t, dt.UpdateService(ServiceConfig{}))
 		}},
 		{"UpdateService outbound is ignored", func(dt *DiffTracker) {
-			dt.UpdateService(NewOutboundServiceConfig(uid, nil))
+			assert.NoError(t, dt.UpdateService(NewOutboundServiceConfig(uid, nil)))
 		}},
 		{"UpdateService untracked delegates to add", func(dt *DiffTracker) {
-			dt.UpdateService(inbound())
+			defer assertUpdateServiceLocks(t, dt,
+				"Delegated untracked service update to add", "Added service request",
+				"Skipped endpoint cache replay because dependencies are unavailable", "Sent service updater trigger")()
+			assert.NoError(t, dt.UpdateService(inbound()))
+		}},
+		{"UpdateService name reserved before delegated add", func(dt *DiffTracker) {
+			dt.logger = funcr.New(func(_, message string) {
+				if strings.Contains(message, "Delegated untracked service update to add") {
+					if !dt.mu.TryLock() {
+						t.Error("delegation must release the state lock")
+						return
+					}
+					dt.NRPResources.ReservedOutboundServices = utilsets.NewString(uid)
+					dt.mu.Unlock()
+				}
+			}, funcr.Options{Verbosity: 5})
+			assert.ErrorContains(t, dt.UpdateService(inbound()), "reserved")
+			assert.NotContains(t, dt.pendingServiceOps, uid)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+		}},
+		{"UpdateService reserved name", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt)()
+			dt.NRPResources.ReservedOutboundServices = utilsets.NewString(uid)
+			assert.ErrorContains(t, dt.UpdateService(inbound()), "reserved")
+			assert.NotContains(t, dt.pendingServiceOps, uid)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
 		}},
 		{"UpdateService untracked but in NRP", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt,
+				"Created tracking entry for existing service update", "Sent service updater trigger")()
 			dt.NRPResources.LoadBalancers.Insert(uid)
-			dt.UpdateService(inbound())
+			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
 		{"UpdateService parked with unchanged spec", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt, "Skipped parked service with unchanged spec")()
 			dt.pendingServiceOps[uid] = &ServiceOperationState{
-				ServiceUID: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
+				ServiceName: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
 			}
-			dt.UpdateService(inbound())
+			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
 		{"UpdateService parked with changed spec", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt,
+				"Reattempted service creation after terminal failure and spec change", "Sent service updater trigger")()
 			dt.pendingServiceOps[uid] = &ServiceOperationState{
-				ServiceUID: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
+				ServiceName: uid, Config: inbound(), State: StateNotStarted, CreationFailedTerminal: true,
 			}
 			changed := NewInboundServiceConfig(uid, &InboundConfig{
 				FrontendPorts: []PortMapping{{Port: 443, Protocol: "TCP"}},
 				BackendPorts:  []PortMapping{{Port: 8443, Protocol: "TCP"}},
 			})
-			dt.UpdateService(changed)
+			assert.NoError(t, dt.UpdateService(changed))
 		}},
 		{"UpdateService created and unchanged", func(dt *DiffTracker) {
+			defer assertUpdateServiceLocks(t, dt, "Skipped unchanged service config")()
 			applied := inbound()
 			dt.pendingServiceOps[uid] = &ServiceOperationState{
-				ServiceUID: uid, Config: applied, LastAppliedConfig: &applied, State: StateCreated,
+				ServiceName: uid, Config: applied, LastAppliedConfig: &applied, State: StateCreated,
 			}
-			dt.UpdateService(inbound())
+			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
 		{"UpdateService while deleting", func(dt *DiffTracker) {
-			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateDeletionInProgress}
-			dt.UpdateService(inbound())
+			defer assertUpdateServiceLocks(t, dt,
+				"Skipped endpoint cache replay because dependencies are unavailable", "Buffered service recreate intent during deletion")()
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceName: uid, Config: inbound(), State: StateDeletionInProgress}
+			assert.NoError(t, dt.UpdateService(inbound()))
 		}},
 		{"DeleteService untracked", func(dt *DiffTracker) {
 			dt.DeleteService(uid, true, false)
 		}},
 		{"DeleteService tracked", func(dt *DiffTracker) {
-			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateCreated}
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceName: uid, Config: inbound(), State: StateCreated}
 			dt.DeleteService(uid, true, false)
 		}},
 		{"DeleteService already deleting", func(dt *DiffTracker) {
-			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceUID: uid, Config: inbound(), State: StateDeletionInProgress}
+			dt.pendingServiceOps[uid] = &ServiceOperationState{ServiceName: uid, Config: inbound(), State: StateDeletionInProgress}
 			dt.DeleteService(uid, true, false)
 		}},
 		{"UpdateEndpoints untracked", func(dt *DiffTracker) {

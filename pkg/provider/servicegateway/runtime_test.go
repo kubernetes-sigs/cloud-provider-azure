@@ -215,10 +215,11 @@ func TestRegisterInformers_DeliversEndpointSliceEventsToTracker(t *testing.T) {
 	defer ctrl.Finish()
 
 	const (
-		serviceUID = "svc-informer-probe"
-		nodeName   = "node-informer-probe"
-		nodeIP     = "10.0.0.42"
-		podIP      = "10.244.0.42"
+		serviceUID  = "svc-informer-probe"
+		serviceName = serviceUID + "-lb"
+		nodeName    = "node-informer-probe"
+		nodeIP      = "10.0.0.42"
+		podIP       = "10.244.0.42"
 	)
 
 	node := &v1.Node{
@@ -232,12 +233,12 @@ func TestRegisterInformers_DeliversEndpointSliceEventsToTracker(t *testing.T) {
 	tracker, err := difftracker.New(
 		logr.Discard(),
 		difftracker.K8sState{
-			Services: utilsets.NewString(serviceUID),
+			Services: utilsets.NewString(serviceName),
 			Egresses: utilsets.NewString(),
 			Nodes:    map[string]difftracker.Node{},
 		},
 		difftracker.NRPState{
-			LoadBalancers: utilsets.NewString(serviceUID),
+			LoadBalancers: utilsets.NewString(serviceName),
 			NATGateways:   utilsets.NewString(),
 			Locations:     map[string]difftracker.NRPLocation{},
 		},

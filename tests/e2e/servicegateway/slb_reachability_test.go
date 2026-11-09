@@ -331,17 +331,31 @@ var _ = Describe("SLB - Multi-Service Provisioning", Label(slbTestLabel), func()
 				if err != nil {
 					return fmt.Errorf("query Service Gateway address locations: %w", err)
 				}
-				counts := make(map[string]int)
-				for _, loc := range alResponse.Value {
-					for _, addr := range loc.Addresses {
-						for _, s := range addr.Services {
-							counts[s]++
+				registered := make(map[string]map[string]struct{})
+				for _, location := range alResponse.Value {
+					if strings.EqualFold(location.AddressUpdateAction, "Delete") {
+						continue
+					}
+					for _, address := range location.Addresses {
+						for _, name := range address.Services {
+							if registered[name] == nil {
+								registered[name] = make(map[string]struct{})
+							}
+							registered[name][address.Address] = struct{}{}
 						}
 					}
 				}
 				for i := range services {
-					if counts[services[i].uid] != podsPerSvc {
-						return fmt.Errorf("service %s has %d registered pods, want %d", services[i].name, counts[services[i].uid], podsPerSvc)
+					want, podCount, err := livePodIPsFor(cs, ns.Name, services[i].name)
+					if err != nil {
+						return err
+					}
+					if podCount != podsPerSvc {
+						return fmt.Errorf("service %s has %d Ready pods, want %d", services[i].name, podCount, podsPerSvc)
+					}
+					name := inboundServiceName(services[i].uid)
+					if err := registeredAddressSetsMatchErr(name, registered[name], want); err != nil {
+						return err
 					}
 				}
 				return nil
@@ -369,7 +383,7 @@ var _ = Describe("SLB - Multi-Service Provisioning", Label(slbTestLabel), func()
 			// Verify each service has a PIP and collect external IPs
 			serviceExternalIPs := make(map[int]string)
 			for i, svc := range services {
-				expectedPIPName := fmt.Sprintf("%s-pip", svc.uid)
+				expectedPIPName := inboundServiceName(svc.uid) + "-pip"
 				ipAddr, found := pipMap[expectedPIPName]
 				Expect(found).To(BeTrue(), fmt.Sprintf("Service %s should have PIP: %s", svc.name, expectedPIPName))
 				Expect(ipAddr).NotTo(BeEmpty(), fmt.Sprintf("PIP %s should have an IP address", expectedPIPName))
@@ -386,7 +400,6 @@ var _ = Describe("SLB - Multi-Service Provisioning", Label(slbTestLabel), func()
 
 			utils.Logf("Found %d services in Service Gateway", len(sgResponse.Value))
 
-			// Verify each service UID is registered (excluding default outbound service)
 			registeredUIDs := make(map[string]bool)
 			for _, sgSvc := range sgResponse.Value {
 				if sgSvc.Name != "default-natgw" {
@@ -395,7 +408,7 @@ var _ = Describe("SLB - Multi-Service Provisioning", Label(slbTestLabel), func()
 			}
 
 			for _, svc := range services {
-				Expect(registeredUIDs[svc.uid]).To(BeTrue(),
+				Expect(registeredUIDs[inboundServiceName(svc.uid)]).To(BeTrue(),
 					fmt.Sprintf("Service %s (UID: %s) should be registered in Service Gateway", svc.name, svc.uid))
 			}
 			utils.Logf("  ✓ All %d services registered in Service Gateway", numServices)
