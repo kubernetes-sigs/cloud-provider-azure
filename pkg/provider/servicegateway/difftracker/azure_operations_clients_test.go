@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -52,38 +54,73 @@ func notFoundError() error {
 	return &azcore.ResponseError{StatusCode: http.StatusNotFound}
 }
 
-func TestCreateOrUpdatePIP_Mock(t *testing.T) {
-	pip := &armnetwork.PublicIPAddress{Name: ptr.To("svc-pip")}
+func TestCreateOrUpdateManagedPublicIP_Mock(t *testing.T) {
+	pip := armnetwork.PublicIPAddress{Name: ptr.To("svc-lb-pip")}
 
 	t.Run("success", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
-		// Pin the builder -> client seam (see TestCreateOrUpdateLB_Mock).
+		read := mockPIP.EXPECT().Get(ctx, "rg", "svc-lb-pip", nil).Return(nil, notFoundError()).Times(1)
+		response := &armnetwork.PublicIPAddress{
+			Name: pip.Name,
+			Properties: &armnetwork.PublicIPAddressPropertiesFormat{
+				IPAddress: ptr.To("192.0.2.10"),
+			},
+		}
 		var sent armnetwork.PublicIPAddress
-		mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-pip", gomock.Any()).
+		mockPIP.EXPECT().CreateOrUpdate(ctx, "rg", "svc-lb-pip", gomock.Any()).
 			DoAndReturn(func(_ context.Context, _, _ string, got armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
 				sent = got
-				return pip, nil
-			})
+				return response, nil
+			}).After(read)
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.NoError(t, dt.createOrUpdatePIP(context.Background(), "rg", pip))
-		assert.Equal(t, *pip, sent, "the Public IP sent to Azure must be the one the caller built")
+		result, err := dt.createOrUpdateManagedPublicIP(ctx, pip)
+		assert.NoError(t, err)
+		assert.Equal(t, pip, sent, "the Public IP sent to Azure must be the one the caller built")
+		assert.Same(t, response, result)
 	})
 
 	t.Run("error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
-		mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-pip", gomock.Any()).Return(nil, errors.New("boom"))
+		read := mockPIP.EXPECT().Get(ctx, "rg", "svc-lb-pip", nil).Return(nil, notFoundError()).Times(1)
+		writeErr := errors.New("boom")
+		mockPIP.EXPECT().CreateOrUpdate(ctx, "rg", "svc-lb-pip", pip).Return(nil, writeErr).After(read)
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.Error(t, dt.createOrUpdatePIP(context.Background(), "rg", pip))
+		result, err := dt.createOrUpdateManagedPublicIP(ctx, pip)
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, writeErr)
+	})
+
+	t.Run("unowned outbound PIP remains an egress rejection", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		factory := mock_azclient.NewMockClientFactory(ctrl)
+		client := mock_publicipaddressclient.NewMockInterface(ctrl)
+		factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+		client.EXPECT().Get(gomock.Any(), "rg", "svc-natgw-pip", nil).
+			Return(&armnetwork.PublicIPAddress{Etag: ptr.To(`W/"external"`)}, nil).Times(1)
+
+		dt := &DiffTracker{networkClientFactory: factory, config: testConfig()}
+		result, err := dt.createOrUpdateManagedPublicIP(context.Background(), armnetwork.PublicIPAddress{
+			Name: ptr.To("svc-natgw-pip"), Tags: managedResourceTags(),
+		})
+
+		assert.Nil(t, result)
+		assert.ErrorContains(t, err, "not marked as CCM-managed")
+		assert.True(t, isEgressRejected(err))
+		assert.False(t, isTerminalError(err))
 	})
 }
 
@@ -94,10 +131,10 @@ func TestDeletePublicIP_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
-		mockPIP.EXPECT().Delete(gomock.Any(), "rg", "svc-pip").Return(nil)
+		mockPIP.EXPECT().Delete(gomock.Any(), "rg", "svc-lb-pip").Return(nil)
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.NoError(t, dt.deletePublicIP(context.Background(), "rg", "svc-pip"))
+		assert.NoError(t, dt.deletePublicIP(context.Background(), "rg", "svc-lb-pip"))
 	})
 
 	t.Run("not-found is success", func(t *testing.T) {
@@ -106,10 +143,10 @@ func TestDeletePublicIP_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
-		mockPIP.EXPECT().Delete(gomock.Any(), "rg", "svc-pip").Return(notFoundError())
+		mockPIP.EXPECT().Delete(gomock.Any(), "rg", "svc-lb-pip").Return(notFoundError())
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.NoError(t, dt.deletePublicIP(context.Background(), "rg", "svc-pip"))
+		assert.NoError(t, dt.deletePublicIP(context.Background(), "rg", "svc-lb-pip"))
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -118,10 +155,10 @@ func TestDeletePublicIP_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
-		mockPIP.EXPECT().Delete(gomock.Any(), "rg", "svc-pip").Return(errors.New("boom"))
+		mockPIP.EXPECT().Delete(gomock.Any(), "rg", "svc-lb-pip").Return(errors.New("boom"))
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.Error(t, dt.deletePublicIP(context.Background(), "rg", "svc-pip"))
+		assert.Error(t, dt.deletePublicIP(context.Background(), "rg", "svc-lb-pip"))
 	})
 
 	t.Run("empty name", func(t *testing.T) {
@@ -130,8 +167,172 @@ func TestDeletePublicIP_Mock(t *testing.T) {
 	})
 }
 
+func TestDeleteOwnedPublicIP(t *testing.T) {
+	const identity = "payments"
+	for _, pipName := range []string{"payments-lb-pip", "payments-natgw-pip", "payments-natgw-pip-v6"} {
+		t.Run(pipName, func(t *testing.T) {
+			managedMarker := consts.ServiceGatewayManagedTagValue
+			owned := &armnetwork.PublicIPAddress{
+				Name: ptr.To(pipName), Etag: ptr.To(`W/"pip-version"`),
+				Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(managedMarker)},
+			}
+			withETag := func(etag *string) *armnetwork.PublicIPAddress {
+				pip := *owned
+				pip.Etag = etag
+				return &pip
+			}
+			readFailure := &azcore.ResponseError{StatusCode: http.StatusForbidden}
+			deleteFailure := &azcore.ResponseError{StatusCode: http.StatusConflict}
+			unknownPreconditionFailure := &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed}
+			for _, tc := range []struct {
+				name        string
+				pip         *armnetwork.PublicIPAddress
+				readErr     error
+				deleteErr   error
+				wantDelete  bool
+				wantDeleted bool
+				wantErr     error
+				wantErrText string
+			}{
+				{name: "owned", pip: owned, wantDelete: true, wantDeleted: true},
+				{name: "marker casing is not normalized", pip: &armnetwork.PublicIPAddress{
+					Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(strings.ToUpper(managedMarker))}}},
+				{name: "marker whitespace is not trimmed", pip: &armnetwork.PublicIPAddress{
+					Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(" " + managedMarker)}}},
+				{name: "missing ETag", pip: withETag(nil), wantErrText: "usable ETag"},
+				{name: "blank ETag", pip: withETag(ptr.To(" ")), wantErrText: "usable ETag"},
+				{name: "wildcard ETag", pip: withETag(ptr.To("*")), wantErrText: "usable ETag"},
+				{name: "untagged legacy", pip: &armnetwork.PublicIPAddress{}},
+				{name: "nil tag value", pip: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: nil}}},
+				{name: "empty tag value", pip: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("")}}},
+				{name: "unknown marker", pip: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("payroll")}}},
+				{name: "false marker", pip: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("false")}}},
+				{name: "old inbound marker", pip: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("inbound")}}},
+				{name: "old outbound marker", pip: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("outbound")}}},
+				{name: "old identity tags alone do not establish ownership", pip: &armnetwork.PublicIPAddress{
+					Tags: map[string]*string{"k8s-azure-egress-identity": ptr.To(identity), "k8s-azure-service-uid": ptr.To(identity)}}},
+				{name: "absent", readErr: notFoundError()},
+				{name: "read forbidden", readErr: readFailure, wantErr: readFailure},
+				{name: "read canceled", readErr: context.Canceled, wantErr: context.Canceled},
+				{name: "nil successful response", wantErrText: "returned no resource"},
+				{name: "delete failed", pip: owned, deleteErr: deleteFailure, wantDelete: true, wantErr: deleteFailure},
+				{name: "unproven precondition failure", pip: owned, deleteErr: unknownPreconditionFailure, wantDelete: true, wantErr: unknownPreconditionFailure},
+				{name: "deleted concurrently", pip: owned, deleteErr: notFoundError(), wantDelete: true, wantDeleted: true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					ctrl := gomock.NewController(t)
+					defer ctrl.Finish()
+					factory := mock_azclient.NewMockClientFactory(ctrl)
+					client := mock_publicipaddressclient.NewMockInterface(ctrl)
+					factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+					read := client.EXPECT().Get(gomock.Any(), "rg", pipName, nil).Return(tc.pip, tc.readErr).Times(1)
+					if tc.wantDelete {
+						client.EXPECT().Delete(gomock.Any(), "rg", pipName).Return(tc.deleteErr).After(read).Times(1)
+					}
+					dt := &DiffTracker{networkClientFactory: factory, config: testConfig()}
+					deleted, err := dt.deleteOwnedPublicIP(context.Background(), pipName)
+					assert.Equal(t, tc.wantDeleted, deleted)
+					switch {
+					case tc.wantErr != nil:
+						assert.ErrorIs(t, err, tc.wantErr)
+					case tc.wantErrText != "":
+						assert.ErrorContains(t, err, tc.wantErrText)
+					default:
+						assert.NoError(t, err)
+					}
+				})
+			}
+		})
+	}
+	t.Run("empty name", func(t *testing.T) {
+		dt := &DiffTracker{config: testConfig()}
+		deleted, err := dt.deleteOwnedPublicIP(context.Background(), "")
+		assert.False(t, deleted)
+		assert.ErrorContains(t, err, "pip name is empty")
+	})
+	assert.False(t, ownsPublicIP(nil))
+	assert.True(t, ownsPublicIP(&armnetwork.PublicIPAddress{Tags: managedResourceTags()}))
+	assert.False(t, ownsPublicIP(&armnetwork.PublicIPAddress{
+		Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown")}}))
+}
+
+func TestCreateInboundPublicIP_PreservesExistingOwnership(t *testing.T) {
+	const identity = "service-uid-lb"
+	readFailure := &azcore.ResponseError{StatusCode: http.StatusForbidden}
+	writeFailure := &azcore.ResponseError{StatusCode: http.StatusConflict}
+	ownedTags := map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(consts.ServiceGatewayManagedTagValue), "team": ptr.To("networking")}
+	foreignTags := map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown"), "team": ptr.To("customer")}
+	for _, tc := range []struct {
+		name        string
+		existing    *armnetwork.PublicIPAddress
+		readErr     error
+		writeErr    error
+		wantWrite   bool
+		wantErr     error
+		wantErrText string
+	}{
+		{name: "new address gets ownership", readErr: notFoundError(), wantWrite: true},
+		{name: "owned retry keeps all tags and ETag", existing: &armnetwork.PublicIPAddress{
+			Tags: ownedTags, Etag: ptr.To(`W/"existing"`),
+		}, wantWrite: true},
+		{name: "untagged address is rejected", existing: &armnetwork.PublicIPAddress{}, wantErrText: "not marked as CCM-managed"},
+		{name: "another owner is rejected", existing: &armnetwork.PublicIPAddress{Tags: foreignTags}, wantErrText: "not marked as CCM-managed"},
+		{name: "empty marker is rejected", existing: &armnetwork.PublicIPAddress{
+			Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("")},
+		}, wantErrText: "not marked as CCM-managed"},
+		{name: "nil marker is rejected", existing: &armnetwork.PublicIPAddress{
+			Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: nil},
+		}, wantErrText: "not marked as CCM-managed"},
+		{name: "managed marker is preserved", existing: &armnetwork.PublicIPAddress{Tags: managedResourceTags()}, wantWrite: true},
+		{name: "unrelated tags do not establish ownership", existing: &armnetwork.PublicIPAddress{
+			Tags: map[string]*string{"team": ptr.To("customer")},
+		}, wantErrText: "not marked as CCM-managed"},
+		{name: "read failed", readErr: readFailure, wantErr: readFailure},
+		{name: "read canceled", readErr: context.Canceled, wantErr: context.Canceled},
+		{name: "nil successful response", wantErrText: "returned no resource"},
+		{name: "write failed", readErr: notFoundError(), writeErr: writeFailure, wantWrite: true, wantErr: writeFailure},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pip, _, _, err := buildInboundServiceResources(identity, nil, testConfig())
+			if !assert.NoError(t, err) {
+				return
+			}
+			expected := pip
+			if tc.existing != nil {
+				expected.Tags = tc.existing.Tags
+				expected.Etag = tc.existing.Etag
+			}
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			client := mock_publicipaddressclient.NewMockInterface(ctrl)
+			factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+			read := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(tc.existing, tc.readErr).Times(1)
+			if tc.wantWrite {
+				client.EXPECT().CreateOrUpdate(gomock.Any(), "rg", PublicIPName(identity), expected).
+					Return(&expected, tc.writeErr).After(read).Times(1)
+			}
+			dt := &DiffTracker{networkClientFactory: factory, config: testConfig()}
+			result, err := dt.createOrUpdateManagedPublicIP(context.Background(), pip)
+			switch {
+			case tc.wantErr != nil:
+				assert.ErrorIs(t, err, tc.wantErr)
+			case tc.wantErrText != "":
+				assert.ErrorContains(t, err, tc.wantErrText)
+				assert.Nil(t, result)
+				assert.False(t, isEgressRejected(err))
+				assert.False(t, isTerminalError(err))
+			default:
+				assert.NoError(t, err)
+				assert.Equal(t, &expected, result)
+			}
+			assert.Equal(t, consts.ServiceGatewayManagedTagValue, derefString(pip.Tags[consts.ServiceGatewayManagedTagKey]), "the caller's request must not be mutated")
+		})
+	}
+}
+
 func TestCreateOrUpdateLB_Mock(t *testing.T) {
-	lb := armnetwork.LoadBalancer{Name: ptr.To("svc")}
+	lb := armnetwork.LoadBalancer{Name: ptr.To("svc-lb")}
 
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -146,7 +347,7 @@ func TestCreateOrUpdateLB_Mock(t *testing.T) {
 		// backend pool, no rules) passed the entire unit suite, because every mock matched the
 		// payload with gomock.Any(). Pin that what the caller built is what is sent.
 		var sent armnetwork.LoadBalancer
-		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-lb", gomock.Any()).
 			DoAndReturn(func(_ context.Context, _, _ string, got armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
 				sent = got
 				return nil, nil
@@ -163,7 +364,7 @@ func TestCreateOrUpdateLB_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
-		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).Return(nil, errors.New("boom"))
+		mockLB.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-lb", gomock.Any()).Return(nil, errors.New("boom"))
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.Error(t, dt.createOrUpdateLB(context.Background(), lb))
@@ -182,10 +383,10 @@ func TestDeleteLB_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
-		mockLB.EXPECT().Delete(gomock.Any(), "rg", "uid").Return(nil)
+		mockLB.EXPECT().Delete(gomock.Any(), "rg", "uid-lb").Return(nil)
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.NoError(t, dt.deleteLB(context.Background(), "uid"))
+		assert.NoError(t, dt.deleteLB(context.Background(), "uid-lb"))
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -194,15 +395,15 @@ func TestDeleteLB_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
-		mockLB.EXPECT().Delete(gomock.Any(), "rg", "uid").Return(errors.New("boom"))
+		mockLB.EXPECT().Delete(gomock.Any(), "rg", "uid-lb").Return(errors.New("boom"))
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.Error(t, dt.deleteLB(context.Background(), "uid"))
+		assert.Error(t, dt.deleteLB(context.Background(), "uid-lb"))
 	})
 }
 
 func TestCreateOrUpdateNatGateway_Mock(t *testing.T) {
-	natGW := armnetwork.NatGateway{Name: ptr.To("svc")}
+	natGW := armnetwork.NatGateway{Name: ptr.To("svc-natgw")}
 
 	t.Run("success", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -213,7 +414,7 @@ func TestCreateOrUpdateNatGateway_Mock(t *testing.T) {
 		// Pin the builder -> client seam (see TestCreateOrUpdateLB_Mock): with gomock.Any() for the
 		// payload, replacing the caller's NAT gateway with an empty one was invisible.
 		var sent armnetwork.NatGateway
-		mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).
+		mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-natgw", gomock.Any()).
 			DoAndReturn(func(_ context.Context, _, _ string, got armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
 				sent = got
 				return nil, nil
@@ -230,7 +431,7 @@ func TestCreateOrUpdateNatGateway_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
-		mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc", gomock.Any()).Return(nil, errors.New("boom"))
+		mockNAT.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-natgw", gomock.Any()).Return(nil, errors.New("boom"))
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
 		assert.Error(t, dt.createOrUpdateNatGateway(context.Background(), "rg", natGW))
@@ -249,10 +450,10 @@ func TestDeleteNatGateway_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
-		mockNAT.EXPECT().Delete(gomock.Any(), "rg", "svc").Return(nil)
+		mockNAT.EXPECT().Delete(gomock.Any(), "rg", "svc-natgw").Return(nil)
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.NoError(t, dt.deleteNatGateway(context.Background(), "rg", "svc"))
+		assert.NoError(t, dt.deleteNatGateway(context.Background(), "rg", "svc-natgw"))
 	})
 
 	t.Run("error", func(t *testing.T) {
@@ -261,10 +462,10 @@ func TestDeleteNatGateway_Mock(t *testing.T) {
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
-		mockNAT.EXPECT().Delete(gomock.Any(), "rg", "svc").Return(errors.New("boom"))
+		mockNAT.EXPECT().Delete(gomock.Any(), "rg", "svc-natgw").Return(errors.New("boom"))
 
 		dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-		assert.Error(t, dt.deleteNatGateway(context.Background(), "rg", "svc"))
+		assert.Error(t, dt.deleteNatGateway(context.Background(), "rg", "svc-natgw"))
 	})
 
 	t.Run("empty name", func(t *testing.T) {
@@ -277,7 +478,7 @@ func TestUpdateNRPSGWServices_Mock(t *testing.T) {
 	servicesDTO := ServicesDataDTO{
 		Action: PartialUpdate,
 		Services: []ServiceDTO{
-			{Service: "svc", ServiceType: Inbound, IsDelete: true},
+			{Service: "svc-lb", ServiceType: Inbound, IsDelete: true},
 		},
 	}
 
@@ -311,7 +512,7 @@ func TestUpdateNRPSGWServices_Mock(t *testing.T) {
 				assert.True(t, *sr.IsDelete, "the deletion flag must survive the DTO conversion")
 			}
 			if assert.NotNil(t, sr.Service) && assert.NotNil(t, sr.Service.Name) {
-				assert.Equal(t, "svc", *sr.Service.Name, "the request must name the service the caller asked for")
+				assert.Equal(t, "svc-lb", *sr.Service.Name, "the request must name the service the caller asked for")
 			}
 		}
 	})
@@ -400,7 +601,7 @@ func TestUpdateNRPSGWAddressLocations_Mock(t *testing.T) {
 			{
 				Location:            "node1",
 				AddressUpdateAction: PartialUpdate,
-				Addresses:           []AddressDTO{{Address: "10.244.0.7", ServiceNames: utilsets.NewString("svc")}},
+				Addresses:           []AddressDTO{{Address: "10.244.0.7", ServiceNames: utilsets.NewString("svc-lb")}},
 			},
 		},
 	}
@@ -491,9 +692,7 @@ func TestUpdateNRPSGWAddressLocations_Mock(t *testing.T) {
 	})
 }
 
-func TestDisassociateNatGatewayFromServiceGateway_Mock(t *testing.T) {
-	// Simplest reconcile path: no matching SGW service to clear, and the NAT
-	// gateway is already gone (404) -> method returns nil.
+func TestUnlinkNatGateway_Mock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
@@ -502,11 +701,13 @@ func TestDisassociateNatGatewayFromServiceGateway_Mock(t *testing.T) {
 	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
 	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 
-	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{}, nil)
-	mockNAT.EXPECT().Get(gomock.Any(), "rg", "svc", gomock.Any()).Return(nil, notFoundError())
+	mockNAT.EXPECT().Get(gomock.Any(), "rg", "svc-natgw", gomock.Any()).Return(nil, notFoundError())
 
 	dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
-	assert.NoError(t, dt.disassociateNatGatewayFromServiceGateway(context.Background(), "sgw", "svc"))
+	exists, canManage, err := dt.unlinkNatGateway(context.Background(), "sgw", "svc-natgw", "rg", "svc-natgw")
+	assert.NoError(t, err)
+	assert.False(t, exists)
+	assert.True(t, canManage)
 }
 
 func TestConvertServicesUpdateActionToARM(t *testing.T) {
@@ -634,12 +835,15 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	// A single detached PIP (no IPConfiguration) that no Kubernetes object or NRP entry claims.
 	// List returns a NON-NIL slice: init must reuse it and never call List again, which is what
 	// the Times(1) below pins. The PIP is an orphan, so the sweep deletes it.
-	const orphanPIP = "leftover-pip"
+	const orphanPIP = "leftover-natgw-pip"
 	pips := []*armnetwork.PublicIPAddress{{
 		Name:       ptr.To(orphanPIP),
+		Etag:       ptr.To(`W/"pip-version"`),
+		Tags:       managedResourceTags(),
 		Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 	}}
 	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(pips, nil).Times(1)
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", orphanPIP, nil).Return(pips[0], nil).Times(1)
 	mockPIP.EXPECT().Delete(gomock.Any(), "rg", orphanPIP).Return(nil).Times(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -650,54 +854,99 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	assert.NotNil(t, dt)
 }
 
-// TestARMPrimitivesDoNotHoldStateLock enforces the package concurrency invariant: ARM
-// primitives never hold dt.mu across I/O. It blocks inside an in-flight ARM call and
-// asserts dt.mu is still acquirable; a regression that took the state lock around an ARM
-// call would serialize state access behind network latency and deadlock this test.
 func TestARMPrimitivesDoNotHoldStateLock(t *testing.T) {
+	for _, phase := range []string{"read", "write"} {
+		t.Run(phase, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			inARM := make(chan struct{})
+			releaseARM := make(chan struct{})
+			block := func() {
+				close(inARM)
+				<-releaseARM
+			}
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+			mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+			read := mockPIP.EXPECT().Get(gomock.Any(), "rg", "svc-lb-pip", nil).
+				DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.PublicIPAddress, error) {
+					if phase == "read" {
+						block()
+					}
+					return nil, notFoundError()
+				}).Times(1)
+			mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "svc-lb-pip", gomock.Any()).
+				DoAndReturn(func(context.Context, string, string, armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+					if phase == "write" {
+						block()
+					}
+					return &armnetwork.PublicIPAddress{Name: ptr.To("svc-lb-pip")}, nil
+				}).After(read)
+
+			dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+			armDone := make(chan struct{})
+			var callErr error
+			defer func() {
+				close(releaseARM)
+				select {
+				case <-armDone:
+					assert.NoError(t, callErr)
+				case <-time.After(2 * time.Second):
+					t.Error("Public IP upsert did not finish after releasing the ARM call")
+				}
+			}()
+			go func() {
+				defer close(armDone)
+				_, callErr = dt.createOrUpdateManagedPublicIP(context.Background(), armnetwork.PublicIPAddress{Name: ptr.To("svc-lb-pip")})
+			}()
+
+			select {
+			case <-inARM:
+			case <-armDone:
+				t.Fatalf("Public IP upsert returned before the ARM %s: %v", phase, callErr)
+			case <-time.After(2 * time.Second):
+				t.Fatalf("Public IP upsert did not reach the ARM %s", phase)
+			}
+
+			if !dt.mu.TryLock() {
+				t.Fatal("dt.mu was held during an in-flight ARM call")
+			}
+			dt.mu.Unlock()
+		})
+	}
+}
+
+func TestBuildNRPState_RecordsUnmanagedNATGateways(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-
-	inARM := make(chan struct{})
-	releaseARM := make(chan struct{})
-
 	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
-	mockPIP.EXPECT().
-		CreateOrUpdate(gomock.Any(), "rg", "svc-pip", gomock.Any()).
-		DoAndReturn(func(context.Context, string, string, armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
-			close(inARM)
-			<-releaseARM
-			return &armnetwork.PublicIPAddress{Name: ptr.To("svc-pip")}, nil
-		})
 
-	dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
+		Name: ptr.To("default-natgw"),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), IsDefault: ptr.To(true),
+			PublicNatGatewayID: ptr.To("/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/natGateways/dflt")},
+	}, {
+		// Restarted between the two unlink steps: registered, but its NAT Gateway ID already cleared.
+		Name:       ptr.To("byo-natgw"),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound)},
+	}}, nil)
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil)
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.NatGateway{{Name: ptr.To("byo-nat"), Properties: &armnetwork.NatGatewayPropertiesFormat{}}}, nil)
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 
-	armDone := make(chan struct{})
-	go func() {
-		_ = dt.createOrUpdatePIP(context.Background(), "rg", &armnetwork.PublicIPAddress{Name: ptr.To("svc-pip")})
-		close(armDone)
-	}()
-
-	<-inARM // ARM call is now in flight
-
-	locked := make(chan struct{})
-	go func() {
-		dt.mu.Lock()
-		_ = dt.NRPResources // touch lock-guarded state
-		dt.mu.Unlock()
-		close(locked)
-	}()
-
-	select {
-	case <-locked:
-	case <-time.After(2 * time.Second):
-		close(releaseARM)
-		<-armDone
-		t.Fatal("dt.mu was held during an in-flight ARM call; ARM primitives must not hold the state lock across I/O")
+	nrp, _, _, _, _, err := buildNRPState(context.Background(), testConfig(), mockFactory)
+	if assert.NoError(t, err) && assert.NotNil(t, nrp.UnmanagedNATGateways) {
+		assert.ElementsMatch(t, []string{"default-natgw", "dflt", "byo-nat"}, nrp.UnmanagedNATGateways.UnsortedList())
+		assert.Empty(t, nrp.OutboundNATGatewayIDs["byo-natgw"], "nothing names the NAT Gateway of an interrupted unlink")
 	}
-
-	close(releaseARM)
-	<-armDone
 }

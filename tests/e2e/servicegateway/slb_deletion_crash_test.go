@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
@@ -188,7 +188,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 				return fmt.Errorf("found %d inbound services, want at least %d", inboundCount, serviceCount)
 			}
 			for _, serviceUID := range serviceUIDs {
-				if err := serviceReconciledErr(serviceUID, 1); err != nil {
+				if err := servicePodsReconciledErr(cs, ns.Name, serviceUID, 1); err != nil {
 					return err
 				}
 			}
@@ -380,7 +380,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 			}
 
 			for _, svc := range sgResponse.Value {
-				if svc.Name == egressName && svc.Properties.ServiceType == "Outbound" {
+				if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
 					natGatewayID = svc.Properties.PublicNatGatewayID
 					if natGatewayID == "" {
 						return fmt.Errorf("NAT Gateway should be provisioned")
@@ -477,7 +477,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 
 		foundEgress := false
 		for _, svc := range sgResponse.Value {
-			if svc.Name == egressName && svc.Properties.ServiceType == "Outbound" {
+			if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
 				foundEgress = true
 				utils.Logf("WARNING: Egress service %s still in SGW", egressName)
 				break
@@ -606,7 +606,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 			for _, svc := range sgResponse.Value {
 				if svc.Properties.ServiceType == "Inbound" {
 					inboundCount++
-				} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw" {
+				} else if svc.Properties.ServiceType == "Outbound" && !isDefaultOutboundService(svc) {
 					outboundCount++
 				}
 			}
@@ -618,11 +618,11 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 				return fmt.Errorf("found %d non-default outbound services, want at least 1", outboundCount)
 			}
 			for _, serviceUID := range serviceUIDs {
-				if err := serviceReconciledErr(serviceUID, 1); err != nil {
+				if err := servicePodsReconciledErr(cs, ns.Name, serviceUID, 1); err != nil {
 					return err
 				}
 			}
-			if err := egressRegisteredErr(egressName, egressPodCount); err != nil {
+			if err := egressPodsRegisteredErr(cs, ns.Name, egressName, egressPodCount); err != nil {
 				return err
 			}
 			return nil
@@ -737,7 +737,7 @@ var _ = Describe("Container Load Balancer Deletion Crash Recovery Tests", Label(
 			if svc.Properties.ServiceType == "Inbound" {
 				inboundCount++
 				utils.Logf("WARNING: Remaining inbound: %s", svc.Name)
-			} else if svc.Properties.ServiceType == "Outbound" && svc.Name != "default-natgw" {
+			} else if svc.Properties.ServiceType == "Outbound" && !isDefaultOutboundService(svc) {
 				outboundCount++
 				utils.Logf("WARNING: Remaining outbound: %s", svc.Name)
 			}
@@ -789,29 +789,15 @@ func countAzureLoadBalancers() (int, error) {
 		return 0, fmt.Errorf("failed to list Load Balancers: %w", err)
 	}
 
-	var lbs []map[string]interface{}
+	var lbs []AzureLoadBalancer
 	if err := json.Unmarshal(output, &lbs); err != nil {
 		return 0, fmt.Errorf("failed to parse LB JSON: %w", err)
 	}
 
-	// SLB Load Balancers are named with service UIDs (36-char lowercase UUIDs)
-	// Exclude AKS-managed LBs like "kubernetes", "kubernetes-internal"
 	slbCount := 0
 	for _, lb := range lbs {
-		name, _ := lb["name"].(string)
-		// SLB LBs are named with service UIDs: 36 chars, 4 dashes, all lowercase hex
-		if len(name) == 36 && strings.Count(name, "-") == 4 {
-			// Additional check: verify it looks like a UUID (all lowercase hex + dashes)
-			isUUID := true
-			for _, c := range name {
-				if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || c == '-') {
-					isUUID = false
-					break
-				}
-			}
-			if isUUID {
-				slbCount++
-			}
+		if lb.SKU.Name == "Service" {
+			slbCount++
 		}
 	}
 
@@ -827,23 +813,14 @@ func countAzurePublicIPs() (int, error) {
 		return 0, fmt.Errorf("failed to list Public IPs: %w", err)
 	}
 
-	var pips []map[string]interface{}
+	var pips []AzurePublicIP
 	if err := json.Unmarshal(output, &pips); err != nil {
 		return 0, fmt.Errorf("failed to parse PIP JSON: %w", err)
 	}
 
-	// SLB PIPs are named with service UIDs (36-char UUIDs) for inbound services
-	// NAT Gateway PIPs are named with egress name + "-pip" (e.g., "default-natgw-pip")
-	// We count both types but exclude non-SLB PIPs
 	slbPIPCount := 0
 	for _, pip := range pips {
-		name, _ := pip["name"].(string)
-		// SLB inbound service PIPs are just UUIDs (36 chars, 4 dashes)
-		if len(name) == 36 && strings.Count(name, "-") == 4 {
-			slbPIPCount++
-		}
-		// SLB NAT Gateway PIPs end with "-pip" (but exclude default-natgw-pip)
-		if strings.HasSuffix(name, "-pip") && name != "default-natgw-pip" {
+		if pip.Tags[consts.ServiceGatewayManagedTagKey] == consts.ServiceGatewayManagedTagValue {
 			slbPIPCount++
 		}
 	}
@@ -852,8 +829,7 @@ func countAzurePublicIPs() (int, error) {
 }
 
 // countAzureNATGateways counts the number of SLB-managed NAT Gateways in the resource group
-// SLB creates NAT Gateways named after the egress label value (e.g., namespace name)
-// The default NAT Gateway "default-natgw" is always excluded
+// BYO and RP-owned default NAT Gateways do not carry the CCM managed marker.
 func countAzureNATGateways() (int, error) {
 	output, err := runAz("network", "nat", "gateway", "list",
 		"--resource-group", resourceGroupName,
@@ -862,16 +838,16 @@ func countAzureNATGateways() (int, error) {
 		return 0, fmt.Errorf("failed to list NAT Gateways: %w", err)
 	}
 
-	var nats []map[string]interface{}
+	var nats []struct {
+		Tags map[string]string `json:"tags"`
+	}
 	if err := json.Unmarshal(output, &nats); err != nil {
 		return 0, fmt.Errorf("failed to parse NAT Gateway JSON: %w", err)
 	}
 
-	// Count all NAT Gateways except the default one
 	nonDefaultCount := 0
 	for _, nat := range nats {
-		name, _ := nat["name"].(string)
-		if name != "default-natgw" {
+		if nat.Tags[consts.ServiceGatewayManagedTagKey] == consts.ServiceGatewayManagedTagValue {
 			nonDefaultCount++
 		}
 	}

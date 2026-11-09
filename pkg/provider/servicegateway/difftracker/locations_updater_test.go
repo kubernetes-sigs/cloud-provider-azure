@@ -65,7 +65,7 @@ func TestLocationsUpdaterRetriesAfterSyncFailure(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -121,7 +121,7 @@ func TestLocationsUpdater_HungSyncTimesOutAndRecovers(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -204,7 +204,7 @@ func TestLocationsUpdater_TerminalErrorNotRetried(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -267,12 +267,12 @@ func TestLocationsUpdater_TerminalErrorStillDrainsUnrelatedDeletions(t *testing.
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("poison")
-	dt.pendingServiceOps["poison"] = &ServiceOperationState{ServiceUID: "poison", State: StateCreated}
+	dt.pendingServiceOps["poison"] = &ServiceOperationState{ServiceName: "poison", State: StateCreated}
 
 	// "innocent" is unrelated: it holds no NRP addresses at all, so its drain is already complete
 	// and CheckPendingServiceDeletions must promote it to StateDeletionInProgress.
-	dt.pendingServiceOps["innocent"] = &ServiceOperationState{ServiceUID: "innocent", State: StateDeletionPending}
-	dt.pendingServiceDeletions["innocent"] = &PendingServiceDeletion{ServiceUID: "innocent", IsInbound: true}
+	dt.pendingServiceOps["innocent"] = &ServiceOperationState{ServiceName: "innocent", State: StateDeletionPending}
+	dt.pendingServiceDeletions["innocent"] = &PendingServiceDeletion{ServiceName: "innocent", IsInbound: true}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -343,7 +343,7 @@ func TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError(t *testing.T)
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	// Put the tracker in the initializing state the real startup path uses.
 	dt.initCompletionChecker = make(chan struct{})
@@ -403,8 +403,8 @@ func TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending(t *testi
 		Addresses: map[string]NRPAddress{"10.0.0.1": {Services: utilsets.NewString("svc")}},
 	}
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateDeletionPending}
-	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceUID: "svc", IsInbound: true}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateDeletionPending}
+	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceName: "svc", IsInbound: true}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -455,8 +455,8 @@ func TestLocationsUpdater_DrainKeepsRetryingPastAttemptCap(t *testing.T) {
 		Addresses: map[string]NRPAddress{"10.0.0.1": {Services: utilsets.NewString("svc")}},
 	}
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateDeletionPending}
-	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceUID: "svc", IsInbound: true}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateDeletionPending}
+	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceName: "svc", IsInbound: true}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -492,11 +492,11 @@ func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
 	defer ctrl.Finish()
 
 	const (
-		nodeIP  = "10.0.0.1"
-		podIP   = "10.244.0.7"
-		svcUID  = "svc"
-		wantRG  = "rg"
-		wantSGW = "sgw"
+		nodeIP      = "10.0.0.1"
+		podIP       = "10.244.0.7"
+		serviceName = "svc"
+		wantRG      = "rg"
+		wantSGW     = "sgw"
 	)
 
 	captured := make(chan armnetwork.ServiceGatewayUpdateAddressLocationsRequest, 8)
@@ -516,12 +516,12 @@ func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
 	dt.config = testConfig()
 
 	pod := newPod()
-	pod.InboundIdentities = utilsets.NewString(svcUID)
+	pod.InboundIdentities = utilsets.NewString(serviceName)
 	node := newNode()
 	node.Pods[podIP] = pod
 	dt.K8sResources.Nodes[nodeIP] = node
-	dt.NRPResources.LoadBalancers.Insert(svcUID)
-	dt.pendingServiceOps[svcUID] = &ServiceOperationState{ServiceUID: svcUID, State: StateCreated}
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceName: serviceName, State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -564,7 +564,7 @@ func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
 			names = append(names, *n)
 		}
 	}
-	assert.Equal(t, []string{svcUID}, names,
+	assert.Equal(t, []string{serviceName}, names,
 		"the address must be attributed to the owning service, or NRP routes it for the wrong service")
 }
 
@@ -599,7 +599,7 @@ func TestLocationsUpdater_StopWaitsForInFlightSync(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	go lu.Run()

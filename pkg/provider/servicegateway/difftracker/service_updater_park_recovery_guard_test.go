@@ -44,13 +44,13 @@ import (
 
 // gatedByRetry reports whether the dispatcher would skip the operation this pass. It mirrors the
 // processBatch dispatch decision without spawning a worker goroutine.
-func gatedByRetry(su *ServiceUpdater, dt *DiffTracker, uid string) bool {
+func gatedByRetry(su *ServiceUpdater, dt *DiffTracker, serviceName string) bool {
 	su.mu.Lock()
-	su.activeOps[uid] = true
+	su.activeOps[serviceName] = true
 	su.mu.Unlock()
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	return su.retryGate(uid, dt.pendingServiceOps[uid])
+	return su.retryGate(serviceName, dt.pendingServiceOps[serviceName])
 }
 
 // TestGuardRetriesExhaustedPark_RecoveredBySpecChange verifies that a spec-changing UpdateService
@@ -60,11 +60,11 @@ func gatedByRetry(su *ServiceUpdater, dt *DiffTracker, uid string) bool {
 func TestGuardRetriesExhaustedPark_RecoveredBySpecChange(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked"
+	serviceName := "svc-parked"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateNotStarted,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
@@ -73,19 +73,21 @@ func TestGuardRetriesExhaustedPark_RecoveredBySpecChange(t *testing.T) {
 
 	// An unchanged-spec resync must NOT reset the park (it would defeat the backoff under a
 	// normal resync storm).
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
-	op := dt.pendingServiceOps[uid]
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(80))))
+	op := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, maxServiceRetries, op.RetryCount, "unchanged-spec resync must not reset the retry budget")
 	assert.True(t, op.RetriesExhausted, "unchanged-spec resync must leave the park intact")
-	assert.True(t, gatedByRetry(su, dt, uid), "the still-parked op must remain gated")
+	assert.Empty(t, dt.serviceUpdaterTrigger)
+	assert.True(t, gatedByRetry(su, dt, serviceName), "the still-parked op must remain gated")
 
 	// A spec change is fresh intent: the park must be cleared and the op dispatchable again.
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
-	op = dt.pendingServiceOps[uid]
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(8080))))
+	op = dt.pendingServiceOps[serviceName]
 	assert.Equal(t, 0, op.RetryCount, "a spec-changing resync must reset the retry budget")
 	assert.False(t, op.RetriesExhausted, "a spec-changing resync must clear the park")
 	assert.True(t, op.NextRetryAt.IsZero(), "a spec-changing resync must clear the backoff deadline")
-	assert.False(t, gatedByRetry(su, dt, uid), "the recovered op must no longer be gated by retryGate")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered create must notify the updater")
+	assert.False(t, gatedByRetry(su, dt, serviceName), "the recovered op must no longer be gated by retryGate")
 }
 
 // TestGuardRetriesExhaustedPark_RecoveredByDelete verifies that deleting a service whose create
@@ -95,24 +97,24 @@ func TestGuardRetriesExhaustedPark_RecoveredBySpecChange(t *testing.T) {
 func TestGuardRetriesExhaustedPark_RecoveredByDelete(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-delete"
+	serviceName := "svc-parked-delete"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateNotStarted,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
 		NextRetryAt:      time.Now().Add(time.Hour),
 	}
 
-	dt.DeleteService(uid, true, false)
+	dt.DeleteService(serviceName, true, false)
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, 0, op.RetryCount, "a delete must reset the inherited create retry budget")
 	assert.False(t, op.RetriesExhausted, "a delete must clear the inherited park")
 	assert.True(t, op.NextRetryAt.IsZero(), "a delete must clear the inherited backoff deadline")
-	assert.False(t, gatedByRetry(su, dt, uid), "the delete must be dispatchable, not gated by retryGate")
+	assert.False(t, gatedByRetry(su, dt, serviceName), "the delete must be dispatchable, not gated by retryGate")
 }
 
 // TestGuardRetriesExhaustedPark_CreateRecoversAfterCooldown verifies that a create which exhausted
@@ -123,23 +125,24 @@ func TestGuardRetriesExhaustedPark_RecoveredByDelete(t *testing.T) {
 func TestGuardRetriesExhaustedPark_CreateRecoversAfterCooldown(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-create-stable-spec"
+	serviceName := "svc-parked-create-stable-spec"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateNotStarted,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
 		NextRetryAt:      time.Now().Add(-time.Hour), // cooldown elapsed
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80))) // ordinary same-spec resync
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(80)))) // ordinary same-spec resync
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.RetriesExhausted, "a same-spec resync after the cooldown must clear the park")
 	assert.Equal(t, 0, op.RetryCount, "the retry budget must be reset so the create can be dispatched")
-	assert.False(t, gatedByRetry(su, dt, uid), "the recovered create must be dispatchable")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered create must notify the updater")
+	assert.False(t, gatedByRetry(su, dt, serviceName), "the recovered create must be dispatchable")
 }
 
 // TestGuardRetriesExhaustedPark_UpdateInProgressRecoversOnSpecChange verifies that an op which
@@ -149,23 +152,24 @@ func TestGuardRetriesExhaustedPark_CreateRecoversAfterCooldown(t *testing.T) {
 func TestGuardRetriesExhaustedPark_UpdateInProgressRecoversOnSpecChange(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-update"
+	serviceName := "svc-parked-update"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateUpdateInProgress,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
 		NextRetryAt:      time.Now().Add(-time.Hour),
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080))) // genuine spec change
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(8080)))) // genuine spec change
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.RetriesExhausted, "a spec change must clear a parked updating op")
 	assert.Equal(t, 0, op.RetryCount, "a spec change must reset the parked update retry budget")
-	assert.False(t, gatedByRetry(su, dt, uid), "the recovered update must be dispatchable")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered update must notify the updater")
+	assert.False(t, gatedByRetry(su, dt, serviceName), "the recovered update must be dispatchable")
 }
 
 // TestGuardRetriesExhaustedPark_UpdateRecoversAfterCooldown verifies that an op which exhausted its
@@ -175,11 +179,11 @@ func TestGuardRetriesExhaustedPark_UpdateInProgressRecoversOnSpecChange(t *testi
 func TestGuardRetriesExhaustedPark_UpdateRecoversAfterCooldown(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-update-stable-spec"
+	serviceName := "svc-parked-update-stable-spec"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateUpdateInProgress,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
@@ -187,18 +191,20 @@ func TestGuardRetriesExhaustedPark_UpdateRecoversAfterCooldown(t *testing.T) {
 	}
 
 	// While the cooldown is pending, a same-spec resync must leave the park intact.
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
-	op := dt.pendingServiceOps[uid]
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(80))))
+	op := dt.pendingServiceOps[serviceName]
 	assert.True(t, op.RetriesExhausted, "a same-spec resync within the cooldown must leave the park intact")
-	assert.True(t, gatedByRetry(su, dt, uid), "the still-parked update must remain gated")
+	assert.Empty(t, dt.serviceUpdaterTrigger)
+	assert.True(t, gatedByRetry(su, dt, serviceName), "the still-parked update must remain gated")
 
 	// Once the cooldown has elapsed, a same-spec resync must re-arm it.
 	op.NextRetryAt = time.Now().Add(-time.Hour)
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(80)))
-	op = dt.pendingServiceOps[uid]
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(80))))
+	op = dt.pendingServiceOps[serviceName]
 	assert.False(t, op.RetriesExhausted, "a same-spec resync after the cooldown must clear the park")
 	assert.Equal(t, 0, op.RetryCount, "the retry budget must be reset so the update can be dispatched")
-	assert.False(t, gatedByRetry(su, dt, uid), "the recovered update must be dispatchable")
+	assert.Len(t, dt.serviceUpdaterTrigger, 1, "the recovered update must notify the updater")
+	assert.False(t, gatedByRetry(su, dt, serviceName), "the recovered update must be dispatchable")
 }
 
 // TestGuardRetriesExhaustedPark_ParkedDeleteRecoversOnRedelete verifies that a delete which itself
@@ -208,23 +214,23 @@ func TestGuardRetriesExhaustedPark_UpdateRecoversAfterCooldown(t *testing.T) {
 func TestGuardRetriesExhaustedPark_ParkedDeleteRecoversOnRedelete(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-delete-inflight"
+	serviceName := "svc-parked-delete-inflight"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateDeletionInProgress,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
 		NextRetryAt:      time.Now().Add(-time.Hour),
 	}
 
-	dt.DeleteService(uid, true, false) // repeated delete while the finalizer is still present
+	dt.DeleteService(serviceName, true, false) // repeated delete while the finalizer is still present
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.RetriesExhausted, "a repeated delete must clear a parked deletion")
 	assert.Equal(t, 0, op.RetryCount, "a repeated delete must reset the parked delete retry budget")
-	assert.False(t, gatedByRetry(su, dt, uid), "the recovered delete must be dispatchable")
+	assert.False(t, gatedByRetry(su, dt, serviceName), "the recovered delete must be dispatchable")
 }
 
 // TestParkedDelete_SelfReArmsAfterCooldown verifies that a delete parked after exhausting its retry
@@ -234,20 +240,20 @@ func TestGuardRetriesExhaustedPark_ParkedDeleteRecoversOnRedelete(t *testing.T) 
 func TestParkedDelete_SelfReArmsAfterCooldown(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-delete-cooldown"
+	serviceName := "svc-parked-delete-cooldown"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, nil),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, nil),
 		State:            StateDeletionInProgress,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
 		NextRetryAt:      time.Now().Add(-time.Minute), // cooldown elapsed
 	}
 
-	assert.False(t, gatedByRetry(su, dt, uid),
+	assert.False(t, gatedByRetry(su, dt, serviceName),
 		"a parked delete past its cooldown must be re-armed and dispatchable without a second DeleteService")
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.RetriesExhausted, "the parked delete must be re-armed (park cleared)")
 	assert.Equal(t, 0, op.RetryCount, "the parked delete must get a fresh retry budget")
 }
@@ -262,11 +268,11 @@ func TestParkedDelete_SelfReArmsAfterCooldown(t *testing.T) {
 func TestParkedCreate_SelfReArmsAfterCooldown(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-create-cooldown"
+	serviceName := "svc-parked-create-cooldown"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateNotStarted,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
@@ -274,15 +280,15 @@ func TestParkedCreate_SelfReArmsAfterCooldown(t *testing.T) {
 	}
 
 	// While the cooldown is pending the parked create stays gated (no per-resync storm).
-	assert.True(t, gatedByRetry(su, dt, uid),
+	assert.True(t, gatedByRetry(su, dt, serviceName),
 		"a parked create within its cooldown must stay gated")
-	assert.True(t, dt.pendingServiceOps[uid].RetriesExhausted, "the create must remain parked during the cooldown")
+	assert.True(t, dt.pendingServiceOps[serviceName].RetriesExhausted, "the create must remain parked during the cooldown")
 
 	// Once the cooldown elapses, retryGate must re-arm the parked create itself.
-	dt.pendingServiceOps[uid].NextRetryAt = time.Now().Add(-time.Minute)
-	assert.False(t, gatedByRetry(su, dt, uid),
+	dt.pendingServiceOps[serviceName].NextRetryAt = time.Now().Add(-time.Minute)
+	assert.False(t, gatedByRetry(su, dt, serviceName),
 		"a parked create past its cooldown must self-rearm in retryGate (no external driver re-drives it on a stable cluster)")
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.RetriesExhausted, "the parked create must be re-armed (park cleared)")
 	assert.Equal(t, 0, op.RetryCount, "the parked create must get a fresh retry budget")
 }
@@ -293,20 +299,20 @@ func TestParkedCreate_SelfReArmsAfterCooldown(t *testing.T) {
 func TestParkedUpdate_SelfReArmsAfterCooldown(t *testing.T) {
 	dt := newTestDiffTracker()
 	su := newTestServiceUpdater(dt)
-	uid := "svc-parked-update-cooldown"
+	serviceName := "svc-parked-update-cooldown"
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:            StateUpdateInProgress,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
 		NextRetryAt:      time.Now().Add(-time.Minute), // cooldown elapsed
 	}
 
-	assert.False(t, gatedByRetry(su, dt, uid),
+	assert.False(t, gatedByRetry(su, dt, serviceName),
 		"a parked update past its cooldown must self-rearm in retryGate")
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.RetriesExhausted, "the parked update must be re-armed (park cleared)")
 	assert.Equal(t, 0, op.RetryCount, "the parked update must get a fresh retry budget")
 }
@@ -351,10 +357,10 @@ func TestParkedDelete_SkippedDuringCooldown(t *testing.T) {
 	dt.networkClientFactory = f
 	dt.NRPResources.LoadBalancers.Insert("uid-parked-del")
 
-	uid := "uid-parked-del"
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:       uid,
-		Config:           NewInboundServiceConfig(uid, nil),
+	serviceName := "uid-parked-del"
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:      serviceName,
+		Config:           NewInboundServiceConfig(serviceName, nil),
 		State:            StateDeletionInProgress,
 		RetryCount:       maxServiceRetries,
 		RetriesExhausted: true,
@@ -362,7 +368,7 @@ func TestParkedDelete_SkippedDuringCooldown(t *testing.T) {
 		// cooldown elapses (see TestParkedDelete_SelfReArmsAfterCooldown).
 		NextRetryAt: time.Now().Add(time.Hour),
 	}
-	dt.pendingServiceDeletions[uid] = &PendingServiceDeletion{ServiceUID: uid, IsInbound: true}
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
 
 	su := newTestServiceUpdater(dt)
 
@@ -370,13 +376,13 @@ func TestParkedDelete_SkippedDuringCooldown(t *testing.T) {
 	// the SGW/LB/PIP clients above) and activeOps released so retryGate can re-evaluate later.
 	su.processBatch()
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateDeletionInProgress, op.State,
 		"parked delete op must stay in StateDeletionInProgress (not advanced, not cleared)")
 	assert.True(t, op.RetriesExhausted, "parked delete op must remain parked")
 
 	su.mu.Lock()
-	_, active := su.activeOps[uid]
+	_, active := su.activeOps[serviceName]
 	su.mu.Unlock()
 	assert.False(t, active, "retryGate must release activeOps for the parked op")
 
@@ -394,10 +400,10 @@ func TestParkedDelete_SkippedDuringCooldown(t *testing.T) {
 // to StateNotStarted, and the dispatcher is nudged. An unchanged-spec resync leaves the park intact.
 func TestUpdateService_CreationFailedTerminalRecoversOnSpecChange(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-terminal-recover"
-	oldCfg := NewInboundServiceConfig(uid, makeInboundConfig(80))
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:             uid,
+	serviceName := "svc-terminal-recover"
+	oldCfg := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:            serviceName,
 		Config:                 oldCfg,
 		State:                  StateNotStarted,
 		CreationFailedTerminal: true,
@@ -413,9 +419,9 @@ func TestUpdateService_CreationFailedTerminalRecoversOnSpecChange(t *testing.T) 
 	default:
 	}
 
-	dt.UpdateService(NewInboundServiceConfig(uid, makeInboundConfig(8080)))
+	assert.NoError(t, dt.UpdateService(NewInboundServiceConfig(serviceName, makeInboundConfig(8080))))
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.False(t, op.CreationFailedTerminal,
 		"a spec-changing UpdateService MUST clear CreationFailedTerminal")
 	assert.False(t, op.RetriesExhausted, "park (RetriesExhausted) MUST also be cleared on recovery")

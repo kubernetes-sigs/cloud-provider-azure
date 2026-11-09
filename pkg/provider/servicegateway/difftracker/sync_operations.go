@@ -51,7 +51,7 @@ func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
 
 // getSyncLoadBalancerServicesLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncLoadBalancerServicesLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.logger, dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
+	return dt.getSyncServicesLocked(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
 }
 
 func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
@@ -63,7 +63,14 @@ func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
 
 // getSyncNRPNATGatewaysLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncNRPNATGatewaysLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.logger, dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+	return dt.getSyncServicesLocked(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+}
+
+func (dt *DiffTracker) getSyncServicesLocked(desired, registered *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+	result := GetServicesToSync(dt.logger, desired, registered)
+	result.Additions.Delete(DefaultOutboundNATGatewayName)
+	result.Removals.Delete(DefaultOutboundNATGatewayName)
+	return result
 }
 
 func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
@@ -177,9 +184,9 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 	serviceRef := utilsets.NewString()
 
 	// Check inbound services (LoadBalancers)
-	for _, serviceUID := range pod.InboundIdentities.UnsortedList() {
-		if dt.isServiceReadyToSync(serviceUID, true) {
-			serviceRef.Insert(serviceUID)
+	for _, serviceName := range pod.InboundIdentities.UnsortedList() {
+		if dt.isServiceReadyToSync(serviceName, true) {
+			serviceRef.Insert(serviceName)
 		}
 	}
 
@@ -198,11 +205,11 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 // update) or still being created, so the live resource keeps tracking endpoint changes instead of
 // having its backend pool drained. A service with no NRP resource yet is not synced.
 // Must be called with dt.mu held
-func (dt *DiffTracker) isServiceReadyToSync(serviceUID string, isInbound bool) bool {
-	existsInNRP := (isInbound && dt.NRPResources.LoadBalancers.Has(serviceUID)) ||
-		(!isInbound && dt.NRPResources.NATGateways.Has(serviceUID))
+func (dt *DiffTracker) isServiceReadyToSync(serviceName string, isInbound bool) bool {
+	existsInNRP := (isInbound && dt.NRPResources.LoadBalancers.Has(serviceName)) ||
+		(!isInbound && dt.NRPResources.NATGateways.Has(serviceName))
 
-	if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
+	if opState, exists := dt.pendingServiceOps[serviceName]; exists {
 		// The key is shared by inbound (Service UID) and outbound (egress label) identities, so this
 		// entry may belong to the other kind. Answering from it would let an egress identity ride an
 		// inbound service's readiness. Fall back to the NRP resource of the kind asked about.

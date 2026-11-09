@@ -19,7 +19,6 @@ package servicegateway
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -127,8 +126,6 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		utils.Logf("Created service %s", serviceName)
 
 		By(fmt.Sprintf("Creating %d pods per node, spread across %d nodes", podsPerNode, len(nodeNames)))
-		podIPs := make(map[string][]string)     // nodeName -> list of pod IPs on that node
-		podHostIPs := make(map[string][]string) // hostIP -> list of pod IPs on that host
 		createdPods := make([]string, 0)
 
 		for i, nodeName := range nodeNames {
@@ -170,30 +167,20 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Collecting pod IPs per node")
+		var readyPods []v1.Pod
 		for _, podName := range createdPods {
 			pod, err := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			nodeName := pod.Spec.NodeName
-			hostIP := pod.Status.HostIP
-			podIP := pod.Status.PodIP
-
-			if podIPs[nodeName] == nil {
-				podIPs[nodeName] = make([]string, 0)
-			}
-			podIPs[nodeName] = append(podIPs[nodeName], podIP)
-
-			if podHostIPs[hostIP] == nil {
-				podHostIPs[hostIP] = make([]string, 0)
-			}
-			podHostIPs[hostIP] = append(podHostIPs[hostIP], podIP)
-
-			utils.Logf("Pod %s: Node=%s, HostIP=%s, PodIP=%s", podName, nodeName, hostIP, podIP)
+			readyPods = append(readyPods, *pod)
+			utils.Logf("Pod %s: Node=%s, HostIPs=%v, PodIPs=%v", podName, pod.Spec.NodeName, pod.Status.HostIPs, pod.Status.PodIPs)
 		}
+		podHostIPs, err := inboundPodAddressLocations(cs, readyPods, createdService.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for Azure LoadBalancer provisioning")
 		Eventually(func() error {
-			return serviceReconciledErr(serviceUID, len(createdPods))
+			return servicePodsReconciledErr(cs, ns.Name, serviceUID, len(createdPods))
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"service should be reconciled with Azure LoadBalancer resources and registered pod endpoints")
 
@@ -211,7 +198,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 			addresses := make([]string, 0)
 			for _, addr := range loc.Addresses {
 				for _, svc := range addr.Services {
-					if svc == serviceUID {
+					if svc == inboundServiceName(serviceUID) {
 						addresses = append(addresses, addr.Address)
 						break
 					}
@@ -255,7 +242,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		for _, sgSvc := range sgResponse.Value {
 			// Match this spec's service, not merely "some inbound service": every spec shares
 			// one ServiceGateway, so another spec's leftover would satisfy a type-only check.
-			if sgSvc.Name == serviceUID && sgSvc.Properties.ServiceType == "Inbound" {
+			if sgSvc.Name == inboundServiceName(serviceUID) && sgSvc.Properties.ServiceType == "Inbound" {
 				foundService = true
 				utils.Logf("✓ Found inbound service in Service Gateway: %s", sgSvc.Name)
 				break
@@ -300,7 +287,6 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		utils.Logf("Found %d nodes: %v", len(nodeNames), nodeNames)
 
 		By(fmt.Sprintf("Creating %d egress pods per node, spread across %d nodes", podsPerNode, len(nodeNames)))
-		podHostIPs := make(map[string][]string) // hostIP -> list of pod IPs
 		createdPods := make([]string, 0)
 
 		for i, nodeName := range nodeNames {
@@ -340,24 +326,20 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Collecting pod IPs per host")
+		var readyPods []v1.Pod
 		for _, podName := range createdPods {
 			pod, err := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
-			hostIP := pod.Status.HostIP
-			podIP := pod.Status.PodIP
-
-			if podHostIPs[hostIP] == nil {
-				podHostIPs[hostIP] = make([]string, 0)
-			}
-			podHostIPs[hostIP] = append(podHostIPs[hostIP], podIP)
-
-			utils.Logf("Pod %s: HostIP=%s, PodIP=%s", podName, hostIP, podIP)
+			readyPods = append(readyPods, *pod)
+			utils.Logf("Pod %s: HostIPs=%v, PodIPs=%v", podName, pod.Status.HostIPs, pod.Status.PodIPs)
 		}
+		podHostIPs, err := egressPodAddressLocations(readyPods)
+		Expect(err).NotTo(HaveOccurred())
 
 		By("Waiting for Azure NAT Gateway provisioning")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, len(createdPods))
+			return egressPodsRegisteredErr(cs, ns.Name, egressName, len(createdPods))
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"egress service should be reconciled with NAT Gateway and registered pods")
 
@@ -384,7 +366,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		var foundEgress bool
 		var natGatewayID string
 		for _, sgSvc := range sgResponse.Value {
-			if sgSvc.Name == egressName && sgSvc.Properties.ServiceType == "Outbound" {
+			if sgSvc.Name == outboundServiceName(egressName) && sgSvc.Properties.ServiceType == "Outbound" {
 				foundEgress = true
 				natGatewayID = sgSvc.Properties.PublicNatGatewayID
 				utils.Logf("✓ Found egress service '%s' with NAT Gateway: %s", egressName, natGatewayID)
@@ -404,7 +386,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 			for _, addr := range loc.Addresses {
 				// Filter to only our egress service
 				for _, svc := range addr.Services {
-					if strings.Contains(svc, egressName) {
+					if svc == outboundServiceName(egressName) {
 						addresses = append(addresses, addr.Address)
 						break
 					}
@@ -546,7 +528,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 
 		By("Waiting for initial Azure provisioning")
 		Eventually(func() error {
-			return serviceReconciledErr(serviceUID, len(podsOnNode0)+len(podsOnNode1))
+			return servicePodsReconciledErr(cs, ns.Name, serviceUID, len(podsOnNode0)+len(podsOnNode1))
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"service should be reconciled with initial pod endpoints")
 
@@ -555,16 +537,14 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		// correct outcome from the inverse failure - node 1's pods deregistered while node 0's
 		// leaked - because both leave the same total.
 		podIPsFor := func(names []string) map[string]struct{} {
-			set := make(map[string]struct{})
+			var pods []v1.Pod
 			for _, podName := range names {
 				pod, getErr := cs.CoreV1().Pods(ns.Name).Get(ctx, podName, metav1.GetOptions{})
 				Expect(getErr).NotTo(HaveOccurred())
-				for _, ip := range pod.Status.PodIPs {
-					if ip.IP != "" {
-						set[ip.IP] = struct{}{}
-					}
-				}
+				pods = append(pods, *pod)
 			}
+			set, err := inboundPodIPSet(cs, pods, createdService.Spec.IPFamilies)
+			Expect(err).NotTo(HaveOccurred())
 			return set
 		}
 		node0IPs := podIPsFor(podsOnNode0)
@@ -572,7 +552,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 		Expect(node0IPs).NotTo(BeEmpty())
 		Expect(node1IPs).NotTo(BeEmpty())
 
-		initial, err := registeredAddressesFor(serviceUID)
+		initial, err := registeredAddressesFor(inboundServiceName(serviceUID))
 		Expect(err).NotTo(HaveOccurred())
 		for ip := range node0IPs {
 			Expect(initial).To(HaveKey(ip), "node 0 pod IP %s should be registered before the drain", ip)
@@ -590,7 +570,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 
 		By("Verifying exactly the drained node's addresses are deregistered")
 		Eventually(func() error {
-			return registeredAddressesMatchErr(serviceUID, node1IPs)
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), node1IPs)
 		}, 3*time.Minute, defaultPollInterval).Should(Succeed(),
 			"every drained node-0 pod IP must be deregistered and every node-1 pod IP must remain")
 
@@ -670,7 +650,7 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 
 		By("Waiting for provisioning and verifying the victim pod registers under its node's location")
 		Eventually(func() error {
-			return serviceReconciledErr(serviceUID, 2)
+			return servicePodsReconciledErr(cs, ns.Name, serviceUID, 2)
 		}, provisionTime, 10*time.Second).Should(Succeed())
 
 		registeredUnder := func(podIP string) (string, bool) {

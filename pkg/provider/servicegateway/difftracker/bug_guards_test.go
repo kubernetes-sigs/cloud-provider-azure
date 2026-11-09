@@ -52,16 +52,16 @@ func TestRemoveLastPodFinalizers_SurfacesRetryExhaustion(t *testing.T) {
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	euid := "egress-leaked"
+	egressName := "egress-leaked"
 	dt.pendingPodDeletions["default/stuck"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "stuck",
-		ServiceUID: euid,
-		Addresses:  []string{"10.244.0.1"},
-		IsLastPod:  true,
+		Namespace:   "default",
+		Name:        "stuck",
+		ServiceName: egressName,
+		Addresses:   []string{"10.244.0.1"},
+		IsLastPod:   true,
 	}
 
-	err := dt.RemoveLastPodFinalizers(context.Background(), euid)
+	err := dt.RemoveLastPodFinalizers(context.Background(), egressName)
 	assert.Error(t, err,
 		"permanent finalizer-strip failure MUST be surfaced to the caller (otherwise the outbound delete reports false success and the pod finalizer leaks)")
 
@@ -76,11 +76,11 @@ func TestCheckInitializationComplete_WaitsForPendingPodDeletions(t *testing.T) {
 	dt.initCompletionChecker = make(chan struct{})
 	dt.isInitializing = 1
 	dt.pendingPodDeletions["default/foo"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "foo",
-		ServiceUID: "egress",
-		Addresses:  []string{"10.244.0.1"},
-		IsLastPod:  false,
+		Namespace:   "default",
+		Name:        "foo",
+		ServiceName: "egress",
+		Addresses:   []string{"10.244.0.1"},
+		IsLastPod:   false,
 	}
 
 	dt.checkInitializationComplete()
@@ -95,24 +95,24 @@ func TestCheckInitializationComplete_WaitsForPendingPodDeletions(t *testing.T) {
 // Deleting during an in-flight update should still drive deletion to completion.
 func TestDeleteService_DuringUpdateNoLocations_DispatchesDelete(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-update-then-delete"
-	dt.NRPResources.LoadBalancers.Insert(uid)
-	inflight := NewInboundServiceConfig(uid, makeInboundConfig(8080))
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	serviceName := "svc-update-then-delete"
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
+	inflight := NewInboundServiceConfig(serviceName, makeInboundConfig(8080))
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         inflight,
 		InFlightConfig: &inflight,
 		State:          StateUpdateInProgress,
 	}
-	dt.DeleteService(uid, true, false)
+	dt.DeleteService(serviceName, true, false)
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	assert.Equal(t, StateDeletionInProgress, op.State, "fast-path takes us straight to DeletionInProgress (current behaviour)")
 
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	_, stillTracked := dt.pendingServiceOps[uid]
-	_, pending := dt.pendingServiceDeletions[uid]
+	_, stillTracked := dt.pendingServiceOps[serviceName]
+	_, pending := dt.pendingServiceDeletions[serviceName]
 	assert.True(t, stillTracked || pending,
 		"after delete-during-update fast-path + update completion, "+
 			"engine MUST still drive the Azure LB delete (either via pendingServiceOps or pendingServiceDeletions)")
@@ -126,44 +126,44 @@ func TestDeleteService_DuringUpdateNoLocations_DispatchesDelete(t *testing.T) {
 // empty map and never drives the deletion, leaking the LB/PIP and leaving the Service Terminating.
 func TestDeleteService_DuringUpdatePreemptKeepsPendingDeletion(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-del-during-update"
+	serviceName := "svc-del-during-update"
 	const node, addr = "10.0.0.1", "10.244.0.1"
 
-	inflight := NewInboundServiceConfig(uid, makeInboundConfig(80))
-	dt.NRPResources.LoadBalancers.Insert(uid)
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:     uid,
+	inflight := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:    serviceName,
 		Config:         inflight,
 		InFlightConfig: &inflight,
 		State:          StateUpdateInProgress,
 	}
 
 	// Delete fast path: no NRP locations yet -> StateDeletionInProgress, pendingServiceDeletions cleared.
-	dt.DeleteService(uid, true, false)
+	dt.DeleteService(serviceName, true, false)
 
 	// The in-flight LocationsUpdater publishes the pod address just after the delete gated on
 	// serviceHasLocationsInNRP.
 	dt.NRPResources.Locations[node] = NRPLocation{
-		Addresses: map[string]NRPAddress{addr: {Services: utilsets.NewString(uid)}},
+		Addresses: map[string]NRPAddress{addr: {Services: utilsets.NewString(serviceName)}},
 	}
 
 	// The in-flight update completes and is routed through the delete-preempt branch.
-	dt.OnServiceCreationComplete(uid, true, nil)
+	dt.OnServiceCreationComplete(serviceName, true, nil)
 
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if !assert.NotNil(t, op, "the op must remain tracked after the delete-preempt routing") {
 		return
 	}
 	assert.Equal(t, StateDeletionPending, op.State, "locations reappeared, so the op must wait in StateDeletionPending")
-	_, pending := dt.pendingServiceDeletions[uid]
+	_, pending := dt.pendingServiceDeletions[serviceName]
 	assert.True(t, pending,
 		"an op routed to StateDeletionPending must have a pendingServiceDeletions entry so CheckPendingServiceDeletions can drive it")
 
 	// Drain the locations: CheckPendingServiceDeletions must promote the op to dispatch.
 	delete(dt.NRPResources.Locations, node)
 	dt.CheckPendingServiceDeletions()
-	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[uid].State,
+	assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[serviceName].State,
 		"once locations clear, CheckPendingServiceDeletions must promote the op to StateDeletionInProgress")
-	_, stillPending := dt.pendingServiceDeletions[uid]
+	_, stillPending := dt.pendingServiceDeletions[serviceName]
 	assert.False(t, stillPending, "the pendingServiceDeletions entry must be consumed once the deletion dispatches")
 }
