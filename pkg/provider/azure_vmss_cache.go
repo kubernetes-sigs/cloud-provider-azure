@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v7"
+	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 
@@ -462,24 +463,66 @@ func (ss *ScaleSet) getVMManagementTypeByProviderID(ctx context.Context, provide
 		return ManagedByAvSet, nil
 	}
 
+	vmManagementType, found, err := ss.getVMManagementTypeByProviderIDFromCache(ctx, providerID, crt)
+	if err != nil {
+		return ManagedByUnknownVMSet, err
+	}
+	if found {
+		return vmManagementType, nil
+	}
+
+	// The providerID is not in the cache. The VM has either been created after the last
+	// cache refresh or been deleted. Query ARM directly to tell them apart, so that a deleted
+	// VM is reported as cloudprovider.InstanceNotFound and its node can be removed.
+	return ss.getVMManagementTypeByProviderIDFromARM(ctx, providerID)
+}
+
+// getVMManagementTypeByProviderIDFromCache looks up the providerID in nonVmssUniformNodesCache.
+// The returned bool reports whether the providerID was found in the cache.
+func (ss *ScaleSet) getVMManagementTypeByProviderIDFromCache(ctx context.Context, providerID string, crt azcache.AzureCacheReadType) (VMManagementType, bool, error) {
 	ss.lockMap.LockEntry(consts.VMManagementTypeLockKey)
 	defer ss.lockMap.UnlockEntry(consts.VMManagementTypeLockKey)
 	cached, err := ss.nonVmssUniformNodesCache.Get(ctx, consts.NonVmssUniformNodesKey, crt)
 	if err != nil {
-		return ManagedByUnknownVMSet, err
+		return ManagedByUnknownVMSet, false, err
 	}
 
-	cachedVmssFlexVMProviderIDs := cached.(NonVmssUniformNodesEntry).VMSSFlexVMProviderIDs
-	cachedAvSetVMProviderIDs := cached.(NonVmssUniformNodesEntry).AvSetVMProviderIDs
-
-	if cachedAvSetVMProviderIDs.Has(providerID) {
-		return ManagedByAvSet, nil
+	if cached.(NonVmssUniformNodesEntry).AvSetVMProviderIDs.Has(providerID) {
+		return ManagedByAvSet, true, nil
 	}
-	if cachedVmssFlexVMProviderIDs.Has(providerID) {
+	if cached.(NonVmssUniformNodesEntry).VMSSFlexVMProviderIDs.Has(providerID) {
+		return ManagedByVmssFlex, true, nil
+	}
+	return ManagedByUnknownVMSet, false, nil
+}
+
+// getVMManagementTypeByProviderIDFromARM gets the VM referenced by a standalone VM providerID
+// from ARM and determines its management type. It returns cloudprovider.InstanceNotFound if
+// the VM does not exist.
+func (ss *ScaleSet) getVMManagementTypeByProviderIDFromARM(ctx context.Context, providerID string) (VMManagementType, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getVMManagementTypeByProviderIDFromARM")
+	vmNameMatches := providerIDRE.FindStringSubmatch(providerID)
+	resourceGroupMatches := azureResourceGroupNameRE.FindStringSubmatch(providerID)
+	if len(vmNameMatches) != 2 || len(resourceGroupMatches) != 2 {
+		return ManagedByUnknownVMSet, fmt.Errorf("getVMManagementTypeByProviderID : failed to check the providerID %s management type", providerID)
+	}
+	vmName := vmNameMatches[1]
+	resourceGroup := resourceGroupMatches[1]
+
+	vm, err := ss.ComputeClientFactory.GetVirtualMachineClient().Get(ctx, resourceGroup, vmName, nil)
+	exists, err := checkResourceExistsFromError(err)
+	if err != nil {
+		return ManagedByUnknownVMSet, fmt.Errorf("getting VM %s in resource group %s for providerID %s: %w", vmName, resourceGroup, providerID, err)
+	}
+	if !exists || vm == nil {
+		logger.V(2).Info("Virtual machine not found", "providerID", providerID)
+		return ManagedByUnknownVMSet, cloudprovider.InstanceNotFound
+	}
+
+	if vm.Properties != nil && vm.Properties.VirtualMachineScaleSet != nil {
 		return ManagedByVmssFlex, nil
 	}
-	return ManagedByUnknownVMSet, fmt.Errorf("getVMManagementTypeByProviderID : failed to check the providerID %s management type", providerID)
-
+	return ManagedByAvSet, nil
 }
 
 // getVMManagementTypeByIPConfigurationID determines the VM type by the following steps:
