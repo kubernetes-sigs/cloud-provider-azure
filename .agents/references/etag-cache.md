@@ -120,7 +120,7 @@ if strings.Contains(strings.ToLower(retryErrorMessage), consts.OperationCanceled
 
 ## NIC Update-Only Writes
 
-CCM only updates existing node NICs. All provider NIC writes go through
+CCM only updates existing node NICs. Classic load-balancer NIC writes go through
 `Cloud.updateInterface` in `pkg/provider/azure_interface_repo.go`, which sets
 `If-Match: *` through the Azure SDK request context. This includes adding and
 removing backend-pool membership for standalone and VMSS Flex nodes. If a VM
@@ -134,6 +134,18 @@ client remains create-capable for non-CCM consumers. Live validation against
 NIC API version `2025-05-01` confirmed successful updates to an existing NIC
 and `PreconditionFailedResourceDoesNotExist` for a deleted NIC, which remained
 absent after the rejected PUT. This does not clean up previously orphaned NICs.
+
+SGW-managed NIC NSGs use `servicegateway/difftracker/nsg_azure.go` instead:
+ordinary NIC writes carry the exact fetched ETag through the request context;
+Uniform VMSS instance updates reuse the VM model fetched during NIC resolution
+and carry that exact ETag in `BeginUpdateOptions.IfMatch`; association does not
+perform a second VM GET.
+Association attempts invalidate the existing node network cache, and new
+associations are read back before authorizing protected bindings. NSG updates
+retain the resource ETag for the existing azclient conditional-write policy.
+Shared provider cache behavior is unchanged. Uniform VMSS cache-refill listing
+uses its existing background context, so cancellation of an SGW attempt does not
+cancel that listing.
 
 ## Public-IP Recording Tests
 

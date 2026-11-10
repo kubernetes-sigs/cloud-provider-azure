@@ -285,6 +285,12 @@ func (s *ServiceUpdater) processBatch() {
 		}
 		s.activeOps[serviceName] = true
 		s.mu.Unlock()
+		if !s.diffTracker.readyForLBUpdateLocked(serviceName) {
+			s.mu.Lock()
+			delete(s.activeOps, serviceName)
+			s.mu.Unlock()
+			continue
+		}
 
 		// Collect work based on state
 		switch opState.State {

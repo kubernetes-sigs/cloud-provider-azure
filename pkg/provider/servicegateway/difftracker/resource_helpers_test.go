@@ -71,6 +71,45 @@ func TestExtractInboundConfigFromService_NilService(t *testing.T) {
 	assert.Nil(t, config)
 }
 
+func TestAdmitInboundServiceAllowedIPRanges(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		wantError   bool
+	}{
+		{name: "absent"},
+		{name: "IPv4 address", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.1.2.3"}},
+		{name: "IPv6 address", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "2001:db8::1"}},
+		{name: "prefixes", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.0.0.0/8, 2001:db8::/32"}},
+		{name: "empty", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: ""}, wantError: true},
+		{name: "whitespace", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: " "}, wantError: true},
+		{name: "invalid address", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.0.0.999"}, wantError: true},
+		{name: "invalid prefix", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.0.0.0/33"}, wantError: true},
+		{name: "unmasked prefix", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.1.2.3/8"}, wantError: true},
+		{name: "partially invalid", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.0.0.0/8,not-an-ip"}, wantError: true},
+		{name: "empty entry", annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.0.0.0/8,"}, wantError: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Annotations: tt.annotations},
+				Spec: v1.ServiceSpec{
+					Type:  v1.ServiceTypeLoadBalancer,
+					Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}},
+				},
+			}
+			config, err := AdmitInboundService(service)
+			if tt.wantError {
+				assert.Error(t, err)
+				assert.Nil(t, config)
+				return
+			}
+			assert.NoError(t, err)
+			assert.NotNil(t, config)
+		})
+	}
+}
+
 func TestValidateInboundConfig(t *testing.T) {
 	tests := []struct {
 		name       string
