@@ -195,6 +195,6 @@ func GetTestCloudWithServiceLoadBalancer(ctrl *gomock.Controller) (az *Cloud) {
 	az.LoadBalancerBackendPoolConfigurationType = consts.LoadBalancerBackendPoolConfigurationTypePodIP
 	az.LoadBalancerSKU = consts.LoadBalancerSKUService
 	az.ServiceGatewayEnabled = true
-	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, az.NetworkClientFactory, az.KubeClient)
+	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, az.NetworkClientFactory, az.ComputeClientFactory, az.VMSet, az.KubeClient)
 	return az
 }

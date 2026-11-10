@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 // TestEngineUpdateEndpoints_AfterRestart tests that UpdateEndpoints works correctly
@@ -123,7 +125,7 @@ func TestEngineDeleteService_AfterRestart(t *testing.T) {
 // TestEngineAddService_AfterRestart tests that AddService correctly handles
 // services that already exist in NRP (e.g., after restart)
 func TestEngineAddService_AfterRestart(t *testing.T) {
-	dt := newTestDiffTracker()
+	dt := newProviderDiffTracker(t, gomock.NewController(t), fake.NewSimpleClientset())
 	serviceName := "service-add-after-restart"
 
 	// Simulate restart scenario:
@@ -134,11 +136,16 @@ func TestEngineAddService_AfterRestart(t *testing.T) {
 	// This is already the case in newTestDiffTracker()
 
 	// 3. AddService is called
-	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, nil)))
+	config := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	assert.NoError(t, dt.AddService(config))
 
-	// Verify service was NOT added to pendingServiceOps (already exists in NRP)
-	_, exists := dt.pendingServiceOps[serviceName]
-	assert.False(t, exists, "service should not be added to pendingServiceOps since it exists in NRP")
+	op := dt.pendingServiceOps[serviceName]
+	if !assert.NotNil(t, op) {
+		return
+	}
+	assert.Equal(t, StateCreated, op.State)
+	assert.Equal(t, config, op.Config)
+	assert.Empty(t, dt.serviceUpdaterTrigger)
 
 	// Verify service is still in NRP
 	assert.True(t, dt.NRPResources.LoadBalancers.Has(serviceName), "service should still be in NRP")

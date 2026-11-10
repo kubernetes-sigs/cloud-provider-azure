@@ -186,7 +186,7 @@ func NewCloud(ctx context.Context, clientBuilder cloudprovider.ControllerClientB
 		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
 	}
 	if az.ServiceGatewayEnabled {
-		az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, az.NetworkClientFactory, az.KubeClient)
+		az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, az.NetworkClientFactory, az.ComputeClientFactory, az.VMSet, az.KubeClient)
 	}
 	az.azureResourceLocker = NewAzureResourceLocker(
 		az,

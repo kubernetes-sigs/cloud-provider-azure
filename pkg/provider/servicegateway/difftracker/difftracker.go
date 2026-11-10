@@ -24,6 +24,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -35,13 +36,19 @@ import (
 // New creates and initializes a new DiffTracker with the given state and configuration.
 // It validates the configuration and ensures all required dependencies are present.
 // Returns an error if the configuration is invalid or if any required dependency is nil.
-func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) (*DiffTracker, error) {
+func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkClientFactory, computeClientFactory azclient.ClientFactory, nodeProvider NSGNodeProvider, kubeClient kubernetes.Interface) (*DiffTracker, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("difftracker.New: %w", err)
 	}
 
 	if networkClientFactory == nil {
 		return nil, fmt.Errorf("difftracker.New: networkClientFactory must not be nil")
+	}
+	if computeClientFactory == nil {
+		return nil, fmt.Errorf("difftracker.New: computeClientFactory must not be nil")
+	}
+	if nodeProvider == nil {
+		return nil, fmt.Errorf("difftracker.New: nodeProvider must not be nil")
 	}
 	if kubeClient == nil {
 		return nil, fmt.Errorf("difftracker.New: kubeClient must not be nil")
@@ -88,6 +95,8 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		// Configuration and clients
 		config:               config,
 		networkClientFactory: networkClientFactory,
+		computeClientFactory: computeClientFactory,
+		nodeProvider:         nodeProvider,
 		kubeClient:           kubeClient,
 
 		// Initialize Engine state management maps
@@ -96,6 +105,8 @@ func New(logger logr.Logger, k8s K8sState, nrp NRPState, config Config, networkC
 		pendingPods:             make(map[string][]PendingPodUpdate),
 		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
 		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
+		dirtyNICPolicies:        sets.New[string](),
+		pendingLocationUpdates:  make(map[string]NRPLocation),
 
 		recoveredServiceFinalizers: make(map[string]struct{}),
 		byoNATGateways:             make(map[string]string),

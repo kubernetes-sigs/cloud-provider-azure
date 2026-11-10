@@ -117,6 +117,8 @@ func InitializeFromCluster(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
+	computeClientFactory azclient.ClientFactory,
+	nodeProvider NSGNodeProvider,
 	kubeClient kubernetes.Interface,
 ) (*DiffTracker, error) {
 	logger := log.FromContextOrBackground(ctx)
@@ -143,9 +145,13 @@ func InitializeFromCluster(
 
 	// Build NRP state from Azure (includes pipNameToIP for External IP recovery)
 	// We keep currentLoadBalancersInNRP and currentNATGatewaysInNRP to identify and clean up orphaned Azure resources
-	nrp, currentLoadBalancersInNRP, currentNATGatewaysInNRP, azurePIPs, pipNameToIP, err := buildNRPState(ctx, config, networkClientFactory)
+	nrp, azureLoadBalancers, currentNATGatewaysInNRP, azurePIPs, pipNameToIP, err := buildNRPState(ctx, config, networkClientFactory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NRP state: %w", err)
+	}
+	currentLoadBalancersInNRP := utilsets.NewString()
+	for name := range azureLoadBalancers {
+		currentLoadBalancersInNRP.Insert(name)
 	}
 
 	// Existence set of every Azure PIP name, independent of whether its address has been allocated
@@ -155,12 +161,15 @@ func InitializeFromCluster(
 	pipNamesInAzure := pipNamesInAzureFromList(azurePIPs)
 
 	// Initialize DiffTracker with computed state
-	diffTracker, err := initializeDiffTrackerWithState(log.FromContextOrBackground(ctx), k8s, nrp, config, networkClientFactory, kubeClient)
+	diffTracker, err := initializeDiffTrackerWithState(log.FromContextOrBackground(ctx), k8s, nrp, config, networkClientFactory, computeClientFactory, nodeProvider, kubeClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize DiffTracker: %w", err)
 	}
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
 	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
+	if err := diffTracker.discoverNICPolicies(ctx, nodeNameToIPs); err != nil {
+		return nil, err
+	}
 
 	unregisteredBYO, err := diffTracker.recoverUnregisteredBYOLinks(ctx, egressPodList)
 	if err != nil {
@@ -193,13 +202,16 @@ func InitializeFromCluster(
 	syncOperations := diffTracker.GetSyncOperations()
 	logSyncOperations(syncOperations)
 
-	// Setup initialization mode and start updaters
-	if err := startInitialization(ctx, diffTracker); err != nil {
-		return nil, err
-	}
+	// Queue NIC-policy recovery before either updater can finish initialization.
+	diffTracker.mu.Lock()
+	atomic.StoreInt32(&diffTracker.isInitializing, 1)
+	diffTracker.initCompletionChecker = make(chan struct{})
+	atomic.StoreInt32(&diffTracker.pendingUpdaterTriggers, int32(len(diffTracker.serviceUpdaterTrigger)+len(diffTracker.locationsUpdaterTrigger)))
+	diffTracker.mu.Unlock()
 
 	// Reconcile services (create/delete LBs and NAT Gateways in Azure)
 	diffTracker.reconcileServices(syncOperations, serviceNameToService)
+	diffTracker.prepareNICPolicyInitialization(serviceNameToService, azureLoadBalancers)
 
 	// Schedule deletion of orphaned Azure resources via ServiceUpdater.
 	// Orphaned resources are LBs/NATs/PIPs that exist in Azure but NOT in ServiceGateway.
@@ -235,6 +247,21 @@ func InitializeFromCluster(
 		logger.V(2).Info("Triggered initial location sync", "deletions", hasDeletions, "onlyExisting", hasOnlyExistingServices, "recoveredItems", hasRecoveredItems, "existingNRPServices", hasExistingNRPServices)
 		diffTracker.triggerLocationsUpdater()
 	}
+	diffTracker.mu.Lock()
+	if diffTracker.dirtyNICPolicies.Len() > 0 || diffTracker.locationRecoveryPending {
+		diffTracker.triggerLocationsUpdater()
+	}
+	for _, op := range diffTracker.pendingServiceOps {
+		if op.State == StateUpdateInProgress {
+			diffTracker.triggerServiceUpdater()
+			break
+		}
+	}
+	diffTracker.mu.Unlock()
+	if err := startInitialization(ctx, diffTracker); err != nil {
+		return nil, err
+	}
+	diffTracker.checkInitializationComplete()
 
 	// Their last-pod entries keep initialization open until all startup work is queued.
 	for _, identity := range unregisteredBYO {
@@ -256,6 +283,9 @@ func InitializeFromCluster(
 		cleanupOnError(diffTracker)
 		return nil, fmt.Errorf("waiting for initial sync: %w", err)
 	}
+	diffTracker.mu.Lock()
+	diffTracker.wakeNICPolicyWorkLocked()
+	diffTracker.mu.Unlock()
 	logger.V(2).Info("Completed initialization operations")
 
 	// Recover External IPs for services that were mid-provisioning when CCM crashed.
@@ -923,7 +953,7 @@ func buildNRPState(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
-) (NRPState, *utilsets.IgnoreCaseSet, *utilsets.IgnoreCaseSet, []*armnetwork.PublicIPAddress, map[string]string, error) {
+) (NRPState, map[string]*armnetwork.LoadBalancer, *utilsets.IgnoreCaseSet, []*armnetwork.PublicIPAddress, map[string]string, error) {
 	nrp := NRPState{
 		LoadBalancers: utilsets.NewString(),
 		NATGateways:   utilsets.NewString(),
@@ -1081,7 +1111,7 @@ func fetchAzureLoadBalancers(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
-) (*utilsets.IgnoreCaseSet, error) {
+) (map[string]*armnetwork.LoadBalancer, error) {
 	logger := log.FromContextOrBackground(ctx)
 	lbclient := networkClientFactory.GetLoadBalancerClient()
 	lbs, err := lbclient.List(ctx, config.ResourceGroup)
@@ -1089,13 +1119,13 @@ func fetchAzureLoadBalancers(
 		return nil, fmt.Errorf("failed to list load balancers: %w", err)
 	}
 
-	currentLBs := utilsets.NewString()
+	currentLBs := make(map[string]*armnetwork.LoadBalancer)
 	for _, lb := range lbs {
-		if lb.Name != nil {
-			currentLBs.Insert(strings.ToLower(*lb.Name))
+		if lb != nil && lb.Name != nil {
+			currentLBs[strings.ToLower(*lb.Name)] = lb
 		}
 	}
-	logger.V(2).Info("Fetched Azure load balancers", "loadBalancers", currentLBs.Len())
+	logger.V(2).Info("Fetched Azure load balancers", "loadBalancers", len(currentLBs))
 	return currentLBs, nil
 }
 
@@ -1180,9 +1210,11 @@ func initializeDiffTrackerWithState(
 	nrp NRPState,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
+	computeClientFactory azclient.ClientFactory,
+	nodeProvider NSGNodeProvider,
 	kubeClient kubernetes.Interface,
 ) (*DiffTracker, error) {
-	return New(logger, k8s, nrp, config, networkClientFactory, kubeClient)
+	return New(logger, k8s, nrp, config, networkClientFactory, computeClientFactory, nodeProvider, kubeClient)
 }
 
 // logSyncOperations logs the sync operations summary

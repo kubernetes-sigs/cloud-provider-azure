@@ -47,6 +47,40 @@ func setTestNodeLister(t *testing.T, dt *DiffTracker, nodes ...*v1.Node) {
 	dt.SetNodeLister(corelisters.NewNodeLister(indexer))
 }
 
+func TestNodeInternalIPs(t *testing.T) {
+	node := &v1.Node{Status: v1.NodeStatus{Addresses: []v1.NodeAddress{
+		{Type: v1.NodeHostName, Address: "node-1"},
+		{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+		{Type: v1.NodeExternalIP, Address: "52.1.2.3"},
+		{Type: v1.NodeInternalIP, Address: "FD00::1"},
+		{Type: v1.NodeInternalIP, Address: "fd00:0::1"},
+		{Type: v1.NodeExternalDNS, Address: "node-1.example.com"},
+	}}}
+	assert.Equal(t, []string{"10.0.0.1", "fd00::1"}, nodeInternalIPs(node))
+	assert.Empty(t, nodeInternalIPs(&v1.Node{}))
+	assert.Empty(t, nodeInternalIPs(nil))
+}
+
+func TestReconcileNodeChangeDelegatesEndpointReplay(t *testing.T) {
+	service := nsgKubeService("svc-lb", "20.0.0.0/8")
+	dt, _, node := newNSGTestTracker(t, service)
+	setTestNodeLister(t, dt, node)
+	slice := newServiceOwnedEndpointSlice("endpoints", service.Namespace, string(service.UID), discovery_v1.AddressTypeIPv4,
+		[]discovery_v1.Endpoint{{
+			Addresses:  []string{"10.1.0.1"},
+			NodeName:   ptr.To(node.Name),
+			Conditions: discovery_v1.EndpointConditions{Ready: ptr.To(true)},
+		}})
+	dt.ReconcileEndpointSlice(nil, slice)
+	assert.Contains(t, dt.K8sResources.Nodes["10.0.0.1"].Pods, "10.1.0.1")
+	moved := node.DeepCopy()
+	moved.Status.Addresses[0].Address = "10.0.0.2"
+	setTestNodeLister(t, dt, moved)
+	dt.ReconcileNodeChange(node, moved)
+	assert.NotContains(t, dt.K8sResources.Nodes["10.0.0.1"].Pods, "10.1.0.1")
+	assert.Contains(t, dt.K8sResources.Nodes["10.0.0.2"].Pods, "10.1.0.1")
+}
+
 func TestReconcileNodeIPChange(t *testing.T) {
 	const (
 		svcUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"

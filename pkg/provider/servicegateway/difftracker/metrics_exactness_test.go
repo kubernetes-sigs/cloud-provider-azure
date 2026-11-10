@@ -37,6 +37,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/testutil"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
@@ -208,11 +209,9 @@ func TestGuardMetrics_LocationsAndAddressesTotals_ReflectNRPTotalsEveryCycle(t *
 	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
 	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	dt := newTestDiffTracker()
-	dt.config = testConfig()
-	dt.networkClientFactory = mockFactory
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
+	dt := seedDiffTracker(t, mockFactory, fake.NewSimpleClientset(), emptyK8sState(), emptyNRPState())
 	dt.NRPResources.LoadBalancers.Insert("svc")
+	assert.NoError(t, dt.AddService(NewInboundServiceConfig("svc", makeInboundConfig(80))))
 
 	// In-sync state: one location (node 10.0.0.1) with one address (10.244.0.1) present in BOTH
 	// K8s and NRP, so GetSyncLocationsAddresses produces no diff.
