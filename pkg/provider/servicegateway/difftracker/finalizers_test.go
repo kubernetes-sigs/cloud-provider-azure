@@ -1370,24 +1370,12 @@ func TestPodFinalizerCompletionPreservesCurrentCreation(t *testing.T) {
 		{name: "dual", nodes: []string{"10.0.0.1", "fd00::1"}, moved: []string{"10.0.0.2", "fd00::2"}, old: []string{"10.244.0.7", "fd00::7"}, fresh: []string{"10.244.0.8", "fd00::8"}, peer: []string{"10.244.0.9", "fd00::9"}},
 	} {
 		t.Run(family.name, func(t *testing.T) {
-			for _, tc := range []struct {
-				name                           string
-				address, location, ready, peer bool
-				completeDuringRegistration     bool
-			}{
-				{name: "creating_address_move", address: true},
-				{name: "creating_location_move", location: true},
-				{name: "creating_unchanged"},
-				{name: "ready_address_move", address: true, ready: true},
-				{name: "creating_with_peer", address: true, peer: true},
-				{name: "completion_during_registration", address: true, completeDuringRegistration: true},
-			} {
-				t.Run(tc.name, func(t *testing.T) {
+			for _, mode := range []string{"not_started", "creating", "location_move", "unchanged", "ready", "peer"} {
+				t.Run(mode, func(t *testing.T) {
 					ctx := context.Background()
 					label := "egress-b"
 					pod := unlabelledFinalizerPod(&label, "uid-p", family.old...)
-					pod.Status.HostIP = family.nodes[0]
-					pod.Status.HostIPs = nil
+					pod.Status.HostIP, pod.Status.HostIPs = family.nodes[0], nil
 					for _, node := range family.nodes {
 						pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: node})
 					}
@@ -1402,85 +1390,69 @@ func TestPodFinalizerCompletionPreservesCurrentCreation(t *testing.T) {
 					if !assert.NotNil(t, op) {
 						return
 					}
-					assert.Equal(t, StateNotStarted, op.State)
-					op.State = StateCreationInProgress
-					inFlight := op.Config
-					op.InFlightConfig = &inFlight
-					if tc.peer {
+					wantState := StateNotStarted
+					if mode != "not_started" {
+						wantState = StateCreationInProgress
+						op.State = StateCreationInProgress
+						inFlight := op.Config
+						op.InFlightConfig = &inFlight
+					}
+					if mode == "peer" {
 						for i, address := range family.peer {
 							dt.AddPodWithUID(b, "ns/q", "uid-q", family.nodes[i], address)
 						}
 					}
-					complete := func() {
+					if mode == "ready" {
 						dt.NRPResources.NATGateways.Insert(b)
 						dt.OnServiceCreationComplete(b, true, nil)
-					}
-					if tc.ready {
-						complete()
+						dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+						wantState = StateCreated
 					}
 					current := pod.DeepCopy()
-					addresses, locations := family.old, family.nodes
-					if tc.address {
-						addresses = family.fresh
-						current.Status.PodIP = addresses[0]
-						current.Status.PodIPs = nil
-						for _, address := range addresses {
-							current.Status.PodIPs = append(current.Status.PodIPs, v1.PodIP{IP: address})
-						}
+					addresses, locations := family.fresh, family.nodes
+					switch mode {
+					case "location_move":
+						addresses, locations = family.old, family.moved
+					case "unchanged":
+						addresses = family.old
 					}
-					if tc.location {
-						locations = family.moved
-						current.Status.HostIP = locations[0]
-						current.Status.HostIPs = nil
-						for _, node := range locations {
-							current.Status.HostIPs = append(current.Status.HostIPs, v1.HostIP{IP: node})
-						}
+					current.Status.PodIP, current.Status.PodIPs = addresses[0], nil
+					for _, address := range addresses {
+						current.Status.PodIPs = append(current.Status.PodIPs, v1.PodIP{IP: address})
+					}
+					current.Status.HostIP, current.Status.HostIPs = locations[0], nil
+					for _, node := range locations {
+						current.Status.HostIPs = append(current.Status.HostIPs, v1.HostIP{IP: node})
 					}
 					_, err := kube.CoreV1().Pods("ns").Update(ctx, current, metav1.UpdateOptions{})
 					assert.NoError(t, err)
-					completedDuringRegistration := false
-					if tc.completeDuringRegistration {
-						gets := 0
-						kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
-							gets++
-							if gets == 2 {
-								complete()
-								completedDuringRegistration = true
-							}
-							return false, nil, nil
-						})
-					}
 					assert.NoError(t, dt.RemoveLastPodFinalizers(ctx, a))
-					assert.Equal(t, tc.completeDuringRegistration, completedDuringRegistration)
-					if tc.ready || tc.completeDuringRegistration {
-						assert.Equal(t, StateCreated, op.State)
-					} else {
-						assert.Equal(t, StateCreationInProgress, op.State)
-						assert.Same(t, &inFlight, op.InFlightConfig)
-						complete()
-					}
 					assert.Same(t, op, dt.pendingServiceOps[b])
-					assert.Equal(t, StateCreated, op.State)
+					assert.Equal(t, wantState, op.State)
 					assert.NotContains(t, dt.pendingServiceDeletions, b)
-					assert.Empty(t, dt.pendingPods[b])
+					if mode != "ready" {
+						op.State = StateCreationInProgress
+						dt.NRPResources.NATGateways.Insert(b)
+						dt.OnServiceCreationComplete(b, true, nil)
+					}
+					assert.Equal(t, StateCreated, op.State)
 					for i, address := range addresses {
-						tracked := dt.K8sResources.Nodes[locations[i]].Pods[address]
-						assert.Equal(t, "uid-p", tracked.OutboundPodUID)
-						assert.Equal(t, b, tracked.PublicOutboundIdentity)
-						if tc.address || tc.location {
+						assert.Equal(t, "uid-p", dt.K8sResources.Nodes[locations[i]].Pods[address].OutboundPodUID)
+						if mode != "unchanged" {
 							assert.Empty(t, dt.K8sResources.Nodes[family.nodes[i]].Pods[family.old[i]].PublicOutboundIdentity)
 						}
 					}
-					if tc.peer {
+					if mode == "peer" {
 						for i, address := range family.peer {
 							assert.Equal(t, "uid-q", dt.K8sResources.Nodes[family.nodes[i]].Pods[address].OutboundPodUID)
 						}
 					}
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+					assert.False(t, dt.CheckPendingPodDeletions(ctx))
 					got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
 					assert.NoError(t, err)
 					assert.True(t, hasPodFinalizer(got))
-					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
-					assert.False(t, dt.CheckPendingPodDeletions(ctx))
+					assert.Empty(t, dt.pendingPods[b])
 					assert.Empty(t, dt.pendingPodDeletions)
 					assert.Empty(t, dt.podFinalizerGuards)
 				})
@@ -1489,11 +1461,11 @@ func TestPodFinalizerCompletionPreservesCurrentCreation(t *testing.T) {
 	}
 }
 
-func TestPodFinalizerCompletionRetainsChangedRegistration(t *testing.T) {
+func TestPodFinalizerCompletionKeepsAssociationUntilRegistration(t *testing.T) {
 	const a, b, c = "egress-a-natgw", "egress-b-natgw", "egress-c-natgw"
-	for _, state := range []string{"not_started", "creating", "ready"} {
-		for _, change := range []string{"relabel", "no_addresses", "no_location", "gone"} {
-			t.Run(state+"/"+change, func(t *testing.T) {
+	for _, ready := range []bool{false, true} {
+		for _, change := range []string{"removed", "emptied", "relabelled"} {
+			t.Run(fmt.Sprintf("ready=%t/%s", ready, change), func(t *testing.T) {
 				ctx := context.Background()
 				label := "egress-b"
 				pod := unlabelledFinalizerPod(&label, "uid-p", "10.244.0.7")
@@ -1508,102 +1480,65 @@ func TestPodFinalizerCompletionRetainsChangedRegistration(t *testing.T) {
 				if !assert.NotNil(t, op) {
 					return
 				}
-				if state != "not_started" {
-					op.State = StateCreationInProgress
-					inFlight := op.Config
-					op.InFlightConfig = &inFlight
-				}
-				if state == "ready" {
+				op.State = StateCreationInProgress
+				inFlight := op.Config
+				op.InFlightConfig = &inFlight
+				if ready {
 					dt.NRPResources.NATGateways.Insert(b)
 					dt.OnServiceCreationComplete(b, true, nil)
 					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
 				}
-				current := pod.DeepCopy()
-				current.Status.PodIP = "10.244.0.8"
-				current.Status.PodIPs = []v1.PodIP{{IP: "10.244.0.8"}}
-				_, err := kube.CoreV1().Pods("ns").Update(ctx, current, metav1.UpdateOptions{})
+				observed := pod.DeepCopy()
+				observed.Status.PodIP = "10.244.0.8"
+				observed.Status.PodIPs = []v1.PodIP{{IP: "10.244.0.8"}}
+				_, err := kube.CoreV1().Pods("ns").Update(ctx, observed, metav1.UpdateOptions{})
 				assert.NoError(t, err)
+				current := observed.DeepCopy()
+				switch change {
+				case "removed":
+					current.Labels = nil
+				case "emptied":
+					current.Labels[consts.PodLabelServiceEgressGateway] = ""
+				case "relabelled":
+					current.Labels[consts.PodLabelServiceEgressGateway] = "egress-c"
+				}
 				gets := 0
 				kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
 					gets++
 					if gets == 2 {
-						resource := v1.SchemeGroupVersion.WithResource("pods")
-						if change == "gone" {
-							assert.NoError(t, kube.Tracker().Delete(resource, "ns", "p"))
-						} else {
-							if change == "relabel" {
-								current.Labels[consts.PodLabelServiceEgressGateway] = "egress-c"
-							} else if change == "no_location" {
-								current.Status.HostIP, current.Status.HostIPs = "fd00::1", nil
-							} else {
-								current.Status.PodIP, current.Status.PodIPs = "", nil
-							}
-							assert.NoError(t, kube.Tracker().Update(resource, current, "ns"))
-						}
+						assert.NoError(t, kube.Tracker().Update(v1.SchemeGroupVersion.WithResource("pods"), current, "ns"))
 					}
 					return false, nil, nil
 				})
 				assert.NoError(t, dt.RemoveLastPodFinalizers(ctx, a))
 				assert.Equal(t, 2, gets)
-				pending := dt.pendingPodDeletions["ns/p"]
-				if !assert.NotNil(t, pending) {
-					return
-				}
-				assert.True(t, pending.ResolutionPending)
-				assert.Contains(t, pending.ResolutionServices, b)
-
-				dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
-				dt.CheckPendingPodDeletions(ctx)
-				if change == "no_location" {
-					pending = dt.pendingPodDeletions["ns/p"]
-					if assert.NotNil(t, pending) {
-						assert.True(t, pending.ResolutionPending)
-					}
-					assert.Same(t, op, dt.pendingServiceOps[b])
-					assert.NotContains(t, dt.pendingServiceDeletions, b)
-					current.Status.HostIP = "10.0.0.1"
-					_, err = kube.CoreV1().Pods("ns").Update(ctx, current, metav1.UpdateOptions{})
-					assert.NoError(t, err)
-					dt.CheckPendingPodDeletions(ctx)
-					if state != "ready" {
-						op.State = StateCreationInProgress
-						dt.NRPResources.NATGateways.Insert(b)
-						dt.OnServiceCreationComplete(b, true, nil)
-					}
-					assert.Equal(t, StateCreated, op.State)
-					assert.Equal(t, "uid-p", dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.8"].OutboundPodUID)
-				} else if state == "not_started" {
-					assert.NotContains(t, dt.pendingServiceOps, b)
+				assert.True(t, dt.outboundAddressDesiredLocked(b, "10.244.0.7"),
+					"an interrupted registration must leave the association available for cleanup")
+				assert.False(t, dt.outboundAddressDesiredLocked(b, "10.244.0.8"))
+				assert.NotContains(t, dt.pendingServiceDeletions, b)
+				if change == "removed" {
+					dt.podInformerRemovePod(observed)
 				} else {
-					assert.True(t, op.State == StateDeletionPending || op.State == StateDeletionInProgress)
-					if state == "creating" {
-						dt.NRPResources.NATGateways.Insert(b)
-						dt.OnServiceCreationComplete(b, true, nil)
-						assert.Equal(t, StateDeletionInProgress, op.State)
-					}
-					completeEgressCleanup(t, dt, b)
+					dt.reconcileEgressPodUpdate(observed, current)
 				}
-				if change == "relabel" {
-					next := dt.pendingServiceOps[c]
-					if assert.NotNil(t, next) {
-						assert.Equal(t, StateNotStarted, next.State)
-						next.State = StateCreationInProgress
-						dt.NRPResources.NATGateways.Insert(c)
-						dt.OnServiceCreationComplete(c, true, nil)
-						tracked := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.8"]
-						assert.Equal(t, "uid-p", tracked.OutboundPodUID)
-						assert.Equal(t, c, tracked.PublicOutboundIdentity)
-					}
+				assert.False(t, dt.outboundAddressDesiredLocked(b, "10.244.0.7"))
+				assert.True(t, op.State == StateDeletionPending || op.State == StateDeletionInProgress)
+				if !ready {
+					dt.NRPResources.NATGateways.Insert(b)
+					dt.OnServiceCreationComplete(b, true, nil)
 				}
-				if change != "gone" {
-					got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
-					assert.NoError(t, err)
-					assert.True(t, hasPodFinalizer(got))
-				}
-				assert.Empty(t, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity)
-				assert.Empty(t, dt.pendingPods[b])
 				dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
-				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+				dt.CheckPendingServiceDeletions()
+				assert.Equal(t, StateDeletionInProgress, op.State)
+				completeEgressCleanup(t, dt, b)
+				got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, change == "relabelled", hasPodFinalizer(got))
+				assert.Contains(t, got.Finalizers, "example.com/keep")
+				if change == "relabelled" {
+					assert.NotNil(t, dt.pendingServiceOps[c])
+					assert.True(t, dt.outboundAddressDesiredLocked(c, "10.244.0.8"))
+				}
 				assert.Empty(t, dt.pendingPodDeletions)
 				assert.Empty(t, dt.podFinalizerGuards)
 			})

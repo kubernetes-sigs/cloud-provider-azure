@@ -1152,7 +1152,7 @@ func (dt *DiffTracker) queuePodServiceCleanupLocked(serviceName string) bool {
 	op := dt.pendingServiceOps[serviceName]
 	if !dt.NRPResources.NATGateways.Has(serviceName) && !dt.serviceHasLocationsInNRP(serviceName) &&
 		(op == nil || op.State == StateNotStarted) {
-		return dt.handleEmptyOutboundServiceLocked(serviceName)
+		return false
 	}
 	dt.markOutboundServiceForDeletionLocked(serviceName)
 	dt.triggerLocationsUpdater()
@@ -1200,26 +1200,15 @@ func (dt *DiffTracker) preparePodFinalizerLocked(pod *v1.Pod, entry *pendingPodT
 	live = dt.podWantsEgressLocked(pod)
 	currentService := podEgressGatewayName(pod)
 	currentAddresses := PodEgressAddresses(pod)
-	currentLocations := PodNodeLocationsByFamily(pod)
 	preserveCurrentService := live && pod.Status.HostIP != "" && len(currentAddresses) > 0
 	// Workers cannot inspect any intermediate per-identity record while this lock is held.
 	plans := dt.unlabelledPodReleasePlansLocked(pod, entry.Record, completedService)
 	for _, plan := range plans {
-		preserveService := preserveCurrentService && plan.serviceName == currentService
-		addresses := plan.addresses
-		if preserveService {
-			addresses = nil
-			for _, address := range plan.addresses {
-				location, found := NodeLocationForAddress(currentLocations, address)
-				if !slices.Contains(currentAddresses, address) || !found || location != plan.location {
-					addresses = append(addresses, address)
-				}
-			}
-		}
-		if len(addresses) == 0 {
+		if preserveCurrentService && plan.serviceName == currentService {
+			// Registration publishes the replacement before pruning this service's old tuples.
 			continue
 		}
-		dt.deletePodLocked(plan.serviceName, plan.location, addresses, pod.Namespace, pod.Name, string(pod.UID), preserveService, true)
+		dt.deletePodLocked(plan.serviceName, plan.location, plan.addresses, pod.Namespace, pod.Name, string(pod.UID), false, true)
 	}
 	if !live {
 		identity := podEgressGatewayName(pod)
@@ -1369,9 +1358,8 @@ func (dt *DiffTracker) processPodFinalizerGuarded(ctx context.Context, entry *pe
 			return ready && !live
 		})
 	}
-	retryRegistration := false
 	if readd != nil {
-		retryRegistration = dt.podInformerRegisterPodGuarded(ctx, readd)
+		dt.podInformerRegisterPodGuarded(ctx, readd)
 		if err == nil {
 			err = ctx.Err()
 		}
@@ -1387,10 +1375,6 @@ func (dt *DiffTracker) processPodFinalizerGuarded(ctx context.Context, entry *pe
 			dt.queuePodResolutionLocked(readd, false)
 		}
 		return false, readd, err
-	}
-	if retryRegistration {
-		dt.queuePodResolutionLocked(readd, false)
-		return false, readd, nil
 	}
 	if finished {
 		retired = dt.retirePodDeletionLocked(entry)

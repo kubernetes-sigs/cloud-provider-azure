@@ -1453,7 +1453,7 @@ type deletePodAddressOutcome struct {
 // after every address has been processed, so CheckPendingPodDeletions can never observe a partial
 // address set and strip the pod's single finalizer while another address is still registered in NRP.
 // Must be called with dt.mu held.
-func (dt *DiffTracker) deletePodAddressLocked(serviceName, location, address, podKey, podUID string, preserveService, exactLocation bool) deletePodAddressOutcome {
+func (dt *DiffTracker) deletePodAddressLocked(serviceName, location, address, podKey, podUID string, exactLocation bool) deletePodAddressOutcome {
 	// Informer deletes supply a primary-IP hint; discovery must not follow an address that moved.
 	if !exactLocation {
 		location = dt.resolveOutboundAddressLocationLocked(serviceName, location, address)
@@ -1468,10 +1468,11 @@ func (dt *DiffTracker) deletePodAddressLocked(serviceName, location, address, po
 		dt.serviceHasLocationsInNRP(serviceName)
 	if dt.cancelBufferedPodLocked(serviceName, location, address, podKey, podUID) {
 		dt.logger.V(5).Info("Cancelled buffered pod before service creation", "service", serviceName, "location", location, "address", address)
-		// Replacement keeps the gateway, but dispatched addresses still require drain acknowledgment.
-		if !preserveService {
-			dt.handleEmptyOutboundServiceLocked(serviceName)
-		}
+		// If that was the service's only pod, tear down the pod-less NAT Gateway so it is not leaked.
+		// Once creation was dispatched, the address may already be visible in NRP even though the
+		// completion callback has not promoted the pod into live state. Keep the finalizer until the
+		// resulting service deletion completes.
+		dt.handleEmptyOutboundServiceLocked(serviceName)
 		return deletePodAddressOutcome{
 			drainGated:  mayHaveReachedNRP,
 			triggerSync: mayHaveReachedNRP,
@@ -1638,7 +1639,7 @@ func (dt *DiffTracker) deletePodLocked(serviceName, location string, addresses [
 		if address == "" {
 			continue
 		}
-		outcome := dt.deletePodAddressLocked(serviceName, location, address, identityPodKey, uid, preserveService, exactLocation)
+		outcome := dt.deletePodAddressLocked(serviceName, location, address, identityPodKey, uid, exactLocation)
 		if outcome.triggerSync {
 			triggerSync = true
 		}
