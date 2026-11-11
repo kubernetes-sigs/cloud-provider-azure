@@ -283,8 +283,7 @@ func (dt *DiffTracker) podInformerAddPod(pod *v1.Pod) {
 	dt.podInformerRegisterPodGuarded(ctx, pod)
 }
 
-// Report interrupted publication so cleanup callers retain their discovery record.
-func (dt *DiffTracker) podInformerRegisterPodGuarded(ctx context.Context, pod *v1.Pod) (needsRetry bool) {
+func (dt *DiffTracker) podInformerRegisterPodGuarded(ctx context.Context, pod *v1.Pod) {
 	// Only process pods in Running or Pending phase
 	if pod.Status.Phase != v1.PodRunning && pod.Status.Phase != v1.PodPending {
 		klog.V(4).Infof("podInformerAddPod: Pod %s/%s is in phase %s (not Running/Pending), skipping",
@@ -324,7 +323,7 @@ func (dt *DiffTracker) podInformerRegisterPodGuarded(ctx context.Context, pod *v
 	current, err := dt.addPodFinalizerGuarded(ctx, pod)
 	if errors.Is(err, ErrPodGoneOrReplaced) || ctx.Err() != nil {
 		klog.V(4).Infof("podInformerAddPod: pod %s no longer matches the add intent or registration was canceled", podKey)
-		return true
+		return
 	}
 	if err != nil {
 		klog.Warningf("podInformerAddPod: registering egress pod %s WITHOUT cleanup finalizer after retries: %v", podKey, err)
@@ -336,7 +335,7 @@ func (dt *DiffTracker) podInformerRegisterPodGuarded(ctx context.Context, pod *v
 		pod = current
 		podIPs = dt.podRegistrationAddresses(pod)
 		if len(podIPs) == 0 {
-			return true
+			return
 		}
 	}
 
@@ -355,7 +354,7 @@ func (dt *DiffTracker) podInformerRegisterPodGuarded(ctx context.Context, pod *v
 		locations[podIP] = location
 	}
 	if len(locations) == 0 {
-		return true
+		return
 	}
 
 	dt.mu.Lock()
@@ -382,7 +381,6 @@ func (dt *DiffTracker) podInformerRegisterPodGuarded(ctx context.Context, pod *v
 			dt.deletePodLocked(drain.serviceName, drain.location, drain.addresses, "", "", string(pod.UID), true, true)
 		}
 	}
-	return false
 }
 
 // A fresh GET can publish a status that the informer never observes.
