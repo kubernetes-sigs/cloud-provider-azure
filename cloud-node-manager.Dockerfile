@@ -35,7 +35,7 @@ RUN make bin/azure-cloud-node-manager ENABLE_GIT_COMMAND=${ENABLE_GIT_COMMAND} A
 
 # Use distroless base image for a lean production container.
 # Start a new build stage.
-FROM gcr.io/distroless/base:latest@sha256:075a33d9c49026ca7ee72738b4c4a1caea55d0f44227356e46a611a211050e20
+FROM gcr.io/distroless/base:latest@sha256:ca90dc2333005edbc15bccbd7cd61c08ee0fd9dd1fa5ac68bc72778e6659ec5d
 
 # Create a group and user
 USER 65532:65532
