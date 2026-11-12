@@ -11340,6 +11340,89 @@ func TestRemoveFrontendIPConfigurationFromLoadBalancerUpdate(t *testing.T) {
 	})
 }
 
+func TestRemoveFrontendIPConfigurationFromLoadBalancerDualStack(t *testing.T) {
+	// Cover both IP-family orders in every frontend position, with zero to two
+	// unrelated frontends. Removing entries while iterating from first to last
+	// can skip a frontend or panic.
+	for _, frontendCount := range []int{2, 3, 4} {
+		for ipv4Index := range frontendCount {
+			for ipv6Index := range frontendCount {
+				if ipv4Index == ipv6Index {
+					continue
+				}
+				name := fmt.Sprintf("total-frontends=%d/IPv4-index=%d/IPv6-index=%d", frontendCount, ipv4Index, ipv6Index)
+				t.Run(name, func(t *testing.T) {
+					ctrl := gomock.NewController(t)
+					cloud := GetTestCloud(ctrl)
+					service := getTestServiceDualStack("service1", v1.ProtocolTCP, nil, 80)
+					lb := getTestLoadBalancerDualStack(ptr.To("lb"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), service, consts.LoadBalancerSKUStandard)
+					fips := lb.Properties.FrontendIPConfigurations
+					lb.Properties.FrontendIPConfigurations = make([]*armnetwork.FrontendIPConfiguration, frontendCount)
+					lb.Properties.FrontendIPConfigurations[ipv4Index] = fips[0]
+					lb.Properties.FrontendIPConfigurations[ipv6Index] = fips[1]
+
+					// Fill unused positions with unrelated Services' frontends. Their
+					// frontends, rules, and probes must be preserved.
+					expectedFIPs := make([]*armnetwork.FrontendIPConfiguration, 0, frontendCount-2)
+					expectedRules := make([]*armnetwork.LoadBalancingRule, 0, frontendCount-2)
+					expectedProbes := make([]*armnetwork.Probe, 0, frontendCount-2)
+					for i := range frontendCount {
+						if i == ipv4Index || i == ipv6Index {
+							continue
+						}
+						otherService := getTestService(fmt.Sprintf("service%d", i+2), v1.ProtocolTCP, nil, false, 80)
+						otherLB := getTestLoadBalancer(ptr.To("lb"), ptr.To("rg"), ptr.To("testCluster"),
+							ptr.To("a"+otherService.Name), otherService, consts.LoadBalancerSKUStandard)
+						otherFIP := otherLB.Properties.FrontendIPConfigurations[0]
+						otherProbe := otherLB.Properties.Probes[0]
+						otherRule := otherLB.Properties.LoadBalancingRules[0]
+						otherFIP.Properties.PublicIPAddress.ID = ptr.To(fmt.Sprintf(
+							"%s/providers/Microsoft.Network/publicIPAddresses/testCluster-%s", rgprefix, *otherFIP.Name))
+						otherProbe.ID = ptr.To(cloud.getLoadBalancerProbeID(*otherLB.Name, *otherProbe.Name))
+						otherRule.Properties.FrontendIPConfiguration.ID = otherFIP.ID
+						otherRule.Properties.Probe.ID = otherProbe.ID
+						lb.Properties.FrontendIPConfigurations[i] = otherFIP
+						lb.Properties.LoadBalancingRules = append(lb.Properties.LoadBalancingRules, otherLB.Properties.LoadBalancingRules...)
+						lb.Properties.Probes = append(lb.Properties.Probes, otherLB.Properties.Probes...)
+						expectedFIPs = append(expectedFIPs, otherLB.Properties.FrontendIPConfigurations...)
+						expectedRules = append(expectedRules, otherLB.Properties.LoadBalancingRules...)
+						expectedProbes = append(expectedProbes, otherLB.Properties.Probes...)
+					}
+
+					mockPLSRepo := cloud.plsRepo.(*privatelinkservice.MockRepository)
+					mockPLSRepo.EXPECT().Get(gomock.Any(), "rg", *fips[0].ID, gomock.Any()).
+						Return(&armnetwork.PrivateLinkService{ID: ptr.To(consts.PrivateLinkServiceNotExistID)}, nil)
+					mockLBClient := cloud.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+					expectedDeletedLBName := ""
+					if len(expectedFIPs) == 0 {
+						mockLBClient.EXPECT().Delete(gomock.Any(), "rg", "lb").Return(nil)
+						expectedDeletedLBName = "lb"
+					} else {
+						mockLBClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "lb", gomock.Any()).
+							DoAndReturn(func(_ context.Context, _, _ string, updatedLB armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+								assert.Equal(t, expectedFIPs, updatedLB.Properties.FrontendIPConfigurations)
+								assert.Equal(t, expectedRules, updatedLB.Properties.LoadBalancingRules)
+								assert.Equal(t, expectedProbes, updatedLB.Properties.Probes)
+								return &updatedLB, nil
+							})
+					}
+
+					assert.NotPanics(t, func() {
+						deletedLBName, deletedPLS, err := cloud.removeFrontendIPConfigurationFromLoadBalancer(
+							context.Background(), lb, []*armnetwork.LoadBalancer{lb}, fips, "testCluster", &service)
+						assert.NoError(t, err)
+						assert.Equal(t, expectedDeletedLBName, deletedLBName)
+						assert.False(t, deletedPLS)
+						assert.Equal(t, expectedFIPs, lb.Properties.FrontendIPConfigurations)
+						assert.Equal(t, expectedRules, lb.Properties.LoadBalancingRules)
+						assert.Equal(t, expectedProbes, lb.Properties.Probes)
+					})
+				})
+			}
+		}
+	}
+}
+
 func TestCleanOrphanedLoadBalancerLBInUseByVMSS(t *testing.T) {
 
 	t.Run("cleanOrphanedLoadBalancer should retry deleting lb when meeting LoadBalancerInUseByVirtualMachineScaleSet", func(t *testing.T) {
