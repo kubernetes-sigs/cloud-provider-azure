@@ -19,6 +19,7 @@ package difftracker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -29,12 +30,136 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/component-base/metrics/testutil"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+func TestLocationsUpdaterAdvancesResolvedPodServiceCleanup(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, tt := range []struct {
+		name           string
+		alreadyPending bool
+		initializing   bool
+	}{
+		{name: "quiet post-init resolution"},
+		{name: "already pending cleanup", alreadyPending: true},
+		{name: "initialization retry", initializing: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			label := "egress-b"
+			pod := unlabelledFinalizerPod(&label, "uid-p")
+			now := metav1.Now()
+			pod.DeletionTimestamp = &now
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.networkClientFactory = mock_azclient.NewMockClientFactory(gomock.NewController(t))
+			dt.config = testConfig()
+			dt.NRPResources.NATGateways.Insert(a, b)
+			dt.K8sResources.Egresses.Insert(a, b)
+			dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+				"10.244.0.9": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: b, OutboundPodKey: "ns/q", OutboundPodUID: "uid-q"},
+			}}
+			dt.outboundIdentityPodRefCount.Store(b, 1)
+			dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+				"10.244.0.9": {Services: utilsets.NewString(b)},
+			}}
+			for _, service := range []string{a, b} {
+				dt.pendingServiceOps[service] = &ServiceOperationState{
+					ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+				}
+			}
+			dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-p",
+				ResolutionPending:   true,
+				ResolutionAddresses: []string{"10.244.0.7"}, ResolutionServices: []string{a, b},
+				ServiceCleanup: map[string]podCleanupState{
+					a: {Addresses: []string{"10.244.0.7"}, WaitForServiceDeletion: tt.alreadyPending},
+					b: {Addresses: []string{"10.244.0.7"}},
+				},
+			}
+			if tt.alreadyPending {
+				dt.mu.Lock()
+				dt.markOutboundServiceForDeletionLocked(a)
+				dt.mu.Unlock()
+			}
+			if tt.initializing {
+				atomic.StoreInt32(&dt.isInitializing, 1)
+			}
+			assert.Empty(t, dt.GetSyncLocationsAddresses().Locations)
+			assert.Empty(t, dt.locationsUpdaterTrigger)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+			lu := NewLocationsUpdater(context.Background(), dt)
+			go lu.Run()
+			defer lu.Stop()
+			dt.triggerLocationsUpdater()
+			assert.Eventually(t, func() bool {
+				dt.mu.Lock()
+				defer dt.mu.Unlock()
+				return dt.pendingServiceOps[a].State == StateDeletionInProgress
+			}, 3*time.Second, 10*time.Millisecond, "resolved cleanup must advance without another informer event")
+			got, err := kube.CoreV1().Pods("ns").Get(context.Background(), "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "A's worker still owns finalizer completion")
+		})
+	}
+}
+
+func TestLocationsUpdaterRetriesUnresolvedPodWithoutLocationChanges(t *testing.T) {
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	var gets atomic.Int32
+	kube.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		if gets.Add(1) <= 2 {
+			return true, nil, apierrors.NewServiceUnavailable("transient Pod lookup")
+		}
+		return false, nil, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.networkClientFactory = mock_azclient.NewMockClientFactory(gomock.NewController(t))
+	dt.config = testConfig()
+	dt.releaseUnlabelledPodFinalizer(context.Background(), pod, false)
+	pending := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.True(t, pending.ResolutionPending)
+	lu := NewLocationsUpdater(context.Background(), dt)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		lu.Run()
+	}()
+	defer func() {
+		lu.Stop()
+		<-done
+	}()
+	assert.Eventually(t, func() bool {
+		obj, err := kube.Tracker().Get(v1.SchemeGroupVersion.WithResource("pods"), "ns", "p")
+		if err != nil || hasPodFinalizer(obj.(*v1.Pod)) {
+			return false
+		}
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
+		return len(dt.pendingPodDeletions) == 0 && len(dt.podFinalizerGuards) == 0
+	}, 5*time.Second, 20*time.Millisecond, "a quiet cluster must retry discovery without another event")
+	assert.GreaterOrEqual(t, gets.Load(), int32(4))
+	dt.mu.Lock()
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Empty(t, dt.podFinalizerGuards)
+	dt.mu.Unlock()
+}
 
 // TestLocationsUpdaterRetriesAfterSyncFailure verifies that a failed NRP location sync is
 // retried automatically (with backoff) rather than left unsynced until an unrelated future
@@ -176,6 +301,223 @@ func TestLocationsUpdaterBackoffShortCircuitsOnTrigger(t *testing.T) {
 
 // TestLocationsUpdater_TerminalErrorNotRetried checks that a deterministic NRP rejection (HTTP 400)
 // abandons the batch instead of retrying the identical payload forever.
+func TestLocationsUpdaterAcknowledgesPodDrainBeforeRelease(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, family := range []struct {
+		name  string
+		nodes []string
+		ips   []string
+		other []string
+		next  []string
+	}{
+		{name: "ipv4", nodes: []string{"10.0.0.1"}, ips: []string{"10.244.0.7"}, other: []string{"10.244.0.9"}, next: []string{"10.244.0.10"}},
+		{name: "ipv6", nodes: []string{"fd00::1"}, ips: []string{"fd00::7"}, other: []string{"fd00::9"}, next: []string{"fd00::a"}},
+		{name: "dual", nodes: []string{"10.0.0.1", "fd00::1"}, ips: []string{"10.244.0.7", "fd00::7"}, other: []string{"10.244.0.9", "fd00::9"}, next: []string{"10.244.0.10", "fd00::a"}},
+	} {
+		t.Run(family.name, func(t *testing.T) {
+			for _, status := range []int{0, http.StatusBadRequest, http.StatusUnprocessableEntity} {
+				t.Run(fmt.Sprintf("first_status=%d", status), func(t *testing.T) {
+					ctx := context.Background()
+					label := "egress-a"
+					makePod := func(name, uid string, addresses []string) *v1.Pod {
+						pod := unlabelledFinalizerPod(&label, uid, addresses...)
+						pod.Name, pod.Status.HostIP = name, family.nodes[0]
+						for _, node := range family.nodes {
+							pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: node})
+						}
+						return pod
+					}
+					pod, other := makePod("p", "uid-p", family.ips), makePod("other", "uid-other", family.other)
+					kube := fake.NewSimpleClientset(pod, other)
+					dt := newTestDiffTracker()
+					dt.kubeClient = kube
+					dt.podInformerAddPod(other)
+					op := dt.pendingServiceOps[service]
+					if !assert.NotNil(t, op) {
+						return
+					}
+					op.State = StateCreationInProgress
+					dt.NRPResources.NATGateways.Insert(service)
+					dt.OnServiceCreationComplete(service, true, nil)
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+					select {
+					case <-dt.locationsUpdaterTrigger:
+					default:
+					}
+					dt.podInformerAddPod(pod)
+					ctrl := gomock.NewController(t)
+					factory := mock_azclient.NewMockClientFactory(ctrl)
+					sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+					factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+					addEntered, removeEntered := make(chan struct{}), make(chan struct{})
+					releaseAdd, releaseRemove := make(chan struct{}), make(chan struct{})
+					var addOnce, removeOnce sync.Once
+					resumeAdd := func() { addOnce.Do(func() { close(releaseAdd) }) }
+					resumeRemove := func() { removeOnce.Do(func() { close(releaseRemove) }) }
+					var calls atomic.Int32
+					sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+						DoAndReturn(func(context.Context, string, string, armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+							switch calls.Add(1) {
+							case 1:
+								close(addEntered)
+								<-releaseAdd
+								if status != 0 {
+									return &azcore.ResponseError{StatusCode: status, ErrorCode: "InvalidRequest"}
+								}
+							case 2:
+								close(removeEntered)
+								<-releaseRemove
+							}
+							return nil
+						}).AnyTimes()
+					dt.networkClientFactory, dt.config = factory, testConfig()
+					lu := NewLocationsUpdater(ctx, dt)
+					stopped := make(chan struct{})
+					go func() {
+						defer close(stopped)
+						lu.Run()
+					}()
+					defer func() {
+						resumeAdd()
+						resumeRemove()
+						lu.Stop()
+						<-stopped
+					}()
+					select {
+					case <-addEntered:
+					case <-time.After(3 * time.Second):
+						t.Fatal("NRP add was not dispatched")
+					}
+					empty := pod.DeepCopy()
+					empty.Labels[consts.PodLabelServiceEgressGateway] = ""
+					_, err := kube.CoreV1().Pods("ns").Update(ctx, empty, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					dt.reconcileEgressPodUpdate(pod, empty)
+					deleting := empty.DeepCopy()
+					now := metav1.Now()
+					deleting.DeletionTimestamp = &now
+					_, err = kube.CoreV1().Pods("ns").Update(ctx, deleting, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					dt.reconcileEgressPodUpdate(empty, deleting)
+					current, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+					assert.NoError(t, err)
+					assert.True(t, hasPodFinalizer(current), "duplicate events cannot acknowledge an outstanding publication")
+					if status != 0 {
+						next := makePod("other", "uid-other", family.next)
+						_, err := kube.CoreV1().Pods("ns").Update(ctx, next, metav1.UpdateOptions{})
+						assert.NoError(t, err)
+						dt.reconcileEgressPodUpdate(other, next)
+					}
+					resumeAdd()
+					select {
+					case <-removeEntered:
+					case <-time.After(3 * time.Second):
+						t.Fatal("cleanup did not continue after the first response")
+					}
+					current, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+					assert.NoError(t, err)
+					assert.True(t, hasPodFinalizer(current), "neither an acknowledged add nor a failed pass acknowledges the removal")
+					dt.mu.Lock()
+					pending := dt.pendingPodDeletions["ns/p"]
+					if assert.NotNil(t, pending) {
+						cleanup, found := pending.cleanupFor(service)
+						assert.True(t, found)
+						assert.True(t, cleanup.LocationSyncPending)
+					}
+					dt.mu.Unlock()
+					resumeRemove()
+					assert.Eventually(t, func() bool {
+						current, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+						return err == nil && !hasPodFinalizer(current)
+					}, 3*time.Second, time.Millisecond)
+				})
+			}
+		})
+	}
+}
+
+func TestLocationsUpdaterRetriesUnchangedPodDrainWithBackoff(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		for _, unknown := range []bool{false, true} {
+			t.Run(fmt.Sprintf("status=%d/unknown=%t", status, unknown), func(t *testing.T) {
+				label := "egress-b"
+				pod := unlabelledFinalizerPod(&label, "uid-p", "10.244.0.7")
+				dt := newTestDiffTracker()
+				dt.kubeClient = fake.NewSimpleClientset(pod)
+				dt.NRPResources.NATGateways.Insert(a, b)
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: utilsets.NewString(a)},
+				}}
+				dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+					"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: b, OutboundPodKey: "ns/p", OutboundPodUID: "uid-p"},
+				}}
+				dt.outboundIdentityPodRefCount.Store(b, 1)
+				dt.pendingServiceOps[a] = &ServiceOperationState{
+					ServiceName: a, Config: NewOutboundServiceConfig(a, nil), State: StateDeletionPending,
+				}
+				dt.pendingServiceOps[b] = &ServiceOperationState{
+					ServiceName: b, Config: NewOutboundServiceConfig(b, nil), State: StateCreated,
+				}
+				dt.pendingServiceDeletions[a] = &PendingServiceDeletion{ServiceName: a}
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a,
+					Addresses: []string{"10.244.0.7"}, IsLastPod: true, VerifyUnknownEgressDrain: unknown,
+				}
+				ctrl := gomock.NewController(t)
+				factory := mock_azclient.NewMockClientFactory(ctrl)
+				sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+				factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+				first, second := make(chan struct{}), make(chan struct{})
+				var calls atomic.Int32
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(context.Context, string, string, armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+						switch calls.Add(1) {
+						case 1:
+							close(first)
+						case 2:
+							close(second)
+							cancel()
+						}
+						return &azcore.ResponseError{StatusCode: status, ErrorCode: "InvalidRequest"}
+					}).AnyTimes()
+				dt.networkClientFactory, dt.config = factory, testConfig()
+				lu := NewLocationsUpdater(ctx, dt)
+				lu.failureCount = 6
+				stopped := make(chan struct{})
+				go func() {
+					defer close(stopped)
+					lu.Run()
+				}()
+				defer func() {
+					lu.Stop()
+					<-stopped
+				}()
+				dt.triggerLocationsUpdater()
+				select {
+				case <-first:
+				case <-time.After(3 * time.Second):
+					t.Fatal("locations update was never attempted")
+				}
+				select {
+				case <-second:
+					t.Error("unchanged drain bypassed the scheduled backoff")
+				case <-time.After(time.Second):
+				}
+				cancel()
+				lu.Stop()
+				<-stopped
+				assert.Equal(t, int32(1), calls.Load())
+				assert.Equal(t, 7, lu.failureCount, "cleanup must remain retryable, not take the terminal shortcut")
+				assert.True(t, dt.pendingPodDeletions["ns/p"].waitsForService(a))
+				assert.Empty(t, dt.podFinalizerGuards)
+			})
+		}
+	}
+}
+
 func TestLocationsUpdater_TerminalErrorNotRetried(t *testing.T) {
 	RegisterMetrics()
 	before, err := testutil.GetCounterMetricValue(locationSyncTerminalErrorsTotal)
