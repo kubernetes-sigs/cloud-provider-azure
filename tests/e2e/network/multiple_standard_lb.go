@@ -234,6 +234,91 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	DescribeTable("should migrate services and remove their frontends from the previous load balancer",
+		func(isInternal bool, policy v1.ServiceExternalTrafficPolicy) {
+			const (
+				migratingServiceName = "migrating"
+				unrelatedServiceName = "unrelated"
+			)
+
+			annotations := map[string]string{
+				consts.ServiceAnnotationLoadBalancerConfigurations: "lb-1",
+			}
+			lbSuffix := ""
+			if isInternal {
+				annotations[consts.ServiceAnnotationLoadBalancerInternal] = consts.TrueAnnotationValue
+				lbSuffix = consts.InternalLoadBalancerNameSuffix
+			}
+
+			clusterName := os.Getenv("CLUSTER_NAME")
+			Expect(clusterName).NotTo(BeEmpty())
+			serviceIPs := make(map[string][]*string)
+			frontendIDs := make(map[string][]string)
+
+			for _, name := range []string{migratingServiceName, unrelatedServiceName} {
+				By(fmt.Sprintf("Creating Service %q on load balancer %q", name, "lb-1"+lbSuffix))
+				svc := utils.CreateLoadBalancerServiceManifest(name, annotations, labels, ns.Name, ports)
+				svc.Spec.ExternalTrafficPolicy = policy
+				svc, err := cs.CoreV1().Services(ns.Name).Create(context.Background(), svc, metav1.CreateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				defer func(name string) {
+					Expect(utils.DeleteService(cs, ns.Name, name)).To(Succeed())
+				}(name)
+
+				ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, name, nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ips).To(HaveLen(len(svc.Spec.IPFamilies)))
+				serviceIPs[name] = ips
+				for _, ip := range ips {
+					fipID, lbName := getFIPIDAndLBName(tc, *ip, isInternal)
+					Expect(lbName).To(Equal("lb-1" + lbSuffix))
+					frontendIDs[name] = append(frontendIDs[name], fipID)
+				}
+			}
+
+			for _, targetLB := range []string{clusterName, "lb-1"} {
+				By(fmt.Sprintf("Moving Service %q to load balancer %q", migratingServiceName, targetLB+lbSuffix))
+				svc, err := cs.CoreV1().Services(ns.Name).Get(context.Background(), migratingServiceName, metav1.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				svc.Annotations[consts.ServiceAnnotationLoadBalancerConfigurations] = targetLB
+				beforeUpdate := time.Now()
+				svc, err = cs.CoreV1().Services(ns.Name).Update(context.Background(), svc, metav1.UpdateOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				err = utils.WaitForServiceNormalEventAfter(cs, ns.Name, svc.Name, "EnsuredLoadBalancer", "", beforeUpdate)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Checking that the service frontends were removed from the previous load balancer")
+				for _, fipID := range frontendIDs[svc.Name] {
+					Expect(utils.VerifyFIPRemoved(tc, fipID)).To(Succeed())
+				}
+				frontendIDs[svc.Name] = nil
+				ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, svc.Name, serviceIPs[svc.Name])
+				Expect(err).NotTo(HaveOccurred())
+				Expect(ips).To(HaveLen(len(svc.Spec.IPFamilies)))
+				for _, ip := range ips {
+					fipID, lbName := getFIPIDAndLBName(tc, *ip, isInternal)
+					Expect(lbName).To(Equal(targetLB + lbSuffix))
+					Expect(utils.VerifyFIPHasRulesForPorts(tc, fipID, sets.New[int32](serverPort), "TCP")).To(Succeed())
+					frontendIDs[svc.Name] = append(frontendIDs[svc.Name], fipID)
+				}
+
+				By("Checking that the unrelated service kept its frontends and remains reachable")
+				for i, ip := range serviceIPs[unrelatedServiceName] {
+					fipID, lbName := getFIPIDAndLBName(tc, *ip, isInternal)
+					Expect(lbName).To(Equal("lb-1" + lbSuffix))
+					Expect(strings.EqualFold(fipID, frontendIDs[unrelatedServiceName][i])).To(BeTrue())
+					Expect(utils.VerifyFIPHasRulesForPorts(tc, fipID, sets.New[int32](serverPort), "TCP")).To(Succeed())
+				}
+				_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, unrelatedServiceName, serviceIPs[unrelatedServiceName])
+				Expect(err).NotTo(HaveOccurred())
+			}
+		},
+		Entry("external with local traffic policy", false, v1.ServiceExternalTrafficPolicyLocal),
+		Entry("internal with local traffic policy", true, v1.ServiceExternalTrafficPolicyLocal),
+		Entry("external with cluster traffic policy", false, v1.ServiceExternalTrafficPolicyCluster),
+		Entry("internal with cluster traffic policy", true, v1.ServiceExternalTrafficPolicyCluster),
+	)
+
 	DescribeTable("should place all services sharing an IP on the same load balancer",
 		func(mode string) {
 			isInternal := mode == "internal"
