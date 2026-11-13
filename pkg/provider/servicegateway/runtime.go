@@ -158,10 +158,12 @@ func (r *Runtime) Start(ctx context.Context, informerFactory informers.SharedInf
 	tracker.SetNodeLister(informerFactory.Core().V1().Nodes().Lister())
 	tracker.SetEventRecorder(r.eventRecorder)
 
-	unregisterInformers, err = RegisterInformers(informerFactory, tracker)
+	var informersSynced cache.InformerSynced
+	unregisterInformers, informersSynced, err = RegisterInformers(informerFactory, tracker)
 	if err != nil {
 		return err
 	}
+	go completeStartupReconciliationOnSync(runtimeCtx, informersSynced, informerFactory, tracker)
 	if err := startRuntimePodInformer(runtimeCtx, tracker); err != nil {
 		return fmt.Errorf("start filtered Pod informer: %w", err)
 	}
@@ -182,8 +184,9 @@ func (r *Runtime) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	return r.loadBalancer, true
 }
 
-// RegisterInformers installs the shared Node and EndpointSlice handlers owned by ServiceGateway.
-func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker *difftracker.DiffTracker) (func(), error) {
+// RegisterInformers installs the shared Node and EndpointSlice handlers owned by ServiceGateway. It
+// returns a func that unregisters them and one that reports whether both received the initial list.
+func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker *difftracker.DiffTracker) (func(), cache.InformerSynced, error) {
 	logger := log.Background().WithName("RegisterInformers")
 	removeHandler := func(informer cache.SharedIndexInformer, registration cache.ResourceEventHandlerRegistration, name string) {
 		if err := informer.RemoveEventHandler(registration); err != nil {
@@ -199,7 +202,7 @@ func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker 
 				logger.Error(nil, "ServiceGateway Node add received unexpected object", "objectType", fmt.Sprintf("%T", obj))
 				return
 			}
-			tracker.ReconcileNodeIPChange(node.Name, nil, nodePrivateIPAddresses(node))
+			tracker.ReconcileNodeAdd(node.Name, nodePrivateIPAddresses(node))
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldNode, oldOK := oldObj.(*v1.Node)
@@ -226,7 +229,7 @@ func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker 
 		},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("register ServiceGateway Node handlers: %w", err)
+		return nil, nil, fmt.Errorf("register ServiceGateway Node handlers: %w", err)
 	}
 
 	endpointSliceInformer := informerFactory.Discovery().V1().EndpointSlices().Informer()
@@ -261,13 +264,27 @@ func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker 
 	})
 	if err != nil {
 		removeHandler(nodeInformer, nodeRegistration, "Node")
-		return nil, fmt.Errorf("register ServiceGateway EndpointSlice handlers: %w", err)
+		return nil, nil, fmt.Errorf("register ServiceGateway EndpointSlice handlers: %w", err)
 	}
 
-	return func() {
+	unregister := func() {
 		removeHandler(endpointSliceInformer, endpointSliceRegistration, "EndpointSlice")
 		removeHandler(nodeInformer, nodeRegistration, "Node")
-	}, nil
+	}
+	synced := func() bool {
+		return nodeRegistration.HasSynced() && endpointSliceRegistration.HasSynced()
+	}
+	return unregister, synced, nil
+}
+
+// completeStartupReconciliationOnSync reconciles the EndpointSlices and nodes deleted while the
+// tracker was initializing once the handlers have received the initial list; those deletions never
+// produce a Delete event.
+func completeStartupReconciliationOnSync(ctx context.Context, synced cache.InformerSynced, informerFactory informers.SharedInformerFactory, tracker *difftracker.DiffTracker) {
+	if !cache.WaitForCacheSync(ctx.Done(), synced) {
+		return
+	}
+	tracker.CompleteStartupReconciliation(informerFactory.Discovery().V1().EndpointSlices().Lister())
 }
 
 func nodePrivateIPAddresses(node *v1.Node) []string {
