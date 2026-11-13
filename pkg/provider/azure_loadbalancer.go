@@ -596,7 +596,8 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Conte
 		return "", false, nil
 	}
 	fipConfigs := lb.Properties.FrontendIPConfigurations
-	for i, fipConfig := range fipConfigs {
+	for i := len(fipConfigs) - 1; i >= 0; i-- {
+		fipConfig := fipConfigs[i]
 		for _, fip := range fips {
 			if strings.EqualFold(ptr.Deref(fipConfig.Name, ""), ptr.Deref(fip.Name, "")) {
 				fipConfigs = append(fipConfigs[:i], fipConfigs[i+1:]...)
@@ -613,6 +614,7 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Conte
 			for _, fip := range fips {
 				if strings.Contains(ptr.Deref(lbRules[i].Name, ""), ptr.Deref(fip.Name, "")) {
 					lbRules = append(lbRules[:i], lbRules[i+1:]...)
+					break
 				}
 			}
 		}
@@ -624,6 +626,7 @@ func (az *Cloud) removeFrontendIPConfigurationFromLoadBalancer(ctx context.Conte
 			for _, fip := range fips {
 				if strings.Contains(ptr.Deref(lbProbes[i].Name, ""), ptr.Deref(fip.Name, "")) {
 					lbProbes = append(lbProbes[:i], lbProbes[i+1:]...)
+					break
 				}
 			}
 		}
