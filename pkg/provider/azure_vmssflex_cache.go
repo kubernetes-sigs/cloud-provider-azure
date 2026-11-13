@@ -201,7 +201,9 @@ func (fs *FlexScaleSet) getNodeVmssFlexID(ctx context.Context, nodeName string) 
 				vmssFlex.Properties.VirtualMachineProfile.OSProfile.ComputerNamePrefix != nil {
 				vmssPrefix = ptr.Deref(vmssFlex.Properties.VirtualMachineProfile.OSProfile.ComputerNamePrefix, "")
 			}
-			if strings.EqualFold(vmssPrefix, nodeName[:len(nodeName)-6]) {
+			// A flex VMSS machine name is the VMSS name (or computer name prefix) plus a
+			// fixed-length 6-character instance id, so a shorter node name cannot match it.
+			if len(nodeName) >= 6 && strings.EqualFold(vmssPrefix, nodeName[:len(nodeName)-6]) {
 				// we should check this vmss first since nodeName and vmssFlex.Name or
 				// ComputerNamePrefix belongs to same vmss, so prepend here
 				vmssFlexIDs = append([]string{vmssFlexID}, vmssFlexIDs...)
