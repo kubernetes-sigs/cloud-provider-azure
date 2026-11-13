@@ -47,6 +47,9 @@ func (dt *DiffTracker) UpdateNRPNATGateways(syncServicesReturnType SyncServicesR
 func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 	defer dt.lockWithLatency("UpdateLocationsAddresses")()
 
+	if locationData.Action == FullUpdate {
+		clear(dt.NRPResources.Locations)
+	}
 	for locationKey, locationValue := range locationData.Locations {
 		// Remove empty locations
 		if len(locationValue.Addresses) == 0 {
@@ -57,6 +60,7 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 		// Get or create location
 		nrpLocation := dt.NRPResources.Locations[locationKey]
 		isFullUpdate := locationValue.AddressUpdateAction == FullUpdate
+		owner := dt.pendingLocationUpdates[locationKey].nodeOwner
 
 		// For full updates, start with a fresh location. For partial updates,
 		// the location may be absent from NRP (zero value with a nil Addresses
@@ -64,7 +68,10 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 		if isFullUpdate || nrpLocation.Addresses == nil {
 			nrpLocation = NRPLocation{
 				Addresses: make(map[string]NRPAddress),
+				nodeOwner: owner,
 			}
+		} else if nrpLocation.nodeOwner == nil {
+			nrpLocation.nodeOwner = owner
 		}
 
 		// Process address updates
@@ -95,9 +102,26 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 
 		// Save location if it has addresses, otherwise delete it
 		if len(nrpLocation.Addresses) > 0 {
+			if nrpLocation.nodeOwner != nil && !dt.hasInboundReferencesLocked(nrpLocation) {
+				nrpLocation.nodeOwner = nil
+			}
 			dt.NRPResources.Locations[locationKey] = nrpLocation
 		} else {
 			delete(dt.NRPResources.Locations, locationKey)
 		}
 	}
+
+	dt.completeLocationSyncLocked(locationData)
+}
+
+func (dt *DiffTracker) hasInboundReferencesLocked(location NRPLocation) bool {
+	for _, address := range location.Addresses {
+		for _, uid := range address.Services.UnsortedList() {
+			op := dt.pendingServiceOps[uid]
+			if dt.NRPResources.LoadBalancers.Has(uid) || op != nil && op.Config.IsInbound {
+				return true
+			}
+		}
+	}
+	return false
 }

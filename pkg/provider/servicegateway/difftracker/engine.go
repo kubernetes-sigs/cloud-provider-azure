@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -142,7 +143,7 @@ func (dt *DiffTracker) DeleteInboundService(service *v1.Service) error {
 	return nil
 }
 
-// AddService queues creation for services not already tracked or registered in NRP.
+// AddService queues creation and recovers missing inbound operation state.
 // RP-owned default service names are reserved.
 func (dt *DiffTracker) AddService(config ServiceConfig) error {
 	defer func() {
@@ -169,8 +170,20 @@ func (dt *DiffTracker) AddService(config ServiceConfig) error {
 
 	// Check if service already exists in NRP
 	if config.IsInbound {
+		dt.markNICPolicyChangeLocked(config)
 		dt.K8sResources.Services.Insert(serviceName)
 		if dt.NRPResources.LoadBalancers.Has(serviceName) {
+			if dt.pendingServiceOps[serviceName] == nil {
+				state := StateCreated
+				if nsgPolicyEnabled(config.InboundConfig) {
+					state = StateUpdateInProgress
+					dt.triggerServiceUpdater()
+				}
+				dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+					ServiceName: serviceName, Config: config, State: state,
+					CreatedAt: time.Now(), CorrelationID: uuid.NewString(),
+				}
+			}
 			dt.mu.Unlock()
 			dt.logger.V(5).Info("Skipped existing LoadBalancer", "service", serviceName)
 			return nil
@@ -237,6 +250,13 @@ func (dt *DiffTracker) updateEndpointsLocked(serviceName string, oldPodIPToNodeI
 	if dt.isReservedServiceLocked(serviceName) {
 		dt.logger.V(4).Info("Skipped endpoints for a reserved service", "service", serviceName)
 		return
+	}
+	if dt.mayHaveNICPolicies {
+		for _, addresses := range []map[string]string{oldPodIPToNodeIP, newPodIPToNodeIP} {
+			for _, location := range addresses {
+				dt.dirtyNICPolicies.Insert(canonicalIP(location))
+			}
+		}
 	}
 
 	dt.logger.V(5).Info("Updated endpoints request", "service", serviceName, "oldCount", len(oldPodIPToNodeIP), "newCount", len(newPodIPToNodeIP))
@@ -404,6 +424,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 		if dt.isReservedServiceLocked(serviceName) {
 			return fmt.Errorf("ServiceGateway service name %q is reserved", serviceName)
 		}
+		dt.markNICPolicyChangeLocked(config)
 		dt.K8sResources.Services.Insert(serviceName)
 
 		opState, exists := dt.pendingServiceOps[serviceName]
@@ -446,6 +467,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 				// Service was parked after a non-retryable creation error. Only re-attempt if
 				// the spec actually changed; a resync with the same invalid spec stays parked.
 				if configsEqualForUpdate(&opState.Config, &config) {
+					opState.Config = config
 					dt.logger.V(5).Info("Skipped parked service with unchanged spec", "service", serviceName)
 					return nil
 				}
@@ -476,6 +498,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 			if opState.LastAppliedConfig != nil &&
 				opState.LastAppliedConfig.IsInbound == config.IsInbound &&
 				opState.LastAppliedConfig.InboundConfig.Equals(config.InboundConfig) {
+				opState.Config = config
 				dt.logger.V(5).Info("Skipped unchanged service config", "service", serviceName)
 				return nil
 			}
@@ -553,6 +576,12 @@ func (dt *DiffTracker) DeleteService(serviceName string, isInbound bool, isOrpha
 		dt.mu.Unlock()
 		dt.logger.V(4).Info("Could not delete service without service")
 		return
+	}
+	if isInbound {
+		dt.markServiceNICPoliciesDirtyLocked(serviceName)
+		if dt.dirtyNICPolicies.Len() > 0 {
+			dt.triggerLocationsUpdater()
+		}
 	}
 
 	// Clear desired state without releasing ownership before cleanup.
@@ -769,6 +798,13 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceName string, success boo
 		dt.logger.V(4).Info("Could not complete service operation because pending operation was not found", "service", serviceName)
 		return
 	}
+	if opState.InFlightConfig != nil && opState.InFlightConfig.IsInbound {
+		for _, port := range nsgPortMappings(opState.InFlightConfig.InboundConfig) {
+			if !slices.Contains(opState.RetainedBackendPorts, port) {
+				opState.RetainedBackendPorts = append(opState.RetainedBackendPorts, port)
+			}
+		}
+	}
 
 	// Measure latency from when the operation was dispatched (in processBatch), not from
 	// this callback which runs after the Azure work is done. Fall back to now if unset.
@@ -858,6 +894,9 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceName string, success boo
 			if opState.InFlightConfig != nil {
 				applied := *opState.InFlightConfig
 				opState.LastAppliedConfig = &applied
+			}
+			if opState.Config.IsInbound {
+				dt.completeLBWriteLocked(serviceName)
 			}
 			opState.RetryCount = 0
 
@@ -976,6 +1015,8 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceName string, success boo
 				opState.NextRetryAt = time.Time{}
 				opState.InFlightConfig = nil
 				opState.LastAppliedConfig = nil
+				opState.RetainedBackendPorts = nil
+				opState.NSGPrepared = false
 				opState.RecreateAfterDeletion = false
 				opState.LastAttempt = time.Now().Format(time.RFC3339)
 				delete(dt.pendingServiceDeletions, serviceName)
@@ -1070,6 +1111,9 @@ func (dt *DiffTracker) OnServiceCreationComplete(serviceName string, success boo
 			// Promote any pending endpoints and pods
 			dt.promotePendingEndpointsLocked(serviceName)
 			dt.promotePendingPodsLocked(serviceName)
+			if opState.Config.IsInbound {
+				dt.completeLBWriteLocked(serviceName)
+			}
 
 			// Trigger LocationsUpdater to sync the service state (whether buffers existed or not)
 			dt.triggerLocationsUpdater()
@@ -2114,11 +2158,13 @@ func (dt *DiffTracker) promotePendingPodsLocked(serviceName string) {
 // serviceHasLocationsInNRP checks if any locations in NRP reference this service.
 // Must be called with dt.mu held.
 func (dt *DiffTracker) serviceHasLocationsInNRP(serviceName string) bool {
-	// Iterate through all NRP locations
-	for _, nrpLocation := range dt.NRPResources.Locations {
-		for _, nrpAddress := range nrpLocation.Addresses {
-			if nrpAddress.Services.Has(serviceName) {
-				return true
+	// Unknown write outcomes must also drain before resource deletion.
+	for _, resources := range []map[string]NRPLocation{dt.NRPResources.Locations, dt.pendingLocationUpdates} {
+		for _, nrpLocation := range resources {
+			for _, nrpAddress := range nrpLocation.Addresses {
+				if nrpAddress.Services.Has(serviceName) {
+					return true
+				}
 			}
 		}
 	}
@@ -2246,6 +2292,10 @@ func (dt *DiffTracker) checkInitializationCompleteLocked() {
 	for _, opState := range dt.pendingServiceOps {
 		deferredCreation := opState.CreationRejected && opState.State == StateNotStarted
 		if opState.State != StateCreated && !opState.CreationFailedTerminal && !opState.RetriesExhausted && !deferredCreation {
+			if dt.needsLBPreparationLocked(opState) && !opState.NSGPrepared &&
+				dt.serviceHasLocationsInNRP(opState.ServiceName) {
+				continue
+			}
 			pendingOps++
 		}
 	}

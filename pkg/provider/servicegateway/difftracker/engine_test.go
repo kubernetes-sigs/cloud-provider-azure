@@ -26,9 +26,11 @@ import (
 
 	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/record"
 
@@ -54,6 +56,8 @@ func newTestDiffTracker() *DiffTracker {
 		pendingPods:             make(map[string][]PendingPodUpdate),
 		pendingServiceDeletions: make(map[string]*PendingServiceDeletion),
 		pendingPodDeletions:     make(map[string]*PendingPodDeletion),
+		dirtyNICPolicies:        sets.New[string](),
+		pendingLocationUpdates:  make(map[string]NRPLocation),
 		serviceUpdaterTrigger:   make(chan bool, 1),
 		locationsUpdaterTrigger: make(chan bool, 1),
 	}
@@ -75,6 +79,18 @@ func TestReconcileInboundService(t *testing.T) {
 			},
 		}
 	}
+
+	t.Run("accepts source policies with required constructor dependencies", func(t *testing.T) {
+		dt := newProviderDiffTracker(t, gomock.NewController(t), fake.NewSimpleClientset())
+		service := newService("service-uid", 80)
+		service.Annotations = map[string]string{consts.ServiceAnnotationAllowedIPRanges: "20.0.0.0/8"}
+
+		assert.NoError(t, dt.ReconcileInboundService(service))
+		if op := dt.pendingServiceOps[ServiceName(service)]; assert.NotNil(t, op) {
+			assert.True(t, nsgPolicyEnabled(op.Config.InboundConfig))
+		}
+		assert.Empty(t, dt.NRPResources.Locations)
+	})
 
 	t.Run("adds a new service with provider identity", func(t *testing.T) {
 		dt := newTestDiffTracker()
@@ -260,18 +276,22 @@ func TestEngineAddService_NewService(t *testing.T) {
 
 // TestEngineAddService_ExistsInNRP tests adding a service that already exists in NRP
 func TestEngineAddService_ExistsInNRP(t *testing.T) {
-	dt := newTestDiffTracker()
+	dt := newProviderDiffTracker(t, gomock.NewController(t), fake.NewSimpleClientset())
 	serviceName := "service-2"
 
 	// Setup: service already exists in NRP
 	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
 	// Execute
-	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, nil)))
+	config := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	assert.NoError(t, dt.AddService(config))
 
-	// Verify service is NOT tracked (since it exists)
-	_, exists := dt.pendingServiceOps[serviceName]
-	assert.False(t, exists, "Service should not be tracked if it exists in NRP")
+	op := dt.pendingServiceOps[serviceName]
+	if !assert.NotNil(t, op) {
+		return
+	}
+	assert.Equal(t, StateCreated, op.State)
+	assert.Equal(t, config, op.Config)
 
 	// Verify no trigger
 	select {

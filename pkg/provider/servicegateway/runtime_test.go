@@ -51,6 +51,8 @@ func TestDiffTrackerConfig(t *testing.T) {
 	config.Location = "eastus"
 	config.VnetName = "vnet"
 	config.VnetResourceGroup = "vnet-resource-group"
+	config.SecurityGroupName = "cluster-nsg"
+	config.SecurityGroupResourceGroup = "nsg-resource-group"
 
 	diffTrackerConfig := diffTrackerConfig(config)
 
@@ -60,12 +62,14 @@ func TestDiffTrackerConfig(t *testing.T) {
 	assert.Equal(t, "eastus", diffTrackerConfig.Location)
 	assert.Equal(t, "vnet", diffTrackerConfig.VNetName)
 	assert.Equal(t, "vnet-resource-group", diffTrackerConfig.VNetResourceGroup)
+	assert.Equal(t, "cluster-nsg", diffTrackerConfig.SecurityGroupName)
+	assert.Equal(t, "nsg-resource-group", diffTrackerConfig.SecurityGroupResourceGroup)
 	assert.Contains(t, diffTrackerConfig.ServiceGatewayResourceID(), "/subscriptions/network-subscription/")
 }
 
 func TestRuntimeEnablementAndLoadBalancer(t *testing.T) {
 	config := providerconfig.Config{}
-	runtime := NewRuntime(config, nil, nil)
+	runtime := NewRuntime(config, nil, nil, nil, nil)
 
 	assert.False(t, runtime.Enabled())
 	loadBalancer, supported := runtime.LoadBalancer()
@@ -73,7 +77,7 @@ func TestRuntimeEnablementAndLoadBalancer(t *testing.T) {
 	assert.Nil(t, loadBalancer)
 
 	config.ServiceGatewayEnabled = true
-	runtime = NewRuntime(config, nil, nil)
+	runtime = NewRuntime(config, nil, nil, nil, nil)
 
 	assert.True(t, runtime.Enabled())
 	first, supported := runtime.LoadBalancer()
@@ -86,7 +90,7 @@ func TestRuntimeEnablementAndLoadBalancer(t *testing.T) {
 
 func TestRuntimeStartRequiresDependencies(t *testing.T) {
 	config := providerconfig.Config{ServiceGatewayEnabled: true}
-	runtime := NewRuntime(config, nil, nil)
+	runtime := NewRuntime(config, nil, nil, nil, nil)
 
 	err := runtime.Start(context.Background(), nil)
 
@@ -95,7 +99,7 @@ func TestRuntimeStartRequiresDependencies(t *testing.T) {
 
 func TestRuntimeAcceptsDeferredKubeClient(t *testing.T) {
 	config := providerconfig.Config{ServiceGatewayEnabled: true}
-	runtime := NewRuntime(config, nil, nil)
+	runtime := NewRuntime(config, nil, nil, nil, nil)
 	kubeClient := fake.NewSimpleClientset()
 
 	runtime.SetKubeClient(kubeClient)
@@ -112,14 +116,19 @@ func TestRuntimeStart(t *testing.T) {
 	})
 
 	var runtimeCtx context.Context
+	var computeClientFactory azclient.ClientFactory
+	var nodeProvider difftracker.NSGNodeProvider
 	tracker := &difftracker.DiffTracker{}
 	initializeRuntimeDiffTracker = func(
 		ctx context.Context,
 		_ difftracker.Config,
 		_ azclient.ClientFactory,
+		factory azclient.ClientFactory,
+		nodes difftracker.NSGNodeProvider,
 		_ kubernetes.Interface,
 	) (*difftracker.DiffTracker, error) {
 		runtimeCtx = ctx
+		computeClientFactory, nodeProvider = factory, nodes
 		return tracker, nil
 	}
 	startRuntimePodInformer = func(ctx context.Context, got *difftracker.DiffTracker) error {
@@ -129,15 +138,20 @@ func TestRuntimeStart(t *testing.T) {
 	}
 
 	kubeClient := fake.NewSimpleClientset()
-	runtime := NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
+	factory := mock_azclient.NewMockClientFactory(gomock.NewController(t))
+	nodes := &struct{ difftracker.NSGNodeProvider }{}
+	runtime := NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, factory, nodes, kubeClient)
 	runtime.SetEventRecorder(record.NewFakeRecorder(1))
 
 	ctx, cancel := context.WithCancel(context.Background())
-	if !assert.NoError(t, runtime.Start(ctx, informers.NewSharedInformerFactory(kubeClient, 0))) {
+	informerFactory := informers.NewSharedInformerFactory(kubeClient, 0)
+	if !assert.NoError(t, runtime.Start(ctx, informerFactory)) {
 		cancel()
 		return
 	}
 	assert.Same(t, tracker, runtime.tracker)
+	assert.Same(t, factory, computeClientFactory)
+	assert.Same(t, nodes, nodeProvider)
 
 	loadBalancer, supported := runtime.LoadBalancer()
 	assert.True(t, supported)
@@ -171,6 +185,8 @@ func TestRuntimeStartFailureRollsBack(t *testing.T) {
 		context.Context,
 		difftracker.Config,
 		azclient.ClientFactory,
+		azclient.ClientFactory,
+		difftracker.NSGNodeProvider,
 		kubernetes.Interface,
 	) (*difftracker.DiffTracker, error) {
 		return tracker, nil
@@ -181,7 +197,7 @@ func TestRuntimeStartFailureRollsBack(t *testing.T) {
 	}
 
 	kubeClient := fake.NewSimpleClientset()
-	runtime := NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
+	runtime := NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, nil, nil, kubeClient)
 	runtime.SetEventRecorder(record.NewFakeRecorder(1))
 	err := runtime.Start(
 		context.Background(),
@@ -244,6 +260,8 @@ func TestRegisterInformers_DeliversEndpointSliceEventsToTracker(t *testing.T) {
 		},
 		testDiffTrackerConfig(),
 		mock_azclient.NewMockClientFactory(ctrl),
+		mock_azclient.NewMockClientFactory(ctrl),
+		&struct{ difftracker.NSGNodeProvider }{},
 		kubeClient,
 	)
 	if !assert.NoError(t, err) {
@@ -309,29 +327,6 @@ func testDiffTrackerConfig() difftracker.Config {
 	cfg.VnetName = "vnet"
 	cfg.VnetResourceGroup = "rg"
 	return diffTrackerConfig(cfg)
-}
-
-// TestNodePrivateIPAddresses_SelectsOnlyInternalIPs pins that node locations are derived from
-// InternalIP addresses alone. A node's address list also carries ExternalIP and Hostname entries;
-// registering those as locations would publish backends under an address NRP cannot route to.
-func TestNodePrivateIPAddresses_SelectsOnlyInternalIPs(t *testing.T) {
-	node := &v1.Node{
-		Status: v1.NodeStatus{
-			Addresses: []v1.NodeAddress{
-				{Type: v1.NodeHostName, Address: "node-1"},
-				{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
-				{Type: v1.NodeExternalIP, Address: "52.1.2.3"},
-				{Type: v1.NodeInternalIP, Address: "fd00::1"},
-				{Type: v1.NodeExternalDNS, Address: "node-1.example.com"},
-			},
-		},
-	}
-
-	assert.Equal(t, []string{"10.0.0.1", "fd00::1"}, nodePrivateIPAddresses(node),
-		"only InternalIP addresses are node locations, in the order the node reports them")
-
-	assert.Empty(t, nodePrivateIPAddresses(&v1.Node{}),
-		"a node with no addresses yields no locations")
 }
 
 // TestNodeFromDeleteEvent_DecodesTombstones pins that a delete delivered as a tombstone is decoded.

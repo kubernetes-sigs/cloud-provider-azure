@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -818,11 +819,14 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockNSG := mock_securitygroupclient.NewMockInterface(ctrl)
 
 	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
 	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockFactory.EXPECT().GetSecurityGroupClient().Return(mockNSG)
+	mockNSG.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 
 	// Empty cluster and empty NRP: no ServiceGateway services/locations, no Azure LBs/NATs.
 	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
@@ -849,7 +853,7 @@ func TestInitializeFromCluster_ReusesFetchedPIPListForOrphanCleanup(t *testing.T
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, fake.NewSimpleClientset())
+	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, mockFactory, &nsgTestCloud{}, fake.NewSimpleClientset())
 	assert.NoError(t, err)
 	assert.NotNil(t, dt)
 }

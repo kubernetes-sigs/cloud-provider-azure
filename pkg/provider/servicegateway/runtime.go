@@ -19,7 +19,6 @@ package servicegateway
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	v1 "k8s.io/api/core/v1"
@@ -35,7 +34,6 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	providerconfig "sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/servicegateway/difftracker"
-	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
 var (
@@ -52,6 +50,8 @@ type Runtime struct {
 
 	loadBalancer         *difftracker.LoadBalancer
 	networkClientFactory azclient.ClientFactory
+	computeClientFactory azclient.ClientFactory
+	nodeProvider         difftracker.NSGNodeProvider
 	kubeClient           kubernetes.Interface
 	eventRecorder        record.EventRecorder
 
@@ -60,11 +60,13 @@ type Runtime struct {
 }
 
 // NewRuntime creates the ServiceGateway runtime from the cloud-provider configuration.
-func NewRuntime(config providerconfig.Config, networkClientFactory azclient.ClientFactory, kubeClient kubernetes.Interface) *Runtime {
+func NewRuntime(config providerconfig.Config, networkClientFactory, computeClientFactory azclient.ClientFactory, nodeProvider difftracker.NSGNodeProvider, kubeClient kubernetes.Interface) *Runtime {
 	runtime := &Runtime{
 		enabled:              config.ServiceGatewayEnabled,
 		config:               diffTrackerConfig(config),
 		networkClientFactory: networkClientFactory,
+		computeClientFactory: computeClientFactory,
+		nodeProvider:         nodeProvider,
 		kubeClient:           kubeClient,
 	}
 	if runtime.enabled {
@@ -88,6 +90,8 @@ func diffTrackerConfig(config providerconfig.Config) difftracker.Config {
 		VNetName:                      config.VnetName,
 		VNetResourceGroup:             config.VnetResourceGroup,
 		ServiceGatewayResourceName:    serviceGatewayName,
+		SecurityGroupName:             config.SecurityGroupName,
+		SecurityGroupResourceGroup:    config.SecurityGroupResourceGroup,
 	}
 }
 
@@ -149,7 +153,7 @@ func (r *Runtime) Start(ctx context.Context, informerFactory informers.SharedInf
 
 	difftracker.RegisterMetrics()
 
-	tracker, err := initializeRuntimeDiffTracker(runtimeCtx, r.config, r.networkClientFactory, r.kubeClient)
+	tracker, err := initializeRuntimeDiffTracker(runtimeCtx, r.config, r.networkClientFactory, r.computeClientFactory, r.nodeProvider, r.kubeClient)
 	if err != nil {
 		return fmt.Errorf("initialize difftracker: %w", err)
 	}
@@ -199,7 +203,7 @@ func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker 
 				logger.Error(nil, "ServiceGateway Node add received unexpected object", "objectType", fmt.Sprintf("%T", obj))
 				return
 			}
-			tracker.ReconcileNodeIPChange(node.Name, nil, nodePrivateIPAddresses(node))
+			tracker.ReconcileNodeChange(nil, node)
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldNode, oldOK := oldObj.(*v1.Node)
@@ -210,11 +214,7 @@ func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker 
 					"newObjectType", fmt.Sprintf("%T", newObj))
 				return
 			}
-			oldIPs := nodePrivateIPAddresses(oldNode)
-			newIPs := nodePrivateIPAddresses(newNode)
-			if !utilsets.NewString(oldIPs...).Equals(utilsets.NewString(newIPs...)) {
-				tracker.ReconcileNodeIPChange(newNode.Name, oldIPs, newIPs)
-			}
+			tracker.ReconcileNodeChange(oldNode, newNode)
 		},
 		DeleteFunc: func(obj interface{}) {
 			node, err := nodeFromDeleteEvent(obj)
@@ -222,7 +222,7 @@ func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker 
 				logger.Error(err, "Could not process ServiceGateway Node deletion")
 				return
 			}
-			tracker.ReconcileNodeIPChange(node.Name, nodePrivateIPAddresses(node), nil)
+			tracker.ReconcileNodeChange(node, nil)
 		},
 	})
 	if err != nil {
@@ -268,16 +268,6 @@ func RegisterInformers(informerFactory informers.SharedInformerFactory, tracker 
 		removeHandler(endpointSliceInformer, endpointSliceRegistration, "EndpointSlice")
 		removeHandler(nodeInformer, nodeRegistration, "Node")
 	}, nil
-}
-
-func nodePrivateIPAddresses(node *v1.Node) []string {
-	addresses := make([]string, 0)
-	for _, address := range node.Status.Addresses {
-		if strings.EqualFold(string(address.Type), string(v1.NodeInternalIP)) {
-			addresses = append(addresses, address.Address)
-		}
-	}
-	return addresses
 }
 
 func nodeFromDeleteEvent(obj interface{}) (*v1.Node, error) {

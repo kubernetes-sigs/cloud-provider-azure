@@ -45,6 +45,10 @@ type Config struct {
 	// assumed to live in ResourceGroup (the common case). Set this for BYO-VNet clusters whose
 	// VNet is in a separate resource group (mirrors the cloud config's vnetResourceGroup).
 	VNetResourceGroup string
+
+	// SecurityGroupName identifies the cluster NSG whose NIC association SGW may replace.
+	SecurityGroupName          string
+	SecurityGroupResourceGroup string
 }
 
 func (c *Config) networkResourceSubscriptionID() string {

@@ -41,6 +41,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/component-base/metrics/testutil"
 	"k8s.io/utils/ptr"
 
@@ -48,6 +49,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/publicipaddressclient/mock_publicipaddressclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/securitygroupclient/mock_securitygroupclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -419,7 +421,8 @@ func TestInitOutboundRefCount_AllowsSameRawServiceUIDAndEgressLabel(t *testing.T
 		ServiceGatewayResourceName: "sgw",
 		VNetName:                   "vnet",
 	}
-	dt, err := New(logr.Discard(), k8s, nrp, cfg, mock_azclient.NewMockClientFactory(ctrl), kube)
+	factory := mock_azclient.NewMockClientFactory(ctrl)
+	dt, err := New(logr.Discard(), k8s, nrp, cfg, factory, factory, &nsgTestCloud{}, kube)
 	if !assert.NoError(t, err) {
 		t.FailNow()
 	}
@@ -461,7 +464,8 @@ func TestInitPreservesRegisteredOutboundOwner(t *testing.T) {
 		OutboundNATGatewayIDs: map[string]string{outboundName: byoNATGatewayARMID(uid)},
 	}
 	ctrl := gomock.NewController(t)
-	dt, err := New(logr.Discard(), k8s, nrp, testConfig(), mock_azclient.NewMockClientFactory(ctrl), fake.NewSimpleClientset())
+	factory := mock_azclient.NewMockClientFactory(ctrl)
+	dt, err := New(logr.Discard(), k8s, nrp, testConfig(), factory, factory, &nsgTestCloud{}, fake.NewSimpleClientset())
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -667,6 +671,9 @@ func TestInitializeFromCluster_CompletesAfterAllAdditionsAreRejected(t *testing.
 		t.Run(scenario, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := newOutboundMocks(ctrl)
+			nsg := mock_securitygroupclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetSecurityGroupClient().Return(nsg).AnyTimes()
+			nsg.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
 			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
 			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
@@ -696,7 +703,7 @@ func TestInitializeFromCluster_CompletesAfterAllAdditionsAreRejected(t *testing.
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			dt, err := InitializeFromCluster(ctx, testConfig(), m.factory, fake.NewSimpleClientset(objects...))
+			dt, err := InitializeFromCluster(ctx, testConfig(), m.factory, m.factory, &nsgTestCloud{}, fake.NewSimpleClientset(objects...))
 			if dt != nil {
 				defer cleanupOnError(dt)
 			}
@@ -729,6 +736,9 @@ func TestInitializeFromCluster_SeparatesInboundAndOutboundPodFinalizers(t *testi
 		t.Run(tc.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			m := newOutboundMocks(ctrl)
+			nsg := mock_securitygroupclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetSecurityGroupClient().Return(nsg).AnyTimes()
+			nsg.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
 			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
 			registered := &armnetwork.ServiceGatewayService{
@@ -807,7 +817,7 @@ func TestInitializeFromCluster_SeparatesInboundAndOutboundPodFinalizers(t *testi
 			})
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			dt, err := InitializeFromCluster(ctx, testConfig(), m.factory, kube)
+			dt, err := InitializeFromCluster(ctx, testConfig(), m.factory, m.factory, &nsgTestCloud{}, kube)
 			if dt != nil {
 				defer cleanupOnError(dt)
 			}
@@ -2152,6 +2162,547 @@ func TestSeedClusterAddressFamilies_OnlyIPv6NodeAddressesCount(t *testing.T) {
 	assert.False(t, seeded(nil))
 }
 
+func nsgInitializationClients(t *testing.T, seed *DiffTracker, serviceUIDs ...string) (*mock_azclient.MockClientFactory, *mock_servicegatewayclient.MockInterface) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	factory := seed.networkClientFactory.(*mock_azclient.MockClientFactory)
+	gateway := mock_servicegatewayclient.NewMockInterface(ctrl)
+	loadBalancers := mock_loadbalancerclient.NewMockInterface(ctrl)
+	nats := mock_natgatewayclient.NewMockInterface(ctrl)
+	publicIPs := mock_publicipaddressclient.NewMockInterface(ctrl)
+	factory.EXPECT().GetServiceGatewayClient().Return(gateway).AnyTimes()
+	factory.EXPECT().GetLoadBalancerClient().Return(loadBalancers).AnyTimes()
+	factory.EXPECT().GetNatGatewayClient().Return(nats).AnyTimes()
+	factory.EXPECT().GetPublicIPAddressClient().Return(publicIPs).AnyTimes()
+	var services []*armnetwork.ServiceGatewayService
+	var lbs []*armnetwork.LoadBalancer
+	for _, uid := range serviceUIDs {
+		services = append(services, &armnetwork.ServiceGatewayService{
+			Name: ptr.To(uid), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)},
+		})
+		_, lb, _, err := buildInboundServiceResources(uid, &InboundConfig{
+			FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+			BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
+		}, seed.config)
+		if !assert.NoError(t, err) {
+			t.FailNow()
+		}
+		lbs = append(lbs, &lb)
+	}
+	gateway.EXPECT().GetServices(gomock.Any(), "network-rg", "sgw").Return(services, nil).AnyTimes()
+	gateway.EXPECT().GetAddressLocations(gomock.Any(), "network-rg", "sgw").Return(nil, nil).AnyTimes()
+	loadBalancers.EXPECT().List(gomock.Any(), "network-rg").Return(lbs, nil).AnyTimes()
+	loadBalancers.EXPECT().Get(gomock.Any(), "network-rg", gomock.Any(), nil).
+		DoAndReturn(func(ctx context.Context, _, name string, _ *string) (*armnetwork.LoadBalancer, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			for _, lb := range lbs {
+				if ptr.Deref(lb.Name, "") == name {
+					return nsgCopy(lb), nil
+				}
+			}
+			return nil, notFoundError()
+		}).AnyTimes()
+	nats.EXPECT().List(gomock.Any(), "network-rg").Return(nil, nil).AnyTimes()
+	publicIPs.EXPECT().List(gomock.Any(), "network-rg").Return(nil, nil).AnyTimes()
+	return factory, gateway
+}
+
+func TestInitializeFromClusterManagedNICNSGs(t *testing.T) {
+	for _, scenario := range []string{"annotation absent", "slow NSG", "retry NSG", "invalid source policy"} {
+		t.Run(scenario, func(t *testing.T) {
+			service := nsgKubeService("svc-lb", "20.0.0.0/8")
+			if scenario == "annotation absent" {
+				service.Annotations = nil
+			}
+			service.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "203.0.113.1"}}
+			seed, cloud, node := newNSGTestTracker(t, service)
+			if scenario == "invalid source policy" {
+				service.Annotations[consts.ServiceAnnotationAllowedIPRanges] = ""
+				_, err := seed.kubeClient.CoreV1().Services(service.Namespace).Update(context.Background(), service, metav1.UpdateOptions{})
+				assert.NoError(t, err)
+			}
+			slice := newServiceOwnedEndpointSlice("endpoints", service.Namespace, string(service.UID), discoveryv1.AddressTypeIPv4,
+				[]discoveryv1.Endpoint{{Addresses: []string{"10.1.0.1"}, NodeName: ptr.To(node.Name), Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}}})
+			_, err := seed.kubeClient.DiscoveryV1().EndpointSlices(service.Namespace).Create(context.Background(), slice, metav1.CreateOptions{})
+			assert.NoError(t, err)
+
+			factory, gateway := nsgInitializationClients(t, seed, "svc-lb")
+			lbs := factory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			lbs.EXPECT().CreateOrUpdate(gomock.Any(), "network-rg", "svc-lb", gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, value armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+					return &value, nil
+				}).AnyTimes()
+			var publications atomic.Int32
+			gateway.EXPECT().UpdateAddressLocations(gomock.Any(), "network-rg", "sgw", gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+					if len(request.AddressLocations) == 0 {
+						assert.Equal(t, "FullUpdate", string(ptr.Deref(request.Action, "")))
+						return nil
+					}
+					if !assert.Len(t, request.AddressLocations, 1) {
+						return fmt.Errorf("unexpected location count")
+					}
+					location := request.AddressLocations[0]
+					assert.Equal(t, "10.0.0.1", ptr.Deref(location.AddressLocation, ""))
+					if !assert.Len(t, location.Addresses, 1) {
+						return fmt.Errorf("unexpected address count")
+					}
+					assert.Equal(t, "10.1.0.1", ptr.Deref(location.Addresses[0].Address, ""))
+					assert.Equal(t, []*string{ptr.To("svc-lb")}, location.Addresses[0].Services)
+					cloud.mu.Lock()
+					defer cloud.mu.Unlock()
+					if scenario == "annotation absent" {
+						assert.Zero(t, cloud.nicWrites)
+						assert.Empty(t, cloud.groups)
+						publications.Add(1)
+						return nil
+					}
+					assert.Equal(t, 1, cloud.nicWrites, "backend publication must follow NIC association")
+					assert.Len(t, cloud.groups, 1)
+					for _, group := range cloud.groups {
+						assert.Equal(t, armnetwork.SecurityRuleAccessDeny,
+							nsgTestAccess(t, group.Properties.SecurityRules, "40.1.2.3", "10.1.0.1", 8080, armnetwork.SecurityRuleProtocolTCP))
+					}
+					publications.Add(1)
+					return nil
+				}).AnyTimes()
+
+			entered, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			cloud.beforeWrite = func(ctx context.Context) {
+				once.Do(func() { close(entered) })
+				select {
+				case <-release:
+				case <-ctx.Done():
+				}
+			}
+			if scenario == "retry NSG" {
+				cloud.groupError = errors.New("NSG temporarily unavailable")
+				close(release)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			var tracker *DiffTracker
+			var initErr error
+			done := make(chan struct{})
+			go func() {
+				tracker, initErr = InitializeFromCluster(ctx, seed.config, factory, seed.computeClientFactory, seed.nodeProvider, seed.kubeClient)
+				close(done)
+			}()
+			t.Cleanup(func() {
+				cancel()
+				<-done
+				if tracker != nil {
+					tracker.serviceUpdater.Stop()
+					tracker.locationsUpdater.Stop()
+				}
+			})
+			if scenario == "annotation absent" || scenario == "invalid source policy" {
+				<-done
+				assert.NoError(t, initErr)
+				if assert.NotNil(t, tracker) {
+					tracker.locationsUpdater.Stop()
+				}
+				cloud.mu.Lock()
+				assert.Equal(t, 0, cloud.groupWrites)
+				cloud.mu.Unlock()
+				if scenario == "annotation absent" {
+					assert.Equal(t, int32(1), publications.Load())
+					if tracker != nil {
+						tracker.mu.Lock()
+						assert.Empty(t, tracker.dirtyNICPolicies)
+						tracker.mu.Unlock()
+					}
+					for _, action := range seed.kubeClient.(*fake.Clientset).Actions() {
+						assert.False(t, action.Matches("get", "nodes"), "unrestricted startup needs no per-node NSG pass")
+					}
+				} else {
+					assert.Zero(t, publications.Load())
+				}
+				return
+			}
+			assert.Equal(t, int32(0), publications.Load())
+			select {
+			case <-entered:
+			case <-ctx.Done():
+				t.Fatal("LocationsUpdater did not attempt the source policy")
+			}
+			select {
+			case <-done:
+				assert.NoError(t, initErr, "controller startup must not wait on per-Service NSG work")
+			case <-ctx.Done():
+				t.Fatal("initialization did not release the normal controllers")
+			}
+			if scenario == "slow NSG" {
+				close(release)
+			} else {
+				assert.Eventually(t, func() bool {
+					cloud.mu.Lock()
+					defer cloud.mu.Unlock()
+					return cloud.groupWrites > 0
+				}, 5*time.Second, time.Millisecond, "the first NSG attempt must fail before recovery")
+				cloud.mu.Lock()
+				assert.Equal(t, 0, cloud.nicWrites)
+				assert.Equal(t, int32(0), publications.Load())
+				cloud.groupError = nil
+				cloud.mu.Unlock()
+			}
+			<-done
+			assert.NoError(t, initErr)
+			assert.NotNil(t, tracker)
+			assert.Eventually(t, func() bool { return publications.Load() > 0 }, 5*time.Second, time.Millisecond)
+		})
+	}
+}
+
+func TestNICPolicyInitializationExtendsBaselineReconciliation(t *testing.T) {
+	existing, added := nsgKubeService("existing-lb", "20.0.0.0/8"), nsgKubeService("added-lb", "40.0.0.0/8")
+	existing.Spec.Ports[0].TargetPort = intstr.FromInt32(9090)
+	dt, _, _ := newNSGTestTracker(t, existing, added)
+	delete(dt.pendingServiceOps, "existing-lb")
+	delete(dt.pendingServiceOps, "added-lb")
+	dt.UpdateNRPLoadBalancers(SyncServicesReturnType{Removals: utilsets.NewString("added-lb")})
+	services := map[string]*v1.Service{"existing-lb": existing, "added-lb": added}
+	dt.reconcileServices(&SyncDiffTrackerReturnType{
+		LoadBalancerUpdates: SyncServicesReturnType{Additions: utilsets.NewString("added-lb"), Removals: utilsets.NewString()},
+		NATGatewayUpdates:   SyncServicesReturnType{Additions: utilsets.NewString(), Removals: utilsets.NewString()},
+	}, services)
+	assert.NotContains(t, dt.pendingServiceOps, "existing-lb", "the baseline function retains its additions-only contract")
+	addedOperation := dt.pendingServiceOps["added-lb"]
+	if !assert.NotNil(t, addedOperation) {
+		return
+	}
+	state := addedOperation.State
+	_, live, _, err := buildInboundServiceResources("existing-lb", &InboundConfig{
+		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
+		BackendPorts:  []PortMapping{{Port: 8080, Protocol: "TCP"}},
+	}, dt.config)
+	assert.NoError(t, err)
+	dt.prepareNICPolicyInitialization(services, map[string]*armnetwork.LoadBalancer{"existing-lb": &live})
+	assert.Same(t, addedOperation, dt.pendingServiceOps["added-lb"], "the extension must not recreate the baseline operation")
+	assert.Equal(t, state, addedOperation.State)
+	assert.Equal(t, added.Namespace, addedOperation.Config.Namespace)
+	assert.Equal(t, added.Name, addedOperation.Config.Name)
+	recovered := dt.pendingServiceOps["existing-lb"]
+	if !assert.NotNil(t, recovered) {
+		return
+	}
+	assert.Nil(t, recovered.LastAppliedConfig)
+	assert.Equal(t, []PortMapping{{Port: 8080, Protocol: "TCP"}}, recovered.RetainedBackendPorts)
+	assert.Equal(t, existing.Namespace, recovered.Config.Namespace)
+	assert.Equal(t, existing.Name, recovered.Config.Name)
+	assert.NotNil(t, recovered.Config.InboundConfig.AllowedIPRanges)
+	assert.True(t, dt.locationRecoveryPending)
+}
+
+func TestInitializeFromClusterConfirmsLBPortsBeforeProtectedPublication(t *testing.T) {
+	service := nsgKubeService("svc-lb", "20.0.0.0/8")
+	service.Spec.Ports[0].TargetPort = intstr.FromInt32(9090)
+	service.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "203.0.113.1"}}
+	seed, cloud, node := newNSGTestTracker(t, service)
+	slice := newServiceOwnedEndpointSlice("endpoints", service.Namespace, string(service.UID), discoveryv1.AddressTypeIPv4,
+		[]discoveryv1.Endpoint{{Addresses: []string{"10.1.0.1"}, NodeName: ptr.To(node.Name), Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}}})
+	_, err := seed.kubeClient.DiscoveryV1().EndpointSlices(service.Namespace).Create(context.Background(), slice, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	factory, gateway := nsgInitializationClients(t, seed, "svc-lb")
+	lbs := factory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+	var livePort, publications atomic.Int32
+	livePort.Store(8080)
+	entered, release := make(chan struct{}), make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(unblock)
+	lbs.EXPECT().CreateOrUpdate(gomock.Any(), "network-rg", "svc-lb", gomock.Any()).
+		DoAndReturn(func(ctx context.Context, _, _ string, value armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+			close(entered)
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+			if assert.Len(t, value.Properties.LoadBalancingRules, 1) {
+				livePort.Store(*value.Properties.LoadBalancingRules[0].Properties.BackendPort)
+			}
+			return &value, nil
+		})
+	gateway.EXPECT().UpdateAddressLocations(gomock.Any(), "network-rg", "sgw", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			if len(request.AddressLocations) == 0 {
+				assert.Equal(t, "FullUpdate", string(ptr.Deref(request.Action, "")))
+				return nil
+			}
+			assert.Equal(t, int32(9090), livePort.Load())
+			cloud.mu.Lock()
+			defer cloud.mu.Unlock()
+			if assert.Len(t, cloud.groups, 1) {
+				for _, group := range cloud.groups {
+					assert.Equal(t, armnetwork.SecurityRuleAccessDeny,
+						nsgTestAccess(t, group.Properties.SecurityRules, "40.1.2.3", "10.1.0.1", livePort.Load(), armnetwork.SecurityRuleProtocolTCP))
+				}
+			}
+			publications.Add(1)
+			return nil
+		}).AnyTimes()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	var tracker *DiffTracker
+	var initErr error
+	done := make(chan struct{})
+	go func() {
+		tracker, initErr = InitializeFromCluster(ctx, seed.config, factory, seed.computeClientFactory, seed.nodeProvider, seed.kubeClient)
+		close(done)
+	}()
+	t.Cleanup(func() {
+		unblock()
+		cancel()
+		<-done
+		if tracker != nil {
+			tracker.serviceUpdater.Stop()
+			tracker.locationsUpdater.Stop()
+		}
+	})
+	select {
+	case <-entered:
+	case <-ctx.Done():
+		t.Fatal("the recovered LB was not reconciled")
+	}
+	assert.Zero(t, publications.Load(), "desired port 9090 cannot authorize traffic while the live port is 8080")
+	unblock()
+	<-done
+	assert.NoError(t, initErr)
+	assert.Eventually(t, func() bool { return publications.Load() == 1 }, 5*time.Second, time.Millisecond)
+}
+
+func TestInitializeFromClusterRecoversReassignedNSGTupleAfterCorrectiveACK(t *testing.T) {
+	old := nsgKubeService("old-lb", "20.0.0.0/8")
+	seed, cloud, node := newNSGTestTracker(t, old)
+	addNSGTestBackend(seed, "old-lb", "10.0.0.1", "10.1.0.1", "")
+	prepareNSGTest(t, seed)
+	operational := nsgTestNRMSRule(103)
+	for _, group := range cloud.groups {
+		group.Properties.SecurityRules = append(group.Properties.SecurityRules, nsgCopy(operational))
+	}
+	assert.NoError(t, seed.kubeClient.CoreV1().Services(old.Namespace).Delete(context.Background(), old.Name, metav1.DeleteOptions{}))
+	replacement := nsgKubeService("replacement-lb", "40.0.0.0/8")
+	replacement.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "203.0.113.2"}}
+	_, err := seed.kubeClient.CoreV1().Services(replacement.Namespace).Create(context.Background(), replacement, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	slice := newServiceOwnedEndpointSlice("endpoints", replacement.Namespace, string(replacement.UID), discoveryv1.AddressTypeIPv4,
+		[]discoveryv1.Endpoint{{Addresses: []string{"10.1.0.1"}, NodeName: ptr.To(node.Name), Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}}})
+	_, err = seed.kubeClient.DiscoveryV1().EndpointSlices(replacement.Namespace).Create(context.Background(), slice, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	factory, gateway := nsgInitializationClients(t, seed, "replacement-lb")
+	lbs := factory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+	lbs.EXPECT().CreateOrUpdate(gomock.Any(), "network-rg", "replacement-lb", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, value armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+			return &value, nil
+		}).AnyTimes()
+	var recoveryCalls, publications atomic.Int32
+	gateway.EXPECT().UpdateAddressLocations(gomock.Any(), "network-rg", "sgw", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			cloud.mu.Lock()
+			defer cloud.mu.Unlock()
+			for _, group := range cloud.groups {
+				assert.Contains(t, group.Properties.SecurityRules, operational, "recovery must preserve NRMS before and after the corrective ACK")
+			}
+			if string(ptr.Deref(request.Action, "")) == "FullUpdate" {
+				assert.Empty(t, request.AddressLocations)
+				assert.Equal(t, 1, cloud.groupWrites, "old protection stays before a corrective ACK")
+				if recoveryCalls.Add(1) == 1 {
+					return context.DeadlineExceeded
+				}
+				return nil
+			}
+			assert.GreaterOrEqual(t, recoveryCalls.Load(), int32(2))
+			for _, group := range cloud.groups {
+				policies, err := decodeNSGServices(group.Properties.SecurityRules)
+				assert.NoError(t, err)
+				assert.NotContains(t, policies, "old-lb")
+				assert.Contains(t, policies, "replacement-lb")
+			}
+			publications.Add(1)
+			return nil
+		}).AnyTimes()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tracker, err := InitializeFromCluster(ctx, seed.config, factory, seed.computeClientFactory, seed.nodeProvider, seed.kubeClient)
+	if !assert.NoError(t, err) {
+		return
+	}
+	t.Cleanup(func() {
+		cancel()
+		tracker.serviceUpdater.Stop()
+		tracker.locationsUpdater.Stop()
+	})
+	assert.Eventually(t, func() bool { return publications.Load() == 1 }, 5*time.Second, time.Millisecond)
+}
+
+func TestInitializeFromClusterLeavesNSGConflictsToLiveReconciliation(t *testing.T) {
+	first, second := nsgKubeService("first-lb", "20.0.0.0/8"), nsgKubeService("second-lb", "40.0.0.0/8")
+	for _, service := range []*v1.Service{first, second} {
+		service.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: "203.0.113.1"}}
+	}
+	seed, cloud, node := newNSGTestTracker(t, first, second)
+	for _, service := range []*v1.Service{first, second} {
+		slice := newServiceOwnedEndpointSlice(service.Name+"-endpoints", service.Namespace, string(service.UID), discoveryv1.AddressTypeIPv4,
+			[]discoveryv1.Endpoint{{Addresses: []string{"10.1.0.1"}, NodeName: ptr.To(node.Name), Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)}}})
+		_, err := seed.kubeClient.DiscoveryV1().EndpointSlices(service.Namespace).Create(context.Background(), slice, metav1.CreateOptions{})
+		assert.NoError(t, err)
+	}
+	_, err := seed.kubeClient.CoreV1().Nodes().Create(context.Background(), &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "unrelated", UID: "unrelated"},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.2"}}},
+	}, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	factory, gateway := nsgInitializationClients(t, seed, "first-lb", "second-lb")
+	lbs := factory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+	lbs.EXPECT().CreateOrUpdate(gomock.Any(), "network-rg", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, value armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+			return &value, nil
+		}).AnyTimes()
+	var publications atomic.Int32
+	gateway.EXPECT().UpdateAddressLocations(gomock.Any(), "network-rg", "sgw", gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+			if len(request.AddressLocations) > 0 {
+				assert.Len(t, request.AddressLocations[0].Addresses[0].Services, 2)
+				publications.Add(1)
+			}
+			return nil
+		}).AnyTimes()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tracker, err := InitializeFromCluster(ctx, seed.config, factory, seed.computeClientFactory, seed.nodeProvider, seed.kubeClient)
+	if !assert.NoError(t, err, "NSG conflicts must not prevent the normal controllers from starting") {
+		return
+	}
+	t.Cleanup(func() {
+		cancel()
+		tracker.serviceUpdater.Stop()
+		tracker.locationsUpdater.Stop()
+	})
+	recorder := record.NewFakeRecorder(20)
+	tracker.SetEventRecorder(recorder)
+	select {
+	case event := <-recorder.Events:
+		assert.Contains(t, event, consts.ServiceGatewaySourceRangeConflictReason)
+	case <-ctx.Done():
+		t.Fatal("source conflict was not reported")
+	}
+	assert.Zero(t, publications.Load())
+	for _, service := range []*v1.Service{first, second} {
+		service.Annotations = nil
+		updated, err := seed.kubeClient.CoreV1().Services(service.Namespace).Update(ctx, service, metav1.UpdateOptions{})
+		assert.NoError(t, err)
+		assert.NoError(t, tracker.ReconcileInboundService(updated))
+	}
+	assert.Eventually(t, func() bool { return publications.Load() == 1 }, 5*time.Second, time.Millisecond)
+	cloud.mu.Lock()
+	assert.Zero(t, cloud.groupWrites, "corrected unrestricted Services need no managed NSG")
+	cloud.mu.Unlock()
+}
+
+func TestInitializeFromClusterCleansOrphanedNICNSGs(t *testing.T) {
+	for _, scenario := range []string{"missing NIC", "live NIC", "live detached NIC", "foreign NSG", "delete failure", "interrupted cleanup"} {
+		t.Run(scenario, func(t *testing.T) {
+			service := nsgKubeService("svc-lb", "20.0.0.0/8")
+			seed, cloud, node := newNSGTestTracker(t, service)
+			addNSGTestBackend(seed, "svc-lb", "10.0.0.1", "10.1.0.1", "")
+			prepareNSGTest(t, seed)
+			assert.NoError(t, seed.kubeClient.CoreV1().Nodes().Delete(context.Background(), node.Name, metav1.DeleteOptions{}))
+			assert.NoError(t, seed.kubeClient.CoreV1().Services(service.Namespace).Delete(context.Background(), service.Name, metav1.DeleteOptions{}))
+			if scenario != "live NIC" {
+				for _, group := range cloud.groups {
+					group.Properties.NetworkInterfaces = nil
+				}
+			}
+			if scenario != "live NIC" && scenario != "live detached NIC" {
+				cloud.nic = nil
+			}
+			if scenario == "live detached NIC" {
+				cloud.nic.Properties.NetworkSecurityGroup = nil
+			}
+			if scenario == "foreign NSG" {
+				for _, group := range cloud.groups {
+					group.Tags[consts.ServiceGatewayNSGOwnerTag] = ptr.To("another-owner")
+				}
+			}
+			if scenario == "delete failure" {
+				cloud.groupDeleteError = errors.New("delete temporarily failed")
+			}
+			if scenario == "interrupted cleanup" {
+				target, err := seed.targetFromID("/subscriptions/compute-sub/resourceGroups/node-rg/providers/Microsoft.Network/networkInterfaces/other-nic")
+				assert.NoError(t, err)
+				group, _, err := seed.desiredGroup(nil, target, "other-node", "eastus", nil)
+				assert.NoError(t, err)
+				group.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
+				cloud.groups[*group.Name] = &group
+			}
+			factory, gateway := nsgInitializationClients(t, seed)
+			gateway.EXPECT().UpdateAddressLocations(gomock.Any(), "network-rg", "sgw", gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+					assert.Equal(t, "FullUpdate", string(ptr.Deref(request.Action, "")))
+					assert.Empty(t, request.AddressLocations)
+					return nil
+				}).AnyTimes()
+			initialize := func(interrupt bool) (*DiffTracker, error) {
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				t.Cleanup(cancel)
+				if interrupt {
+					cloud.afterDelete = cancel
+				}
+				tracker, err := InitializeFromCluster(ctx, seed.config, factory, seed.computeClientFactory, seed.nodeProvider, seed.kubeClient)
+				if tracker != nil {
+					cancel()
+					tracker.serviceUpdater.Stop()
+					tracker.locationsUpdater.Stop()
+				}
+				return tracker, err
+			}
+			tracker, err := initialize(scenario == "interrupted cleanup")
+			switch scenario {
+			case "delete failure", "interrupted cleanup":
+				assert.Error(t, err)
+				assert.Nil(t, tracker)
+				assert.Len(t, cloud.groups, 1)
+				if scenario == "interrupted cleanup" {
+					assert.ErrorIs(t, err, context.Canceled)
+					assert.Equal(t, 1, cloud.groupDeletes, "one completed deletion survives interruption")
+				}
+				cloud.groupDeleteError, cloud.afterDelete = nil, nil
+				tracker, err = initialize(false)
+				assert.NoError(t, err)
+				assert.NotNil(t, tracker)
+				assert.Empty(t, cloud.groups, "the next initialization completes the remaining cleanup")
+			case "live NIC", "live detached NIC":
+				assert.NoError(t, err)
+				assert.NotNil(t, tracker)
+				assert.Len(t, cloud.groups, 1)
+				assert.Zero(t, cloud.groupDeletes)
+				cloud.nic = nil
+				for _, group := range cloud.groups {
+					group.Properties.NetworkInterfaces = nil
+				}
+				_, err = initialize(false)
+				assert.NoError(t, err)
+				assert.Empty(t, cloud.groups, "a later initialization cleans the now-missing NIC")
+			case "foreign NSG":
+				assert.NoError(t, err)
+				assert.Len(t, cloud.groups, 1)
+				assert.Zero(t, cloud.groupDeletes)
+			default:
+				assert.NoError(t, err)
+				assert.NotNil(t, tracker)
+				assert.Empty(t, cloud.groups)
+			}
+			deletions := cloud.groupDeletes
+			_, err = initialize(false)
+			assert.NoError(t, err)
+			assert.Equal(t, deletions, cloud.groupDeletes, "repeated initialization is idempotent")
+		})
+	}
+}
+
 // TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes pins the production wiring: the
 // Node lister is published only after InitializeFromCluster returns, so initialization must take
 // the cluster's address families from the Node list it fetches itself. Without this the startup
@@ -2168,11 +2719,14 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 		mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
 		mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+		mockNSG := mock_securitygroupclient.NewMockInterface(ctrl)
 
 		mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
 		mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
 		mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+		mockFactory.EXPECT().GetSecurityGroupClient().Return(mockNSG)
+		mockNSG.EXPECT().List(gomock.Any(), "rg").Return(nil, nil)
 
 		mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
 		mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
@@ -2190,7 +2744,7 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, fake.NewSimpleClientset(objects...))
+		dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, mockFactory, &nsgTestCloud{}, fake.NewSimpleClientset(objects...))
 		assert.NoError(t, err)
 		if dt == nil {
 			t.Fatal("InitializeFromCluster returned no tracker")
@@ -2269,7 +2823,7 @@ func TestFetchServiceGatewayServices_RecordsNATGatewaysAndSkipsDefault(t *testin
 
 			k8s := newK8sStateForSeeders()
 			k8s.Egresses.Insert(tc.serviceName, "byo-natgw", "new-natgw")
-			dt, err := New(logr.Discard(), k8s, *nrp, testConfig(), mockFactory, fake.NewSimpleClientset())
+			dt, err := New(logr.Discard(), k8s, *nrp, testConfig(), mockFactory, mockFactory, &nsgTestCloud{}, fake.NewSimpleClientset())
 			if !assert.NoError(t, err) {
 				return
 			}
@@ -2328,8 +2882,9 @@ func TestNewTracksOnlyBYONATGateways(t *testing.T) {
 		"othersub": "/subscriptions/other/resourceGroups/rg/providers/Microsoft.Network/natGateways/othersub",
 	}
 	cfg := testConfig()
+	factory := mock_azclient.NewMockClientFactory(ctrl)
 	dt, err := New(logr.Discard(), K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
-		nrp, cfg, mock_azclient.NewMockClientFactory(ctrl), fake.NewSimpleClientset())
+		nrp, cfg, factory, factory, &nsgTestCloud{}, fake.NewSimpleClientset())
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -2530,6 +3085,9 @@ func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
 			kube := fake.NewSimpleClientset(pod, node)
 			ctrl := gomock.NewController(t)
 			m := newOutboundMocks(ctrl)
+			nsg := mock_securitygroupclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetSecurityGroupClient().Return(nsg).AnyTimes()
+			nsg.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
 			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
 			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
 			lb.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
@@ -2637,7 +3195,7 @@ func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
 			mu.Lock()
 			recovering = true
 			mu.Unlock()
-			restarted, err := InitializeFromCluster(ctx, cfg, m.factory, kube)
+			restarted, err := InitializeFromCluster(ctx, cfg, m.factory, m.factory, &nsgTestCloud{}, kube)
 			if restarted != nil {
 				defer cleanupOnError(restarted)
 			}
@@ -2695,7 +3253,7 @@ func TestRestartedControllerOnlyUnlinksBYONATGateway(t *testing.T) {
 		return
 	}
 	dt, err := New(logr.Discard(), K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
-		nrp, cfg, m.factory, fake.NewSimpleClientset())
+		nrp, cfg, m.factory, m.factory, &nsgTestCloud{}, fake.NewSimpleClientset())
 	if !assert.NoError(t, err) {
 		return
 	}
@@ -2746,7 +3304,7 @@ func TestRestartedBetweenTheTwoUnlinkStepsLeavesTheBYOLink(t *testing.T) {
 		return
 	}
 	dt, err := New(logr.Discard(), K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
-		nrp, cfg, m.factory, fake.NewSimpleClientset())
+		nrp, cfg, m.factory, m.factory, &nsgTestCloud{}, fake.NewSimpleClientset())
 	if !assert.NoError(t, err) {
 		return
 	}

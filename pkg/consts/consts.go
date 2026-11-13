@@ -627,6 +627,33 @@ const (
 	// DefaultServiceGatewayResourceName is the fixed ServiceGateway resource name used when
 	// ServiceGatewayEnabled=true. It is not configurable via cloud-provider config.
 	DefaultServiceGatewayResourceName = "servicegateway"
+
+	ServiceGatewayNSGNamePrefix               = "sgw-nsg-"
+	ServiceGatewayNSGRuleNamePrefix           = "sgw-service-"
+	ServiceGatewayNSGNRMSRuleNamePrefix       = "NRMS-Rule-"
+	ServiceGatewayNSGNRMSMinimumPriority      = 100
+	ServiceGatewayNSGServiceDescriptionPrefix = "ServiceGateway service "
+	ServiceGatewayNSGAllowInboundRuleName     = "sgw-allow-other-inbound"
+	ServiceGatewayNSGAllowOutboundRuleName    = "sgw-allow-other-outbound"
+	ServiceGatewayNSGAllowOtherDescription    = "ServiceGateway non-target traffic"
+	ServiceGatewayNSGOwnerTag                 = "k8s-azure-servicegateway-owner"
+	ServiceGatewayNSGNICTag                   = "k8s-azure-servicegateway-nic"
+	ServiceGatewayNSGNodeTag                  = "k8s-azure-servicegateway-node"
+	ServiceGatewayNSGTargetRGTag              = "k8s-azure-nic-resource-group"
+	ServiceGatewayNSGTargetNameTag            = "k8s-azure-nic-name"
+	ServiceGatewayNSGTargetVMSSTag            = "k8s-azure-nic-vmss"
+	ServiceGatewayNSGTargetInstanceTag        = "k8s-azure-nic-instance"
+	ServiceGatewayNSGNICResourceType          = "Microsoft.Network/networkInterfaces"
+	ServiceGatewayNSGVMSSNICResourceType      = "Microsoft.Compute/virtualMachineScaleSets/virtualMachines/networkInterfaces"
+	ServiceGatewayNSGVMResourceType           = "Microsoft.Compute/virtualMachines"
+	ServiceGatewayNSGVMSSVMResourceType       = "Microsoft.Compute/virtualMachineScaleSets/virtualMachines"
+	ServiceGatewayNSGProviderIDPrefix         = "azure://"
+	ServiceGatewayNSGMaxRules                 = 2_000
+	ServiceGatewayNSGMaxSourcePrefixes        = 6_000
+	ServiceGatewayNSGMaxDestinationPrefixes   = 6_000
+	ServiceGatewayInvalidSourceRangesReason   = "InvalidAllowedIPRanges"
+	ServiceGatewaySourceRangeConflictReason   = "SourceRangeConflict"
+	ServiceGatewayNSGReconcileFailedReason    = "SourceRangeReconcileFailed"
 )
 
 // Azure resource lock

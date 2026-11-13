@@ -18,6 +18,7 @@ package difftracker
 
 import (
 	"context"
+	"errors"
 	"math/rand"
 	"net/http"
 	"sync"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/metrics"
 )
@@ -67,13 +69,13 @@ func init() { nrpOperationTimeout.Store(int64(defaultNRPOperationTimeout)) }
 
 func getNRPOperationTimeout() time.Duration { return time.Duration(nrpOperationTimeout.Load()) }
 
-// LocationsUpdater syncs location and address changes to NRP Service Gateway
+// LocationsUpdater prepares NIC source policies and syncs addresses to NRP Service Gateway.
 type LocationsUpdater struct {
 	diffTracker *DiffTracker
 	ctx         context.Context
 	cancel      context.CancelFunc
 
-	// failureCount is the number of consecutive failed NRP syncs, used to compute the
+	// failureCount is the number of consecutive failed reconciliation attempts, used to compute the
 	// retry backoff. Accessed only from the single Run goroutine (process), so no lock.
 	failureCount int
 
@@ -137,7 +139,7 @@ func (lu *LocationsUpdater) Stop() {
 	lu.logger.V(2).Info("Stopped LocationsUpdater")
 }
 
-// process computes location/address diff and syncs to NRP
+// process prepares NSGs, syncs locations and addresses to NRP, then prunes acknowledged withdrawals.
 func (lu *LocationsUpdater) process(ctx context.Context) {
 	mc := metrics.NewMetricContext("locations", "LocationsUpdater.process",
 		lu.diffTracker.config.ResourceGroup, lu.diffTracker.config.networkResourceSubscriptionID(), "sync")
@@ -148,7 +150,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	// A Service or pod finalizer is still waiting on the batch this pass failed to apply. Nothing
 	// else re-drives it, so keep retrying even for a deterministic rejection.
 	drainPending := false
-	// Most recent NRP error, reported when giving up.
+	// Most recent reconciliation error, reported during sustained failures.
 	var lastSyncErr error
 	var numLocations, numAddresses int
 
@@ -168,6 +170,9 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 		switch {
 		case isOperationSucceeded:
 			lu.failureCount = 0
+			lu.diffTracker.mu.Lock()
+			lu.diffTracker.wakeNICPolicyWorkLocked()
+			lu.diffTracker.mu.Unlock()
 		case terminalSyncErr:
 			lu.failureCount = 0
 		case atomic.LoadInt32(&lu.diffTracker.isInitializing) == 1 &&
@@ -232,11 +237,32 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 
 	startTime := time.Now()
 
-	// Get locations and addresses diff from DiffTracker
-	locationData := lu.diffTracker.GetSyncLocationsAddresses()
+	var nsgErr error
+	var preparation map[string]*nsgPreparedNIC
+	var work sets.Set[string]
+	defer func() {
+		lu.diffTracker.mu.Lock()
+		lu.diffTracker.finishNICPolicyWorkLocked(work, preparation)
+		lu.diffTracker.mu.Unlock()
+	}()
+	if atomic.LoadInt32(&lu.diffTracker.isInitializing) == 0 {
+		work = lu.diffTracker.takeNICPolicyWork()
+		preparation, nsgErr = lu.diffTracker.prepareNICPolicies(ctx, work)
+		lastSyncErr = nsgErr
+	} else {
+		work = sets.New[string]()
+	}
 
-	if len(locationData.Locations) == 0 {
+	// Get locations and addresses diff from DiffTracker
+	baselineDiff := lu.diffTracker.GetSyncLocationsAddresses()
+	locationData := lu.diffTracker.applyNICPoliciesToLocationSync(baselineDiff, preparation)
+
+	if len(locationData.Locations) == 0 && locationData.Action != FullUpdate {
 		lu.logger.V(4).Info("No location changes to sync")
+		nsgErr = errors.Join(nsgErr, lu.diffTracker.pruneNICPolicies(ctx, preparation, work))
+		if nsgErr != nil {
+			lastSyncErr = nsgErr
+		}
 		// Even with no location diff, recovered pending service/pod deletions must
 		// still be processed so their finalizers are not left pending.
 		lu.diffTracker.CheckPendingServiceDeletions()
@@ -249,7 +275,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			lu.logger.V(4).Info("Pod finalizer removal incomplete, retrying")
 			return
 		}
-		isOperationSucceeded = true
+		isOperationSucceeded = nsgErr == nil
 		return
 	}
 
@@ -265,7 +291,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	// Call NRP Service Gateway API to update locations/addresses
 	err := lu.diffTracker.updateNRPSGWAddressLocations(ctx, lu.diffTracker.config.ServiceGatewayResourceName, locationsDTO)
 	if err != nil {
-		lastSyncErr = err
+		lastSyncErr = errors.Join(nsgErr, err)
 		if httpStatus, errCode := extractAzureErrorInfo(err); isTerminalLocationSyncStatus(httpStatus) {
 			// Deterministic NRP rejection (e.g. 400): the identical batch can never be accepted, so
 			// retrying would spin the single worker forever and starve every other service's
@@ -283,8 +309,8 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			// Those checks only advance work whose addresses already left NRP. The batch was
 			// abandoned unapplied, so anything still waiting has no future trigger: keep retrying
 			// instead of taking the terminal shortcut.
-			drainPending = readyRemovalPending || lu.serviceDeletionsPending()
-			if drainPending {
+			drainPending = readyRemovalPending || lu.deletionsPending()
+			if drainPending || nsgErr != nil {
 				terminalSyncErr = false
 			}
 			return
@@ -300,6 +326,11 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 
 	// Update NRPResources to reflect the sync
 	lu.diffTracker.UpdateLocationsAddresses(locationData)
+
+	nsgErr = errors.Join(nsgErr, lu.diffTracker.pruneNICPolicies(ctx, preparation, work))
+	if nsgErr != nil {
+		lastSyncErr = nsgErr
+	}
 
 	// Check pending deletions after location sync
 	// Services waiting for their locations to clear can now be deleted
@@ -318,7 +349,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 		return
 	}
 
-	isOperationSucceeded = true
+	isOperationSucceeded = nsgErr == nil
 }
 
 // initPodFinalizersStillPending reports whether init is in progress and recovered pod
@@ -335,13 +366,12 @@ func (lu *LocationsUpdater) initPodFinalizersStillPending() bool {
 	return len(dt.pendingPodDeletions) > 0
 }
 
-// serviceDeletionsPending reports whether any service deletion is still waiting for its addresses
-// to leave NRP. Only a successful location sync advances one.
-func (lu *LocationsUpdater) serviceDeletionsPending() bool {
+// deletionsPending reports whether Service or Pod deletions remain after processing already-drained entries.
+func (lu *LocationsUpdater) deletionsPending() bool {
 	dt := lu.diffTracker
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	return len(dt.pendingServiceDeletions) > 0
+	return len(dt.pendingServiceDeletions) > 0 || len(dt.pendingPodDeletions) > 0
 }
 
 // computeRetryBackoff returns a bounded, jittered backoff delay for the given 1-based attempt

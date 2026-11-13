@@ -17,12 +17,247 @@ limitations under the License.
 package difftracker
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+func BenchmarkLocationSync(b *testing.B) {
+	for _, count := range []int{100, 1000, 10000} {
+		for _, change := range []bool{false, true} {
+			b.Run(fmt.Sprintf("addresses=%d/change=%t", count, change), func(b *testing.B) {
+				dt := newTestDiffTracker()
+				dt.K8sResources.Services.Insert("svc-lb")
+				dt.NRPResources.LoadBalancers.Insert("svc-lb")
+				for index := 0; index < count; index++ {
+					location := fmt.Sprintf("10.0.%d.1", index%10)
+					address := fmt.Sprintf("10.224.%d.%d", index/256, index%256)
+					node := dt.K8sResources.Nodes[location]
+					if node.Pods == nil {
+						node = newNode()
+					}
+					pod := newPod()
+					pod.InboundIdentities.Insert("svc-lb")
+					node.Pods[address] = pod
+					dt.K8sResources.Nodes[location] = node
+					ack := dt.NRPResources.Locations[location]
+					if ack.Addresses == nil {
+						ack.Addresses = make(map[string]NRPAddress)
+					}
+					ack.Addresses[address] = NRPAddress{Services: utilsets.NewString("svc-lb")}
+					dt.NRPResources.Locations[location] = ack
+				}
+				if change {
+					pod := newPod()
+					pod.InboundIdentities.Insert("svc-lb")
+					dt.K8sResources.Nodes["10.0.0.1"].Pods["10.225.0.1"] = pod
+				}
+				b.ReportAllocs()
+				b.ResetTimer()
+				for index := 0; index < b.N; index++ {
+					result := dt.GetSyncLocationsAddresses()
+					if change && len(result.Locations) != 1 || !change && len(result.Locations) != 0 {
+						b.Fatal("unexpected membership delta")
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestLocationSyncKeepsNICPolicyPublicationSeparateFromBaseline(t *testing.T) {
+	dt, cloud, _ := newNSGTestTracker(t, nsgKubeService("svc-lb", "20.0.0.0/8"))
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
+
+	baseline := dt.GetSyncLocationsAddresses()
+	assert.True(t, baseline.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Has("svc-lb"))
+	assert.Empty(t, dt.pendingLocationUpdates, "the baseline diagnostic calculation does not record a publication")
+	assert.Empty(t, dt.applyNICPoliciesToLocationSync(baseline, nil).Locations, "the actual publisher requires NIC preparation")
+	assert.True(t, baseline.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Has("svc-lb"), "NIC processing must not mutate the baseline")
+	assert.Empty(t, dt.pendingLocationUpdates)
+	assert.Zero(t, cloud.groupWrites)
+
+	prepared := prepareNSGTest(t, dt)
+	request := nsgTestLocationSync(dt, prepared)
+	assert.True(t, request.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Has("svc-lb"))
+	assert.True(t, dt.pendingLocationUpdates["10.0.0.1"].Addresses["10.1.0.1"].Services.Has("svc-lb"))
+	dt.UpdateLocationsAddresses(request)
+	assert.Empty(t, dt.GetSyncLocationsAddresses().Locations)
+	assert.Empty(t, dt.pendingLocationUpdates)
+}
+
+func TestLocationSyncRevalidatesPolicyAfterBaseline(t *testing.T) {
+	dt, cloud, _ := newNSGTestTracker(t, nsgKubeService("svc-lb", "20.0.0.0/8"))
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
+	prepared := prepareNSGTest(t, dt)
+	baseline := dt.GetSyncLocationsAddresses()
+	assert.NoError(t, dt.ReconcileInboundService(nsgKubeService("svc-lb", "30.0.0.0/8")))
+	writes := cloud.groupWrites
+
+	request := dt.applyNICPoliciesToLocationSync(baseline, prepared)
+	assert.Empty(t, request.Locations, "an older preparation must not publish after a policy change")
+	assert.Empty(t, dt.pendingLocationUpdates, "only the final request belongs in the journal")
+	assert.Equal(t, writes, cloud.groupWrites, "the location step does not perform Azure I/O")
+
+	prepared = prepareNSGTest(t, dt)
+	request = dt.applyNICPoliciesToLocationSync(baseline, prepared)
+	assert.True(t, request.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Has("svc-lb"))
+}
+
+func TestLocationSyncIncludesWithdrawalAfterBaseline(t *testing.T) {
+	dt, _, _ := newNSGTestTracker(t, nsgKubeService("svc-lb", "20.0.0.0/8"))
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
+	dt.UpdateLocationsAddresses(nsgTestLocationSync(dt, prepareNSGTest(t, dt)))
+	baseline := dt.GetSyncLocationsAddresses()
+	assert.Empty(t, baseline.Locations)
+
+	dt.UpdateEndpoints("svc-lb", map[string]string{"10.1.0.1": "10.0.0.1"}, nil)
+	request := dt.applyNICPoliciesToLocationSync(baseline, nil)
+	assert.Contains(t, request.Locations, "10.0.0.1", "incoming dirty work must be checked after the baseline calculation")
+	dt.UpdateLocationsAddresses(request)
+	assert.Empty(t, dt.NRPResources.Locations)
+	assert.Empty(t, baseline.Locations)
+}
+
+func TestLocationSyncRecoveryIncludesUnchangedLocations(t *testing.T) {
+	service := nsgKubeService("svc-lb", "")
+	service.Annotations = nil
+	dt, _, _ := newNSGTestTracker(t, service)
+	for location, address := range map[string]string{"10.0.0.1": "10.1.0.1", "10.0.0.2": "10.2.0.1"} {
+		addNSGTestBackend(dt, "svc-lb", location, address, "")
+	}
+	dt.UpdateLocationsAddresses(nsgTestLocationSync(dt, nil))
+	dt.mayHaveNICPolicies, dt.locationRecoveryPending = true, true
+	baseline := dt.GetSyncLocationsAddresses()
+	assert.Empty(t, baseline.Locations)
+
+	request := dt.applyNICPoliciesToLocationSync(baseline, nil)
+	assert.Equal(t, FullUpdate, request.Action)
+	assert.Len(t, request.Locations, 2, "a root replacement must retain unchanged acknowledged locations")
+	assert.True(t, request.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Has("svc-lb"))
+	assert.True(t, request.Locations["10.0.0.2"].Addresses["10.2.0.1"].ServiceRef.Has("svc-lb"))
+	dt.UpdateLocationsAddresses(request)
+	assert.False(t, dt.locationRecoveryPending)
+	assert.Empty(t, dt.pendingLocationUpdates)
+	assert.Len(t, dt.NRPResources.Locations, 2)
+}
+
+func TestLocationSyncCorrectsUnacknowledgedNoOp(t *testing.T) {
+	service := nsgKubeService("svc-lb", "")
+	service.Annotations = nil
+	dt, _, _ := newNSGTestTracker(t, service)
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
+	attempt := nsgTestLocationSync(dt, nil)
+	assert.Contains(t, attempt.Locations, "10.0.0.1")
+
+	dt.UpdateEndpoints("svc-lb", map[string]string{"10.1.0.1": "10.0.0.1"}, nil)
+	baseline := dt.GetSyncLocationsAddresses()
+	assert.Empty(t, baseline.Locations)
+	assert.Empty(t, dt.dirtyNICPolicies)
+	request := dt.applyNICPoliciesToLocationSync(baseline, nil)
+	assert.Contains(t, request.Locations, "10.0.0.1", "an unacknowledged addition requires correction even when desired equals the old ACK")
+	assert.Empty(t, request.Locations["10.0.0.1"].Addresses)
+	assert.True(t, dt.pendingLocationUpdates["10.0.0.1"].Addresses["10.1.0.1"].Services.Has("svc-lb"))
+	dt.UpdateLocationsAddresses(request)
+	assert.Empty(t, dt.pendingLocationUpdates)
+	assert.Empty(t, dt.NRPResources.Locations)
+}
+
+func TestLocationSyncCorrectsOnlyUnacknowledgedLocations(t *testing.T) {
+	service := nsgKubeService("svc-lb", "")
+	service.Annotations = nil
+	dt, _, _ := newNSGTestTracker(t, service)
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.2", "10.2.0.1", "")
+	dt.UpdateLocationsAddresses(nsgTestLocationSync(dt, nil))
+	dt.NRPResources.Locations["10.0.0.1"].Addresses["10.1.0.9"] = NRPAddress{Services: utilsets.NewString("default-natgw")}
+
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.2", "")
+	attempt := nsgTestLocationSync(dt, nil)
+	assert.Equal(t, PartialUpdate, attempt.Locations["10.0.0.1"].AddressUpdateAction)
+	assert.NotContains(t, attempt.Locations, "10.0.0.2")
+	assert.Len(t, dt.pendingLocationUpdates["10.0.0.1"].Addresses, 1)
+
+	dt.UpdateEndpoints("svc-lb", map[string]string{"10.1.0.2": "10.0.0.1"}, nil)
+	addNSGTestBackend(dt, "svc-lb", "10.0.0.2", "10.2.0.2", "")
+	correction := nsgTestLocationSync(dt, nil)
+	assert.Equal(t, PartialUpdate, correction.Action)
+	first := correction.Locations["10.0.0.1"]
+	assert.Equal(t, FullUpdate, first.AddressUpdateAction)
+	assert.Len(t, first.Addresses, 2)
+	assert.True(t, first.Addresses["10.1.0.1"].ServiceRef.Has("svc-lb"))
+	assert.True(t, first.Addresses["10.1.0.9"].ServiceRef.Equals(utilsets.NewString("default-natgw")))
+	assert.NotContains(t, first.Addresses, "10.1.0.2")
+	second := correction.Locations["10.0.0.2"]
+	assert.Equal(t, PartialUpdate, second.AddressUpdateAction)
+	assert.Len(t, second.Addresses, 1)
+	assert.True(t, second.Addresses["10.2.0.2"].ServiceRef.Has("svc-lb"))
+
+	dt.UpdateLocationsAddresses(correction)
+	assert.Empty(t, dt.pendingLocationUpdates)
+	assert.Len(t, dt.NRPResources.Locations["10.0.0.2"].Addresses, 2)
+	assert.NotContains(t, dt.NRPResources.Locations["10.0.0.1"].Addresses, "10.1.0.2")
+	assert.Empty(t, nsgTestLocationSync(dt, nil).Locations)
+}
+
+func TestLocationSyncJournalDoesNotCopyAcknowledgedBindings(t *testing.T) {
+	first, second := nsgKubeService("first-lb", ""), nsgKubeService("second-lb", "")
+	first.Annotations, second.Annotations = nil, nil
+	dt, _, _ := newNSGTestTracker(t, first, second)
+	addNSGTestBackend(dt, "first-lb", "10.0.0.1", "10.1.0.1", "")
+	dt.UpdateLocationsAddresses(nsgTestLocationSync(dt, nil))
+	addNSGTestBackend(dt, "second-lb", "10.0.0.1", "10.1.0.1", "")
+	attempt := nsgTestLocationSync(dt, nil)
+	assert.True(t, attempt.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Equals(utilsets.NewString("first-lb", "second-lb")))
+	assert.True(t, dt.pendingLocationUpdates["10.0.0.1"].Addresses["10.1.0.1"].Services.Equals(utilsets.NewString("second-lb")))
+	dt.UpdateLocationsAddresses(attempt)
+	assert.Empty(t, dt.pendingLocationUpdates)
+}
+
+func TestNICLocationSyncPreservesBYOAndRPDefaultReferences(t *testing.T) {
+	const serviceName, byoName = "svc-lb", "egress-natgw"
+	const byoID = "/subscriptions/network-sub/resourceGroups/owner-rg/providers/Microsoft.Network/natGateways/egress"
+	for _, rootRecovery := range []bool{false, true} {
+		for _, reserved := range []string{"default-natgw", "rp-default-special"} {
+			t.Run(fmt.Sprintf("rootRecovery=%t/default=%s", rootRecovery, reserved), func(t *testing.T) {
+				dt, _, _ := newNSGTestTracker(t, nsgKubeService(serviceName, "20.0.0.0/8"))
+				dt.NRPResources.ReservedOutboundServices = utilsets.NewString(reserved)
+				dt.setBYONATGatewayID(byoName, byoID)
+				addNSGTestBackend(dt, serviceName, "10.0.0.1", "10.1.0.1", byoName)
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.1.0.9": {Services: utilsets.NewString(reserved)},
+				}}
+				prepared := prepareNSGTest(t, dt)
+				attempt := nsgTestLocationSync(dt, prepared)
+				assert.True(t, attempt.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Equals(utilsets.NewString(serviceName, byoName)))
+
+				// No ACK: remove only the inbound intent while the selected BYO Pod remains.
+				dt.UpdateEndpoints(serviceName, map[string]string{"10.1.0.1": "10.0.0.1"}, nil)
+				dt.locationRecoveryPending = rootRecovery
+				correction := nsgTestLocationSync(dt, nil)
+				assert.Equal(t, FullUpdate, correction.Locations["10.0.0.1"].AddressUpdateAction)
+				assert.Len(t, correction.Locations["10.0.0.1"].Addresses, 2)
+				assert.True(t, correction.Locations["10.0.0.1"].Addresses["10.1.0.1"].ServiceRef.Equals(utilsets.NewString(byoName)))
+				assert.True(t, correction.Locations["10.0.0.1"].Addresses["10.1.0.9"].ServiceRef.Equals(utilsets.NewString(reserved)))
+				if rootRecovery {
+					assert.Equal(t, FullUpdate, correction.Action)
+				} else {
+					assert.Equal(t, PartialUpdate, correction.Action)
+				}
+
+				dt.UpdateLocationsAddresses(correction)
+				assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.1.0.1"].Services.Equals(utilsets.NewString(byoName)))
+				assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.1.0.9"].Services.Equals(utilsets.NewString(reserved)))
+				assert.Equal(t, byoID, dt.byoNATGatewayID(byoName), "NIC reconciliation must not replace the retained owner target")
+				assert.Empty(t, dt.pendingLocationUpdates)
+				assert.Empty(t, nsgTestLocationSync(dt, nil).Locations)
+			})
+		}
+	}
+}
 
 func TestGetSyncLoadBalancerServices(t *testing.T) {
 	dt := &DiffTracker{

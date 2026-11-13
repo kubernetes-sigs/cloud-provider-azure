@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
@@ -153,7 +154,7 @@ func TestInitializeDiffTracker(t *testing.T) {
 	defer ctrl.Finish()
 	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 	mockKubeClient := fake.NewSimpleClientset()
-	diffTracker, err := New(log.Noop(), K8sResources, NRPResources, config, mockFactory, mockKubeClient)
+	diffTracker, err := New(log.Noop(), K8sResources, NRPResources, config, mockFactory, mockFactory, &nsgTestCloud{}, mockKubeClient)
 	assert.NoError(t, err)
 	syncOperations := diffTracker.GetSyncOperations()
 	// It follows a call to ServiceGateway API and if it is successful we can proceed with syncing difftracker.NRP
@@ -223,6 +224,43 @@ func validTestConfig() Config {
 	}
 }
 
+func TestNewClientDependencies(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	networkFactory := mock_azclient.NewMockClientFactory(ctrl)
+	computeFactory := mock_azclient.NewMockClientFactory(ctrl)
+	nodes := &nsgTestCloud{}
+	kubeClient := fake.NewSimpleClientset()
+	for _, tt := range []struct {
+		name    string
+		compute azclient.ClientFactory
+		nodes   NSGNodeProvider
+		wantErr string
+	}{
+		{name: "both node dependencies", compute: computeFactory, nodes: nodes},
+		{name: "no node dependencies", wantErr: "difftracker.New: computeClientFactory must not be nil"},
+		{name: "missing node provider", compute: computeFactory, wantErr: "difftracker.New: nodeProvider must not be nil"},
+		{name: "missing compute clients", nodes: nodes, wantErr: "difftracker.New: computeClientFactory must not be nil"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dt, err := New(log.Noop(), emptyK8sState(), emptyNRPState(), validTestConfig(), networkFactory, tt.compute, tt.nodes, kubeClient)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+				assert.Nil(t, dt)
+				return
+			}
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Same(t, networkFactory, dt.networkClientFactory)
+			assert.Same(t, tt.compute, dt.computeClientFactory)
+			assert.Same(t, tt.nodes, dt.nodeProvider)
+			assert.Same(t, kubeClient, dt.kubeClient)
+			assert.NotNil(t, dt.dirtyNICPolicies)
+			assert.NotNil(t, dt.pendingLocationUpdates)
+		})
+	}
+}
+
 // TestNewSeedsOutboundRefCount verifies New seeds the outbound ref-counter from
 // the egress pods already present in the initial state, so the counter is
 // non-zero for identities that have backing pods at construction time.
@@ -242,7 +280,7 @@ func TestNewSeedsOutboundRefCount(t *testing.T) {
 		"10.0.1.1": {InboundIdentities: sets.NewString(), PublicOutboundIdentity: "Egress2"},
 	}}
 
-	dt, err := New(log.Noop(), k8s, emptyNRPState(), validTestConfig(), mockFactory, mockKubeClient)
+	dt, err := New(log.Noop(), k8s, emptyNRPState(), validTestConfig(), mockFactory, mockFactory, &nsgTestCloud{}, mockKubeClient)
 	assert.NoError(t, err)
 
 	val, ok := dt.outboundIdentityPodRefCount.Load("egress1")

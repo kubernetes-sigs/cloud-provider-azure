@@ -18,11 +18,13 @@ package difftracker
 
 import (
 	"errors"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -119,6 +121,9 @@ type InboundConfig struct {
 	// cannot be resolved to a PodIP backend port here, so their presence is rejected as a
 	// terminal error in buildInboundServiceResources rather than silently mis-routing traffic.
 	NamedTargetPorts []string
+	// AllowedIPRanges is nil when the Service has no source policy.
+	AllowedIPRanges      []netip.Prefix
+	InvalidAllowedRanges string
 }
 
 // OutboundConfig contains NAT Gateway configuration for outbound services
@@ -289,6 +294,7 @@ type NRPLocation struct {
 	// Addresses is keyed by pod IP. Each pod IP is added to the ServiceGateway
 	// as an address under this location once the pod is created.
 	Addresses map[string]NRPAddress
+	nodeOwner *nsgLocationOwner
 }
 
 type NRPState struct {
@@ -360,9 +366,13 @@ type ServiceOperationState struct {
 	// LastAppliedConfig is the configuration last successfully applied to Azure.
 	// Used by UpdateService to short-circuit no-op updates.
 	LastAppliedConfig *ServiceConfig
-	State             ResourceState
-	RetryCount        int
-	LastAttempt       string // timestamp as string for serialization
+	// NSGPrepared permits a protected LB update for the current accepted configuration.
+	NSGPrepared bool
+	// RetainedBackendPorts covers recovered and retired-attempt ports, not a confirmed LB configuration.
+	RetainedBackendPorts []PortMapping
+	State                ResourceState
+	RetryCount           int
+	LastAttempt          string // timestamp as string for serialization
 
 	// NextRetryAt is the earliest time the dispatcher may re-dispatch this operation after a
 	// transient failure. Set in the failure branches of OnServiceCreationComplete to now+backoff;
@@ -442,7 +452,14 @@ type DiffTracker struct {
 	// Configuration and clients
 	config               Config
 	networkClientFactory azclient.ClientFactory
+	computeClientFactory azclient.ClientFactory
+	nodeProvider         NSGNodeProvider
 	kubeClient           kubernetes.Interface
+
+	dirtyNICPolicies        sets.Set[string]
+	pendingLocationUpdates  map[string]NRPLocation
+	mayHaveNICPolicies      bool
+	locationRecoveryPending bool
 
 	// serviceLister is the provider's shared-informer-backed Service lister, published via
 	// SetServiceLister once SetInformers has run. It is nil until then (and in tests), in which
@@ -455,7 +472,7 @@ type DiffTracker struct {
 	// eventRecorder emits Service Gateway pod events; set post-init before the egress informer starts.
 	eventRecorder record.EventRecorder
 	// endpointSlicesCache is owned by difftracker and stores snapshots from forwarded informer
-	// events. It is replayed when a service is registered and by ReconcileNodeIPChange.
+	// events. It is replayed when a service is registered and by ReconcileNodeChange.
 	endpointSlicesCache sync.Map
 
 	// Engine state management
