@@ -133,7 +133,7 @@ func startControllers(ctx context.Context, c *cloudnodeconfig.Config, healthzHan
 		c.SharedInformers.Core().V1().Nodes(),
 		// cloud node controller uses existing cluster role from node-controller
 		c.ClientBuilder.ClientOrDie("node-controller"),
-		nodeprovider.NewNodeProvider(ctx, c.UseInstanceMetadata, c.CloudConfigFilePath),
+		nodeprovider.NewNodeProvider(ctx, c.UseInstanceMetadata, c.CloudConfigFilePath, c.NodeIPFamilies),
 		c.NodeStatusUpdateFrequency.Duration,
 		c.WaitForRoutes,
 		c.EnableDeprecatedBetaTopologyLabels)
