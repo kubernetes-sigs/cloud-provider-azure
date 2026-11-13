@@ -121,7 +121,11 @@ type Cloud struct {
 	routeCIDRs map[string]string
 
 	// regionZonesMap stores all available zones for the subscription by region
-	regionZonesMap   map[string][]string
+	regionZonesMap map[string][]string
+	// publicIPZonesMap stores, per region, the zones Microsoft.Network reports for
+	// publicIPAddresses. They are the ones a new public IP may use, and they can be
+	// narrower than regionZonesMap.
+	publicIPZonesMap map[string][]string
 	refreshZonesLock sync.RWMutex
 
 	KubeClient         clientset.Interface
