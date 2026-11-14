@@ -627,6 +627,14 @@ const (
 	// DefaultServiceGatewayResourceName is the fixed ServiceGateway resource name used when
 	// ServiceGatewayEnabled=true. It is not configurable via cloud-provider config.
 	DefaultServiceGatewayResourceName = "servicegateway"
+
+	// DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds is the default minimum time between
+	// consecutive ServiceGateway address-location updates sent to NRP.
+	DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds = 400
+
+	// DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds is the configuration value
+	// indicating that no additional spacing should be applied between NRP address-location updates.
+	DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds = -1
 )
 
 // Azure resource lock

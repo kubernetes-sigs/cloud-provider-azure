@@ -18,7 +18,10 @@ package servicegateway
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -61,6 +64,42 @@ func TestDiffTrackerConfig(t *testing.T) {
 	assert.Equal(t, "vnet", diffTrackerConfig.VNetName)
 	assert.Equal(t, "vnet-resource-group", diffTrackerConfig.VNetResourceGroup)
 	assert.Contains(t, diffTrackerConfig.ServiceGatewayResourceID(), "/subscriptions/network-subscription/")
+	assert.Equal(t, 400*time.Millisecond, diffTrackerConfig.LocationsUpdateInterval,
+		"an unset serviceGatewayLocationsUpdateIntervalInMilliseconds must default to 400ms")
+}
+
+func TestDiffTrackerConfigLocationsUpdateInterval(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		json      string
+		expected  time.Duration
+		wantError bool
+	}{
+		{name: "absent", json: `{}`, expected: 400 * time.Millisecond},
+		{name: "zero", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": 0}`, expected: 400 * time.Millisecond},
+		{name: "disabled", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": -1}`},
+		{name: "one millisecond", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": 1}`, expected: time.Millisecond},
+		{name: "custom", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": 1500}`, expected: 1500 * time.Millisecond},
+		{name: "negative below disabled", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": -2}`, wantError: true},
+		{name: "other negative", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": -1000}`, wantError: true},
+		{name: "minimum integer", json: `{"serviceGatewayLocationsUpdateIntervalInMilliseconds": ` + strconv.Itoa(math.MinInt) + `}`, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var config providerconfig.Config
+			config.SubscriptionID = "sub"
+			config.ResourceGroup = "rg"
+			config.Location = "eastus"
+			config.VnetName = "vnet"
+			assert.NoError(t, json.Unmarshal([]byte(tc.json), &config))
+			trackerConfig := diffTrackerConfig(config)
+			if tc.wantError {
+				assert.ErrorContains(t, trackerConfig.Validate(), "LocationsUpdateInterval must not be negative")
+			} else {
+				assert.Equal(t, tc.expected, trackerConfig.LocationsUpdateInterval)
+				assert.NoError(t, trackerConfig.Validate())
+			}
+		})
+	}
 }
 
 func TestRuntimeEnablementAndLoadBalancer(t *testing.T) {
