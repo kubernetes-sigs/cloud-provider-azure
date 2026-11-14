@@ -19,6 +19,8 @@ package difftracker
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,9 +31,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+	restfake "k8s.io/client-go/rest/fake"
 	ktesting "k8s.io/client-go/testing"
+	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/component-base/metrics/testutil"
+	"k8s.io/utils/ptr"
 
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -466,6 +473,7 @@ func TestRemoveServiceGatewayFinalizer(t *testing.T) {
 				UID:        types.UID("test-uid"),
 				Finalizers: []string{"other-finalizer", ServiceGatewayServiceCleanupFinalizer},
 			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
 		}
 
 		kubeClient := fake.NewSimpleClientset(svc)
@@ -647,6 +655,418 @@ func TestRemoveServiceGatewayFinalizer(t *testing.T) {
 		assert.NoError(t, getErr)
 		assert.Equal(t, replacement.Finalizers, updatedSvc.Finalizers)
 	})
+}
+
+func TestRemoveServiceFinalizersDuringRecovery(t *testing.T) {
+	serviceName := inboundServiceName("original")
+	tests := []struct {
+		name        string
+		serviceType v1.ServiceType
+		class       *string
+		deleting    bool
+		replaced    bool
+		noSGW       bool
+		tracked     string
+		wantTracked bool
+		wantRemove  bool
+		wantDone    bool
+	}{
+		{name: "retyped", serviceType: v1.ServiceTypeClusterIP, wantRemove: true, wantDone: true},
+		{name: "foreign class", serviceType: v1.ServiceTypeLoadBalancer, class: ptr.To("example.com/other"), wantRemove: true, wantDone: true},
+		{name: "managed again", serviceType: v1.ServiceTypeLoadBalancer},
+		{name: "deleting load balancer", serviceType: v1.ServiceTypeLoadBalancer, deleting: true, wantRemove: true, wantDone: true},
+		{name: "replacement", serviceType: v1.ServiceTypeClusterIP, replaced: true, wantDone: true},
+		{name: "our finalizer already gone", serviceType: v1.ServiceTypeClusterIP, noSGW: true, wantDone: true},
+		{name: "registered LB", serviceType: v1.ServiceTypeClusterIP, tracked: "lb", wantTracked: true},
+		{name: "same raw outbound identity", serviceType: v1.ServiceTypeClusterIP, tracked: "nat", wantRemove: true, wantDone: true},
+		{name: "pending operation", serviceType: v1.ServiceTypeClusterIP, tracked: "operation", wantTracked: true},
+		{name: "desired service", serviceType: v1.ServiceTypeClusterIP, tracked: "desired", wantTracked: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns", Name: "svc", UID: "original", ResourceVersion: "1",
+					Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, servicehelper.LoadBalancerCleanupFinalizer, "example.com/keep"},
+				},
+				Spec: v1.ServiceSpec{Type: tt.serviceType, LoadBalancerClass: tt.class},
+			}
+			if tt.deleting {
+				svc.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			if tt.replaced {
+				svc.UID = "replacement"
+			}
+			if tt.noSGW {
+				svc.Finalizers = svc.Finalizers[1:]
+			}
+			kube := fake.NewSimpleClientset(svc)
+			dt := &DiffTracker{kubeClient: kube}
+			switch tt.tracked {
+			case "lb":
+				dt.NRPResources.LoadBalancers = utilsets.NewString(serviceName)
+			case "nat":
+				dt.NRPResources.NATGateways = utilsets.NewString(outboundServiceName("original"))
+			case "operation":
+				dt.pendingServiceOps = map[string]*ServiceOperationState{serviceName: {}}
+			case "desired":
+				dt.K8sResources.Services = utilsets.NewString(serviceName)
+			}
+			target := &v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "svc", UID: "original"}}
+			completed, err := dt.removeServiceFinalizers(context.Background(), target, true)
+			if tt.wantTracked {
+				assert.ErrorContains(t, err, "tracked")
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantDone, completed)
+			got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			if tt.wantRemove {
+				assert.Equal(t, []string{"example.com/keep"}, got.Finalizers)
+			} else {
+				assert.Equal(t, svc.Finalizers, got.Finalizers)
+			}
+			updates := 0
+			for _, action := range kube.Actions() {
+				if action.Matches("update", "services") {
+					updates++
+					assert.Equal(t, "1", action.(ktesting.UpdateAction).GetObject().(*v1.Service).ResourceVersion)
+				}
+			}
+			assert.Equal(t, tt.wantRemove, updates == 1)
+			if !tt.wantRemove {
+				assert.Zero(t, updates)
+			}
+		})
+	}
+
+	t.Run("rechecks ownership after a conflict", func(t *testing.T) {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns", Name: "svc", UID: "original", ResourceVersion: "1",
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, servicehelper.LoadBalancerCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+		}
+		kube := fake.NewSimpleClientset(svc)
+		updates := 0
+		kube.PrependReactor("update", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			updates++
+			if updates != 1 {
+				return false, nil, nil
+			}
+			managed := svc.DeepCopy()
+			managed.Spec.Type = v1.ServiceTypeLoadBalancer
+			managed.ResourceVersion = "2"
+			if err := kube.Tracker().Update(v1.SchemeGroupVersion.WithResource("services"), managed, "ns"); err != nil {
+				return true, nil, err
+			}
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "services"}, "svc", fmt.Errorf("Service retyped"))
+		})
+		dt := &DiffTracker{kubeClient: kube}
+		completed, err := dt.removeServiceFinalizers(context.Background(), svc, true)
+		assert.NoError(t, err)
+		assert.False(t, completed)
+		assert.Equal(t, 1, updates)
+		got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+		if assert.NoError(t, err) {
+			assert.Equal(t, svc.Finalizers, got.Finalizers)
+			assert.Equal(t, v1.ServiceTypeLoadBalancer, got.Spec.Type)
+		}
+	})
+
+	t.Run("missing Service", func(t *testing.T) {
+		dt := &DiffTracker{kubeClient: fake.NewSimpleClientset()}
+		completed, err := dt.removeServiceFinalizers(context.Background(),
+			&v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "gone", UID: "original"}}, true)
+		assert.NoError(t, err)
+		assert.True(t, completed)
+	})
+
+	t.Run("cancellation stops local retries", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		kube := fake.NewSimpleClientset()
+		reads := 0
+		kube.PrependReactor("get", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			reads++
+			cancel()
+			return true, nil, apierrors.NewServiceUnavailable("apiserver unavailable")
+		})
+		dt := &DiffTracker{kubeClient: kube}
+		completed, err := dt.removeServiceFinalizers(ctx,
+			&v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "svc", UID: "original"}}, true)
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.False(t, completed)
+		assert.Equal(t, 1, reads)
+	})
+}
+
+func TestRetryServiceFinalizers_RetainsFailuresUntilRecovery(t *testing.T) {
+	RegisterMetrics()
+	recoveredBefore, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	newService := func(name string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns", Name: name, UID: types.UID(name),
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, "example.com/keep"},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+		}
+	}
+	kube := fake.NewSimpleClientset(newService("waiting"), newService("healthy"))
+	var available atomic.Bool
+	var failed atomic.Int32
+	var healthyUpdates atomic.Int32
+	kube.PrependReactor("update", "services", func(action ktesting.Action) (bool, runtime.Object, error) {
+		svc := action.(ktesting.UpdateAction).GetObject().(*v1.Service)
+		if svc.Name == "waiting" && !available.Load() {
+			failed.Add(1)
+			return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "services"}, svc.Name, fmt.Errorf("temporarily denied"))
+		}
+		if svc.Name == "healthy" {
+			healthyUpdates.Add(1)
+		}
+		return false, nil, nil
+	})
+	dt := &DiffTracker{kubeClient: kube}
+	refs := []v1.ObjectReference{
+		{Namespace: "ns", Name: "waiting", UID: "waiting"},
+		{Namespace: "ns", Name: "healthy", UID: "healthy"},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	updater := &ServiceUpdater{ctx: ctx, diffTracker: dt, activeOps: make(map[string]bool)}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		updater.retryServiceFinalizers(refs)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+
+	if !assert.Eventually(t, func() bool {
+		return failed.Load() >= int32(2*finalizerRetryBackoff.Steps) && healthyUpdates.Load() == 1
+	}, 8*time.Second, 10*time.Millisecond) {
+		return
+	}
+	available.Store(true)
+	select {
+	case <-done:
+	case <-time.After(7 * time.Second):
+		t.Fatal("finalizer retries did not recover")
+	}
+	assert.Equal(t, int32(1), healthyUpdates.Load())
+	for _, name := range []string{"waiting", "healthy"} {
+		got, err := kube.CoreV1().Services("ns").Get(ctx, name, metav1.GetOptions{})
+		if assert.NoError(t, err) {
+			assert.Equal(t, []string{"example.com/keep"}, got.Finalizers)
+		}
+	}
+	recoveredAfter, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(2), recoveredAfter-recoveredBefore)
+	assert.Equal(t, []v1.ObjectReference{{}, {}}, refs, "completed identities must not remain retained in the retry batch")
+}
+
+func TestRetryServiceFinalizers_BoundsAPIAttempts(t *testing.T) {
+	oldTimeout := nrpOperationTimeout.Swap(int64(100 * time.Millisecond))
+	t.Cleanup(func() { nrpOperationTimeout.Store(oldTimeout) })
+	timedOut := make(chan error, 1)
+	client, err := kubernetes.NewForConfigAndClient(&rest.Config{Host: "https://127.0.0.1"},
+		restfake.CreateHTTPClient(func(request *http.Request) (*http.Response, error) {
+			<-request.Context().Done()
+			select {
+			case timedOut <- request.Context().Err():
+			default:
+			}
+			return nil, request.Context().Err()
+		}))
+	if !assert.NoError(t, err) {
+		return
+	}
+	dt := &DiffTracker{kubeClient: client}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updater := &ServiceUpdater{ctx: ctx, diffTracker: dt, activeOps: make(map[string]bool)}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		updater.retryServiceFinalizers([]v1.ObjectReference{{Namespace: "ns", Name: "svc", UID: "original"}})
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	select {
+	case err := <-timedOut:
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.NoError(t, ctx.Err(), "the API attempt must end before the updater context expires")
+	case <-time.After(3 * time.Second):
+		t.Fatal("Kubernetes request did not honor its per-attempt deadline")
+	}
+}
+
+func TestRetryServiceFinalizers_SerializesWithServiceOperations(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns", Name: "svc", UID: "original",
+			Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+		},
+		Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+	}
+	serviceName := ServiceName(svc)
+	kube := fake.NewSimpleClientset(svc)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	operationStarted := make(chan struct{}, 2)
+	updater := &ServiceUpdater{
+		diffTracker: dt, ctx: ctx, activeOps: make(map[string]bool),
+		semaphore: make(chan struct{}, 10),
+		onComplete: func(string, bool, error) {
+			operationStarted <- struct{}{}
+		},
+	}
+	updating := make(chan struct{})
+	release := make(chan struct{})
+	var reserved atomic.Bool
+	kube.PrependReactor("update", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+		updater.mu.Lock()
+		reserved.Store(updater.activeOps[serviceName])
+		updater.mu.Unlock()
+		dt.mu.Lock()
+		dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+			ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateUpdateInProgress,
+		}
+		dt.mu.Unlock()
+		updater.processBatch()
+		close(updating)
+		<-release
+		return false, nil, nil
+	})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		updater.retryServiceFinalizers([]v1.ObjectReference{{Namespace: "ns", Name: "svc", UID: "original"}})
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+		updater.wg.Wait()
+	})
+	select {
+	case <-updating:
+	case <-time.After(3 * time.Second):
+		close(release)
+		t.Fatal("finalizer update did not start")
+	}
+	assert.True(t, reserved.Load(), "the retry must exclude a concurrent worker for the same identity")
+	select {
+	case <-operationStarted:
+		t.Error("a service operation started while its finalizers were being removed")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("finalizer retry did not finish")
+	}
+	select {
+	case <-dt.serviceUpdaterTrigger:
+	default:
+		t.Error("service work skipped during finalization was not requeued")
+	}
+	updater.processBatch()
+	select {
+	case <-operationStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("service work did not resume after finalization")
+	}
+}
+
+func TestRetryServiceFinalizers_WaitsForExistingWork(t *testing.T) {
+	serviceName := inboundServiceName("busy")
+	for _, block := range []string{"active operation", "registered resource", "pending operation"} {
+		t.Run(block, func(t *testing.T) {
+			newService := func(name string) *v1.Service {
+				return &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ns", Name: name, UID: types.UID(name),
+						Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+					},
+					Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+				}
+			}
+			kube := fake.NewSimpleClientset(newService("busy"), newService("ready"))
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			updater := &ServiceUpdater{ctx: ctx, diffTracker: dt, activeOps: make(map[string]bool)}
+			switch block {
+			case "active operation":
+				updater.activeOps[serviceName] = true
+			case "registered resource":
+				dt.NRPResources.LoadBalancers.Insert(serviceName)
+			case "pending operation":
+				dt.pendingServiceOps[serviceName] = &ServiceOperationState{}
+			}
+			ready := make(chan struct{}, 1)
+			var busyUpdates atomic.Int32
+			kube.PrependReactor("update", "services", func(action ktesting.Action) (bool, runtime.Object, error) {
+				service := action.(ktesting.UpdateAction).GetObject().(*v1.Service)
+				if service.Name == "busy" {
+					busyUpdates.Add(1)
+				} else {
+					select {
+					case ready <- struct{}{}:
+					default:
+					}
+				}
+				return false, nil, nil
+			})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				updater.retryServiceFinalizers([]v1.ObjectReference{
+					{Namespace: "ns", Name: "busy", UID: "busy"},
+					{Namespace: "ns", Name: "ready", UID: "ready"},
+				})
+			}()
+			t.Cleanup(func() {
+				cancel()
+				<-done
+			})
+			select {
+			case <-ready:
+			case <-time.After(3 * time.Second):
+				t.Fatal("one blocked Service prevented another Service's cleanup")
+			}
+			assert.Zero(t, busyUpdates.Load(), "existing work must retain its finalizers")
+			updater.mu.Lock()
+			if block == "active operation" {
+				assert.True(t, updater.activeOps[serviceName], "the retry must not release another worker's slot")
+			}
+			delete(updater.activeOps, serviceName)
+			updater.mu.Unlock()
+			dt.mu.Lock()
+			dt.NRPResources.LoadBalancers.Delete(serviceName)
+			delete(dt.pendingServiceOps, serviceName)
+			dt.mu.Unlock()
+			select {
+			case <-done:
+			case <-time.After(4 * time.Second):
+				t.Fatal("cleanup did not resume after existing work ended")
+			}
+			assert.Equal(t, int32(1), busyUpdates.Load())
+			assert.Empty(t, updater.activeOps)
+		})
+	}
 }
 
 // ================================================================================================
