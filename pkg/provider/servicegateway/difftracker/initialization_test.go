@@ -1704,15 +1704,140 @@ func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing
 		})
 		failing := newProviderDiffTracker(t, ctrl, kube)
 
-		r0, _, f0 := read()
+		r0, s0, f0 := read()
 		// No Azure resource anywhere, so recovery takes the direct-removal path -- which fails.
-		recoverStuckFinalizers(context.Background(), failing,
+		pending := recoverStuckFinalizers(context.Background(), failing,
 			&v1.ServiceList{Items: []v1.Service{*svcScheduled}}, nil, nil,
 			utilsets.NewString(), utilsets.NewString())
-		r1, _, f1 := read()
-		assert.Equal(t, float64(1), f1-f0, "a forgotten Service finalizer removal must be counted")
+		r1, s1, f1 := read()
+		assert.Equal(t, float64(1), f1-f0, "a failed Service finalizer removal must be counted")
+		assert.Equal(t, float64(1), s1-s0, "the failed removal remains scheduled for retry")
 		assert.Equal(t, float64(0), r1-r0, "a failed removal must not be reported as a recovery")
+		assert.Equal(t, []v1.ObjectReference{{Namespace: svcScheduled.Namespace, Name: svcScheduled.Name, UID: svcScheduled.UID}}, pending)
 	})
+}
+
+func TestInitializeFromCluster_RetriesServiceFinalizersWithoutBlockingStartup(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		verb        string
+		stopUpdater bool
+		cancel      bool
+	}{
+		{name: "GET recovers", verb: "get"},
+		{name: "UPDATE recovers", verb: "update"},
+		{name: "updater stops during retry", verb: "update", stopUpdater: true},
+		{name: "runtime context is cancelled", verb: "get", cancel: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+			mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+			mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+			mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+
+			mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+			mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+			mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+			mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+			mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns", Name: "retyped", UID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+					Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, "service.kubernetes.io/load-balancer-cleanup", "example.com/keep"},
+				},
+				Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+			}
+			kube := fake.NewSimpleClientset(svc)
+			var available atomic.Bool
+			var failed atomic.Int32
+			releaseRetry := make(chan struct{})
+			var releaseOnce sync.Once
+			release := func() { releaseOnce.Do(func() { close(releaseRetry) }) }
+			defer release()
+			kube.PrependReactor(tt.verb, "services", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+				if !available.Load() {
+					calls := failed.Add(1)
+					if tt.stopUpdater && calls > int32(finalizerRetryBackoff.Steps) {
+						<-releaseRetry
+					}
+					return true, nil, apierrors.NewServiceUnavailable("apiserver unavailable")
+				}
+				return false, nil, nil
+			})
+
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+			if !assert.NoError(t, err) || !assert.NotNil(t, dt) {
+				return
+			}
+			t.Cleanup(func() {
+				available.Store(true)
+				cancel()
+				dt.serviceUpdater.Stop()
+				dt.locationsUpdater.Stop()
+			})
+			assert.True(t, dt.InitialSyncDone)
+			assert.GreaterOrEqual(t, failed.Load(), int32(finalizerRetryBackoff.Steps))
+			got, err := kube.Tracker().Get(v1.SchemeGroupVersion.WithResource("services"), "ns", "retyped")
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Contains(t, got.(*v1.Service).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+
+			if tt.stopUpdater || tt.cancel {
+				if !assert.Eventually(t, func() bool {
+					return failed.Load() > int32(finalizerRetryBackoff.Steps)
+				}, 3*time.Second, 5*time.Millisecond) {
+					return
+				}
+				if tt.cancel {
+					cancel()
+				}
+				stopped := make(chan struct{})
+				go func() {
+					dt.serviceUpdater.Stop()
+					close(stopped)
+				}()
+				if tt.stopUpdater {
+					select {
+					case <-dt.serviceUpdater.ctx.Done():
+					case <-time.After(time.Second):
+						t.Fatal("Stop did not cancel its context")
+					}
+					select {
+					case <-stopped:
+						t.Error("Stop returned before its finalizer retry exited")
+					case <-time.After(100 * time.Millisecond):
+					}
+					release()
+				}
+				select {
+				case <-stopped:
+				case <-time.After(time.Second):
+					t.Fatal("stopping the updater did not stop its finalizer retry")
+				}
+				calls := failed.Load()
+				time.Sleep(200 * time.Millisecond)
+				assert.Equal(t, calls, failed.Load(), "cleanup must not issue requests after Stop returns")
+				return
+			}
+
+			available.Store(true)
+			assert.Eventually(t, func() bool {
+				got, err := kube.CoreV1().Services("ns").Get(ctx, "retyped", metav1.GetOptions{})
+				return err == nil && len(got.Finalizers) == 1 && got.Finalizers[0] == "example.com/keep"
+			}, 5*time.Second, 10*time.Millisecond, "cleanup must recover without a restart or another Service event")
+		})
+	}
 }
 
 // TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer pins that recovery keys on
@@ -1750,6 +1875,47 @@ func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *te
 	gotLB, err := kube.CoreV1().Services("default").Get(context.Background(), "still-lb", metav1.GetOptions{})
 	assert.NoError(t, err)
 	assert.False(t, hasServiceGatewayFinalizer(gotLB), "control: a LoadBalancer Service recovers as before")
+}
+
+// TestRecoverStuckFinalizers_RecoversAliveServiceRetypedAwayFromLoadBalancer pins that a live Service
+// retyped away from LoadBalancer, or claimed by another LoadBalancerClass, is recovered too. It is not desired, so without this its finalizer,
+// added by a create the CCM never finished, is only released after it is deleted and the CCM restarts.
+// A live LoadBalancer Service is the control: its finalizer is owned by the normal lifecycle.
+func TestRecoverStuckFinalizers_RecoversAliveServiceRetypedAwayFromLoadBalancer(t *testing.T) {
+	newLive := func(name, uid string, svcType v1.ServiceType) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default", UID: types.UID(uid),
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: svcType},
+		}
+	}
+	retyped := newLive("retyped", "uid-retyped", v1.ServiceTypeClusterIP)
+	retypedWithLB := newLive("retyped-lb", "uid-retyped-lb", v1.ServiceTypeClusterIP)
+	foreignClass := newLive("foreign-class", "uid-foreign-class", v1.ServiceTypeLoadBalancer)
+	foreignClass.Spec.LoadBalancerClass = ptr.To("example.com/other-controller")
+	liveLB := newLive("live-lb", "uid-live-lb", v1.ServiceTypeLoadBalancer)
+
+	kube := fake.NewSimpleClientset(retyped, retypedWithLB, foreignClass, liveLB)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	services := &v1.ServiceList{Items: []v1.Service{*retyped, *retypedWithLB, *foreignClass, *liveLB}}
+
+	pending := recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(ServiceName(retypedWithLB)), nil)
+	assert.Empty(t, pending, "existing Azure resources must stay on the normal cleanup path")
+
+	get := func(name string) *v1.Service {
+		svc, err := kube.CoreV1().Services("default").Get(context.Background(), name, metav1.GetOptions{})
+		assert.NoError(t, err)
+		return svc
+	}
+	assert.False(t, hasServiceGatewayFinalizer(get("retyped")), "a retyped Service with no Azure resource must be released")
+	assert.True(t, hasServiceGatewayFinalizer(get("retyped-lb")), "the finalizer anchors the cleanup of an existing load balancer")
+	assert.Contains(t, dt.recoveredServiceFinalizers, ServiceName(retypedWithLB))
+	assert.False(t, hasServiceGatewayFinalizer(get("foreign-class")), "a Service claimed by another LoadBalancerClass is not desired either")
+	assert.True(t, hasServiceGatewayFinalizer(get("live-lb")), "control: a live LoadBalancer Service is not recovered")
+	assert.NotContains(t, dt.recoveredServiceFinalizers, ServiceName(liveLB))
 }
 
 // TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway pins that ownership is decided
