@@ -331,6 +331,46 @@ func TestCreateInboundPublicIP_PreservesExistingOwnership(t *testing.T) {
 	}
 }
 
+func TestGetOwnedPublicIP_Mock(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		pip       *armnetwork.PublicIPAddress
+		err       error
+		wantOwned bool
+		wantErr   bool
+	}{
+		{name: "allocated address", pip: publicIPWithAddress("20.1.2.3"), wantOwned: true},
+		{name: "no address allocated", pip: publicIPWithAddress(""), wantOwned: true},
+		{name: "no properties", pip: &armnetwork.PublicIPAddress{Tags: managedResourceTags()}, wantOwned: true},
+		{name: "foreign address", pip: &armnetwork.PublicIPAddress{Properties: &armnetwork.PublicIPAddressPropertiesFormat{IPAddress: ptr.To("20.1.2.3")}}},
+		{name: "no public IP returned", wantErr: true},
+		{name: "not-found", err: notFoundError()},
+		{name: "error", err: errors.New("boom"), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+			mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+			mockPIP.EXPECT().Get(gomock.Any(), "rg", "svc-lb-pip", nil).Return(tc.pip, tc.err)
+
+			dt := &DiffTracker{networkClientFactory: mockFactory, config: testConfig()}
+			got, err := dt.getOwnedPublicIP(context.Background(), "svc-lb-pip")
+			if tc.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+			if tc.wantOwned {
+				assert.Same(t, tc.pip, got)
+			} else {
+				assert.Nil(t, got)
+			}
+		})
+	}
+}
+
 func TestCreateOrUpdateLB_Mock(t *testing.T) {
 	lb := armnetwork.LoadBalancer{Name: ptr.To("svc-lb")}
 
