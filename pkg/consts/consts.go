@@ -391,6 +391,10 @@ const (
 	// LoadBalancerMaximumPriority is the maximum priority
 	LoadBalancerMaximumPriority = 4096
 
+	NetworkProviderNamespace    = "Microsoft.Network"
+	PublicIPAddressResourceType = "publicIPAddresses"
+	VirtualMachineResourceType  = "virtualMachines"
+
 	// FrontendIPConfigIDTemplate is the template of the frontend IP configuration
 	FrontendIPConfigIDTemplate = "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/loadBalancers/%s/frontendIPConfigurations/%s"
 	// BackendPoolIDTemplate is the template of the backend pool
