@@ -784,6 +784,20 @@ func TestInstanceExistsByProviderID(t *testing.T) {
 		exist, _ := cloud.InstanceExistsByProviderID(context.Background(), test.providerID)
 		assert.Equal(t, test.expected, exist, test.name)
 	}
+
+	t.Run("InstanceExistsByProviderID should return false without error if a standalone VM in a VMSS cluster has been deleted", func(t *testing.T) {
+		ss, err := NewTestScaleSet(ctrl)
+		assert.NoError(t, err)
+		cloud.VMSet = ss
+
+		mockVMsClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMsClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{}, nil).AnyTimes()
+		mockVMsClient.EXPECT().Get(gomock.Any(), "rg", "aks-pool-12345678-vms1", gomock.Any()).Return(nil, &azcore.ResponseError{StatusCode: http.StatusNotFound}).Times(1)
+
+		exist, err := cloud.InstanceExistsByProviderID(context.Background(), "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/aks-pool-12345678-vms1")
+		assert.NoError(t, err)
+		assert.False(t, exist)
+	})
 }
 
 func TestNodeAddressesByProviderID(t *testing.T) {
