@@ -30,6 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
+	cloudprovider "k8s.io/cloud-provider"
+	utilnet "k8s.io/utils/net"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
@@ -179,7 +182,7 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 	It("should arrange local services", func() {
 		By("Creating a local service")
 		svc := utils.CreateLoadBalancerServiceManifest(testServiceName, nil, labels, ns.Name, ports)
-		svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
+		svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
 		_, err := cs.CoreV1().Services(ns.Name).Create(context.TODO(), svc, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		ips, err := utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
@@ -232,6 +235,100 @@ var _ = Describe("Ensure LoadBalancer", Label(utils.TestSuiteLabelMultiSLB), fun
 			return true, nil
 		})
 		Expect(err).NotTo(HaveOccurred())
+
+		for _, policy := range []v1.ServiceExternalTrafficPolicy{
+			v1.ServiceExternalTrafficPolicyCluster,
+			v1.ServiceExternalTrafficPolicyLocal,
+		} {
+			By(fmt.Sprintf("Changing ExternalTrafficPolicy of the service to %s", policy))
+			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				svc, err = cs.CoreV1().Services(ns.Name).Get(context.Background(), testServiceName, metav1.GetOptions{})
+				if err != nil {
+					return err
+				}
+				svc.Spec.ExternalTrafficPolicy = policy
+				_, err = cs.CoreV1().Services(ns.Name).Update(context.Background(), svc, metav1.UpdateOptions{})
+				return err
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			if policy == v1.ServiceExternalTrafficPolicyCluster {
+				By("Checking local service backend pools are removed and the service's load-balancing rules reference shared backend pools")
+			} else {
+				By("Checking local service backend pools are recreated with node IPs and the service's load-balancing rules reference them")
+			}
+			Eventually(func(g Gomega) {
+				expectedNodeIPs := map[v1.IPFamily][]string{}
+				if policy == v1.ServiceExternalTrafficPolicyLocal {
+					currentNodeNames, err := getDeploymentPodsNodeNames(cs, ns.Name, testDeploymentName)
+					g.Expect(err).NotTo(HaveOccurred())
+					for nodeName := range currentNodeNames {
+						node, err := cs.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
+						g.Expect(err).NotTo(HaveOccurred())
+						for _, address := range node.Status.Addresses {
+							if address.Type != v1.NodeInternalIP {
+								continue
+							}
+							family := v1.IPv4Protocol
+							if utilnet.IsIPv6String(address.Address) {
+								family = v1.IPv6Protocol
+							}
+							expectedNodeIPs[family] = append(expectedNodeIPs[family], address.Address)
+						}
+					}
+				}
+				for _, svcIP := range ips {
+					lb := getAzureLoadBalancerFromPIP(tc, svcIP, tc.GetResourceGroup(), tc.GetResourceGroup())
+					poolIDs := sets.New[string]()
+					for _, pool := range lb.Properties.BackendAddressPools {
+						poolName := ptr.Deref(pool.Name, "")
+						localIPv4 := strings.EqualFold(poolName, expectedBPName)
+						localIPv6 := strings.EqualFold(poolName, expectedBPName+"-"+consts.IPVersionIPv6String)
+						if policy == v1.ServiceExternalTrafficPolicyCluster {
+							g.Expect(localIPv4 || localIPv6).To(BeFalse())
+						} else if localIPv4 || localIPv6 {
+							family := v1.IPv4Protocol
+							if localIPv6 {
+								family = v1.IPv6Protocol
+							}
+							var actualIPs []string
+							for _, address := range pool.Properties.LoadBalancerBackendAddresses {
+								actualIPs = append(actualIPs, ptr.Deref(address.Properties.IPAddress, ""))
+							}
+							g.Expect(actualIPs).To(ConsistOf(expectedNodeIPs[family]))
+						}
+						poolIDs.Insert(strings.ToLower(ptr.Deref(pool.ID, "")))
+					}
+
+					ruleCount := 0
+					for _, rule := range lb.Properties.LoadBalancingRules {
+						ruleName := ptr.Deref(rule.Name, "")
+						if !strings.HasPrefix(ruleName, cloudprovider.DefaultLoadBalancerName(svc)+"-") {
+							continue
+						}
+						suffix := ""
+						if strings.HasSuffix(strings.ToLower(ruleName), "-"+consts.IPVersionIPv6StringLower) {
+							suffix = "-" + consts.IPVersionIPv6String
+						}
+						sharedPoolID := strings.ToLower(fmt.Sprintf("%s/backendAddressPools/%s%s", ptr.Deref(lb.ID, ""), clusterName, suffix))
+						g.Expect(poolIDs.Has(sharedPoolID)).To(BeTrue())
+						expectedPoolID := sharedPoolID
+						if policy == v1.ServiceExternalTrafficPolicyLocal {
+							expectedPoolID = strings.ToLower(fmt.Sprintf("%s/backendAddressPools/%s%s", ptr.Deref(lb.ID, ""), expectedBPName, suffix))
+						}
+						g.Expect(rule.Properties.BackendAddressPool).NotTo(BeNil())
+						g.Expect(strings.ToLower(ptr.Deref(rule.Properties.BackendAddressPool.ID, ""))).To(Equal(expectedPoolID))
+						g.Expect(poolIDs.Has(expectedPoolID)).To(BeTrue())
+						ruleCount++
+					}
+					g.Expect(ruleCount).To(BeNumerically(">", 0))
+				}
+			}, 5*time.Minute, 5*time.Second).Should(Succeed())
+
+			By(fmt.Sprintf("Checking service connectivity after changing ExternalTrafficPolicy to %s", policy))
+			_, err = utils.WaitServiceExposureAndValidateConnectivity(cs, tc.IPFamily, ns.Name, testServiceName, []*string{})
+			Expect(err).NotTo(HaveOccurred())
+		}
 	})
 
 	DescribeTable("should migrate services and remove their frontends from the previous load balancer",

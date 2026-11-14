@@ -162,6 +162,9 @@ type Config struct {
 	RouteUpdateIntervalInSeconds int `json:"routeUpdateIntervalInSeconds,omitempty" yaml:"routeUpdateIntervalInSeconds,omitempty"`
 	// LoadBalancerBackendPoolUpdateIntervalInSeconds is the interval for updating load balancer backend pool of local services. Default is 30 seconds.
 	LoadBalancerBackendPoolUpdateIntervalInSeconds int `json:"loadBalancerBackendPoolUpdateIntervalInSeconds,omitempty" yaml:"loadBalancerBackendPoolUpdateIntervalInSeconds,omitempty"`
+	// LoadBalancerBackendPoolUpdateMaxRetries is the maximum number of retries for a failed backend pool update operation of local services.
+	// nil = use default (3), 0 = disable retry. The total attempts = 1 + maxRetries.
+	LoadBalancerBackendPoolUpdateMaxRetries *int `json:"loadBalancerBackendPoolUpdateMaxRetries,omitempty" yaml:"loadBalancerBackendPoolUpdateMaxRetries,omitempty"`
 
 	// ClusterServiceLoadBalancerHealthProbeMode determines the health probe mode for cluster service load balancer.
 	// Supported values are `shared` and `servicenodeport`.
