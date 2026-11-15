@@ -123,23 +123,9 @@ func (dt *DiffTracker) deletePublicIP(ctx context.Context, pipResourceGroup stri
 
 // deleteOwnedPublicIP returns true only when an owned address was deleted.
 func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName string) (bool, error) {
-	if pipName == "" {
-		return false, fmt.Errorf("deleteOwnedPublicIP: pip name is empty")
-	}
-	pip, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
-	if err != nil {
-		if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr == nil && !exists {
-			dt.logger.V(4).Info("Skipped absent Public IP", "publicIP", pipName)
-			return false, nil
-		}
-		return false, fmt.Errorf("reading Public IP %q to check ownership: %w", pipName, err)
-	}
-	if pip == nil {
-		return false, fmt.Errorf("reading Public IP %q to check ownership returned no resource", pipName)
-	}
-	if !ownsPublicIP(pip) {
-		dt.logger.V(2).Info("Kept Public IP without matching CCM-managed marker", "publicIP", pipName)
-		return false, nil
+	pip, err := dt.getOwnedPublicIP(ctx, pipName)
+	if err != nil || pip == nil {
+		return false, err
 	}
 	deleteCtx, err := withResourceETag(ctx, fmt.Sprintf("Public IP %q", pipName), pip.Etag)
 	if err != nil {
@@ -149,6 +135,28 @@ func (dt *DiffTracker) deleteOwnedPublicIP(ctx context.Context, pipName string) 
 		return false, err
 	}
 	return true, nil
+}
+
+func (dt *DiffTracker) getOwnedPublicIP(ctx context.Context, pipName string) (*armnetwork.PublicIPAddress, error) {
+	if pipName == "" {
+		return nil, fmt.Errorf("getOwnedPublicIP: pip name is empty")
+	}
+	pip, err := dt.networkClientFactory.GetPublicIPAddressClient().Get(ctx, dt.config.ResourceGroup, pipName, nil)
+	if err != nil {
+		if exists, checkErr := errutils.CheckResourceExistsFromAzcoreError(err); checkErr == nil && !exists {
+			dt.logger.V(4).Info("Skipped absent Public IP", "publicIP", pipName)
+			return nil, nil
+		}
+		return nil, fmt.Errorf("reading Public IP %q to check ownership: %w", pipName, err)
+	}
+	if pip == nil {
+		return nil, fmt.Errorf("reading Public IP %q to check ownership returned no resource", pipName)
+	}
+	if !ownsPublicIP(pip) {
+		dt.logger.V(2).Info("Kept Public IP without matching CCM-managed marker", "publicIP", pipName)
+		return nil, nil
+	}
+	return pip, nil
 }
 
 // createOrUpdateLB creates or updates a load balancer
@@ -392,12 +400,24 @@ func (dt *DiffTracker) updateNRPSGWAddressLocations(ctx context.Context, service
 // It matches on UID alone: the returned Service may no longer be of type LoadBalancer and may be
 // terminating. Callers that act on the result must apply their own type and deletion checks.
 func (dt *DiffTracker) getServiceBySGWName(ctx context.Context, serviceName string) (*v1.Service, error) {
+	return dt.resolveServiceBySGWName(ctx, serviceName, false)
+}
+
+// getServiceBySGWNameUncached reads from the API server instead of the informer
+// cache, for a caller that writes back what it read and must not act on a stale copy.
+func (dt *DiffTracker) getServiceBySGWNameUncached(ctx context.Context, serviceName string) (*v1.Service, error) {
+	return dt.resolveServiceBySGWName(ctx, serviceName, true)
+}
+
+func (dt *DiffTracker) resolveServiceBySGWName(ctx context.Context, serviceName string, uncached bool) (*v1.Service, error) {
 	uid, kind, ok := serviceIdentity(serviceName)
 	if !ok || kind != Inbound {
 		return nil, fmt.Errorf("getServiceBySGWName: invalid inbound ServiceGateway name %q", serviceName)
 	}
-
 	namespace, name, lister := dt.serviceLookupInfo(serviceName)
+	if uncached {
+		lister = nil
+	}
 	if namespace != "" && name != "" {
 		svc, err := dt.getServiceByNamespaceName(ctx, lister, namespace, name)
 		switch {
@@ -536,6 +556,48 @@ func (dt *DiffTracker) updateServiceLoadBalancerStatus(ctx context.Context, serv
 		}
 
 		dt.logger.V(2).Info("Updated Service with LoadBalancer IP", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
+		return nil
+	})
+}
+
+// removeServiceLoadBalancerIngressIP withdraws ip from the Service's status.loadBalancer.ingress,
+// keeping every other entry (another IP family, hostnames). An empty ip is a no-op. A Service that is
+// gone, was replaced by a same-name Service, or is being deleted is left untouched.
+//
+// The Service is read from the API server, not the informer cache, and written back with its
+// resourceVersion, so a concurrent status write is never overwritten: the conflict re-reads it.
+func (dt *DiffTracker) removeServiceLoadBalancerIngressIP(ctx context.Context, serviceName string, ip string) error {
+	if ip == "" {
+		return nil
+	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		svc, err := dt.getServiceBySGWNameUncached(ctx, serviceName)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return fmt.Errorf("removeServiceLoadBalancerIngressIP: failed to get service: %w", err)
+		}
+		if svc.DeletionTimestamp != nil {
+			return nil
+		}
+
+		desired := make([]v1.LoadBalancerIngress, 0, len(svc.Status.LoadBalancer.Ingress))
+		for _, ingress := range svc.Status.LoadBalancer.Ingress {
+			if ingress.IP != ip {
+				desired = append(desired, ingress)
+			}
+		}
+		if len(desired) == len(svc.Status.LoadBalancer.Ingress) {
+			return nil
+		}
+
+		svc.Status.LoadBalancer.Ingress = desired
+		if _, err := dt.kubeClient.CoreV1().Services(svc.Namespace).UpdateStatus(ctx, svc, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("removeServiceLoadBalancerIngressIP: failed to update service status: %w", err)
+		}
+
+		dt.logger.V(2).Info("Withdrew Public IP address from Service status", "namespace", svc.Namespace, "service", svc.Name, "ip", ip)
 		return nil
 	})
 }
