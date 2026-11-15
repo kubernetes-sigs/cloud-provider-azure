@@ -44,6 +44,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/loadbalancerclient/mock_loadbalancerclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/natgatewayclient/mock_natgatewayclient"
@@ -351,6 +352,100 @@ func TestUpdateServiceLoadBalancerStatus_DualStackSafeThroughLister(t *testing.T
 	assert.Contains(t, ips, "10.0.0.1")
 	assert.Contains(t, ips, "2001:db8::1")
 	assert.Contains(t, hosts, "example.com")
+}
+
+// TestRemoveServiceLoadBalancerIngressIP_ReadsPastTheInformerCache pins that the withdrawal reads
+// the Service from the API server: a cache that has not yet observed the published address must not
+// hide it.
+func TestRemoveServiceLoadBalancerIngressIP_ReadsPastTheInformerCache(t *testing.T) {
+	live := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"},
+		Status:     v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}}},
+	}
+	cached := live.DeepCopy()
+	cached.Status.LoadBalancer.Ingress = nil
+	kube := fake.NewSimpleClientset(live)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.serviceLister = serviceListerWith(t, cached)
+	dt.trackService("uid-1", "ns", "svc")
+
+	assert.NoError(t, dt.removeServiceLoadBalancerIngressIP(context.Background(), inboundServiceName("uid-1"), "20.1.2.3"))
+
+	assert.Zero(t, serviceLists(kube), "the Service must be read by name, not by listing every Service")
+	got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+	if assert.NoError(t, err) {
+		assert.Empty(t, got.Status.LoadBalancer.Ingress)
+	}
+}
+
+// TestRemoveServiceLoadBalancerIngressIP_FallsBackToListWhenTheReadFails pins that a transient
+// failure to read the Service by namespace/name falls back to the UID scan instead of failing.
+func TestRemoveServiceLoadBalancerIngressIP_FallsBackToListWhenTheReadFails(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1"},
+		Status:     v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{Ingress: []v1.LoadBalancerIngress{{IP: "20.1.2.3"}}}},
+	}
+	kube := fake.NewSimpleClientset(svc)
+	kube.PrependReactor("get", "services", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("apiserver unavailable")
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.trackService("uid-1", "ns", "svc")
+
+	assert.NoError(t, dt.removeServiceLoadBalancerIngressIP(context.Background(), inboundServiceName("uid-1"), "20.1.2.3"))
+
+	got, err := kube.Tracker().Get(v1.SchemeGroupVersion.WithResource("services"), "ns", "svc")
+	if assert.NoError(t, err) {
+		assert.Empty(t, got.(*v1.Service).Status.LoadBalancer.Ingress)
+	}
+}
+
+// TestRemoveServiceLoadBalancerIngressIP_KeepsAConcurrentStatusWrite pins that the withdrawal never
+// overwrites a status write that lands between its read and its write: the API server rejects the
+// write as a conflict, and the withdrawal re-reads the Service and removes only its address.
+func TestRemoveServiceLoadBalancerIngressIP_KeepsAConcurrentStatusWrite(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{Name: "svc", Namespace: "ns", UID: "uid-1", ResourceVersion: "1"},
+		Status: v1.ServiceStatus{LoadBalancer: v1.LoadBalancerStatus{
+			Ingress: []v1.LoadBalancerIngress{{IP: "20.1.2.3"}, {IP: "2001:db8::1"}},
+		}},
+	}
+	kube := fake.NewSimpleClientset(svc)
+	services := v1.SchemeGroupVersion.WithResource("services")
+	concurrentWrite := true
+	kube.PrependReactor("update", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if concurrentWrite {
+			concurrentWrite = false
+			changed := svc.DeepCopy()
+			changed.ResourceVersion = "2"
+			changed.Status.LoadBalancer.Ingress = append(changed.Status.LoadBalancer.Ingress, v1.LoadBalancerIngress{Hostname: "example.com"})
+			if err := kube.Tracker().Update(services, changed, "ns"); err != nil {
+				return true, nil, err
+			}
+		}
+		// Like the API server, reject a write that carries an outdated resourceVersion.
+		stored, err := kube.Tracker().Get(services, "ns", "svc")
+		if err != nil {
+			return true, nil, err
+		}
+		written := action.(k8stesting.UpdateAction).GetObject().(*v1.Service)
+		if written.ResourceVersion != "" && written.ResourceVersion != stored.(*v1.Service).ResourceVersion {
+			return true, nil, apierrors.NewConflict(v1.Resource("services"), "svc", errors.New("the object has been modified"))
+		}
+		return false, nil, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.trackService("uid-1", "ns", "svc")
+
+	assert.NoError(t, dt.removeServiceLoadBalancerIngressIP(context.Background(), inboundServiceName("uid-1"), "20.1.2.3"))
+
+	got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+	if assert.NoError(t, err) {
+		assert.Equal(t, []v1.LoadBalancerIngress{{IP: "2001:db8::1"}, {Hostname: "example.com"}}, got.Status.LoadBalancer.Ingress)
+	}
 }
 
 type fixedStatusTransport struct {
@@ -816,6 +911,134 @@ func TestPublicIPConditionalDeletion(t *testing.T) {
 						assert.NotContains(t, live.Tags, consts.ServiceGatewayManagedTagKey)
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestInboundPublicIPWithdrawalPreservesOwnershipAndVersion(t *testing.T) {
+	const address = "20.1.2.3"
+	for _, tc := range []struct {
+		name        string
+		wantWrites  int
+		wantDeletes int
+		wantGone    bool
+		wantErr     bool
+	}{
+		{name: "owned", wantWrites: 1, wantDeletes: 1, wantGone: true},
+		{name: "untagged"},
+		{name: "legacy marker"},
+		{name: "missing ETag", wantErr: true},
+		{name: "wildcard ETag", wantErr: true},
+		{name: "owner changed after withdrawal", wantWrites: 1, wantDeletes: 1, wantErr: true},
+		{name: "no allocated address", wantDeletes: 1, wantGone: true},
+		{name: "no properties", wantDeletes: 1, wantGone: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := deletionTestService()
+			svc.Status.LoadBalancer.Ingress = []v1.LoadBalancerIngress{{IP: address}, {IP: "2001:db8::1"}, {Hostname: "example.com"}}
+			kube := fake.NewSimpleClientset(svc)
+			serviceName := ServiceName(svc)
+			pipName := PublicIPName(serviceName)
+			live := publicIPWithAddress(address)
+			switch tc.name {
+			case "untagged":
+				live.Tags = nil
+			case "legacy marker":
+				live.Tags[consts.ServiceGatewayManagedTagKey] = ptr.To("inbound")
+			case "missing ETag":
+				live.Etag = nil
+			case "wildcard ETag":
+				live.Etag = ptr.To("*")
+			case "no allocated address":
+				live.Properties.IPAddress = nil
+			case "no properties":
+				live.Properties = nil
+			}
+			kube.PrependReactor("update", "services", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				if tc.name == "owner changed after withdrawal" && action.GetSubresource() == "status" {
+					live.Tags[consts.ServiceGatewayManagedTagKey] = ptr.To("customer")
+					live.Etag = ptr.To(`W/"replacement-version"`)
+				}
+				return false, nil, nil
+			})
+			gets, deletes := 0, 0
+			transport := armNetworkTransportFunc(func(req *http.Request) (*http.Response, error) {
+				assert.Contains(t, req.URL.Path, "/publicIPAddresses/"+pipName)
+				status := http.StatusOK
+				var value any
+				switch req.Method {
+				case http.MethodGet:
+					gets++
+					assert.Empty(t, req.Header.Get("If-Match"))
+					value = live
+				case http.MethodDelete:
+					deletes++
+					assert.Equal(t, tc.wantWrites, statusWrites(kube))
+					assert.Equal(t, `W/"pip-version"`, req.Header.Get("If-Match"))
+					if req.Header.Get("If-Match") != derefString(live.Etag) {
+						status = http.StatusPreconditionFailed
+						value = map[string]any{"error": map[string]string{"code": "PreconditionFailed", "message": "resource changed"}}
+					} else {
+						live = nil
+						status = http.StatusNoContent
+					}
+				default:
+					t.Fatalf("unexpected Public IP request %s", req.Method)
+				}
+				var body []byte
+				if value != nil {
+					var err error
+					body, err = json.Marshal(value)
+					if err != nil {
+						return nil, err
+					}
+				}
+				return &http.Response{
+					StatusCode: status, Header: http.Header{"Content-Type": {"application/json"}},
+					Body: io.NopCloser(bytes.NewReader(body)), Request: req,
+				}, nil
+			})
+			client, err := publicipaddressclient.New("sub", fakeCredential{}, &arm.ClientOptions{
+				ClientOptions: azcore.ClientOptions{Transport: transport, Retry: policy.RetryOptions{MaxRetries: -1}},
+			})
+			if !assert.NoError(t, err) {
+				return
+			}
+			ctrl := gomock.NewController(t)
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+			factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+			factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+			lb.EXPECT().Delete(gomock.Any(), "rg", serviceName).Return(nil)
+			sgw.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(2)
+			dt := deletionTestDiffTracker(kube, factory)
+			dt.pendingServiceOps[serviceName].Config.Namespace = svc.Namespace
+			dt.pendingServiceOps[serviceName].Config.Name = svc.Name
+			called := false
+			su := deletionTestUpdater(dt, func(name string, ok bool, err error) {
+				called = true
+				assert.Equal(t, serviceName, name)
+				assert.Equal(t, !tc.wantErr, ok)
+				assert.Equal(t, tc.wantErr, err != nil)
+			})
+			su.deleteInboundService(serviceName, "withdrawal-ownership")
+			assert.True(t, called)
+			assert.Equal(t, 1, gets, "withdrawal and deletion must use the same owned-resource snapshot")
+			assert.Equal(t, tc.wantDeletes, deletes)
+			assert.Equal(t, tc.wantGone, live == nil)
+			assert.Equal(t, tc.wantWrites, statusWrites(kube))
+			got, err := kube.CoreV1().Services(svc.Namespace).Get(context.Background(), svc.Name, metav1.GetOptions{})
+			assert.NoError(t, err)
+			wantIngress := svc.Status.LoadBalancer.Ingress
+			if tc.wantWrites != 0 {
+				wantIngress = wantIngress[1:]
+			}
+			assert.Equal(t, wantIngress, got.Status.LoadBalancer.Ingress)
+			if tc.name == "owner changed after withdrawal" {
+				assert.Equal(t, "customer", derefString(live.Tags[consts.ServiceGatewayManagedTagKey]))
 			}
 		})
 	}
