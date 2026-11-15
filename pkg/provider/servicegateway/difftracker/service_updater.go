@@ -833,14 +833,32 @@ func (s *ServiceUpdater) deleteInboundService(serviceName string, correlationID 
 		s.logger.V(5).Info("Unregistered inbound service from ServiceGateway", "serviceUID", serviceName)
 	}
 
-	// Step 4: Delete Public IP
+	// Step 4: Withdraw the owned Public IP's address before conditionally deleting that version.
+	// A failed withdrawal keeps the Public IP so the retry can still read its address.
 	_, pipName, _ := buildInboundResourceNames(serviceName)
-	if deleted, err := s.diffTracker.deleteOwnedPublicIP(ctx, pipName); err != nil {
+	pip, err := s.diffTracker.getOwnedPublicIP(ctx, pipName)
+	if err != nil {
 		httpStatus, errCode := extractAzureErrorInfo(err)
-		s.logger.V(4).Info("Could not delete Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
-		lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
-	} else if deleted {
-		s.logger.V(5).Info("Deleted Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName)
+		s.logger.V(4).Info("Could not get Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+		lastErr = fmt.Errorf("failed to get Public IP: %w", err)
+	} else if pip != nil {
+		pipAddress := ""
+		if pip.Properties != nil {
+			pipAddress = derefString(pip.Properties.IPAddress)
+		}
+		deleteCtx, err := withResourceETag(ctx, fmt.Sprintf("Public IP %q", pipName), pip.Etag)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
+		} else if err = s.diffTracker.removeServiceLoadBalancerIngressIP(ctx, serviceName, pipAddress); err != nil {
+			s.logger.V(4).Info("Could not withdraw Public IP address from service status", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName, "publicIPAddress", pipAddress, "err", err)
+			lastErr = fmt.Errorf("failed to withdraw Public IP address from service status: %w", err)
+		} else if err = s.diffTracker.deletePublicIP(deleteCtx, s.diffTracker.config.ResourceGroup, pipName); err != nil {
+			httpStatus, errCode := extractAzureErrorInfo(err)
+			s.logger.V(4).Info("Could not delete Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName, "httpStatus", httpStatus, "errorCode", errCode, "err", err)
+			lastErr = fmt.Errorf("failed to delete Public IP: %w", err)
+		} else {
+			s.logger.V(5).Info("Deleted Public IP for inbound service", "serviceUID", serviceName, "correlationID", correlationID, "publicIP", pipName)
+		}
 	}
 
 	// Step 5: Update NRPResources and notify completion
