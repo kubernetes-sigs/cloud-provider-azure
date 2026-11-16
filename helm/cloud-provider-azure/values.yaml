@@ -12,6 +12,7 @@ cloudControllerManager:
   configureCloudRoutes: "true" # "false" for Azure CNI and "true" for other network plugins
   # contentionProfiling: "true"
   # controllerStartInterval: "2m"
+  controllers: "*,-cloud-node" # e.g. "*,-cloud-node,-service-lb-controller" to also disable the service LB controller
   # enableDynamicReloading: "true"
   # http2MaxStreamsPerConnection: "47"
   imageRepository: "mcr.microsoft.com/oss/kubernetes"
