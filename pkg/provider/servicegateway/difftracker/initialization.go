@@ -170,6 +170,7 @@ func InitializeFromCluster(
 		return nil, fmt.Errorf("failed to initialize DiffTracker: %w", err)
 	}
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
+	diffTracker.startupNodeIPs = nodeNameToIPs
 	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
 
 	unregisteredBYO, err := diffTracker.recoverUnregisteredBYOLinks(ctx, egressPodList)
