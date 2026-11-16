@@ -71,16 +71,35 @@ class ReleaseNoteURLTest(unittest.TestCase):
         doc_pr.validate_generated_site_file(self.site_file)
 
     def test_replaces_existing_url_and_preserves_aliases(self) -> None:
-        for old_url in (
-            "/blog/2020/09/01/v0.6.0/",
-            '"/blog/2020/09/01/v0.6.0/"',
-            "'/blog/v0.6.0/'",
-        ):
-            with self.subTest(old_url=old_url):
+        for key in ("url", '"url"', "'url'"):
+            for old_url in (
+                "/blog/2020/09/01/v0.6.0/",
+                '"/blog/2020/09/01/v0.6.0/"',
+                "'/blog/v0.6.0/'",
+            ):
+                with self.subTest(key=key, old_url=old_url):
+                    old_line = f"{key}: {old_url}\n"
+                    original = NOTE.replace(
+                        "date: 2020-09-01\n",
+                        f"date: 2020-09-01\n{old_line}"
+                        "aliases:\n  - /previous-release-note/\n",
+                    )
+                    self.write_note(original)
+
+                    doc_pr.set_release_note_url(self.site_file, TAG)
+
+                    self.assertEqual(
+                        self.site_file.read_text(encoding="utf-8"),
+                        original.replace(old_line, URL_LINE),
+                    )
+
+    def test_preserves_blank_lines_after_single_line_url(self) -> None:
+        old_line = "url: /blog/old-address/\n"
+        for blank_lines in ("\n", "  \n", "\n \t\n"):
+            with self.subTest(blank_lines=blank_lines):
                 original = NOTE.replace(
                     "date: 2020-09-01\n",
-                    f"date: 2020-09-01\nurl: {old_url}\n"
-                    "aliases:\n  - /previous-release-note/\n",
+                    f"date: 2020-09-01\n{old_line}{blank_lines}",
                 )
                 self.write_note(original)
 
@@ -88,7 +107,7 @@ class ReleaseNoteURLTest(unittest.TestCase):
 
                 self.assertEqual(
                     self.site_file.read_text(encoding="utf-8"),
-                    original.replace(f"url: {old_url}\n", URL_LINE),
+                    original.replace(old_line, URL_LINE),
                 )
 
     def test_uses_requested_tag(self) -> None:
@@ -123,10 +142,17 @@ class ReleaseNoteURLTest(unittest.TestCase):
             ("## Changes\n", "Expected YAML front matter"),
             ("---\ntitle: v0.6.0\n## Changes\n", "Unterminated YAML front matter"),
             ("---\nurl: /one/\nurl: /two/\n---\n## Changes\n", "Multiple URL fields"),
+            ('---\n"url": /one/\nurl: /two/\n---\n## Changes\n', "Multiple URL fields"),
+            ("---\n'url': /one/\nurl: /two/\n---\n## Changes\n", "Multiple URL fields"),
             ("---\nurl: >\n  /old/\n---\n## Changes\n", "single-line URL"),
+            ("---\nurl: >\n\n  /old/\n---\n## Changes\n", "single-line URL"),
+            ('---\n"url": >\n\n  /old/\n---\n## Changes\n', "single-line URL"),
+            ("---\nurl: |\n  \n  /old/\n---\n## Changes\n", "single-line URL"),
+            ("---\nurl:\n\n  /old/\n---\n## Changes\n", "single-line URL"),
+            ("---\nurl: /old/\n\n  continued\n---\n## Changes\n", "single-line URL"),
         ]
         for content, error in cases:
-            with self.subTest(error=error):
+            with self.subTest(content=content):
                 self.write_note(content)
 
                 with self.assertRaisesRegex(doc_pr.CommandError, error):

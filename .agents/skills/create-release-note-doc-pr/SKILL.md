@@ -75,10 +75,11 @@ Common flags:
 
 ## Local Validation
 
-Run the bundled tests without GitHub credentials or remote writes:
+Run the bundled tests without GitHub credentials or remote writes. Use `-B`
+to avoid bytecode caches that would fail the helper's clean-worktree check:
 
 ```bash
-python3 -m unittest discover -s <SKILL_DIR>/scripts -p 'test_*.py' -v
+python3 -B -m unittest discover -s <SKILL_DIR>/scripts -p 'test_*.py' -v
 ```
 
 When Hugo is installed, the tests also check that the explicit URL overrides
