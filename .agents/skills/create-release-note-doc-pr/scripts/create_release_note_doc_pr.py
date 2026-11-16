@@ -194,6 +194,48 @@ def validate_generated_site_file(site_file: Path) -> None:
         raise CommandError(f"Generated file lacks release note sections ('## ...'): {site_file}")
 
 
+def set_release_note_url(site_file: Path, tag: str, *, dry_run: bool = False) -> None:
+    """Override Hugo's dated blog permalink without removing the publication date."""
+    url = f"/blog/{tag}/"
+    if dry_run:
+        print(f"[OK] Dry run: would set release note URL to {url} in {site_file}")
+        return
+
+    content = site_file.read_text(encoding="utf-8")
+    lines = content.splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\r\n") != "---":
+        raise CommandError(f"Expected YAML front matter in release note: {site_file}")
+    end = next(
+        (index for index in range(1, len(lines)) if lines[index].rstrip("\r\n") == "---"),
+        None,
+    )
+    if end is None:
+        raise CommandError(f"Unterminated YAML front matter in release note: {site_file}")
+
+    url_indexes = [
+        index
+        for index in range(1, end)
+        if re.match(r"""(?:url|"url"|'url')[ \t]*:""", lines[index])
+    ]
+    if len(url_indexes) > 1:
+        raise CommandError(f"Multiple URL fields in release note: {site_file}")
+    url_line = f"url: {json.dumps(url)}\n"
+    if url_indexes:
+        index = url_indexes[0]
+        # The generator uses flat YAML scalars. Skip blank lines so a multiline
+        # URL's continuation cannot be left behind by a single-line replacement.
+        following = next((line for line in lines[index + 1 : end] if line.strip()), "")
+        if following.startswith((" ", "\t")):
+            raise CommandError(f"Expected a single-line URL in release note: {site_file}")
+        lines[index] = url_line
+    else:
+        lines.insert(end, url_line)
+
+    updated = "".join(lines)
+    if updated != content:
+        site_file.write_text(updated, encoding="utf-8")
+
+
 def get_existing_pr(
     repo_root: Path,
     *,
@@ -328,6 +370,9 @@ def main() -> int:
             print("[OK] Dry run: skipping generated content validation.")
         else:
             validate_generated_site_file(site_file)
+        # The generator comes from the docs branch after checkout, so enforce
+        # the URL here for both freshly generated and --no-generate notes.
+        set_release_note_url(site_file, args.tag, dry_run=args.dry_run)
 
         run(["git", "add", str(site_file)], cwd=repo_root, dry_run=args.dry_run)
 
