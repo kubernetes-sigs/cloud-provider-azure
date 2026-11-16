@@ -9,6 +9,7 @@ skill source.
 |-------|-----|---------------|
 | Shared skill catalog and layout | [../skills/README.md](../skills/README.md) | Discovering existing shared skills, checking the expected skill directory layout, or confirming how agents consume repo-owned skills |
 | Shared skill authoring | [../skills/authoring.md](../skills/authoring.md) | Adding or updating shared skills, editing skill metadata, adding support files, writing bundled scripts, or creating PRs with shared-skill changes |
+| Release-note documentation PRs | [../skills/create-release-note-doc-pr/SKILL.md](../skills/create-release-note-doc-pr/SKILL.md) | Generating release notes with date-free URLs, updating the docs PR workflow, or validating its helper script |
 
 ## Rules
 
