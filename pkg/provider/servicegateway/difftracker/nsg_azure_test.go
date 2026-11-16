@@ -180,13 +180,13 @@ func TestNSGPrimaryNICID(t *testing.T) {
 
 func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 	for _, tt := range []struct {
-		name        string
-		status      int
-		changedNRMS bool
+		name                string
+		status              int
+		changedExternalRule bool
 	}{
 		{"success", http.StatusOK, false},
 		{"ETag conflict", http.StatusPreconditionFailed, false},
-		{"changed NRMS response", http.StatusOK, true},
+		{"changed external rule response", http.StatusOK, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dt, cloud, _ := newNSGTestTracker(t)
@@ -194,7 +194,7 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 			assert.NoError(t, err)
 			rules, err := buildNICSecurityRules(nil, nil)
 			assert.NoError(t, err)
-			operational := nsgTestNRMSRule(103)
+			operational := nsgTestExternalRule(103)
 			rules = append(rules, operational)
 			group, _, err := dt.desiredGroup(nil, target, "node", "eastus", rules)
 			assert.NoError(t, err)
@@ -226,7 +226,7 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 								"code": "PreconditionFailed", "message": "NSG changed",
 							}})
 						}
-						if tt.changedNRMS {
+						if tt.changedExternalRule {
 							for _, rule := range sent.Properties.SecurityRules {
 								if ptr.Deref(rule.Name, "") == *operational.Name {
 									rule.Properties.SourceAddressPrefix = ptr.To("Internet")
@@ -245,7 +245,7 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 			factory.EXPECT().GetSecurityGroupClient().Return(client).AnyTimes()
 			dt.networkClientFactory = factory
 			_, err = dt.writeGroup(context.Background(), desired)
-			if tt.changedNRMS {
+			if tt.changedExternalRule {
 				assert.ErrorContains(t, err, "did not confirm")
 			} else if tt.status == http.StatusOK {
 				assert.NoError(t, err)
@@ -260,7 +260,7 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 	}
 }
 
-func TestNSGAzureRetainsConcurrentNRMSRules(t *testing.T) {
+func TestNSGAzureRetainsConcurrentExternalRules(t *testing.T) {
 	ctx := context.Background()
 	service := nsgKubeService("svc-lb", "20.0.0.0/8")
 	dt, cloud, _ := newNSGTestTracker(t, service)
@@ -274,7 +274,7 @@ func TestNSGAzureRetainsConcurrentNRMSRules(t *testing.T) {
 		return
 	}
 	initialETag := *remote.Etag
-	operational := nsgTestNRMSRule(103)
+	operational := nsgTestExternalRule(103)
 	gets, puts := 0, 0
 	client, err := securitygroupclient.New("network-sub", fakeCredential{}, &arm.ClientOptions{
 		ClientOptions: azcore.ClientOptions{
@@ -294,12 +294,12 @@ func TestNSGAzureRetainsConcurrentNRMSRules(t *testing.T) {
 					if puts == 1 {
 						assert.Equal(t, initialETag, request.Header.Get(consts.IfMatchHeader))
 						remote.Properties.SecurityRules = append(remote.Properties.SecurityRules, nsgCopy(operational))
-						remote.Etag = ptr.To("nrms-changed")
+						remote.Etag = ptr.To("external-rule-changed")
 						return nsgResponse(request, http.StatusPreconditionFailed, map[string]any{"error": map[string]string{
-							"code": "PreconditionFailed", "message": "NRMS changed the NSG after it was read",
+							"code": "PreconditionFailed", "message": "An external writer changed the NSG after it was read",
 						}})
 					}
-					assert.Equal(t, "nrms-changed", request.Header.Get(consts.IfMatchHeader))
+					assert.Equal(t, "external-rule-changed", request.Header.Get(consts.IfMatchHeader))
 					assert.Contains(t, sent.Properties.SecurityRules, operational)
 					sent.Etag = ptr.To("reconciled")
 					sent.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)

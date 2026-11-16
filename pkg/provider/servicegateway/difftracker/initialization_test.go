@@ -3433,7 +3433,7 @@ func TestInitializeFromClusterRecoversReassignedNSGTupleAfterCorrectiveACK(t *te
 	seed, cloud, node := newNSGTestTracker(t, old)
 	addNSGTestBackend(seed, "old-lb", "10.0.0.1", "10.1.0.1", "")
 	prepareNSGTest(t, seed)
-	operational := nsgTestNRMSRule(103)
+	operational := nsgTestExternalRule(103)
 	for _, group := range cloud.groups {
 		group.Properties.SecurityRules = append(group.Properties.SecurityRules, nsgCopy(operational))
 	}
@@ -3458,7 +3458,7 @@ func TestInitializeFromClusterRecoversReassignedNSGTupleAfterCorrectiveACK(t *te
 			cloud.mu.Lock()
 			defer cloud.mu.Unlock()
 			for _, group := range cloud.groups {
-				assert.Contains(t, group.Properties.SecurityRules, operational, "recovery must preserve NRMS before and after the corrective ACK")
+				assert.Contains(t, group.Properties.SecurityRules, operational, "recovery must preserve external rules before and after the corrective ACK")
 			}
 			if string(ptr.Deref(request.Action, "")) == "FullUpdate" {
 				assert.Empty(t, request.AddressLocations)

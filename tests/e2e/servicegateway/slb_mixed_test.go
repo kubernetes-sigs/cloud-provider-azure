@@ -183,7 +183,7 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 					active[index] = created
 				}
 			}
-			nrms := make(map[string]map[string]nicNSGRule)
+			externalRules := make(map[string]map[string]nicNSGRule)
 			associations := make(map[string]string)
 			inboundPresent := true
 			checkState := func(count int, sources string) []v1.Pod {
@@ -257,7 +257,7 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 					if err != nil {
 						return err
 					}
-					currentNRMS := make(map[string]map[string]nicNSGRule)
+					currentExternalRules := make(map[string]map[string]nicNSGRule)
 					foundIDs := make(map[string]bool)
 					for _, group := range groups {
 						id := strings.ToLower(group.ID)
@@ -267,10 +267,11 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 								return fmt.Errorf("obsolete Service rules remain on NSG %s", group.ID)
 							}
 						}
-						currentNRMS[id] = make(map[string]nicNSGRule)
+						currentExternalRules[id] = make(map[string]nicNSGRule)
 						for _, rule := range group.Rules {
-							if strings.HasPrefix(strings.ToLower(rule.Name), "nrms-rule-") {
-								currentNRMS[id][strings.ToLower(rule.Name)] = rule
+							if rule.Priority >= consts.ServiceGatewayNSGReservedRuleMinimumPriority &&
+								rule.Priority < consts.LoadBalancerMinimumPriority {
+								currentExternalRules[id][strings.ToLower(rule.Name)] = rule
 							}
 						}
 					}
@@ -279,14 +280,14 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 							return fmt.Errorf("managed NSG %s or its NIC association disappeared", id)
 						}
 					}
-					for id, rules := range nrms {
+					for id, rules := range externalRules {
 						for name, rule := range rules {
-							if !reflect.DeepEqual(rule, currentNRMS[id][name]) {
-								return fmt.Errorf("NRMS rule %s on %s changed or disappeared", name, id)
+							if !reflect.DeepEqual(rule, currentExternalRules[id][name]) {
+								return fmt.Errorf("externally managed rule %s on %s changed or disappeared", name, id)
 							}
 						}
 					}
-					nrms, live = currentNRMS, pods.Items
+					externalRules, live = currentExternalRules, pods.Items
 					return nil
 				}, 5*time.Minute, defaultPollInterval).Should(Succeed())
 				assertAddressLocationFamilyPurity()
@@ -463,7 +464,7 @@ var _ = Describe("Container Load Balancer Mixed Workload", Label(slbTestLabel), 
 			pods = checkState(2, "")
 			checkTraffic(pods, true, false)
 			checkOutbound(pods)
-			By("Removing the last egress Pods without deleting default resources or NRMS rules")
+			By("Removing the last egress Pods without deleting default resources or externally managed rules")
 			resize(nil)
 			checkState(0, "")
 		},

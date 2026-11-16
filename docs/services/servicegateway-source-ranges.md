@@ -27,7 +27,7 @@ There is no additional feature flag: within SGW mode, an absent annotation means
 allow all sources for this policy.
 For each backend address family, CCM's rules allow only matching source prefixes.
 A family with no matching source prefix is denied by those rules. Higher-priority
-NRMS operational rules retain their normal Azure precedence, as described below.
+externally managed rules retain their normal Azure precedence, as described below.
 Existing limitations on Service address families, numeric target ports, and
 protocols are unchanged.
 
@@ -40,12 +40,12 @@ packet model, the VIP has already been translated to this backend destination;
 no separate VIP-destination rule is added. Direct traffic to that same backend
 tuple is also affected. Preserving direct Pod access is not supported.
 
-CCM's rules do not restrict non-target traffic. NRMS rules, subnet NSGs, network
-policy, and other platform controls still apply. A matching higher-priority
-NRMS allow can permit traffic outside the Service annotation, and a matching
-NRMS deny can block traffic that CCM's rules allow. The annotation does not
-override NRMS operational policy. The platform must preserve CCM's NIC association,
-and subnet rules must permit the intended traffic.
+CCM's rules do not restrict non-target traffic. Externally managed rules, subnet
+NSGs, network policy, and other platform controls still apply. A matching
+higher-priority external allow rule can permit traffic outside the Service
+annotation, and an external deny rule can block traffic that CCM's rules allow.
+The annotation does not override higher-priority rules. The platform must
+preserve CCM's NIC association, and subnet rules must permit the intended traffic.
 NSGs are stateful: changing a rule does not necessarily terminate existing
 connections; use new connections when checking a policy change.
 
@@ -105,8 +105,8 @@ settled NIC policy, without accepting its failed response as a complete port
 baseline or rewriting NSG rules first.
 Removed backends retain protection until their SGW
 withdrawal is confirmed. Removing the annotation or Service removes its CCM rules,
-preserves NRMS rules, and keeps the NIC NSG while the NIC exists. Node deletion
-alone is not proof that its NIC is gone. Runtime retires the departed owner's
+preserves externally managed rules, and keeps the NIC NSG while the NIC exists.
+Node deletion alone is not proof that its NIC is gone. Runtime retires the departed owner's
 membership bookkeeping after its drain acknowledgment and leaves old NSG resource
 deletion to initialization.
 Node address changes are reconciled through the existing Node handler. If an
@@ -145,21 +145,23 @@ The CCM identity needs NSG read/write/delete permissions and the appropriate
 NIC or VMSS-instance read/write permissions. CCM can replace an absent NIC NSG
 or the configured cluster NSG association; it does not adopt arbitrary customer
 NSGs. Rules from the replaced cluster NSG are not copied. The NIC NSG remains
-CCM-owned, with NRMS as the supported operational exception. Its name, SGW-owner
-tag and NIC-identity tag must agree before it can be managed; a matching name
-or generic CCM-managed marker alone is not ownership. Rules named
-`NRMS-Rule-<priority>` (case-insensitive), whose numeric suffix matches their
-priority in the range 100-499, are preserved without changing their configuration
-or priority. They are not classified as CCM-owned. CCM's priorities remain
-500-4096, so there is no priority relocation or overlap between these ranges.
-Other unexpected custom rules, incomplete rules, and NRMS-shaped rules outside
-that layout cause an explicit reconciliation error; they are neither adopted
-nor overwritten. Name/layout recognition does not authenticate a writer; Azure
-RBAC and the operational ownership contract still apply. Azure's built-in default
-rules are separate from these custom rules.
+CCM-owned, with priorities 100-499 reserved for externally managed rules. Its
+name, SGW-owner tag and NIC-identity tag must agree before it can be managed; a
+matching name or generic CCM-managed marker alone is not ownership. Non-CCM
+rules in that reserved range are preserved without changing their name,
+configuration or priority. No external-system naming convention is required.
+CCM's priorities remain 500-4096, so there is no priority relocation or overlap
+between these ranges. Names starting with `sgw-service-` and the names
+`sgw-allow-other-inbound` and `sgw-allow-other-outbound` are reserved for CCM,
+case-insensitively. Non-CCM rules using those names or falling outside priorities
+100-499 cause an explicit reconciliation error, as do incomplete or blank-named
+rules; they are neither adopted nor overwritten. A reserved
+priority does not authenticate a writer; Azure RBAC and the operational ownership
+contract still apply. Azure's built-in default rules are separate from these
+custom rules.
 
 The planner checks limits of 2,000 custom rules, 6,000 source entries, and 6,000
-destination entries per NSG, including preserved NRMS entries. Capacity and Azure
+destination entries per NSG, including preserved external rules. Capacity and Azure
 failures produce `SourceRangeReconcileFailed` Warnings and are retried.
 Manual modification of managed ownership or NIC associations is unsupported.
 Classic, non-SGW LoadBalancer behavior is unchanged.

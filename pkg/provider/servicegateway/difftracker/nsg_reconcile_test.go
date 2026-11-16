@@ -471,16 +471,16 @@ func TestNICPoliciesSourceOnlyUpdatesAndRemoval(t *testing.T) {
 	assert.Equal(t, 1, cloud.nicWrites)
 }
 
-func TestNICPoliciesPreservesNRMSAcrossPolicyLifecycle(t *testing.T) {
+func TestNICPoliciesPreservesExternalRulesAcrossPolicyLifecycle(t *testing.T) {
 	ctx := context.Background()
 	service := nsgKubeService("svc-lb", "20.0.0.0/8")
 	dt, cloud, _ := newNSGTestTracker(t, service)
 	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
 	dt.UpdateLocationsAddresses(nsgTestLocationSync(dt, prepareNSGTest(t, dt)))
-	operational := nsgTestNRMSRule(103)
+	operational := nsgTestExternalRule(103)
 	for _, group := range cloud.groups {
 		group.Properties.SecurityRules = append(group.Properties.SecurityRules, nsgCopy(operational))
-		group.Etag = ptr.To("nrms-added")
+		group.Etag = ptr.To("external-rule-added")
 	}
 	assertOperational := func() {
 		t.Helper()
@@ -500,7 +500,7 @@ func TestNICPoliciesPreservesNRMSAcrossPolicyLifecycle(t *testing.T) {
 
 	dt.dirtyNICPolicies.Insert("10.0.0.1")
 	prepareNSGTest(t, dt)
-	assert.Equal(t, 1, cloud.groupWrites, "NRMS appearing alone must not rewrite unchanged managed rules")
+	assert.Equal(t, 1, cloud.groupWrites, "external rules appearing alone must not rewrite unchanged managed rules")
 	assertOperational()
 
 	service.Annotations[consts.ServiceAnnotationAllowedIPRanges] = "40.0.0.0/8"
@@ -1175,7 +1175,7 @@ func TestNICPoliciesRejectsForeignAssociationBeforeCreatingGroup(t *testing.T) {
 	assert.Empty(t, nsgTestLocations(dt, prepared).Locations)
 }
 
-func TestNICPoliciesRejectsUnownedRulesWithoutWriting(t *testing.T) {
+func TestNICPoliciesRejectsUnownedRulesInCCMRangeWithoutWriting(t *testing.T) {
 	service := nsgKubeService("svc-lb", "20.0.0.0/8")
 	dt, cloud, _ := newNSGTestTracker(t, service)
 	addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
@@ -1186,7 +1186,7 @@ func TestNICPoliciesRejectsUnownedRulesWithoutWriting(t *testing.T) {
 			Name: ptr.To("external-rule"),
 			Properties: &armnetwork.SecurityRulePropertiesFormat{
 				Direction: ptr.To(armnetwork.SecurityRuleDirectionInbound), Access: ptr.To(armnetwork.SecurityRuleAccessDeny),
-				Protocol: ptr.To(armnetwork.SecurityRuleProtocolTCP), Priority: ptr.To[int32](200),
+				Protocol: ptr.To(armnetwork.SecurityRuleProtocolTCP), Priority: ptr.To[int32](500),
 				SourceAddressPrefix: ptr.To("*"), DestinationAddressPrefix: ptr.To("*"),
 				SourcePortRange: ptr.To("*"), DestinationPortRange: ptr.To("22"),
 			},

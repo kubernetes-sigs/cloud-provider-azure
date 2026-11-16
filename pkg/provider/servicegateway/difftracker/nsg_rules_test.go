@@ -84,9 +84,9 @@ func nsgTestService(port int32, protocol string, sources string, addresses ...st
 	return service
 }
 
-func nsgTestNRMSRule(priority int32) *armnetwork.SecurityRule {
+func nsgTestExternalRule(priority int32) *armnetwork.SecurityRule {
 	return &armnetwork.SecurityRule{
-		Name: ptr.To(fmt.Sprintf("NRMS-Rule-%d", priority)),
+		Name: ptr.To(fmt.Sprintf("external-rule-%d", priority)),
 		Properties: &armnetwork.SecurityRulePropertiesFormat{
 			Description:              ptr.To("Operational network policy"),
 			Direction:                ptr.To(armnetwork.SecurityRuleDirectionInbound),
@@ -309,6 +309,47 @@ func TestBuildNICSecurityRules(t *testing.T) {
 		nsgTestAccess(t, rules, "2001:db8::1", "fd00:1::10", 8080, armnetwork.SecurityRuleProtocolTCP))
 }
 
+func TestBuildNICSecurityRulesUDP(t *testing.T) {
+	for _, family := range []struct {
+		name, destination, allowed, denied, sources, missing string
+	}{
+		{"IPv4", "10.1.0.1", "20.1.2.3", "40.1.2.3", "20.0.0.0/8", "2001:db8::/32"},
+		{"IPv6", "fd00::1", "2001:db8::1", "2001:db9::1", "2001:db8::/32", "20.0.0.0/8"},
+	} {
+		t.Run(family.name, func(t *testing.T) {
+			for _, policy := range []struct {
+				name, sources string
+				allowMatching bool
+			}{
+				{"unrestricted", "", true},
+				{"matching family", family.sources, true},
+				{"missing family", family.missing, false},
+				{"both families", family.sources + "," + family.missing, true},
+			} {
+				t.Run(policy.name, func(t *testing.T) {
+					rules, err := buildNICSecurityRules(map[string]nsgService{
+						"udp": nsgTestService(8080, "UDP", policy.sources, family.destination),
+					}, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					for _, source := range []string{family.allowed, family.denied} {
+						want := armnetwork.SecurityRuleAccessDeny
+						if policy.sources == "" || source == family.allowed && policy.allowMatching {
+							want = armnetwork.SecurityRuleAccessAllow
+						}
+						assert.Equal(t, want, nsgTestAccess(t, rules, source, family.destination, 8080, armnetwork.SecurityRuleProtocolUDP))
+						assert.Equal(t, armnetwork.SecurityRuleAccessAllow,
+							nsgTestAccess(t, rules, source, family.destination, 9090, armnetwork.SecurityRuleProtocolUDP))
+						assert.Equal(t, armnetwork.SecurityRuleAccessAllow,
+							nsgTestAccess(t, rules, source, family.destination, 8080, armnetwork.SecurityRuleProtocolTCP))
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestBuildNICSecurityRulesConflicts(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
@@ -363,8 +404,11 @@ func TestBuildNICSecurityRulesReplacesOwnedRules(t *testing.T) {
 	assert.Len(t, empty, 2)
 }
 
-func TestBuildNICSecurityRulesPreservesNRMS(t *testing.T) {
-	operational := []*armnetwork.SecurityRule{nsgTestNRMSRule(103), nsgTestNRMSRule(107), nsgTestNRMSRule(109)}
+func TestBuildNICSecurityRulesPreservesExternalRules(t *testing.T) {
+	operational := []*armnetwork.SecurityRule{nsgTestExternalRule(103), nsgTestExternalRule(107), nsgTestExternalRule(109)}
+	operational[0].Name = ptr.To("operator-allow")
+	operational[1].Name = ptr.To("site-policy")
+	operational[2].Name = ptr.To("custom-egress")
 	operational[1].Properties.Access = ptr.To(armnetwork.SecurityRuleAccessDeny)
 	operational[1].Properties.Protocol = ptr.To(armnetwork.SecurityRuleProtocolTCP)
 	operational[1].Properties.SourceAddressPrefix = ptr.To("Internet")
@@ -421,30 +465,32 @@ func TestBuildNICSecurityRulesPreservesNRMS(t *testing.T) {
 	}
 }
 
-func TestBuildNICSecurityRulesNRMSLayout(t *testing.T) {
+func TestBuildNICSecurityRulesExternalRuleLayout(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		ruleName string
 		priority int32
 		valid    bool
 	}{
-		{"minimum", "NRMS-Rule-100", 100, true},
-		{"observed", "NRMS-Rule-103", 103, true},
-		{"last reserved priority", "NRMS-Rule-499", 499, true},
-		{"name casing", "nrms-rule-103", 103, true},
-		{"below Azure minimum", "NRMS-Rule-99", 99, false},
-		{"negative priority", "NRMS-Rule--1", -1, false},
-		{"CCM range", "NRMS-Rule-500", 500, false},
-		{"allow-other collision", "NRMS-Rule-4096", 4096, false},
-		{"name priority mismatch", "NRMS-Rule-103", 104, false},
-		{"unknown custom rule", "platform-allow", 103, false},
-		{"non-numeric suffix", "NRMS-Rule-custom", 103, false},
-		{"extra suffix", "NRMS-Rule-103-custom", 103, false},
-		{"leading zero", "NRMS-Rule-0103", 103, false},
-		{"signed suffix", "NRMS-Rule-+103", 103, false},
+		{"minimum", "operator-allow", 100, true},
+		{"last reserved priority", "site-policy", 499, true},
+		{"arbitrary name casing", "External-Rule", 103, true},
+		{"name need not encode priority", "external-rule-103", 104, true},
+		{"below Azure minimum", "external-rule", 99, false},
+		{"negative priority", "external-rule", -1, false},
+		{"CCM range", "external-rule", 500, false},
+		{"allow-other priority collision", "external-rule", 4096, false},
+		{"CCM service prefix", "sgw-service-custom", 103, false},
+		{"CCM service prefix casing", "SGW-SERVICE-CUSTOM", 103, false},
+		{"CCM inbound name", "sgw-allow-other-inbound", 103, false},
+		{"CCM inbound name casing", "SGW-ALLOW-OTHER-INBOUND", 103, false},
+		{"CCM outbound name", "sgw-allow-other-outbound", 103, false},
+		{"CCM outbound name casing", "SGW-ALLOW-OTHER-OUTBOUND", 103, false},
+		{"empty name", "", 103, false},
+		{"blank name", " \t", 103, false},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			rule := nsgTestNRMSRule(tt.priority)
+			rule := nsgTestExternalRule(tt.priority)
 			rule.Name = ptr.To(tt.ruleName)
 			rules, err := buildNICSecurityRules(nil, []*armnetwork.SecurityRule{rule})
 			if !tt.valid {
@@ -471,7 +517,7 @@ func TestBuildNICSecurityRulesNRMSLayout(t *testing.T) {
 		{"protocol", func(rule *armnetwork.SecurityRule) { rule.Properties.Protocol = nil }},
 	} {
 		t.Run("missing "+tt.name, func(t *testing.T) {
-			rule := nsgTestNRMSRule(103)
+			rule := nsgTestExternalRule(103)
 			tt.change(rule)
 			_, err := buildNICSecurityRules(nil, []*armnetwork.SecurityRule{rule})
 			assert.ErrorContains(t, err, "incomplete")
@@ -479,11 +525,11 @@ func TestBuildNICSecurityRulesNRMSLayout(t *testing.T) {
 	}
 }
 
-func TestBuildNICSecurityRulesNRMSPrecedence(t *testing.T) {
-	allowV4, allowV6 := nsgTestNRMSRule(103), nsgTestNRMSRule(104)
+func TestBuildNICSecurityRulesExternalRulePrecedence(t *testing.T) {
+	allowV4, allowV6 := nsgTestExternalRule(103), nsgTestExternalRule(104)
 	allowV4.Properties.SourceAddressPrefix = ptr.To("203.0.113.0/24")
 	allowV6.Properties.SourceAddressPrefix = ptr.To("2001:db8:2::/48")
-	denyV4, denyV6 := nsgTestNRMSRule(107), nsgTestNRMSRule(108)
+	denyV4, denyV6 := nsgTestExternalRule(107), nsgTestExternalRule(108)
 	for _, rule := range []*armnetwork.SecurityRule{denyV4, denyV6} {
 		rule.Properties.Access = ptr.To(armnetwork.SecurityRuleAccessDeny)
 		rule.Properties.DestinationPortRange = ptr.To("8080")
@@ -504,12 +550,12 @@ func TestBuildNICSecurityRulesNRMSPrecedence(t *testing.T) {
 	}{
 		{"ordinary IPv4 allow", "20.2.3.4", "10.0.0.1", armnetwork.SecurityRuleAccessAllow},
 		{"ordinary IPv4 deny", "40.1.2.3", "10.0.0.1", armnetwork.SecurityRuleAccessDeny},
-		{"NRMS IPv4 allow overrides Service deny", "203.0.113.7", "10.0.0.1", armnetwork.SecurityRuleAccessAllow},
-		{"NRMS IPv4 deny overrides Service allow", "20.1.2.3", "10.0.0.1", armnetwork.SecurityRuleAccessDeny},
+		{"external IPv4 allow overrides Service deny", "203.0.113.7", "10.0.0.1", armnetwork.SecurityRuleAccessAllow},
+		{"external IPv4 deny overrides Service allow", "20.1.2.3", "10.0.0.1", armnetwork.SecurityRuleAccessDeny},
 		{"ordinary IPv6 allow", "2001:db8:1:2::1", "fd00::1", armnetwork.SecurityRuleAccessAllow},
 		{"ordinary IPv6 deny", "2001:db8:3::1", "fd00::1", armnetwork.SecurityRuleAccessDeny},
-		{"NRMS IPv6 allow overrides Service deny", "2001:db8:2::1", "fd00::1", armnetwork.SecurityRuleAccessAllow},
-		{"NRMS IPv6 deny overrides Service allow", "2001:db8:1:1::1", "fd00::1", armnetwork.SecurityRuleAccessDeny},
+		{"external IPv6 allow overrides Service deny", "2001:db8:2::1", "fd00::1", armnetwork.SecurityRuleAccessAllow},
+		{"external IPv6 deny overrides Service allow", "2001:db8:1:1::1", "fd00::1", armnetwork.SecurityRuleAccessDeny},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, nsgTestAccess(t, rules, tt.source, tt.destination, 8080, armnetwork.SecurityRuleProtocolTCP))
@@ -519,12 +565,12 @@ func TestBuildNICSecurityRulesNRMSPrecedence(t *testing.T) {
 
 func TestBuildNICSecurityRulesCapacity(t *testing.T) {
 	for _, tt := range []struct {
-		name      string
-		sources   int
-		backends  int
-		services  int
-		nrms      int
-		wantError bool
+		name          string
+		sources       int
+		backends      int
+		services      int
+		externalRules int
+		wantError     bool
 	}{
 		{"source boundary", 5997, 1, 1, 0, false},
 		{"source overflow", 5998, 1, 1, 0, true},
@@ -532,12 +578,12 @@ func TestBuildNICSecurityRulesCapacity(t *testing.T) {
 		{"destination overflow", 1, 3000, 1, 0, true},
 		{"rule boundary", 1, 1, 999, 0, false},
 		{"rule overflow", 1, 1, 1000, 0, true},
-		{"source boundary with NRMS", 5996, 1, 1, 1, false},
-		{"source overflow with NRMS", 5997, 1, 1, 1, true},
-		{"destination boundary with NRMS", 1, 2998, 1, 2, false},
-		{"destination overflow with NRMS", 1, 2999, 1, 1, true},
-		{"rule boundary with NRMS", 1, 1, 998, 2, false},
-		{"rule overflow with NRMS", 1, 1, 999, 1, true},
+		{"source boundary with external rules", 5996, 1, 1, 1, false},
+		{"source overflow with external rules", 5997, 1, 1, 1, true},
+		{"destination boundary with external rules", 1, 2998, 1, 2, false},
+		{"destination overflow with external rules", 1, 2999, 1, 1, true},
+		{"rule boundary with external rules", 1, 1, 998, 2, false},
+		{"rule overflow with external rules", 1, 1, 999, 1, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			services := make(map[string]nsgService)
@@ -555,8 +601,8 @@ func TestBuildNICSecurityRulesCapacity(t *testing.T) {
 				services[strconv.Itoa(s)] = service
 			}
 			var existing []*armnetwork.SecurityRule
-			for i := 0; i < tt.nrms; i++ {
-				existing = append(existing, nsgTestNRMSRule(int32(100+i)))
+			for i := 0; i < tt.externalRules; i++ {
+				existing = append(existing, nsgTestExternalRule(int32(100+i)))
 			}
 			_, err := buildNICSecurityRules(services, existing)
 			if tt.wantError {
@@ -568,7 +614,7 @@ func TestBuildNICSecurityRulesCapacity(t *testing.T) {
 	}
 }
 
-func TestBuildNICSecurityRulesRejectsUnownedRules(t *testing.T) {
+func TestBuildNICSecurityRulesRejectsUnownedRulesInCCMRange(t *testing.T) {
 	for _, tt := range []struct {
 		name        string
 		source      string
@@ -577,13 +623,13 @@ func TestBuildNICSecurityRulesRejectsUnownedRules(t *testing.T) {
 		protocol    armnetwork.SecurityRuleProtocol
 		priority    int32
 	}{
-		{"broad earlier allow", "*", "*", "*", armnetwork.SecurityRuleProtocolAsterisk, 100},
-		{"source service tag", "VirtualNetwork", "*", "8080", armnetwork.SecurityRuleProtocolTCP, 100},
-		{"source subset", "20.1.0.0/16", "*", "8080", armnetwork.SecurityRuleProtocolTCP, 100},
-		{"different destination", "*", "10.0.0.2", "8080", armnetwork.SecurityRuleProtocolTCP, 100},
-		{"different port", "*", "*", "9090", armnetwork.SecurityRuleProtocolTCP, 100},
-		{"port range", "*", "*", "8000-8100", armnetwork.SecurityRuleProtocolTCP, 100},
-		{"different protocol", "*", "*", "8080", armnetwork.SecurityRuleProtocolUDP, 100},
+		{"broad allow", "*", "*", "*", armnetwork.SecurityRuleProtocolAsterisk, 500},
+		{"source service tag", "VirtualNetwork", "*", "8080", armnetwork.SecurityRuleProtocolTCP, 500},
+		{"source subset", "20.1.0.0/16", "*", "8080", armnetwork.SecurityRuleProtocolTCP, 500},
+		{"different destination", "*", "10.0.0.2", "8080", armnetwork.SecurityRuleProtocolTCP, 500},
+		{"different port", "*", "*", "9090", armnetwork.SecurityRuleProtocolTCP, 500},
+		{"port range", "*", "*", "8000-8100", armnetwork.SecurityRuleProtocolTCP, 500},
+		{"different protocol", "*", "*", "8080", armnetwork.SecurityRuleProtocolUDP, 500},
 		{"lower precedence", "*", "*", "*", armnetwork.SecurityRuleProtocolAsterisk, 4096},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -237,10 +237,13 @@ func isNSGOwnedRule(rule *armnetwork.SecurityRule) bool {
 		strings.EqualFold(name, consts.ServiceGatewayNSGAllowOutboundRuleName)
 }
 
-func isNRMSRule(name string, priority int32) bool {
-	return priority >= consts.ServiceGatewayNSGNRMSMinimumPriority &&
+func isReservedNSGRule(name string, priority int32) bool {
+	return priority >= consts.ServiceGatewayNSGReservedRuleMinimumPriority &&
 		priority < consts.LoadBalancerMinimumPriority &&
-		strings.EqualFold(name, fmt.Sprintf("%s%d", consts.ServiceGatewayNSGNRMSRuleNamePrefix, priority))
+		strings.TrimSpace(name) != "" &&
+		!strings.HasPrefix(strings.ToLower(name), consts.ServiceGatewayNSGRuleNamePrefix) &&
+		!strings.EqualFold(name, consts.ServiceGatewayNSGAllowInboundRuleName) &&
+		!strings.EqualFold(name, consts.ServiceGatewayNSGAllowOutboundRuleName)
 }
 
 func buildNICSecurityRules(services map[string]nsgService, existing []*armnetwork.SecurityRule) ([]*armnetwork.SecurityRule, error) {
@@ -253,7 +256,7 @@ func buildNICSecurityRules(services map[string]nsgService, existing []*armnetwor
 		if isNSGOwnedRule(rule) {
 			continue
 		}
-		if !isNRMSRule(*rule.Name, *rule.Properties.Priority) {
+		if !isReservedNSGRule(*rule.Name, *rule.Properties.Priority) {
 			return nil, fmt.Errorf("managed NIC NSG contains an unexpected custom rule %q", *rule.Name)
 		}
 		rules = append(rules, rule)
