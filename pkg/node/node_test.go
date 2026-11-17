@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"sigs.k8s.io/cloud-provider-azure/internal/testutil/imdstest"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	azureprovider "sigs.k8s.io/cloud-provider-azure/pkg/provider"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
@@ -151,4 +153,61 @@ func TestNodeProvidersNodeAddresses(t *testing.T) {
 			})
 		}
 	}
+}
+func TestGetMetadataLabelsIMDS(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		response     string
+		wantGroup    string
+		wantSubgroup string
+		wantError    bool
+	}{
+		{name: "M1 aliases", response: `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":"group-123"}]}}`, wantGroup: "group-123", wantSubgroup: "group-123"},
+		{name: "M2 labels", response: `{"compute":{"interconnectGroupId":"group-123","interconnectSubgroupId":"subgroup-123"}}`, wantGroup: "group-123", wantSubgroup: "subgroup-123"},
+		{name: "M2 subgroup only", response: `{"compute":{"interconnectSubgroupId":"subgroup-123","tagsList":[{"name":"Platform_Interconnect_Group","value":"legacy"}]}}`, wantSubgroup: "subgroup-123"},
+		{name: "metadata error", response: `{}`, wantError: true},
+		{name: "evaluation error", response: `{"compute":{"tagsList":[{"name":"Platform_Interconnect_Group","value":"invalid/value"}]}}`, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprint(w, tc.response)
+			}))
+			defer server.Close()
+			metadata, err := azureprovider.NewInstanceMetadataService(server.URL + "/")
+			if !assert.NoError(t, err) {
+				t.FailNow()
+			}
+			np := &IMDSNodeProvider{azure: &azureprovider.Cloud{
+				Config: config.Config{UseInstanceMetadata: true}, Metadata: metadata,
+			}}
+			labels, err := np.GetMetadataLabels(context.Background())
+			if tc.wantError {
+				assert.Error(t, err)
+				assert.Nil(t, labels)
+			} else {
+				assert.NoError(t, err)
+				want := map[string]string{}
+				if tc.wantGroup != "" {
+					want[consts.LabelPlatformInterconnectGroup] = tc.wantGroup
+				}
+				if tc.wantSubgroup != "" {
+					want[consts.LabelPlatformInterconnectSubgroup] = tc.wantSubgroup
+				}
+				assert.Equal(t, want, labels)
+				id, err := np.GetInterconnectGroupID(context.Background())
+				assert.NoError(t, err)
+				assert.Equal(t, tc.wantGroup, id)
+			}
+		})
+	}
+}
+
+func TestGetMetadataLabelsARM(t *testing.T) {
+	np := &ARMNodeProvider{}
+	labels, err := np.GetMetadataLabels(context.Background())
+	assert.NoError(t, err)
+	assert.Empty(t, labels)
+	id, err := np.GetInterconnectGroupID(context.Background())
+	assert.NoError(t, err)
+	assert.Empty(t, id)
 }
