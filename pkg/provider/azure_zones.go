@@ -148,7 +148,6 @@ func (az *Cloud) GetZoneID(zoneLabel string) string {
 // This interface will not be called if InstancesV2 is enabled.
 // If the node is not running with availability zones, then it will fall back to fault domain.
 func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
-	logger := log.FromContextOrBackground(ctx).WithName("GetZone")
 	if az.UseInstanceMetadata {
 		metadata, err := az.Metadata.GetMetadata(ctx, azcache.CacheReadTypeUnsafe)
 		if err != nil {
@@ -160,23 +159,7 @@ func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 			return cloudprovider.Zone{}, fmt.Errorf("failure of getting compute information from instance metadata")
 		}
 
-		zone := ""
-		location := metadata.Compute.Location
-		if metadata.Compute.Zone != "" {
-			zoneID, err := strconv.Atoi(metadata.Compute.Zone)
-			if err != nil {
-				return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone ID %q: %w", metadata.Compute.Zone, err)
-			}
-			zone = az.makeZone(location, zoneID)
-		} else {
-			logger.V(3).Info("Availability zone is not enabled for the node, falling back to fault domain")
-			zone = metadata.Compute.FaultDomain
-		}
-
-		return cloudprovider.Zone{
-			FailureDomain: strings.ToLower(zone),
-			Region:        strings.ToLower(location),
-		}, nil
+		return az.getZoneFromComputeMetadata(ctx, metadata.Compute)
 	}
 	// if UseInstanceMetadata is false, get Zone name by calling ARM
 	hostname, err := os.Hostname()
@@ -187,6 +170,28 @@ func (az *Cloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 		return cloudprovider.Zone{}, fmt.Errorf("VMSet is not initialized")
 	}
 	return az.VMSet.GetZoneByNodeName(ctx, strings.ToLower(hostname))
+}
+
+// getZoneFromComputeMetadata returns the zone described by the compute section of the instance metadata.
+func (az *Cloud) getZoneFromComputeMetadata(ctx context.Context, compute *ComputeMetadata) (cloudprovider.Zone, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getZoneFromComputeMetadata")
+	zone := ""
+	location := compute.Location
+	if compute.Zone != "" {
+		zoneID, err := strconv.Atoi(compute.Zone)
+		if err != nil {
+			return cloudprovider.Zone{}, fmt.Errorf("failed to parse zone ID %q: %w", compute.Zone, err)
+		}
+		zone = az.makeZone(location, zoneID)
+	} else {
+		logger.V(3).Info("Availability zone is not enabled for the node, falling back to fault domain")
+		zone = compute.FaultDomain
+	}
+
+	return cloudprovider.Zone{
+		FailureDomain: strings.ToLower(zone),
+		Region:        strings.ToLower(location),
+	}, nil
 }
 
 // GetZoneByProviderID implements Zones.GetZoneByProviderID
