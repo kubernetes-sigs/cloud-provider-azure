@@ -30,6 +30,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/utils/ptr"
@@ -917,6 +919,76 @@ func TestCleanupOutdatedRoutes(t *testing.T) {
 			assert.Equal(t, testCase.expectedChanged, changed)
 			assert.Equal(t, testCase.expectedRoutes, routes)
 		})
+	}
+}
+
+func TestUpdateRoutesConcurrentNodeCacheUpdates(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	cloud := GetTestCloud(ctrl)
+	cloud.ipv6DualStackEnabled = true
+	node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}
+	cloud.updateNodeCaches(nil, node)
+	updater := &delayedRouteUpdater{az: cloud}
+
+	outdatedRoute := &armnetwork.Route{Name: ptr.To("node1")}
+	currentRoute := &armnetwork.Route{Name: ptr.To("node1____10.0.0.0_24")}
+	unmanagedRoute := &armnetwork.Route{Name: ptr.To("other-node")}
+	routeTable := &armnetwork.RouteTable{
+		Name:       ptr.To(cloud.RouteTableName),
+		Properties: &armnetwork.RouteTablePropertiesFormat{},
+	}
+	expectedTable := armnetwork.RouteTable{
+		Name: ptr.To(cloud.RouteTableName),
+		Properties: &armnetwork.RouteTablePropertiesFormat{
+			Routes: []*armnetwork.Route{currentRoute, unmanagedRoute},
+		},
+	}
+	const iterations = 1000
+	repo := cloud.routeTableRepo.(*routetable.MockRepository)
+	repo.EXPECT().Get(gomock.Any(), cloud.RouteTableName, gomock.Any()).Return(routeTable, nil).Times(iterations)
+	repo.EXPECT().CreateOrUpdate(gomock.Any(), expectedTable).Return(nil, nil).Times(iterations)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	start := make(chan struct{})
+	nodeUpdatesDone := make(chan struct{})
+	go func() {
+		defer close(nodeUpdatesDone)
+		<-start
+		for range iterations {
+			if ctx.Err() != nil {
+				return
+			}
+			cloud.updateNodeCaches(node, node)
+		}
+	}()
+	routeUpdatesDone := make(chan struct{})
+	go func() {
+		defer close(routeUpdatesDone)
+		<-start
+		for range iterations {
+			if ctx.Err() != nil {
+				return
+			}
+			routeTable.Properties.Routes = []*armnetwork.Route{outdatedRoute, currentRoute, unmanagedRoute}
+			// Use a tag update to trigger route cleanup.
+			op := &delayedRouteOperation{
+				operation: routeTableOperationUpdateTags,
+				// Buffer one result because this test receives it only after updateRoutes returns.
+				result: make(chan batchOperationResult, 1),
+			}
+			updater.addOperation(op)
+			updater.updateRoutes(ctx)
+			assert.NoError(t, op.wait().err)
+		}
+	}()
+	close(start)
+	for _, done := range []<-chan struct{}{nodeUpdatesDone, routeUpdatesDone} {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			t.Fatal("route reconciliation and node cache updates did not complete")
+		}
 	}
 }
 
