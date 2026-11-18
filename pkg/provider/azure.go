@@ -980,6 +980,41 @@ func (az *Cloud) GetNodeNames() (*utilsets.IgnoreCaseSet, error) {
 	return utilsets.NewString(az.nodeNames.UnsortedList()...), nil
 }
 
+func (az *Cloud) hasNodeName(nodeName string) bool {
+	az.nodeCachesLock.RLock()
+	defer az.nodeCachesLock.RUnlock()
+
+	return az.nodeNames.Has(nodeName)
+}
+
+// getNodePrivateIPs returns a copy of the private IPs for the given node.
+func (az *Cloud) getNodePrivateIPs(nodeName string) ([]string, bool) {
+	az.nodeCachesLock.RLock()
+	defer az.nodeCachesLock.RUnlock()
+
+	ips, ok := az.nodePrivateIPs[strings.ToLower(nodeName)]
+	return ips.UnsortedList(), ok
+}
+
+func (az *Cloud) getNodeNameByPrivateIP(ip string) (string, bool) {
+	az.nodeCachesLock.RLock()
+	defer az.nodeCachesLock.RUnlock()
+
+	nodeName, ok := az.nodePrivateIPToNodeNameMap[ip]
+	return nodeName, ok
+}
+
+func (az *Cloud) getExcludedLoadBalancerNodeIPs() []string {
+	az.nodeCachesLock.RLock()
+	defer az.nodeCachesLock.RUnlock()
+
+	var ips []string
+	for _, nodeName := range az.excludeLoadBalancerNodes.UnsortedList() {
+		ips = append(ips, az.nodePrivateIPs[strings.ToLower(nodeName)].UnsortedList()...)
+	}
+	return ips
+}
+
 // GetResourceGroups returns a set of resource groups that all nodes are running on.
 func (az *Cloud) GetResourceGroups() (*utilsets.IgnoreCaseSet, error) {
 	// Kubelet won't set az.nodeInformerSynced, always return configured resourceGroup.
