@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
-	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
 	v1 "k8s.io/api/core/v1"
@@ -90,7 +89,8 @@ func (az *Cloud) backendNodeIPsOfService(svc *v1.Service) []netip.Addr {
 
 	rv := make([]netip.Addr, 0, nodeNames.Len())
 	for _, nodeName := range nodeNames.UnsortedList() {
-		for _, ip := range az.nodePrivateIPs[strings.ToLower(nodeName)].UnsortedList() {
+		ips, _ := az.getNodePrivateIPs(nodeName)
+		for _, ip := range ips {
 			if addr, err := netip.ParseAddr(ip); err == nil {
 				rv = append(rv, addr)
 			}

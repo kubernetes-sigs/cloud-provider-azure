@@ -237,7 +237,7 @@ func (d *delayedRouteUpdater) cleanupOutdatedRoutes(existingRoutes []*armnetwork
 
 		// filter out unmanaged routes
 		deleteRoute := false
-		if d.az.nodeNames.Has(split[0]) {
+		if d.az.hasNodeName(split[0]) {
 			if d.az.ipv6DualStackEnabled && len(split) == 1 {
 				logger.V(2).Info("deleting outdated non-dualstack route", "route", existingRouteName)
 				deleteRoute = true
