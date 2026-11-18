@@ -278,12 +278,11 @@ func (bc *backendPoolTypeNodeIPConfig) GetBackendPrivateIPs(ctx context.Context,
 						logger.Error(err, "failed: GetNodeNameByIPConfigurationID", "service", serviceName)
 						continue
 					}
-					privateIPsSet, ok := bc.nodePrivateIPs[strings.ToLower(nodeName)]
+					privateIPs, ok := bc.getNodePrivateIPs(nodeName)
 					if !ok {
 						klog.Warningf("bc.GetBackendPrivateIPs for service (%s): failed to get private IPs of node %s", serviceName, nodeName)
 						continue
 					}
-					privateIPs := privateIPsSet.UnsortedList()
 					for _, ip := range privateIPs {
 						logger.V(2).Info("lb backendpool - found private IPs of node", "serviceName", serviceName, "ip", ip, "nodeName", nodeName)
 						if utilnet.IsIPv4String(ip) {
@@ -411,7 +410,7 @@ func (bi *backendPoolTypeNodeIP) EnsureHostsInPool(ctx context.Context, service 
 				changed = true
 				numOfDelete++
 			} else if bi.UseMultipleStandardLoadBalancers() && activeNodes != nil {
-				nodeName, ok := bi.nodePrivateIPToNodeNameMap[ip]
+				nodeName, ok := bi.getNodeNameByPrivateIP(ip)
 				if !ok {
 					klog.Warningf("bi.EnsureHostsInPool: cannot find node name for private IP %s", ip)
 					continue
@@ -532,12 +531,9 @@ func (bi *backendPoolTypeNodeIP) ReconcileBackendPools(ctx context.Context, clus
 
 		for _, i := range bpIdxes {
 			bp := newBackendPools[i]
-			var nodeIPAddressesToBeDeleted []string
-			for _, nodeName := range bi.excludeLoadBalancerNodes.UnsortedList() {
-				for _, ip := range bi.nodePrivateIPs[strings.ToLower(nodeName)].UnsortedList() {
-					logger.V(2).Info("found unwanted node private IP, decouple it from the LB", "serviceName", serviceName, "ip", ip, "lbName", lbName)
-					nodeIPAddressesToBeDeleted = append(nodeIPAddressesToBeDeleted, ip)
-				}
+			nodeIPAddressesToBeDeleted := bi.getExcludedLoadBalancerNodeIPs()
+			for _, ip := range nodeIPAddressesToBeDeleted {
+				logger.V(2).Info("found unwanted node private IP, decouple it from the LB", "serviceName", serviceName, "ip", ip, "lbName", lbName)
 			}
 			if len(nodeIPAddressesToBeDeleted) > 0 {
 				if removeNodeIPAddressesFromBackendPool(bp, nodeIPAddressesToBeDeleted, false, false, true) {
@@ -650,7 +646,8 @@ func (bi *backendPoolTypeNodeIP) getBackendPoolNodeNames(bp *armnetwork.BackendA
 		for _, backendAddress := range bp.Properties.LoadBalancerBackendAddresses {
 			if backendAddress.Properties != nil {
 				ip := ptr.Deref(backendAddress.Properties.IPAddress, "")
-				nodeNames.Insert(bi.nodePrivateIPToNodeNameMap[ip])
+				nodeName, _ := bi.getNodeNameByPrivateIP(ip)
+				nodeNames.Insert(nodeName)
 			}
 		}
 	}
@@ -706,7 +703,7 @@ func (az *Cloud) addNodeIPAddressesToBackendPool(backendPool *armnetwork.Backend
 	addresses := backendPool.Properties.LoadBalancerBackendAddresses
 	for _, ipAddress := range nodeIPAddresses {
 		if !hasIPAddressInBackendPool(backendPool, ipAddress) {
-			name := az.nodePrivateIPToNodeNameMap[ipAddress]
+			name, _ := az.getNodeNameByPrivateIP(ipAddress)
 			logger.V(4).Info("adding node to the backend pool", "ip", ipAddress, "backendPoolName", ptr.Deref(backendPool.Name, ""))
 			addresses = append(addresses, &armnetwork.LoadBalancerBackendAddress{
 				Name: ptr.To(name),

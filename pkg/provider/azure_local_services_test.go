@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -690,6 +691,102 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 			assert.Equal(t, tc.expectedOps, actual)
 		})
 	}
+}
+
+func TestNodeAndEndpointSliceInformersConcurrentAccess(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	az := GetTestCloud(ctrl)
+	node1 := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+		Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.1"}}},
+	}
+	node2 := node1.DeepCopy()
+	node2.Name = "node2"
+	node2.Status.Addresses[0].Address = "10.0.0.2"
+	eps := getTestEndpointSlice("eps1", "test", "svc1", "node1")
+	client := fake.NewSimpleClientset(node1, node2, eps)
+	az.KubeClient = client
+	// Mark the local service reconciled so its EndpointSlice handler reads node IPs.
+	az.localServiceNameToServiceInfoMap.Store("test/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+	// Queue backend updates without running Azure calls.
+	updater := newLoadBalancerBackendPoolUpdater(az, time.Hour)
+	az.backendPoolUpdater = updater
+
+	factory := informers.NewSharedInformerFactory(client, 0)
+	az.SetInformers(factory)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	t.Cleanup(func() {
+		cancel()
+		factory.Shutdown()
+	})
+	factory.Start(ctx.Done())
+	for informer, synced := range factory.WaitForCacheSync(ctx.Done()) {
+		if !assert.True(t, synced, "informer %v did not sync", informer) {
+			return
+		}
+	}
+	// Wait for the cloud's handlers, not just the informer caches.
+	if !assert.Eventually(t, func() bool {
+		ips1, _ := az.getNodePrivateIPs("node1")
+		ips2, _ := az.getNodePrivateIPs("node2")
+		_, endpointSliceFound := az.endpointSlicesCache.Load("test/eps1")
+		return endpointSliceFound && len(ips1) == 1 && ips1[0] == "10.0.0.1" &&
+			len(ips2) == 1 && ips2[0] == "10.0.0.2"
+	}, 5*time.Second, time.Millisecond) {
+		return
+	}
+	if !assert.Zero(t, updater.countOperations(), "the backend update queue must start empty") {
+		return
+	}
+
+	// Keep the update burst within the fake client's watch buffer.
+	const updates = 100
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := range updates {
+			node := node1.DeepCopy()
+			node.ResourceVersion = strconv.Itoa(i + 2)
+			node.Status.Addresses[0].Address = fmt.Sprintf("10.0.1.%d", i+1)
+			_, err := client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+		}
+	}()
+	t.Cleanup(wg.Wait)
+	for i := range updates {
+		nodeName := "node2"
+		if i%2 != 0 {
+			nodeName = "node1"
+		}
+		updated := getTestEndpointSlice("eps1", "test", "svc1", nodeName)
+		updated.ResourceVersion = strconv.Itoa(i + 2)
+		_, err := client.DiscoveryV1().EndpointSlices("test").Update(ctx, updated, metav1.UpdateOptions{})
+		if !assert.NoError(t, err) {
+			return
+		}
+	}
+	wg.Wait()
+	if !assert.Eventually(t, func() bool {
+		return updater.countOperations() > 0
+	}, 5*time.Second, time.Millisecond, "EndpointSlice updates must queue backend pool updates") {
+		return
+	}
+	// Waiting for this delete confirms that earlier EndpointSlice update callbacks have finished.
+	if !assert.NoError(t, client.DiscoveryV1().EndpointSlices("test").Delete(ctx, "eps1", metav1.DeleteOptions{})) {
+		return
+	}
+	assert.Eventually(t, func() bool {
+		_, found := az.endpointSlicesCache.Load("test/eps1")
+		return !found
+	}, 5*time.Second, time.Millisecond, "the EndpointSlice handler must finish processing updates")
+	expectedIP := fmt.Sprintf("10.0.1.%d", updates)
+	assert.Eventually(t, func() bool {
+		ips, found := az.getNodePrivateIPs("node1")
+		return found && len(ips) == 1 && ips[0] == expectedIP
+	}, 5*time.Second, time.Millisecond, "the node informer must process the final IP update")
 }
 
 func TestGetBackendPoolNamesAndIDsForService(t *testing.T) {
