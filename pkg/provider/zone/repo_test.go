@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	armresources "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 
@@ -63,6 +64,86 @@ func TestRepo_ListZones(t *testing.T) {
 		client.EXPECT().GetVirtualMachineSupportedZones(gomock.Any()).Return(nil, expectedErr).Times(1)
 
 		_, err = repo.ListZones(context.Background())
+		assert.ErrorIs(t, err, expectedErr)
+	})
+}
+
+func TestRepo_ListNetworkResourceZones(t *testing.T) {
+	// eastus2 is a region where virtual machines support one zone more than public IPs do.
+	networkProvider := &armresources.Provider{
+		ResourceTypes: []*armresources.ProviderResourceType{
+			{
+				ResourceType: to.Ptr("loadBalancers"),
+				ZoneMappings: []*armresources.ZoneMapping{
+					{Location: to.Ptr("West Europe"), Zones: []*string{to.Ptr("1"), to.Ptr("2"), to.Ptr("3"), to.Ptr("4")}},
+				},
+			},
+			{
+				ResourceType: to.Ptr("publicIPAddresses"),
+				ZoneMappings: []*armresources.ZoneMapping{
+					{Location: to.Ptr("East US 2"), Zones: []*string{to.Ptr("2"), to.Ptr("1"), to.Ptr("3")}},
+					{Location: to.Ptr("westus"), Zones: []*string{to.Ptr("1")}},
+				},
+			},
+		},
+	}
+
+	t.Run("return the zones of the requested resource type", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		client := mock_providerclient.NewMockInterface(ctrl)
+		repo, err := NewRepo(client)
+		assert.NoError(t, err)
+		client.EXPECT().GetProvider(gomock.Any(), "Microsoft.Network").Return(networkProvider, nil).Times(1)
+
+		zones, err := repo.ListNetworkResourceZones(context.Background(), PublicIPResourceType)
+		assert.NoError(t, err)
+		assert.Equal(t, map[string][]string{
+			"eastus2": {"2", "1", "3"},
+			"westus":  {"1"},
+		}, zones)
+	})
+
+	t.Run("match the resource type case-insensitively", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		client := mock_providerclient.NewMockInterface(ctrl)
+		repo, err := NewRepo(client)
+		assert.NoError(t, err)
+		client.EXPECT().GetProvider(gomock.Any(), "Microsoft.Network").Return(networkProvider, nil).Times(1)
+
+		zones, err := repo.ListNetworkResourceZones(context.Background(), "PublicIPAddresses")
+		assert.NoError(t, err)
+		assert.Equal(t, []string{"2", "1", "3"}, zones["eastus2"])
+	})
+
+	t.Run("return an empty map for an unlisted resource type", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		client := mock_providerclient.NewMockInterface(ctrl)
+		repo, err := NewRepo(client)
+		assert.NoError(t, err)
+		client.EXPECT().GetProvider(gomock.Any(), "Microsoft.Network").Return(networkProvider, nil).Times(1)
+
+		zones, err := repo.ListNetworkResourceZones(context.Background(), "applicationGateways")
+		assert.NoError(t, err)
+		assert.Equal(t, map[string][]string{}, zones)
+	})
+
+	t.Run("return error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		client := mock_providerclient.NewMockInterface(ctrl)
+		repo, err := NewRepo(client)
+		assert.NoError(t, err)
+		expectedErr := fmt.Errorf("error")
+		client.EXPECT().GetProvider(gomock.Any(), "Microsoft.Network").Return(nil, expectedErr).Times(1)
+
+		_, err = repo.ListNetworkResourceZones(context.Background(), PublicIPResourceType)
 		assert.ErrorIs(t, err, expectedErr)
 	})
 }

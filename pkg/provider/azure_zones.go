@@ -32,6 +32,7 @@ import (
 	azcache "sigs.k8s.io/cloud-provider-azure/pkg/cache"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/zone"
 )
 
 var _ cloudprovider.Zones = (*Cloud)(nil)
@@ -122,6 +123,35 @@ func (az *Cloud) getRegionZonesBackoff(ctx context.Context, region string) ([]*s
 	}
 
 	return []*string{}, nil
+}
+
+// getPublicIPZones returns the zones a new public IP can be created in for the given
+// region. ARM rejects a public IP carrying a zone that only virtual machines support, so
+// these zones come from the publicIPAddresses resource type rather than from
+// regionZonesMap.
+func (az *Cloud) getPublicIPZones(ctx context.Context, region string) ([]*string, error) {
+	logger := log.FromContextOrBackground(ctx).WithName("getPublicIPZones")
+
+	az.refreshZonesLock.RLock()
+	cached := az.publicIPZonesMap
+	az.refreshZonesLock.RUnlock()
+	if cached != nil {
+		return to.SliceOfPtrs(cached[region]...), nil
+	}
+
+	logger.V(2).Info("the public IP region-zones map is not initialized, fetching it immediately")
+	zones, err := az.zoneRepo.ListNetworkResourceZones(ctx, zone.PublicIPResourceType)
+	if err != nil {
+		return nil, fmt.Errorf("list public IP zones: %w", err)
+	}
+
+	az.refreshZonesLock.Lock()
+	defer az.refreshZonesLock.Unlock()
+	if az.publicIPZonesMap == nil {
+		az.publicIPZonesMap = zones
+	}
+
+	return to.SliceOfPtrs(az.publicIPZonesMap[region]...), nil
 }
 
 // makeZone returns the zone value in format of <region>-<zone-id>.
