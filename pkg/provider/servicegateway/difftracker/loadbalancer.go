@@ -96,8 +96,7 @@ func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, servic
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), operation)
 	defer func() { span.Observe(ctx, err) }()
 
-	// Guard before the Service is dereferenced below, for the same reason as
-	// EnsureLoadBalancerDeleted: the metric label is built before the engine validates the input.
+	// Guard before the Service is dereferenced below (warning events and the returned status).
 	if service == nil {
 		return nil, fmt.Errorf("cannot ensure a load balancer for a nil Service")
 	}
@@ -107,9 +106,10 @@ func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, _ string, servic
 		return nil, err
 	}
 
-	serviceName := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
-	metricContext := newLoadBalancerMetricContext(tracker, "ensure_loadbalancer", serviceName)
-	defer func() { metricContext.ObserveOperationWithResult(err == nil) }()
+	metricContext := newLoadBalancerMetricContext(tracker, "ensure_loadbalancer")
+	defer func() {
+		metricContext.ObserveOperationWithResult(err == nil, "service", service.Namespace+"/"+service.Name)
+	}()
 
 	if err = tracker.ReconcileInboundService(service); err != nil {
 		recordWarningEvent(tracker, service, err)
@@ -149,8 +149,7 @@ func (lb *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, _ string,
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), operation)
 	defer func() { span.Observe(ctx, err) }()
 
-	// Guard before the Service is dereferenced below: the engine validates it too, but the metric
-	// label is built first, so a nil Service would panic the caller's goroutine rather than return.
+	// The engine validates the Service too; reject a nil one before any metric is recorded.
 	if service == nil {
 		return fmt.Errorf("cannot delete the load balancer for a nil Service")
 	}
@@ -160,19 +159,21 @@ func (lb *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, _ string,
 		return err
 	}
 
-	serviceName := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
-	metricContext := newLoadBalancerMetricContext(tracker, "ensure_loadbalancer_deleted", serviceName)
+	metricContext := newLoadBalancerMetricContext(tracker, "ensure_loadbalancer_deleted")
 	err = tracker.DeleteInboundService(service)
-	metricContext.ObserveOperationWithResult(err == nil)
+	metricContext.ObserveOperationWithResult(err == nil, "service", service.Namespace+"/"+service.Name)
 	return err
 }
 
-func newLoadBalancerMetricContext(tracker *DiffTracker, operation, serviceName string) *metrics.MetricContext {
+// newLoadBalancerMetricContext labels the metric with the ServiceGateway, not the Service: the
+// shared metric vectors never delete a label value, so a per-Service label would keep a series
+// for every Service name the controller ever handled. Callers log the Service instead.
+func newLoadBalancerMetricContext(tracker *DiffTracker, operation string) *metrics.MetricContext {
 	return metrics.NewMetricContext(
 		"services",
 		operation,
 		tracker.config.ResourceGroup,
 		tracker.config.networkResourceSubscriptionID(),
-		serviceName,
+		tracker.config.ServiceGatewayResourceName,
 	)
 }
