@@ -45,6 +45,3 @@ pkg/
   trace/                        Tracing helpers
   version/                      Version info
 ```
-
-For SGW NIC reconciliation, ownership and recovery, see
-[ServiceGateway NIC source policies](servicegateway-nic-source-policies.md).
