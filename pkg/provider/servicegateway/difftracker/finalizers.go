@@ -1054,9 +1054,9 @@ func (dt *DiffTracker) releaseUnlabelledPodFinalizer(ctx context.Context, pod *v
 	dt.queuePodResolutionLocked(pod, recoveredAtStartup)
 	entry := pendingPodToProcess{Key: key, Record: dt.pendingPodDeletions[key]}
 	dt.mu.Unlock()
-	retired, readd, err := dt.processPodFinalizerGuarded(ctx, &entry, "")
+	retired, podToRegister, err := dt.processPodFinalizerGuarded(ctx, &entry, "")
 	unlock()
-	released = retired && readd == nil
+	released = retired && podToRegister == nil
 	dt.mu.Lock()
 	pending = dt.pendingPodDeletions[key] != nil
 	if pending && recoveredAtStartup && !wasRecovering {
@@ -1351,7 +1351,7 @@ func (dt *DiffTracker) retirePodDeletionLocked(entry *pendingPodToProcess) bool 
 }
 
 // The caller holds the Pod guard, but not dt.mu, throughout the fresh checks and API write.
-func (dt *DiffTracker) processPodFinalizerGuarded(ctx context.Context, entry *pendingPodToProcess, completedService string) (retired bool, readd *v1.Pod, err error) {
+func (dt *DiffTracker) processPodFinalizerGuarded(ctx context.Context, entry *pendingPodToProcess, completedService string) (retired bool, podToRegister *v1.Pod, err error) {
 	dt.mu.Lock()
 	if dt.pendingPodDeletions[entry.Key] != entry.Record {
 		dt.mu.Unlock()
@@ -1423,7 +1423,7 @@ func (dt *DiffTracker) processPodFinalizerGuarded(ctx context.Context, entry *pe
 	}
 	ready, live := dt.preparePodFinalizerLocked(pod, entry, completedService)
 	if live {
-		readd = pod
+		podToRegister = pod
 	}
 	dt.mu.Unlock()
 
@@ -1437,13 +1437,13 @@ func (dt *DiffTracker) processPodFinalizerGuarded(ctx context.Context, entry *pe
 			ready, live := dt.preparePodFinalizerLocked(current, entry, completedService)
 			finished = ready
 			if live {
-				readd = current
+				podToRegister = current
 			}
 			return ready && !live
 		})
 	}
-	if readd != nil {
-		dt.podInformerRegisterPodGuarded(ctx, readd)
+	if podToRegister != nil {
+		dt.podInformerRegisterPodGuarded(ctx, podToRegister)
 		if err == nil {
 			err = ctx.Err()
 		}
@@ -1455,15 +1455,15 @@ func (dt *DiffTracker) processPodFinalizerGuarded(ctx context.Context, entry *pe
 			entry.Record = entry.Record.withCleanup(completedService, completedCleanup)
 			dt.pendingPodDeletions[entry.Key] = entry.Record
 		}
-		if readd != nil && ctx.Err() != nil {
-			dt.queuePodResolutionLocked(readd, false)
+		if podToRegister != nil && ctx.Err() != nil {
+			dt.queuePodResolutionLocked(podToRegister, false)
 		}
-		return false, readd, err
+		return false, podToRegister, err
 	}
 	if finished {
 		retired = dt.retirePodDeletionLocked(entry)
 	}
-	return retired, readd, nil
+	return retired, podToRegister, nil
 }
 
 func (dt *DiffTracker) processPodFinalizer(ctx context.Context, entry *pendingPodToProcess, completedService string) error {
