@@ -239,6 +239,8 @@ func (dt *DiffTracker) readNIC(ctx context.Context, target *arm.ResourceID) (*ar
 	return nic, nil
 }
 
+// Desired and retained ports do not prove the applied LB configuration after recovery.
+// The caller reads only while LastAppliedConfig is unknown, once per Service per preparation pass.
 func (dt *DiffTracker) readLBBackendPorts(ctx context.Context, uid string) ([]PortMapping, error) {
 	lb, err := dt.networkClientFactory.GetLoadBalancerClient().Get(ctx, dt.config.ResourceGroup, uid, nil)
 	if isNSGNotFound(err) {
@@ -299,6 +301,10 @@ func (dt *DiffTracker) deleteOrphanGroup(ctx context.Context, name string) (bool
 	}
 	_, err = dt.readNIC(ctx, target)
 	if isNSGNotFound(err) {
+		if ptr.Deref(group.Etag, "") == "" {
+			return false, fmt.Errorf("orphaned NIC NSG %q has no ETag for a conditional delete", name)
+		}
+		ctx = policy.WithHTTPHeader(ctx, http.Header{consts.IfMatchHeader: {*group.Etag}})
 		if err := dt.networkClientFactory.GetSecurityGroupClient().Delete(ctx, dt.config.ResourceGroup, name); err != nil && !isNSGNotFound(err) {
 			return false, fmt.Errorf("delete orphaned NIC NSG: %w", err)
 		}
@@ -489,6 +495,9 @@ func nsgRulesEqual(first, second []*armnetwork.SecurityRule) bool {
 				return nil
 			}
 			value := *rule
+			if value.Name != nil {
+				value.Name = ptr.To(strings.ToLower(*value.Name))
+			}
 			properties := *rule.Properties
 			value.ID, value.Etag, value.Type = nil, nil, nil
 			properties.ProvisioningState = nil

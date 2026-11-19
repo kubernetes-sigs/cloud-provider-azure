@@ -147,6 +147,14 @@ Shared provider cache behavior is unchanged. Uniform VMSS cache-refill listing
 uses its existing background context, so cancellation of an SGW attempt does not
 cancel that listing.
 
+SGW orphan NSG deletion also sends the exact fetched NSG ETag through the
+request context, after checking ownership, attachments and NIC absence.
+A missing ETag prevents deletion; HTTP 412 propagates without an unconditional
+retry, so a later attempt must re-read and revalidate the resource. HTTP 404
+remains idempotent success. The body-based ETag policy does not handle DELETE.
+Live controls against NSG API `2026-03-01` confirmed stale ETags reject deletion
+with HTTP 412 while a current ETag permits it.
+
 ## Public-IP Recording Tests
 
 The generated public-IP concurrency test uses a real stale ETag rather than a

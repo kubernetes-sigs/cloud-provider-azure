@@ -170,7 +170,7 @@ func (dt *DiffTracker) AddService(config ServiceConfig) error {
 
 	// Check if service already exists in NRP
 	if config.IsInbound {
-		dt.markNICPolicyChangeLocked(config)
+		dt.handleNICPolicyChangeLocked(config)
 		dt.K8sResources.Services.Insert(serviceName)
 		if dt.NRPResources.LoadBalancers.Has(serviceName) {
 			if dt.pendingServiceOps[serviceName] == nil {
@@ -424,7 +424,7 @@ func (dt *DiffTracker) UpdateService(config ServiceConfig) error {
 		if dt.isReservedServiceLocked(serviceName) {
 			return fmt.Errorf("ServiceGateway service name %q is reserved", serviceName)
 		}
-		dt.markNICPolicyChangeLocked(config)
+		dt.handleNICPolicyChangeLocked(config)
 		dt.K8sResources.Services.Insert(serviceName)
 
 		opState, exists := dt.pendingServiceOps[serviceName]
@@ -579,7 +579,7 @@ func (dt *DiffTracker) DeleteService(serviceName string, isInbound bool, isOrpha
 	}
 	if isInbound {
 		dt.markServiceNICPoliciesDirtyLocked(serviceName)
-		if dt.dirtyNICPolicies.Len() > 0 {
+		if dt.hasDirtyNICPoliciesLocked() {
 			dt.triggerLocationsUpdater()
 		}
 	}

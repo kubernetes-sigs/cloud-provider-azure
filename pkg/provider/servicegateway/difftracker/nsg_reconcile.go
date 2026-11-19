@@ -25,9 +25,11 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
+	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,7 +61,11 @@ type nsgPreparedNIC struct {
 	lbOnly           bool
 }
 
-func (dt *DiffTracker) markNICPolicyChangeLocked(config ServiceConfig) {
+func (dt *DiffTracker) hasDirtyNICPoliciesLocked() bool {
+	return dt.dirtyNICPolicies.Len() > 0
+}
+
+func (dt *DiffTracker) handleNICPolicyChangeLocked(config ServiceConfig) {
 	if !config.IsInbound {
 		return
 	}
@@ -74,7 +80,7 @@ func (dt *DiffTracker) markNICPolicyChangeLocked(config ServiceConfig) {
 		op.NSGPrepared = false
 	}
 	dt.markServiceNICPoliciesDirtyLocked(uid)
-	if dt.dirtyNICPolicies.Len() > 0 {
+	if dt.hasDirtyNICPoliciesLocked() {
 		dt.triggerLocationsUpdater()
 	}
 }
@@ -218,7 +224,7 @@ func (dt *DiffTracker) completeLBWriteLocked(uid string) {
 		op.NSGPrepared = false
 	}
 	dt.markServiceNICPoliciesDirtyLocked(uid)
-	if dt.dirtyNICPolicies.Len() > 0 {
+	if dt.hasDirtyNICPoliciesLocked() {
 		dt.triggerLocationsUpdater()
 	}
 }
@@ -300,46 +306,162 @@ func (dt *DiffTracker) nicPolicyContributionsLocked(currentLocations, retainedLo
 	return result
 }
 
-func (dt *DiffTracker) discoverNICPolicies(ctx context.Context, nodeIPs map[string][]string) error {
+func (dt *DiffTracker) discoverNICPolicies(ctx context.Context, nodeIPs map[string][]string, services map[string]*v1.Service) (map[string][]nsgService, error) {
 	groups, err := dt.networkClientFactory.GetSecurityGroupClient().List(ctx, dt.config.ResourceGroup)
 	if err != nil {
-		return fmt.Errorf("discover managed NIC NSGs: %w", err)
+		return nil, fmt.Errorf("discover managed NIC NSGs: %w", err)
 	}
+	policies := make(map[string][]nsgService)
+	rejectedServices := make(map[string]bool)
 	for _, group := range groups {
 		if !dt.ownsClusterGroup(group) {
 			continue
 		}
 		if _, err := dt.targetFromTags(group); err != nil {
-			return err
+			return nil, err
 		}
 		if group.Properties == nil {
-			return fmt.Errorf("managed NIC NSG has no properties")
+			return nil, fmt.Errorf("managed NIC NSG has no properties")
 		}
 		if len(group.Properties.NetworkInterfaces) == 0 && len(group.Properties.Subnets) == 0 {
-			deleted, err := dt.deleteOrphanGroup(ctx, *group.Name)
-			if err != nil {
-				return fmt.Errorf("clean startup NIC NSG %q: %w", *group.Name, err)
+			retain := false
+			for _, rule := range group.Properties.SecurityRules {
+				uid := strings.ToLower(nsgRuleServiceUID(rule))
+				if uid == "" {
+					continue
+				}
+				if _, checked := rejectedServices[uid]; !checked {
+					service := services[uid]
+					dt.mu.Lock()
+					registered := dt.NRPResources.LoadBalancers.Has(uid) && !dt.isReservedServiceLocked(uid)
+					dt.mu.Unlock()
+					rejectedServices[uid] = false
+					if registered && service != nil && service.Spec.Type == v1.ServiceTypeLoadBalancer &&
+						service.DeletionTimestamp == nil && service.Spec.LoadBalancerClass == nil {
+						_, admissionErr := AdmitInboundService(service)
+						rejectedServices[uid] = admissionErr != nil
+					}
+				}
+				if rejectedServices[uid] {
+					retain = true
+					break
+				}
 			}
-			if deleted {
-				continue
+			// A second restart must not lose the last durable policy for a rejected Service.
+			if !retain {
+				deleted, err := dt.deleteOrphanGroup(ctx, *group.Name)
+				if err != nil {
+					return nil, fmt.Errorf("clean startup NIC NSG %q: %w", *group.Name, err)
+				}
+				if deleted {
+					continue
+				}
 			}
 		}
-		if _, err := decodeNSGServices(group.Properties.SecurityRules); err != nil {
-			return err
+		observed, err := decodeNSGServices(group.Properties.SecurityRules)
+		if err != nil {
+			return nil, err
+		}
+		for uid, service := range observed {
+			policies[uid] = append(policies[uid], service)
 		}
 		name := nsgTagValue(group.Tags, consts.ServiceGatewayNSGNodeTag)
 		if name == "" {
-			return fmt.Errorf("managed NIC NSG has no node identity")
+			return nil, fmt.Errorf("managed NIC NSG has no node identity")
 		}
 		dt.mayHaveNICPolicies, dt.locationRecoveryPending = true, true
 		dt.dirtyNICPolicies.Insert(nodeIPs[name]...)
 	}
-	return nil
+	return policies, nil
 }
 
-func (dt *DiffTracker) prepareNICPolicyInitialization(services map[string]*v1.Service, loadBalancers map[string]*armnetwork.LoadBalancer) {
+func (dt *DiffTracker) recoverServingInboundConfig(uid string, lb *armnetwork.LoadBalancer, publicIP string, policies []nsgService, published sets.Set[string]) (*InboundConfig, error) {
+	resourcePrefix := fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network",
+		dt.config.networkResourceSubscriptionID(), dt.config.ResourceGroup)
+	lbID := resourcePrefix + "/loadBalancers/" + uid
+	if lb == nil || !strings.EqualFold(ptr.Deref(lb.ID, ""), lbID) || lb.Properties == nil ||
+		!strings.EqualFold(string(ptr.Deref(lb.Properties.ProvisioningState, "")), string(armnetwork.ProvisioningStateSucceeded)) {
+		return nil, fmt.Errorf("serving LB %q has no matching settled baseline", uid)
+	}
+	p := lb.Properties
+	if lb.SKU == nil || !strings.EqualFold(string(ptr.Deref(lb.SKU.Name, "")), consts.LoadBalancerARMSKUService) ||
+		p.Scope != nil && *p.Scope != armnetwork.LoadBalancerScopePublic || len(p.FrontendIPConfigurations) != 1 {
+		return nil, fmt.Errorf("serving LB %q is not a single-frontend public Service load balancer", uid)
+	}
+	frontend := p.FrontendIPConfigurations[0]
+	if frontend == nil || frontend.Properties == nil || frontend.Properties.PublicIPAddress == nil ||
+		!strings.EqualFold(ptr.Deref(frontend.Properties.PublicIPAddress.ID, ""), resourcePrefix+"/publicIPAddresses/"+PublicIPName(uid)) {
+		return nil, fmt.Errorf("serving LB %q has no matching public IP", uid)
+	}
+	address, err := netip.ParseAddr(publicIP)
+	if err != nil {
+		return nil, fmt.Errorf("serving LB %q has no allocated public IP: %w", uid, err)
+	}
+	for backend := range published {
+		ip, parseErr := netip.ParseAddr(backend)
+		if parseErr != nil || ip.Zone() != "" || address.Zone() != "" || ip.Unmap().Is6() != address.Unmap().Is6() {
+			return nil, fmt.Errorf("serving LB %q has an incompatible published backend %q", uid, backend)
+		}
+	}
+	config := &InboundConfig{IPFamilies: []string{string(v1.IPv4Protocol)}}
+	if address.Unmap().Is6() {
+		config.IPFamilies[0] = string(v1.IPv6Protocol)
+	}
+	ports, err := loadBalancerBackendPorts(lb)
+	if err != nil {
+		return nil, fmt.Errorf("serving LB %q has an invalid backend-port baseline: %w", uid, err)
+	}
+	if len(ports) == 0 {
+		return nil, fmt.Errorf("serving LB %q has no backend ports", uid)
+	}
+	for _, rule := range p.LoadBalancingRules {
+		r := rule.Properties
+		if r.FrontendPort == nil || *r.FrontendPort < 1 || *r.FrontendPort > 65534 || ptr.Deref(r.EnableFloatingIP, false) ||
+			ptr.Deref(r.LoadDistribution, armnetwork.LoadDistributionDefault) != armnetwork.LoadDistributionDefault || r.Probe != nil ||
+			r.FrontendIPConfiguration == nil || !strings.EqualFold(ptr.Deref(r.FrontendIPConfiguration.ID, ""), lbID+"/frontendIPConfigurations/frontend") ||
+			r.BackendAddressPool == nil || !strings.EqualFold(ptr.Deref(r.BackendAddressPool.ID, ""), lbID+"/backendAddressPools/"+uid) {
+			return nil, fmt.Errorf("serving LB %q has an unsupported backend rule", uid)
+		}
+		timeout := ptr.Deref(r.IdleTimeoutInMinutes, inboundIdleTimeoutMinMinutes)
+		if timeout < inboundIdleTimeoutMinMinutes || timeout > inboundIdleTimeoutMaxMinutes ||
+			len(config.FrontendPorts) > 0 && ptr.Deref(config.IdleTimeoutMinutes, inboundIdleTimeoutMinMinutes) != timeout {
+			return nil, fmt.Errorf("serving LB %q has inconsistent or unsupported idle timeouts", uid)
+		}
+		if timeout != inboundIdleTimeoutMinMinutes {
+			config.IdleTimeoutMinutes = ptr.To(timeout)
+		}
+		protocol := strings.ToUpper(string(*r.Protocol))
+		config.FrontendPorts = append(config.FrontendPorts, PortMapping{Port: *r.FrontendPort, Protocol: protocol})
+		config.BackendPorts = append(config.BackendPorts, PortMapping{Port: *r.BackendPort, Protocol: protocol})
+	}
+	covered := sets.New[string]()
+	for _, policy := range policies {
+		if !slices.ContainsFunc(policy.addresses, func(ip netip.Addr) bool { return published.Has(ip.String()) }) {
+			continue
+		}
+		if policy.sources == nil || covered.Len() > 0 && !slices.Equal(config.AllowedIPRanges, policy.sources) {
+			return nil, fmt.Errorf("serving LB %q has inconsistent recovered source policies", uid)
+		}
+		config.AllowedIPRanges = slices.Clone(policy.sources)
+		for _, ip := range policy.addresses {
+			if published.Has(ip.String()) {
+				covered.Insert(ip.String())
+			}
+		}
+	}
+	if covered.Len() > 0 && covered.Len() != published.Len() {
+		return nil, fmt.Errorf("serving LB %q has incomplete source-policy coverage", uid)
+	}
+	if err := ValidateInboundConfig(config); err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+func (dt *DiffTracker) prepareNICPolicyInitialization(services map[string]*v1.Service, loadBalancers map[string]*armnetwork.LoadBalancer, pipNameToIP map[string]string, policies map[string][]nsgService) {
+	var published map[string]sets.Set[string]
 	for uid, service := range services {
-		if service == nil || service.DeletionTimestamp != nil || service.Spec.LoadBalancerClass != nil {
+		if service == nil || service.Spec.Type != v1.ServiceTypeLoadBalancer || service.DeletionTimestamp != nil || service.Spec.LoadBalancerClass != nil {
 			continue
 		}
 		dt.mu.Lock()
@@ -349,6 +471,58 @@ func (dt *DiffTracker) prepareNICPolicyInitialization(services map[string]*v1.Se
 			inbound, err := AdmitInboundService(service)
 			if err != nil {
 				dt.logger.Error(err, "Kept a Service rejected by inbound admission without provisioning or changing it", "serviceUID", uid)
+				dt.mu.Lock()
+				if dt.pendingServiceOps[uid] != nil || dt.isReservedServiceLocked(uid) ||
+					!dt.NRPResources.LoadBalancers.Has(uid) {
+					dt.mu.Unlock()
+					continue
+				}
+				if published == nil {
+					published = make(map[string]sets.Set[string])
+					for _, location := range dt.NRPResources.Locations {
+						for ip, address := range location.Addresses {
+							for _, name := range address.Services.UnsortedList() {
+								if dt.NRPResources.LoadBalancers.Has(name) {
+									if published[name] == nil {
+										published[name] = sets.New[string]()
+									}
+									published[name].Insert(ip)
+								}
+							}
+						}
+					}
+				}
+				if published[uid].Len() == 0 {
+					dt.mu.Unlock()
+					continue
+				}
+				inbound, err = dt.recoverServingInboundConfig(uid, loadBalancers[uid], pipNameToIP[strings.ToLower(PublicIPName(uid))], policies[uid], published[uid])
+				if err != nil {
+					dt.mu.Unlock()
+					dt.logger.Error(err, "Could not recover the existing serving configuration", "serviceUID", uid)
+					continue
+				}
+				config := NewInboundServiceConfig(uid, inbound)
+				config.Namespace, config.Name = service.Namespace, service.Name
+				// Observed serving state is not permission to apply the rejected desired spec.
+				op := &ServiceOperationState{
+					ServiceName: uid, Config: config, State: StateCreated, LastAppliedConfig: &config,
+					CreatedAt: time.Now(), CorrelationID: uuid.NewString(),
+				}
+				for _, policy := range policies[uid] {
+					if !slices.ContainsFunc(policy.addresses, func(ip netip.Addr) bool { return published[uid].Has(ip.String()) }) {
+						continue
+					}
+					for _, port := range policy.ports {
+						if !slices.Contains(op.RetainedBackendPorts, port) {
+							op.RetainedBackendPorts = append(op.RetainedBackendPorts, port)
+						}
+					}
+				}
+				dt.pendingServiceOps[uid] = op
+				dt.mayHaveNICPolicies = dt.mayHaveNICPolicies || nsgPolicyEnabled(inbound)
+				dt.markServiceNICPoliciesDirtyLocked(uid)
+				dt.mu.Unlock()
 				continue
 			}
 			if inbound == nil {
@@ -375,7 +549,11 @@ func (dt *DiffTracker) prepareNICPolicyInitialization(services map[string]*v1.Se
 			if err != nil {
 				dt.logger.V(4).Info("Could not recover LB backend ports; NIC preparation will retry", "service", name, "err", err)
 			} else {
-				op.RetainedBackendPorts = ports
+				for _, port := range ports {
+					if !slices.Contains(op.RetainedBackendPorts, port) {
+						op.RetainedBackendPorts = append(op.RetainedBackendPorts, port)
+					}
+				}
 			}
 		}
 	}
@@ -1010,7 +1188,7 @@ func (dt *DiffTracker) reportNICPolicyError(locations []string, err error) {
 }
 
 func (dt *DiffTracker) wakeNICPolicyWorkLocked() {
-	if (dt.dirtyNICPolicies.Len() > 0 || dt.locationRecoveryPending) && atomic.LoadInt32(&dt.isInitializing) == 0 {
+	if (dt.hasDirtyNICPoliciesLocked() || dt.locationRecoveryPending) && atomic.LoadInt32(&dt.isInitializing) == 0 {
 		dt.triggerLocationsUpdater()
 	}
 }

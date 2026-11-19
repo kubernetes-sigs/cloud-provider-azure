@@ -181,7 +181,8 @@ func InitializeFromCluster(
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
 	diffTracker.startupNodeIPs = nodeNameToIPs
 	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
-	if err := diffTracker.discoverNICPolicies(ctx, nodeNameToIPs); err != nil {
+	nicPolicies, err := diffTracker.discoverNICPolicies(ctx, nodeNameToIPs, serviceNameToService)
+	if err != nil {
 		return nil, err
 	}
 
@@ -226,7 +227,7 @@ func InitializeFromCluster(
 
 	// Reconcile services (create/delete LBs and NAT Gateways in Azure)
 	diffTracker.reconcileServices(syncOperations, serviceNameToService)
-	diffTracker.prepareNICPolicyInitialization(serviceNameToService, azureLoadBalancers)
+	diffTracker.prepareNICPolicyInitialization(serviceNameToService, azureLoadBalancers, pipNameToIP, nicPolicies)
 	if deferredServiceTrigger {
 		diffTracker.triggerServiceUpdater()
 	}
@@ -267,7 +268,7 @@ func InitializeFromCluster(
 		diffTracker.triggerLocationsUpdater()
 	}
 	diffTracker.mu.Lock()
-	if diffTracker.dirtyNICPolicies.Len() > 0 || diffTracker.locationRecoveryPending {
+	if diffTracker.hasDirtyNICPoliciesLocked() || diffTracker.locationRecoveryPending {
 		diffTracker.triggerLocationsUpdater()
 	}
 	for _, op := range diffTracker.pendingServiceOps {

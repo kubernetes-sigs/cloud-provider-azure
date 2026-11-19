@@ -612,7 +612,8 @@ func TestNICPoliciesDrainsBeforePruningAndDefersOrphanCleanup(t *testing.T) {
 	}
 	prepareNSGTest(t, dt)
 	assert.Equal(t, 0, cloud.groupDeletes, "old resource deletion belongs to startup")
-	assert.NoError(t, dt.discoverNICPolicies(context.Background(), nil))
+	_, err = dt.discoverNICPolicies(context.Background(), nil, nil)
+	assert.NoError(t, err)
 	assert.Equal(t, 1, cloud.groupDeletes)
 	assert.Empty(t, cloud.groups)
 }
@@ -689,7 +690,7 @@ func TestNICPoliciesDeletesUnpublishedRules(t *testing.T) {
 					service.Spec.Ports[0].Port = 65535
 					dt, cloud, _ := newNSGTestTracker(t, service)
 					delete(dt.pendingServiceOps, "svc-lb")
-					dt.prepareNICPolicyInitialization(map[string]*v1.Service{"svc-lb": service}, nil)
+					dt.prepareNICPolicyInitialization(map[string]*v1.Service{"svc-lb": service}, nil, nil, nil)
 					assert.Nil(t, dt.pendingServiceOps["svc-lb"].LastAppliedConfig)
 					addNSGTestBackend(dt, "svc-lb", family.location, family.backend, "")
 					mockNSGLocationUpdates(t, dt, func(context.Context, armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
@@ -1005,7 +1006,8 @@ func TestNICPoliciesReconstructsOwnedResourcesAfterRestart(t *testing.T) {
 			if !deleted {
 				addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
 			}
-			assert.NoError(t, dt.discoverNICPolicies(context.Background(), map[string][]string{node.Name: nodeInternalIPs(node)}))
+			_, err := dt.discoverNICPolicies(context.Background(), map[string][]string{node.Name: nodeInternalIPs(node)}, nil)
+			assert.NoError(t, err)
 			assert.Equal(t, 0, cloud.groupWrites)
 			prepared := prepareNSGTest(t, dt)
 			if deleted {
@@ -1094,12 +1096,13 @@ func TestNICPoliciesRejoinedNodeFindsExistingGroup(t *testing.T) {
 	dt, cloud, node := newNSGTestTracker(t)
 	assert.NoError(t, dt.kubeClient.CoreV1().Nodes().Delete(context.Background(), node.Name, metav1.DeleteOptions{}))
 	cloud.nic, cloud.groups = nsgCopy(oldCloud.nic), nsgCopy(oldCloud.groups)
-	assert.NoError(t, dt.discoverNICPolicies(context.Background(), nil))
+	_, err := dt.discoverNICPolicies(context.Background(), nil, nil)
+	assert.NoError(t, err)
 	assert.Empty(t, nsgTestDrainingLocations(dt))
 	dt.UpdateLocationsAddresses(nsgTestLocationSync(dt, nil))
 
 	node.UID = "rejoined"
-	_, err := dt.kubeClient.CoreV1().Nodes().Create(context.Background(), node, metav1.CreateOptions{})
+	_, err = dt.kubeClient.CoreV1().Nodes().Create(context.Background(), node, metav1.CreateOptions{})
 	assert.NoError(t, err)
 	dt.ReconcileNodeChange(nil, node)
 	prepareNSGTest(t, dt)
@@ -1154,11 +1157,13 @@ func TestNSGDiscoveryCleansOrphansDuringInitialization(t *testing.T) {
 	for _, group := range cloud.groups {
 		group.Properties.NetworkInterfaces = nil
 	}
-	assert.NoError(t, dt.discoverNICPolicies(context.Background(), nil))
+	_, err := dt.discoverNICPolicies(context.Background(), nil, nil)
+	assert.NoError(t, err)
 	assert.Empty(t, cloud.groups)
 	assert.Empty(t, dt.dirtyNICPolicies)
 	assert.Equal(t, 1, cloud.groupDeletes)
-	assert.NoError(t, dt.discoverNICPolicies(context.Background(), nil), "repeating startup cleanup is harmless")
+	_, err = dt.discoverNICPolicies(context.Background(), nil, nil)
+	assert.NoError(t, err, "repeating startup cleanup is harmless")
 	assert.Equal(t, 1, cloud.groupDeletes)
 }
 
@@ -1786,7 +1791,7 @@ func TestNICPoliciesChecksRecoveredUnpublishedUnrestrictedPorts(t *testing.T) {
 			listed.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateFailed)
 			if !tt.applied {
 				delete(dt.pendingServiceOps, "b-lb")
-				dt.prepareNICPolicyInitialization(map[string]*v1.Service{"b-lb": b}, map[string]*armnetwork.LoadBalancer{"b-lb": &listed})
+				dt.prepareNICPolicyInitialization(map[string]*v1.Service{"b-lb": b}, map[string]*armnetwork.LoadBalancer{"b-lb": &listed}, nil, nil)
 				assert.Nil(t, dt.pendingServiceOps["b-lb"].LastAppliedConfig)
 			}
 			addNSGTestBackend(dt, "b-lb", "10.0.0.1", "10.1.0.1", "")

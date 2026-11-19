@@ -260,6 +260,119 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 	}
 }
 
+func TestNSGAzureConditionalOrphanDeletion(t *testing.T) {
+	for _, scenario := range []string{"success", "missing ETag", "empty ETag", "already deleted", "ETag conflict", "attached after conflict"} {
+		t.Run(scenario, func(t *testing.T) {
+			dt, cloud, node := newNSGTestTracker(t)
+			target, err := dt.targetFromID(*cloud.nic.ID)
+			if !assert.NoError(t, err) {
+				return
+			}
+			group, _, err := dt.desiredGroup(nil, target, node.Name, "eastus", nil)
+			if !assert.NoError(t, err) {
+				return
+			}
+			group.Etag = ptr.To(`W/"version-1"`)
+			group.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
+			switch scenario {
+			case "missing ETag":
+				group.Etag = nil
+			case "empty ETag":
+				group.Etag = ptr.To("")
+			}
+			cloud.nic = nil
+			gets, deletes := 0, 0
+			present := true
+			conflict := scenario == "ETag conflict" || scenario == "attached after conflict"
+			client, err := securitygroupclient.New("network-sub", fakeCredential{}, &arm.ClientOptions{
+				ClientOptions: azcore.ClientOptions{
+					Retry: policy.RetryOptions{MaxRetries: -1},
+					Transport: nsgTransportFunc(func(request *http.Request) (*http.Response, error) {
+						assert.Equal(t, *group.ID, request.URL.Path)
+						switch request.Method {
+						case http.MethodGet:
+							gets++
+							assert.Empty(t, request.Header.Get(consts.IfMatchHeader), "the delete condition must not leak into later reads")
+							return nsgResponse(request, http.StatusOK, group)
+						case http.MethodDelete:
+							deletes++
+							if ptr.Deref(group.Etag, "") == "" {
+								t.Error("DELETE must not be sent without a fetched ETag")
+								return nsgResponse(request, http.StatusBadRequest, map[string]any{"error": map[string]string{
+									"code": "BadRequest", "message": "Missing delete condition",
+								}})
+							}
+							assert.Equal(t, *group.Etag, request.Header.Get(consts.IfMatchHeader))
+							if conflict && deletes == 1 {
+								group.Etag = ptr.To(`W/"version-2"`)
+								if scenario == "attached after conflict" {
+									group.Properties.NetworkInterfaces = []*armnetwork.Interface{{ID: ptr.To(target.String())}}
+								}
+							}
+							if request.Header.Get(consts.IfMatchHeader) != *group.Etag {
+								return nsgResponse(request, http.StatusPreconditionFailed, map[string]any{"error": map[string]string{
+									"code": "PreconditionFailed", "message": "NSG changed after it was inspected",
+								}})
+							}
+							present = false
+							if scenario == "already deleted" {
+								return nsgResponse(request, http.StatusNotFound, map[string]any{"error": map[string]string{
+									"code": "ResourceNotFound", "message": "NSG was already deleted",
+								}})
+							}
+							return nsgResponse(request, http.StatusNoContent, nil)
+						default:
+							return nil, fmt.Errorf("unexpected NSG method %s", request.Method)
+						}
+					}),
+				},
+			})
+			if !assert.NoError(t, err) {
+				return
+			}
+			factory := mock_azclient.NewMockClientFactory(gomock.NewController(t))
+			factory.EXPECT().GetSecurityGroupClient().Return(client).AnyTimes()
+			dt.networkClientFactory = factory
+
+			deleted, err := dt.deleteOrphanGroup(context.Background(), *group.Name)
+			assert.Equal(t, 1, gets)
+			switch {
+			case scenario == "missing ETag" || scenario == "empty ETag":
+				assert.ErrorContains(t, err, "no ETag for a conditional delete")
+				assert.False(t, deleted)
+				assert.Zero(t, deletes)
+				assert.True(t, present)
+			case conflict:
+				var response *azcore.ResponseError
+				if assert.ErrorAs(t, err, &response) {
+					assert.Equal(t, http.StatusPreconditionFailed, response.StatusCode)
+				}
+				assert.False(t, deleted)
+				assert.True(t, present)
+				assert.Equal(t, 1, deletes, "a conflict must not cause an unconditional retry")
+
+				deleted, err = dt.deleteOrphanGroup(context.Background(), *group.Name)
+				assert.NoError(t, err)
+				assert.Equal(t, 2, gets, "a later attempt must inspect the resource again")
+				if scenario == "attached after conflict" {
+					assert.False(t, deleted)
+					assert.True(t, present)
+					assert.Equal(t, 1, deletes, "a new attachment must prevent the second delete")
+				} else {
+					assert.True(t, deleted)
+					assert.False(t, present)
+					assert.Equal(t, 2, deletes)
+				}
+			default:
+				assert.NoError(t, err)
+				assert.True(t, deleted)
+				assert.False(t, present)
+				assert.Equal(t, 1, deletes)
+			}
+		})
+	}
+}
+
 func TestNSGAzureRetainsConcurrentExternalRules(t *testing.T) {
 	ctx := context.Background()
 	service := nsgKubeService("svc-lb", "20.0.0.0/8")
@@ -614,6 +727,16 @@ func TestNSGRulesEqual(t *testing.T) {
 		equal  bool
 	}{
 		{name: "unchanged", change: func(*armnetwork.SecurityRule) {}, equal: true},
+		{name: "case-only name", equal: true, change: func(r *armnetwork.SecurityRule) {
+			r.Name = ptr.To("RuLe")
+		}},
+		{name: "different name", change: func(r *armnetwork.SecurityRule) {
+			r.Name = ptr.To("other-rule")
+		}},
+		{name: "case-only name with changed port", change: func(r *armnetwork.SecurityRule) {
+			r.Name = ptr.To("RuLe")
+			r.Properties.DestinationPortRange = ptr.To("9090")
+		}},
 		{name: "response metadata", equal: true, change: func(r *armnetwork.SecurityRule) {
 			r.ID, r.Etag, r.Type = ptr.To("resource-id"), ptr.To("etag"), ptr.To("rule-type")
 			r.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
@@ -642,4 +765,19 @@ func TestNSGRulesEqual(t *testing.T) {
 			assert.Equal(t, before, changed)
 		})
 	}
+
+	t.Run("reordered mixed-case names without modifying inputs", func(t *testing.T) {
+		alpha, zulu := nsgCopy(rule), nsgCopy(rule)
+		alpha.Name, zulu.Name = ptr.To("alpha"), ptr.To("Zulu")
+		zulu.Properties.DestinationPortRange = ptr.To("9090")
+		first := []*armnetwork.SecurityRule{zulu, alpha}
+		second := []*armnetwork.SecurityRule{nsgCopy(alpha), nsgCopy(zulu)}
+		second[0].Name, second[1].Name = ptr.To("ALPHA"), ptr.To("zulu")
+		firstBefore, secondBefore := nsgCopy(first), nsgCopy(second)
+
+		assert.True(t, nsgRulesEqual(first, second))
+		assert.True(t, nsgRulesEqual(second, first))
+		assert.Equal(t, firstBefore, first)
+		assert.Equal(t, secondBefore, second)
+	})
 }

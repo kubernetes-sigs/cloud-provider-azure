@@ -115,6 +115,9 @@ its NIC cleanup can wait for that Node observation or the next initialization.
 
 Orphan discovery and cleanup run during initialization, not on a periodic timer.
 Only owned NSGs with a missing NIC and no NIC/subnet associations are deleted.
+An orphan containing policy for an existing registered Service rejected by
+admission is retained until that Service is corrected or removed. This preserves
+the recovery baseline across another restart.
 If CCM stops during cleanup, the next initialization repeats the sweep; completed
 deletions remain completed. Cleanup failures are reported as initialization errors.
 A retained NSG whose NIC disappears later is checked
@@ -140,6 +143,18 @@ remain additional protection obligations, not substitutes for live-port evidence
 An unrestricted recovered Service also needs settled live-port evidence before
 its first membership on a policy-managed NIC; an unsettled startup listing cannot
 prove that its live tuple avoids another Service's restriction.
+
+If an already-serving Service is rejected by admission after an update, restart
+recovery does not apply that rejected configuration. For a registered LB with
+published backends, CCM can recover its serving configuration from the matching
+`Succeeded` public LB and PIP, together with consistent owned NIC source-policy
+rules covering its published backends. Stale rules for withdrawn addresses are
+not adopted as its current policy. That observed configuration is confirmed
+without an LB rewrite, while new backends still require the usual NIC protection
+and association checks.
+Recovered historical ports remain protected until a later LB acknowledgment.
+An incomplete or ambiguous baseline does not authorize new backends, and an
+invalid new Service or an empty registered LB does not gain admission this way.
 
 The CCM identity needs NSG read/write/delete permissions and the appropriate
 NIC or VMSS-instance read/write permissions. CCM can replace an absent NIC NSG
