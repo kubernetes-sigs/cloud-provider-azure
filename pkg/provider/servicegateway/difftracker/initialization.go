@@ -151,7 +151,7 @@ func InitializeFromCluster(
 
 	// Build K8s state from cluster (also returns lists for reuse by recoverStuckFinalizers).
 	// The node-IPs map is reused below to decide the cluster's egress address families.
-	k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPs, err := buildK8sState(ctx, kubeClient)
+	k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPs, nodes, err := buildK8sState(ctx, kubeClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build K8s state: %w", err)
 	}
@@ -181,7 +181,7 @@ func InitializeFromCluster(
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
 	diffTracker.startupNodeIPs = nodeNameToIPs
 	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
-	nicPolicies, err := diffTracker.discoverNICPolicies(ctx, nodeNameToIPs, serviceNameToService)
+	nicPolicies, err := diffTracker.discoverNICPolicies(ctx, nodes, serviceNameToService)
 	if err != nil {
 		return nil, err
 	}
@@ -353,12 +353,12 @@ func validateInitializationInputs(kubeClient kubernetes.Interface, networkClient
 }
 
 // buildK8sState fetches and constructs the complete K8s state (services, endpoints, egresses).
-// Also returns the node-name -> all-internal-IPs map (used internally for family-matched location
-// keys); callers may ignore it.
+// Also returns all internal IPs and the Node objects from the same LIST for family-matched
+// location keys and pass-local NIC ownership recovery.
 func buildK8sState(
 	ctx context.Context,
 	kubeClient kubernetes.Interface,
-) (K8sState, *v1.ServiceList, map[string]*v1.Service, *discoveryv1.EndpointSliceList, *v1.PodList, map[string][]string, error) {
+) (K8sState, *v1.ServiceList, map[string]*v1.Service, *discoveryv1.EndpointSliceList, *v1.PodList, map[string][]string, map[string]*v1.Node, error) {
 	k8s := K8sState{
 		Services: utilsets.NewString(),
 		Egresses: utilsets.NewString(),
@@ -366,30 +366,30 @@ func buildK8sState(
 	}
 
 	// Build node name to IPs mapping (all internal IPs per node, both families on dual-stack)
-	nodeNameToIPsMap, err := buildNodeNameToIPsMap(ctx, kubeClient)
+	nodeNameToIPsMap, nodes, err := buildNodeNameToIPsMap(ctx, kubeClient)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process services
 	serviceList, serviceNameToService, err := processK8sServices(ctx, kubeClient, &k8s)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process endpoint slices
 	endpointSliceList, err := processK8sEndpoints(ctx, kubeClient, &k8s, nodeNameToIPsMap)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process egress pods
 	egressPodList, err := processK8sEgresses(ctx, kubeClient, &k8s)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
-	return k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPsMap, nil
+	return k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPsMap, nodes, nil
 }
 
 // buildNodeNameToIPsMap maps each node name to ALL of its NodeInternalIPs. On a dual-stack node
@@ -397,17 +397,20 @@ func buildK8sState(
 // first one) lets init pick the IP-family-matched location key, mirroring the runtime EndpointSlice
 // path (endpointSliceAddresses) so init and runtime agree on the location key for the
 // same pod. A mismatch would orphan IPv6 (or IPv4) locations across a CCM restart.
-func buildNodeNameToIPsMap(ctx context.Context, kubeClient kubernetes.Interface) (map[string][]string, error) {
+// The returned Node inventory reuses that LIST for startup ownership checks.
+func buildNodeNameToIPsMap(ctx context.Context, kubeClient kubernetes.Interface) (map[string][]string, map[string]*v1.Node, error) {
 	logger := log.FromContextOrBackground(ctx)
 	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list nodes: %w", err)
+		return nil, nil, fmt.Errorf("failed to list nodes: %w", err)
 	}
 	logger.V(2).Info("Listed Kubernetes nodes", "nodes", len(nodeList.Items))
 
 	nodeNameToIPsMap := make(map[string][]string, len(nodeList.Items))
+	nodes := make(map[string]*v1.Node, len(nodeList.Items))
 	for i := range nodeList.Items {
 		n := &nodeList.Items[i]
+		nodes[n.Name] = n
 		for _, addr := range n.Status.Addresses {
 			if addr.Type == v1.NodeInternalIP {
 				// Canonicalize so location keys match runtime (endpointSliceAddresses)
@@ -418,7 +421,7 @@ func buildNodeNameToIPsMap(ctx context.Context, kubeClient kubernetes.Interface)
 		}
 	}
 	logger.V(4).Info("Built node IPs map", "nodes", len(nodeNameToIPsMap))
-	return nodeNameToIPsMap, nil
+	return nodeNameToIPsMap, nodes, nil
 }
 
 // SelectSameFamilyNodeIP returns the deterministic node location key for a pod address of the given

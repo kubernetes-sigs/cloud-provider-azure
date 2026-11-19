@@ -83,7 +83,7 @@ func TestColdStart_DualStackNode_InboundFamilyMatchedLocationKey(t *testing.T) {
 	})
 	kube := fake.NewSimpleClientset(dualStackNode(nodeName, nodeV4, nodeV6), esV4, esV6)
 
-	nodeIPs, err := buildNodeNameToIPsMap(context.Background(), kube)
+	nodeIPs, _, err := buildNodeNameToIPsMap(context.Background(), kube)
 	assert.NoError(t, err)
 	assert.ElementsMatch(t, []string{nodeV4, nodeV6}, nodeIPs[nodeName],
 		"both node InternalIPs must be retained for family matching")
@@ -122,7 +122,7 @@ func TestColdStart_NonCanonicalIPv6_CanonicalizesLocationKeys(t *testing.T) {
 	})
 	kube := fake.NewSimpleClientset(dualStackNode(nodeName, nodeV4, nodeV6Raw), esV6)
 
-	nodeIPs, err := buildNodeNameToIPsMap(context.Background(), kube)
+	nodeIPs, _, err := buildNodeNameToIPsMap(context.Background(), kube)
 	assert.NoError(t, err)
 	assert.Contains(t, nodeIPs[nodeName], nodeV6Canon, "node InternalIP must be canonicalized")
 
@@ -211,7 +211,7 @@ func TestColdStart_DualStackNode_RestartConvergence(t *testing.T) {
 	})
 	kube := fake.NewSimpleClientset(dualStackNode(nodeName, nodeV4, nodeV6), esV4, esV6)
 
-	nodeIPs, err := buildNodeNameToIPsMap(context.Background(), kube)
+	nodeIPs, _, err := buildNodeNameToIPsMap(context.Background(), kube)
 	assert.NoError(t, err)
 	k8s := newK8sStateForSeeders(svcV4UID, svcV6UID)
 	_, err = processK8sEndpoints(context.Background(), kube, &k8s, nodeIPs)
@@ -255,7 +255,7 @@ func TestColdStart_FQDNEndpointSlice_Skipped(t *testing.T) {
 	})
 	kube := fake.NewSimpleClientset(dualStackNode(nodeName, nodeV4, nodeV6), esFQDN)
 
-	nodeIPs, err := buildNodeNameToIPsMap(context.Background(), kube)
+	nodeIPs, _, err := buildNodeNameToIPsMap(context.Background(), kube)
 	assert.NoError(t, err)
 	k8s := newK8sStateForSeeders(svcUID)
 	_, err = processK8sEndpoints(context.Background(), kube, &k8s, nodeIPs)

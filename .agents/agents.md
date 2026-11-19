@@ -15,6 +15,7 @@ reference doc when the related logic, workflow, or convention changes.
 | Topic | Doc | When to check |
 |-------|-----|---------------|
 | Project layout and architecture | [references/project-architecture.md](references/project-architecture.md) | Locating packages, choosing ownership boundaries, or starting work in an unfamiliar area |
+| ServiceGateway NIC source policies | [references/servicegateway-nic-source-policies.md](references/servicegateway-nic-source-policies.md) | Working on SGW NIC NSGs, source restrictions, publication, ownership, or recovery |
 | Tests, builds, and file headers | [references/testing-builds-and-headers.md](references/testing-builds-and-headers.md) | Choosing validation commands, building images, or adding tracked files |
 | Code conventions | [references/code-conventions.md](references/code-conventions.md) | Writing or reviewing Go code, constants, Azure clients, mocks, tests, or repository-pattern code |
 | Logging conventions | [references/logging.md](references/logging.md) | Adding, changing, or reviewing logs and returned errors |

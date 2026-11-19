@@ -646,6 +646,7 @@ const (
 	ServiceGatewayNSGOwnerTag                    = "k8s-azure-servicegateway-owner"
 	ServiceGatewayNSGNICTag                      = "k8s-azure-servicegateway-nic"
 	ServiceGatewayNSGNodeTag                     = "k8s-azure-servicegateway-node"
+	ServiceGatewayNSGConfirmedNICGUIDTag         = "k8s-azure-nic-confirmed-guid"
 	ServiceGatewayNSGTargetRGTag                 = "k8s-azure-nic-resource-group"
 	ServiceGatewayNSGTargetNameTag               = "k8s-azure-nic-name"
 	ServiceGatewayNSGTargetVMSSTag               = "k8s-azure-nic-vmss"

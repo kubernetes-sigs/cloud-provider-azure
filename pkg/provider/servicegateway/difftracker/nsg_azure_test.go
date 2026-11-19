@@ -134,6 +134,13 @@ func TestNSGAzurePrimaryNICReadsRespectCancellation(t *testing.T) {
 				} else {
 					assert.ErrorIs(t, err, context.Canceled)
 					assert.Nil(t, nic)
+					if phase == "cancel NIC read" {
+						if assert.NotNil(t, target) {
+							assert.Equal(t, *cloud.nic.ID, target.String())
+						}
+					} else {
+						assert.Nil(t, target, "failed VM resolution supplies no NIC identity")
+					}
 				}
 				wantReads := 2
 				if phase == "cancel VM read" {
@@ -183,10 +190,17 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 		name                string
 		status              int
 		changedExternalRule bool
+		tagMutation         string
 	}{
-		{"success", http.StatusOK, false},
-		{"ETag conflict", http.StatusPreconditionFailed, false},
-		{"changed external rule response", http.StatusOK, true},
+		{"success", http.StatusOK, false, ""},
+		{"ETag conflict", http.StatusPreconditionFailed, false, ""},
+		{"changed external rule response", http.StatusOK, true, ""},
+		{"generation-only confirmation", http.StatusOK, false, "generation only"},
+		{"missing generation confirmation", http.StatusOK, false, "missing generation"},
+		{"wrong generation confirmation", http.StatusOK, false, "wrong generation"},
+		{"missing owner identity", http.StatusOK, false, "missing owner"},
+		{"case-insensitive tag key", http.StatusOK, false, "tag casing"},
+		{"extra returned tag", http.StatusOK, false, "additional"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			dt, cloud, _ := newNSGTestTracker(t)
@@ -200,12 +214,22 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 			assert.NoError(t, err)
 			group.Etag = ptr.To("nsg-etag")
 			group.Properties.SecurityRules = []*armnetwork.SecurityRule{nsgCopy(operational)}
+			if tt.tagMutation == "generation only" {
+				group.Properties.SecurityRules = nsgCopy(rules)
+			}
 			group.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
 			group.Tags["unrelated"] = ptr.To("preserved")
+			group.Tags[consts.ServiceGatewayNSGConfirmedNICGUIDTag] = ptr.To(*cloud.nic.Properties.ResourceGUID)
 			desired, changed, err := dt.desiredGroup(&group, target, "node", "eastus", rules)
 			assert.NoError(t, err)
-			assert.True(t, changed)
-			assert.Equal(t, []*armnetwork.SecurityRule{operational}, group.Properties.SecurityRules)
+			if tt.tagMutation == "generation only" {
+				assert.False(t, changed)
+				desired.Tags[consts.ServiceGatewayNSGConfirmedNICGUIDTag] = ptr.To("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+				assert.Equal(t, *cloud.nic.Properties.ResourceGUID, nsgTagValue(group.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag))
+			} else {
+				assert.True(t, changed)
+				assert.Equal(t, []*armnetwork.SecurityRule{operational}, group.Properties.SecurityRules)
+			}
 			requests := 0
 			client, err := securitygroupclient.New("network-sub", fakeCredential{}, &arm.ClientOptions{
 				ClientOptions: azcore.ClientOptions{
@@ -220,7 +244,11 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 							return nil, err
 						}
 						assert.True(t, nsgRulesEqual(desired.Properties.SecurityRules, sent.Properties.SecurityRules))
-						assert.Equal(t, group.Tags, sent.Tags)
+						assert.Equal(t, desired.Tags, sent.Tags)
+						if tt.tagMutation == "generation only" {
+							assert.True(t, nsgRulesEqual(group.Properties.SecurityRules, sent.Properties.SecurityRules),
+								"generation confirmation must preserve the existing policy")
+						}
 						if tt.status != http.StatusOK {
 							return nsgResponse(request, tt.status, map[string]any{"error": map[string]string{
 								"code": "PreconditionFailed", "message": "NSG changed",
@@ -232,6 +260,20 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 									rule.Properties.SourceAddressPrefix = ptr.To("Internet")
 								}
 							}
+						}
+						switch tt.tagMutation {
+						case "missing generation":
+							delete(sent.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag)
+						case "wrong generation":
+							sent.Tags[consts.ServiceGatewayNSGConfirmedNICGUIDTag] = ptr.To("wrong-generation")
+						case "missing owner":
+							delete(sent.Tags, consts.ServiceGatewayNSGOwnerTag)
+						case "tag casing":
+							value := sent.Tags[consts.ServiceGatewayNSGConfirmedNICGUIDTag]
+							delete(sent.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag)
+							sent.Tags[strings.ToUpper(consts.ServiceGatewayNSGConfirmedNICGUIDTag)] = value
+						case "additional":
+							sent.Tags["added-by-policy"] = ptr.To("preserved")
 						}
 						sent.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
 						return nsgResponse(request, tt.status, sent)
@@ -245,7 +287,7 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 			factory.EXPECT().GetSecurityGroupClient().Return(client).AnyTimes()
 			dt.networkClientFactory = factory
 			_, err = dt.writeGroup(context.Background(), desired)
-			if tt.changedExternalRule {
+			if tt.changedExternalRule || strings.HasPrefix(tt.tagMutation, "missing") || tt.tagMutation == "wrong generation" {
 				assert.ErrorContains(t, err, "did not confirm")
 			} else if tt.status == http.StatusOK {
 				assert.NoError(t, err)
@@ -256,6 +298,112 @@ func TestNSGAzureConditionalNSGUpdate(t *testing.T) {
 				}
 			}
 			assert.Equal(t, 1, requests)
+		})
+	}
+}
+
+func TestNSGAzureNICConfirmationRequiresETag(t *testing.T) {
+	for _, tt := range []struct {
+		name       string
+		etag       *string
+		concurrent bool
+		wantWrites int
+	}{
+		{"missing", nil, true, 0},
+		{"empty", ptr.To(""), true, 0},
+		{"blank", ptr.To(" "), true, 0},
+		{"wildcard", ptr.To("*"), true, 0},
+		{"stale", ptr.To(`W/"fetched"`), true, 1},
+		{"confirmed", ptr.To(`W/"fetched"`), false, 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dt, cloud, _ := newNSGTestTracker(t, nsgKubeService("svc-lb", "20.0.0.0/8"))
+			addNSGTestBackend(dt, "svc-lb", "10.0.0.1", "10.1.0.1", "")
+			prepared := prepareNSGTest(t, dt)
+			plan := prepared["10.0.0.1"]
+			if !assert.NotNil(t, plan) {
+				return
+			}
+			stored := nsgCopy(cloud.groups[*plan.group.Name])
+			delete(stored.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag)
+			stored.Etag = ptr.To(`W/"fetched"`)
+			operational := nsgTestExternalRule(103)
+			stored.Properties.SecurityRules = append(stored.Properties.SecurityRules, nsgCopy(operational))
+			expectedOperational := nsgCopy(operational)
+			reads, writes := 0, 0
+			client, err := securitygroupclient.New("network-sub", fakeCredential{}, &arm.ClientOptions{
+				ClientOptions: azcore.ClientOptions{
+					Retry: policy.RetryOptions{MaxRetries: -1},
+					Transport: nsgTransportFunc(func(request *http.Request) (*http.Response, error) {
+						assert.Equal(t, *plan.group.ID, request.URL.Path)
+						switch request.Method {
+						case http.MethodGet:
+							reads++
+							fetched := nsgCopy(stored)
+							fetched.Etag = tt.etag
+							if tt.concurrent {
+								stored.Etag = ptr.To(`W/"concurrent"`)
+								expectedOperational.Properties.SourceAddressPrefix = ptr.To("203.0.113.0/24")
+								for i, rule := range stored.Properties.SecurityRules {
+									if ptr.Deref(rule.Name, "") == *operational.Name {
+										stored.Properties.SecurityRules[i] = nsgCopy(expectedOperational)
+									}
+								}
+							}
+							return nsgResponse(request, http.StatusOK, fetched)
+						case http.MethodPut:
+							writes++
+							match := request.Header.Get(consts.IfMatchHeader)
+							if tt.wantWrites > 0 {
+								assert.Equal(t, *tt.etag, match, "metadata confirmation must use the exact fetched ETag")
+							}
+							if match != "" && match != "*" && match != *stored.Etag {
+								return nsgResponse(request, http.StatusPreconditionFailed, map[string]any{
+									"error": map[string]string{"code": "PreconditionFailed", "message": "concurrent NSG update"},
+								})
+							}
+							var sent armnetwork.SecurityGroup
+							if err := json.NewDecoder(request.Body).Decode(&sent); err != nil {
+								return nil, err
+							}
+							sent.Etag = ptr.To(`W/"confirmed"`)
+							sent.Properties.ProvisioningState = ptr.To(armnetwork.ProvisioningStateSucceeded)
+							stored = nsgCopy(&sent)
+							return nsgResponse(request, http.StatusOK, sent)
+						default:
+							return nil, fmt.Errorf("unexpected request method %s", request.Method)
+						}
+					}),
+				},
+			})
+			if !assert.NoError(t, err) {
+				return
+			}
+			factory := mock_azclient.NewMockClientFactory(gomock.NewController(t))
+			factory.EXPECT().GetSecurityGroupClient().Return(client).AnyTimes()
+			dt.networkClientFactory = factory
+			dt.dirtyNICPolicies.Insert("10.0.0.1")
+			result, err := dt.prepareNICPolicies(context.Background(), dt.takeNICPolicyWork())
+			assert.Equal(t, 1, reads)
+			assert.Equal(t, tt.wantWrites, writes, "missing or non-version ETags must not permit a metadata PUT")
+			if tt.name == "confirmed" {
+				assert.NoError(t, err)
+				assert.NotNil(t, result["10.0.0.1"])
+				assert.Equal(t, strings.ToLower(*cloud.nic.Properties.ResourceGUID),
+					nsgTagValue(stored.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag))
+			} else {
+				assert.Error(t, err)
+				assert.Empty(t, result, "unconfirmed metadata must not authorize publication")
+				assert.Empty(t, nsgTagValue(stored.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag))
+			}
+			found := false
+			for _, rule := range stored.Properties.SecurityRules {
+				if ptr.Deref(rule.Name, "") == *operational.Name {
+					found = true
+					assert.Equal(t, expectedOperational, rule, "confirmation must not overwrite a concurrent external rule")
+				}
+			}
+			assert.True(t, found)
 		})
 	}
 }

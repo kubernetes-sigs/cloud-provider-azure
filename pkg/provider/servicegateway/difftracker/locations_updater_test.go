@@ -316,7 +316,7 @@ func TestLocationsUpdaterDoesNotDeriveOwnerFromLBOnlyPreparation(t *testing.T) {
 					assert.Zero(t, cloud.groupWrites)
 				} else {
 					assert.NotNil(t, dt.pendingLocationUpdates["10.0.0.1"].nodeOwner)
-					assert.Equal(t, 1, cloud.groupWrites)
+					assert.Equal(t, 2, cloud.groupWrites)
 				}
 				return nil
 			})
@@ -747,7 +747,7 @@ func TestLocationsUpdaterCompletesProtectedPublicationInOnePass(t *testing.T) {
 		if assert.Len(t, request.AddressLocations, 1) {
 			assert.Len(t, request.AddressLocations[0].Addresses, 100)
 		}
-		assert.Equal(t, 1, cloud.groupWrites)
+		assert.Equal(t, 2, cloud.groupWrites, "rules and durable NIC confirmation precede publication")
 		assert.Equal(t, 1, cloud.nicWrites)
 		return nil
 	})
@@ -1003,7 +1003,7 @@ func TestLocationsUpdaterKeepsNSGProtectionUntilWithdrawalAcknowledged(t *testin
 	mockNSGLocationUpdates(t, dt, func(context.Context, armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
 		calls++
 		assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.1.0.2"].Services.Has("svc-lb"))
-		assert.Equal(t, 1, cloud.groupWrites, "unacknowledged withdrawal must retain old rules")
+		assert.Equal(t, 2, cloud.groupWrites, "unacknowledged withdrawal must retain old rules")
 		for _, group := range cloud.groups {
 			assert.Equal(t, armnetwork.SecurityRuleAccessDeny,
 				nsgTestAccess(t, group.Properties.SecurityRules, "40.1.2.3", "10.1.0.2", 8080, armnetwork.SecurityRuleProtocolTCP))
@@ -1015,11 +1015,11 @@ func TestLocationsUpdaterKeepsNSGProtectionUntilWithdrawalAcknowledged(t *testin
 	})
 	updater := &LocationsUpdater{diffTracker: dt, ctx: ctx, logger: dt.logger}
 	updater.process(ctx)
-	assert.Equal(t, 1, cloud.groupWrites, "failed withdrawal must retain old rules")
+	assert.Equal(t, 2, cloud.groupWrites, "failed withdrawal must retain old rules")
 	assert.NotEmpty(t, dt.locationsUpdaterTrigger, "failed withdrawal must schedule a retry")
 	updater.process(ctx)
 	assert.Equal(t, 2, calls)
-	assert.Equal(t, 2, cloud.groupWrites, "the successful withdrawal pass must prune without a later preparation pass")
+	assert.Equal(t, 3, cloud.groupWrites, "the successful withdrawal pass must prune without a later preparation pass")
 	assert.Empty(t, dt.pendingLocationUpdates)
 	assert.Empty(t, dt.dirtyNICPolicies)
 	for _, group := range cloud.groups {
@@ -1050,7 +1050,7 @@ func TestLocationsUpdaterAppliesSourceOnlyChangesAndAllowAll(t *testing.T) {
 	assert.NoError(t, dt.ReconcileInboundService(service))
 	assert.NotEmpty(t, dt.locationsUpdaterTrigger, "source-only changes must wake the existing worker")
 	updater.process(ctx)
-	assert.Equal(t, 2, cloud.groupWrites)
+	assert.Equal(t, 3, cloud.groupWrites)
 	assert.Empty(t, dt.dirtyNICPolicies, "a no-diff pass must finish its NIC work")
 	for len(dt.locationsUpdaterTrigger) > 0 {
 		<-dt.locationsUpdaterTrigger
@@ -1059,7 +1059,7 @@ func TestLocationsUpdaterAppliesSourceOnlyChangesAndAllowAll(t *testing.T) {
 	assert.NoError(t, dt.ReconcileInboundService(service))
 	assert.NotEmpty(t, dt.locationsUpdaterTrigger)
 	updater.process(ctx)
-	assert.Equal(t, 3, cloud.groupWrites)
+	assert.Equal(t, 4, cloud.groupWrites)
 	assert.Empty(t, dt.dirtyNICPolicies)
 	for _, group := range cloud.groups {
 		assert.Len(t, group.Properties.SecurityRules, 2)

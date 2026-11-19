@@ -46,7 +46,19 @@ type nsgLocationOwner struct {
 	name       string
 	uid        types.UID
 	providerID string
+	nicID      string
+	nicGUID    string
 	draining   bool
+}
+
+func (owner nsgLocationOwner) matchesKnownIdentity(current nsgLocationOwner) bool {
+	if owner.nicID == "" {
+		owner.nicID = current.nicID
+	}
+	if owner.nicGUID == "" {
+		owner.nicGUID = current.nicGUID
+	}
+	return owner == current
 }
 
 // nsgPreparedNIC holds one NIC's result for the current pass; each pass may handle many NICs.
@@ -58,7 +70,27 @@ type nsgPreparedNIC struct {
 	services         map[string]nsgService
 	target           *arm.ResourceID
 	group            *armnetwork.SecurityGroup
+	associationID    string
 	lbOnly           bool
+}
+
+type nsgObservedNIC struct {
+	owner     nsgLocationOwner
+	group     *armnetwork.SecurityGroup
+	services  map[string]nsgService
+	locations sets.Set[string]
+	retain    bool
+}
+
+func nsgNICOwner(node *v1.Node, target *arm.ResourceID, nic *armnetwork.Interface) nsgLocationOwner {
+	owner := nsgLocationOwner{name: node.Name, uid: node.UID, providerID: node.Spec.ProviderID}
+	if target != nil {
+		owner.nicID = strings.ToLower(target.String())
+	}
+	if nic != nil && nic.Properties != nil {
+		owner.nicGUID = strings.ToLower(ptr.Deref(nic.Properties.ResourceGUID, ""))
+	}
+	return owner
 }
 
 func (dt *DiffTracker) hasDirtyNICPoliciesLocked() bool {
@@ -306,25 +338,70 @@ func (dt *DiffTracker) nicPolicyContributionsLocked(currentLocations, retainedLo
 	return result
 }
 
-func (dt *DiffTracker) discoverNICPolicies(ctx context.Context, nodeIPs map[string][]string, services map[string]*v1.Service) (map[string][]nsgService, error) {
+func (dt *DiffTracker) discoverNICPolicies(ctx context.Context, nodes map[string]*v1.Node, services map[string]*v1.Service) (map[string][]nsgService, error) {
 	groups, err := dt.networkClientFactory.GetSecurityGroupClient().List(ctx, dt.config.ResourceGroup)
 	if err != nil {
 		return nil, fmt.Errorf("discover managed NIC NSGs: %w", err)
 	}
 	policies := make(map[string][]nsgService)
 	rejectedServices := make(map[string]bool)
+	published := make(map[string]map[netip.Addr]sets.Set[string])
+	for location, current := range dt.NRPResources.Locations {
+		for address, item := range current.Addresses {
+			ip, err := netip.ParseAddr(address)
+			if err != nil {
+				continue
+			}
+			for _, uid := range item.Services.UnsortedList() {
+				if !dt.NRPResources.LoadBalancers.Has(uid) || dt.isReservedServiceLocked(uid) {
+					continue
+				}
+				if published[uid] == nil {
+					published[uid] = make(map[netip.Addr]sets.Set[string])
+				}
+				if published[uid][ip.Unmap()] == nil {
+					published[uid][ip.Unmap()] = sets.New[string]()
+				}
+				published[uid][ip.Unmap()].Insert(location)
+			}
+		}
+	}
+	var observations []*nsgObservedNIC
 	for _, group := range groups {
 		if !dt.ownsClusterGroup(group) {
 			continue
 		}
-		if _, err := dt.targetFromTags(group); err != nil {
+		target, err := dt.targetFromTags(group)
+		if err != nil {
 			return nil, err
 		}
 		if group.Properties == nil {
 			return nil, fmt.Errorf("managed NIC NSG has no properties")
 		}
+		observed, err := decodeNSGServices(group.Properties.SecurityRules)
+		if err != nil {
+			return nil, err
+		}
+		name := nsgTagValue(group.Tags, consts.ServiceGatewayNSGNodeTag)
+		if name == "" {
+			return nil, fmt.Errorf("managed NIC NSG has no node identity")
+		}
+		owner := nsgLocationOwner{
+			name: name, nicID: strings.ToLower(target.String()),
+			nicGUID: strings.ToLower(nsgTagValue(group.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag)),
+		}
+		if node := nodes[name]; node != nil {
+			owner.uid, owner.providerID = node.UID, node.Spec.ProviderID
+		}
+		observation := &nsgObservedNIC{
+			owner: owner, group: group, services: observed, locations: sets.New[string](),
+		}
+		for uid, service := range observed {
+			for _, address := range service.addresses {
+				observation.locations.Insert(sets.List(published[uid][address])...)
+			}
+		}
 		if len(group.Properties.NetworkInterfaces) == 0 && len(group.Properties.Subnets) == 0 {
-			retain := false
 			for _, rule := range group.Properties.SecurityRules {
 				uid := strings.ToLower(nsgRuleServiceUID(rule))
 				if uid == "" {
@@ -343,11 +420,29 @@ func (dt *DiffTracker) discoverNICPolicies(ctx context.Context, nodeIPs map[stri
 					}
 				}
 				if rejectedServices[uid] {
-					retain = true
+					observation.retain = true
 					break
 				}
 			}
-			// A second restart must not lose the last durable policy for a rejected Service.
+		}
+		observations = append(observations, observation)
+	}
+	dt.recoverNICLocationOwners(ctx, nodes, observations)
+	for _, observation := range observations {
+		group := observation.group
+		if len(group.Properties.NetworkInterfaces) == 0 && len(group.Properties.Subnets) == 0 {
+			retain := false
+			superseded := observation.locations.Len() > 0
+			for location := range observation.locations {
+				owner := dt.NRPResources.Locations[location].nodeOwner
+				matches := owner != nil &&
+					(owner.nicID == "" || owner.nicID == observation.owner.nicID &&
+						(owner.nicGUID == "" || owner.nicGUID == observation.owner.nicGUID))
+				retain = retain || matches
+				superseded = superseded && owner != nil && !owner.draining && !matches
+			}
+			retain = retain || observation.retain && !superseded
+			// Keep the durable baseline until its published owner has been retired.
 			if !retain {
 				deleted, err := dt.deleteOrphanGroup(ctx, *group.Name)
 				if err != nil {
@@ -358,21 +453,144 @@ func (dt *DiffTracker) discoverNICPolicies(ctx context.Context, nodeIPs map[stri
 				}
 			}
 		}
-		observed, err := decodeNSGServices(group.Properties.SecurityRules)
-		if err != nil {
-			return nil, err
-		}
-		for uid, service := range observed {
+		for uid, service := range observation.services {
+			service.addresses = slices.DeleteFunc(slices.Clone(service.addresses), func(address netip.Addr) bool {
+				locations := published[uid][address]
+				if locations.Len() == 0 {
+					return false
+				}
+				for location := range locations {
+					owner := dt.NRPResources.Locations[location].nodeOwner
+					if owner == nil || owner.nicID == "" || owner.nicID == observation.owner.nicID &&
+						(owner.nicGUID == "" || observation.owner.nicGUID == "" || owner.nicGUID == observation.owner.nicGUID) {
+						return false
+					}
+				}
+				return true
+			})
 			policies[uid] = append(policies[uid], service)
 		}
-		name := nsgTagValue(group.Tags, consts.ServiceGatewayNSGNodeTag)
-		if name == "" {
-			return nil, fmt.Errorf("managed NIC NSG has no node identity")
-		}
 		dt.mayHaveNICPolicies, dt.locationRecoveryPending = true, true
-		dt.dirtyNICPolicies.Insert(nodeIPs[name]...)
+		dt.dirtyNICPolicies.Insert(nodeInternalIPs(nodes[observation.owner.name])...)
 	}
 	return policies, nil
+}
+
+func (dt *DiffTracker) recoverNICLocationOwners(ctx context.Context, nodes map[string]*v1.Node, observations []*nsgObservedNIC) {
+	candidates := make(map[string][]*nsgObservedNIC)
+	for _, observation := range observations {
+		for location := range observation.locations {
+			candidates[location] = append(candidates[location], observation)
+		}
+	}
+	if len(candidates) == 0 {
+		return
+	}
+	byLocation := make(map[string]*v1.Node)
+	ambiguous := sets.New[string]()
+	for _, node := range nodes {
+		for _, location := range nodeInternalIPs(node) {
+			if previous := byLocation[location]; previous != nil && previous.UID != node.UID {
+				ambiguous.Insert(location)
+			}
+			byLocation[location] = node
+		}
+	}
+	type lookup struct {
+		node  *v1.Node
+		owner nsgLocationOwner
+		nic   *armnetwork.Interface
+		err   error
+	}
+	lookups := make(map[string]*lookup)
+	for _, location := range slices.Sorted(maps.Keys(candidates)) {
+		list := candidates[location]
+		slices.SortFunc(list, func(a, b *nsgObservedNIC) int {
+			return strings.Compare(a.owner.nicID, b.owner.nicID)
+		})
+		node := byLocation[location]
+		if node == nil || ambiguous.Has(location) {
+			node = nodes[list[0].owner.name]
+			for _, candidate := range list[1:] {
+				if candidate.owner.name != list[0].owner.name {
+					node = nil
+					break
+				}
+			}
+		}
+		var current *lookup
+		if node != nil {
+			current = lookups[node.Name]
+			if current == nil {
+				target, nic, _, err := dt.primaryNIC(ctx, node)
+				current = &lookup{node: node, owner: nsgNICOwner(node, target, nic), nic: nic, err: err}
+				lookups[node.Name] = current
+			}
+		}
+		var selected *nsgObservedNIC
+		known := 0
+		for _, candidate := range list {
+			confirmed := candidate.owner.nicGUID != ""
+			if !confirmed && current != nil && current.owner.nicID != "" &&
+				current.owner.nicID != candidate.owner.nicID &&
+				ptr.Deref(candidate.group.Properties.ProvisioningState, "") == armnetwork.ProvisioningStateSucceeded &&
+				slices.ContainsFunc(candidate.group.Properties.NetworkInterfaces, func(nic *armnetwork.Interface) bool {
+					return nic != nil && strings.EqualFold(ptr.Deref(nic.ID, ""), candidate.owner.nicID)
+				}) {
+				rules, err := buildNICSecurityRules(candidate.services, candidate.group.Properties.SecurityRules)
+				confirmed = err == nil && nsgRulesEqual(rules, candidate.group.Properties.SecurityRules)
+			}
+			if confirmed {
+				known++
+				if selected == nil {
+					selected = candidate
+				}
+			}
+			if current == nil || current.owner.nicID != candidate.owner.nicID {
+				continue
+			}
+			if !confirmed && current.err == nil && current.owner.nicGUID != "" &&
+				current.nic.Properties.NetworkSecurityGroup != nil &&
+				strings.EqualFold(ptr.Deref(current.nic.Properties.NetworkSecurityGroup.ID, ""), ptr.Deref(candidate.group.ID, "")) &&
+				ptr.Deref(current.nic.Properties.ProvisioningState, "") == armnetwork.ProvisioningStateSucceeded &&
+				ptr.Deref(candidate.group.Properties.ProvisioningState, "") == armnetwork.ProvisioningStateSucceeded {
+				rules, err := buildNICSecurityRules(candidate.services, candidate.group.Properties.SecurityRules)
+				confirmed = err == nil && nsgRulesEqual(rules, candidate.group.Properties.SecurityRules)
+			}
+			if confirmed {
+				selected = candidate
+				break
+			}
+		}
+		if selected == nil {
+			continue
+		}
+		owner := selected.owner
+		matching := current != nil && current.owner.nicID == owner.nicID
+		if matching && current.err == nil && current.owner.nicGUID != "" &&
+			(owner.nicGUID == "" || owner.nicGUID == current.owner.nicGUID) {
+			owner = current.owner
+		}
+		if known > 1 && !matching {
+			owner.nicID, owner.nicGUID, owner.draining = "", "", true
+		}
+		value := dt.NRPResources.Locations[location]
+		value.nodeOwner = &owner
+		dt.NRPResources.Locations[location] = value
+		dt.markPreviousLocationOwnerLocked(owner, []string{location}, node)
+		if current != nil {
+			dt.observeNICOwnerLocked(current.owner, []string{location})
+			if current.err != nil {
+				dt.reportNICPolicyError([]string{location}, current.err)
+			}
+		}
+		dt.dirtyNICPolicies.Insert(location)
+	}
+	for _, current := range lookups {
+		if err := dt.checkNICNodeIdentity(ctx, current.owner, nodeInternalIPs(current.node)); err != nil {
+			dt.reportNICPolicyError(nodeInternalIPs(current.node), err)
+		}
+	}
 }
 
 func (dt *DiffTracker) recoverServingInboundConfig(uid string, lb *armnetwork.LoadBalancer, publicIP string, policies []nsgService, published sets.Set[string]) (*InboundConfig, error) {
@@ -702,6 +920,7 @@ func (dt *DiffTracker) prepareNICPolicies(ctx context.Context, work sets.Set[str
 		}
 	}
 	portReads := make(map[string]error)
+	var plans []*nsgPreparedNIC
 	for _, name := range slices.Sorted(maps.Keys(selected)) {
 		node := byName[name]
 		ownedLocations := selected[name]
@@ -732,18 +951,48 @@ func (dt *DiffTracker) prepareNICPolicies(ctx context.Context, work sets.Set[str
 				continue
 			}
 		}
+		if plan == nil {
+			continue
+		}
 		for _, location := range ownedLocations {
 			result[location] = plan
+		}
+		plans = append(plans, plan)
+	}
+	// All NIC writes finish before any result is accepted as publication permission.
+	for _, plan := range plans {
+		if err := dt.validateNICPolicy(ctx, plan); err != nil {
+			dt.reportNICPolicyError(plan.locations, err)
+			combined = errors.Join(combined, err)
+			for _, location := range plan.locations {
+				delete(result, location)
+			}
+			continue
 		}
 		if plan.lbOnly {
 			continue
 		}
 		dt.mu.Lock()
 		for _, location := range plan.currentLocations {
-			current := dt.NRPResources.Locations[location]
-			if current.nodeOwner == nil && dt.hasInboundReferencesLocked(current) && !dt.dirtyNICPolicies.Has(location) {
-				current.nodeOwner = &nsgLocationOwner{name: node.Name, uid: node.UID, providerID: node.Spec.ProviderID}
-				dt.NRPResources.Locations[location] = current
+			if dt.dirtyNICPolicies.Has(location) {
+				continue
+			}
+			for _, resources := range []map[string]NRPLocation{dt.NRPResources.Locations, dt.pendingLocationUpdates} {
+				current := resources[location]
+				if current.nodeOwner != nil {
+					previous := *current.nodeOwner
+					if previous == plan.owner {
+						continue
+					}
+					if !previous.matchesKnownIdentity(plan.owner) {
+						continue
+					}
+				} else if !dt.hasInboundReferencesLocked(current) {
+					continue
+				}
+				confirmed := plan.owner
+				current.nodeOwner = &confirmed
+				resources[location] = current
 			}
 		}
 		dt.mu.Unlock()
@@ -795,11 +1044,17 @@ func (dt *DiffTracker) finishNICPolicyWorkLocked(work sets.Set[string], preparat
 }
 
 func (dt *DiffTracker) prepareNICPolicy(ctx context.Context, node *v1.Node, currentLocations, locations []string, portReads map[string]error) (*nsgPreparedNIC, error) {
-	owner := nsgLocationOwner{name: node.Name, uid: node.UID, providerID: node.Spec.ProviderID}
 	nodeIPs := nodeInternalIPs(node)
 	target, nic, vmss, err := dt.primaryNIC(ctx, node)
+	owner := nsgNICOwner(node, target, nic)
+	dt.mu.Lock()
+	dt.observeNICOwnerLocked(owner, locations)
+	dt.mu.Unlock()
 	if err != nil {
 		return nil, err
+	}
+	if owner.nicGUID == "" {
+		return nil, fmt.Errorf("node %q NIC has no resource GUID", node.Name)
 	}
 	current, err := dt.readGroup(ctx, dt.groupName(target))
 	if err != nil {
@@ -861,6 +1116,9 @@ func (dt *DiffTracker) prepareNICPolicy(ctx context.Context, node *v1.Node, curr
 		owner: owner, nodeIPs: nodeIPs, locations: locations, currentLocations: currentLocations,
 		services: services, target: target, group: current,
 	}
+	if nic.Properties.NetworkSecurityGroup != nil {
+		plan.associationID = ptr.Deref(nic.Properties.NetworkSecurityGroup.ID, "")
+	}
 	needRules := false
 	for _, service := range services {
 		needRules = needRules || service.sources != nil
@@ -873,7 +1131,7 @@ func (dt *DiffTracker) prepareNICPolicy(ctx context.Context, node *v1.Node, curr
 		if state != armnetwork.ProvisioningStateSucceeded {
 			return nil, fmt.Errorf("NIC association has provisioning state %q", state)
 		}
-		return plan, dt.checkNICNodeIdentity(ctx, owner, nodeIPs)
+		return plan, nil
 	}
 	if needRules && nic.Properties.NetworkSecurityGroup != nil {
 		if err := dt.validateAssociation(target, ptr.Deref(nic.Properties.NetworkSecurityGroup.ID, "")); err != nil {
@@ -939,9 +1197,6 @@ func (dt *DiffTracker) prepareNICPolicy(ctx context.Context, node *v1.Node, curr
 		if len(candidates) == 0 {
 			return nil, err
 		}
-		if identityErr := dt.checkNICNodeIdentity(ctx, owner, nodeIPs); identityErr != nil {
-			return nil, errors.Join(err, identityErr)
-		}
 		plan.services, plan.lbOnly = candidates, true
 		return plan, err
 	}
@@ -979,7 +1234,93 @@ func (dt *DiffTracker) prepareNICPolicy(ctx context.Context, node *v1.Node, curr
 	if ptr.Deref(nic.Properties.ProvisioningState, "") != armnetwork.ProvisioningStateSucceeded || needRules && !attached {
 		return nil, fmt.Errorf("NIC NSG association has not converged")
 	}
-	return plan, dt.checkNICNodeIdentity(ctx, owner, nodeIPs)
+	confirmed := nsgNICOwner(node, target, nic)
+	dt.mu.Lock()
+	dt.observeNICOwnerLocked(confirmed, locations)
+	dt.mu.Unlock()
+	if confirmed != owner {
+		return nil, fmt.Errorf("node NIC reconciliation was superseded")
+	}
+	if nic.Properties.NetworkSecurityGroup != nil {
+		plan.associationID = ptr.Deref(nic.Properties.NetworkSecurityGroup.ID, "")
+	}
+	if attached && nsgTagValue(plan.group.Tags, consts.ServiceGatewayNSGConfirmedNICGUIDTag) != owner.nicGUID {
+		dt.mu.Lock()
+		confirmOwner := true
+		for _, location := range currentLocations {
+			for _, resources := range []map[string]NRPLocation{dt.NRPResources.Locations, dt.pendingLocationUpdates} {
+				if previous := resources[location].nodeOwner; previous != nil && !previous.matchesKnownIdentity(owner) {
+					confirmOwner = false
+				}
+			}
+		}
+		dt.mu.Unlock()
+		if !confirmOwner {
+			// Keep the old durable generation until its withdrawal is acknowledged.
+			return nil, nil
+		}
+		confirmationCtx, err := withResourceETag(ctx, fmt.Sprintf("NIC NSG %q", ptr.Deref(plan.group.Name, "")), plan.group.Etag)
+		if err != nil {
+			return nil, err
+		}
+		desired := *plan.group
+		desired.Tags = maps.Clone(plan.group.Tags)
+		for key := range desired.Tags {
+			if strings.EqualFold(key, consts.ServiceGatewayNSGConfirmedNICGUIDTag) {
+				delete(desired.Tags, key)
+			}
+		}
+		desired.Tags[consts.ServiceGatewayNSGConfirmedNICGUIDTag] = ptr.To(owner.nicGUID)
+		plan.group, err = dt.writeGroup(confirmationCtx, desired)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+func (dt *DiffTracker) observeNICOwnerLocked(current nsgLocationOwner, locations []string) {
+	if current.nicID == "" {
+		return
+	}
+	for _, resources := range []map[string]NRPLocation{dt.NRPResources.Locations, dt.pendingLocationUpdates} {
+		for _, location := range locations {
+			previous := resources[location].nodeOwner
+			if previous != nil && previous.name == current.name && previous.uid == current.uid &&
+				previous.providerID == current.providerID &&
+				(previous.nicID != "" && previous.nicID != current.nicID ||
+					previous.nicGUID != "" && current.nicGUID != "" && previous.nicGUID != current.nicGUID) {
+				dt.markPreviousLocationOwnerLocked(*previous, []string{location}, nil)
+			}
+		}
+	}
+}
+
+func (dt *DiffTracker) validateNICPolicy(ctx context.Context, plan *nsgPreparedNIC) error {
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{Name: plan.owner.name, UID: plan.owner.uid},
+		Spec:       v1.NodeSpec{ProviderID: plan.owner.providerID},
+	}
+	target, nic, _, err := dt.primaryNIC(ctx, node)
+	observed := nsgNICOwner(node, target, nic)
+	dt.mu.Lock()
+	dt.observeNICOwnerLocked(observed, plan.locations)
+	dt.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if observed != plan.owner {
+		return fmt.Errorf("node NIC reconciliation was superseded")
+	}
+	associationID := ""
+	if nic.Properties.NetworkSecurityGroup != nil {
+		associationID = ptr.Deref(nic.Properties.NetworkSecurityGroup.ID, "")
+	}
+	if ptr.Deref(nic.Properties.ProvisioningState, "") != armnetwork.ProvisioningStateSucceeded ||
+		!strings.EqualFold(associationID, plan.associationID) {
+		return fmt.Errorf("node NIC association changed during source-policy reconciliation")
+	}
+	return dt.checkNICNodeIdentity(ctx, plan.owner, plan.nodeIPs)
 }
 
 func (dt *DiffTracker) markPreviousLocationOwnerLocked(previous nsgLocationOwner, previousIPs []string, current *v1.Node) {
@@ -995,10 +1336,21 @@ func (dt *DiffTracker) markPreviousLocationOwnerLocked(previous nsgLocationOwner
 			if owner == nil && !dt.hasInboundReferencesLocked(value) {
 				continue
 			}
-			if owner != nil && (owner.name != previous.name || owner.uid != previous.uid || owner.providerID != previous.providerID) {
+			if owner != nil && (owner.name != previous.name || owner.uid != previous.uid || owner.providerID != previous.providerID ||
+				owner.nicID != "" && previous.nicID != "" && owner.nicID != previous.nicID ||
+				owner.nicGUID != "" && previous.nicGUID != "" && owner.nicGUID != previous.nicGUID) {
 				continue
 			}
 			draining := previous
+			if owner != nil {
+				draining = *owner
+				if draining.nicID == "" {
+					draining.nicID = previous.nicID
+				}
+				if draining.nicGUID == "" {
+					draining.nicGUID = previous.nicGUID
+				}
+			}
 			draining.draining = true
 			value.nodeOwner = &draining
 			resources[location] = value
@@ -1131,7 +1483,7 @@ func (dt *DiffTracker) pruneNICPolicies(ctx context.Context, preparation map[str
 		}
 		rules, err := buildNICSecurityRules(services, plan.group.Properties.SecurityRules)
 		if err == nil && !nsgRulesEqual(rules, plan.group.Properties.SecurityRules) {
-			err = dt.checkNICNodeIdentity(ctx, plan.owner, plan.nodeIPs)
+			err = dt.validateNICPolicy(ctx, plan)
 			if err == nil {
 				dt.mu.Lock()
 				for uid := range services {

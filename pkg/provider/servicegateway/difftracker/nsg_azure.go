@@ -184,18 +184,19 @@ func (dt *DiffTracker) primaryNIC(ctx context.Context, node *v1.Node) (*arm.Reso
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	// Preserve the resolved target so later failures cannot hide a changed publication owner.
 	nic, err := dt.readNIC(ctx, target)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("read node NIC: %w", err)
+		return target, nil, nil, fmt.Errorf("read node NIC: %w", err)
 	}
 	if nic.Properties.VirtualMachine == nil || !strings.EqualFold(ptr.Deref(nic.Properties.VirtualMachine.ID, ""), providerID) {
-		return nil, nil, nil, fmt.Errorf("node %q provider identity does not match its NIC", node.Name)
+		return target, nic, nil, fmt.Errorf("node %q provider identity does not match its NIC", node.Name)
 	}
 	if ptr.Deref(nic.Location, "") == "" {
 		nic.Location = location
 	}
 	if ptr.Deref(nic.Location, "") == "" {
-		return nil, nil, nil, fmt.Errorf("node %q NIC has no location", node.Name)
+		return target, nic, nil, fmt.Errorf("node %q NIC has no location", node.Name)
 	}
 	return target, nic, vmssVM, nil
 }
@@ -375,6 +376,11 @@ func (dt *DiffTracker) writeGroup(ctx context.Context, desired armnetwork.Securi
 	if result.Properties.ProvisioningState == nil || *result.Properties.ProvisioningState != armnetwork.ProvisioningStateSucceeded ||
 		!nsgRulesEqual(result.Properties.SecurityRules, desired.Properties.SecurityRules) {
 		return nil, fmt.Errorf("update NIC NSG did not confirm the requested source policies")
+	}
+	for key, value := range desired.Tags {
+		if nsgTagValue(result.Tags, key) != ptr.Deref(value, "") {
+			return nil, fmt.Errorf("update NIC NSG did not confirm the requested ownership tags")
+		}
 	}
 	return result, nil
 }
