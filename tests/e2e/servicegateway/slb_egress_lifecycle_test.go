@@ -45,7 +45,7 @@ func egressOutboundGoneErr(egressName string) error {
 		return fmt.Errorf("query Service Gateway services: %w", err)
 	}
 	for _, s := range resp.Value {
-		if s.Properties.ServiceType == "Outbound" && s.Name == egressName {
+		if s.Properties.ServiceType == "Outbound" && s.Name == outboundServiceName(egressName) {
 			return fmt.Errorf("outbound service %s still registered", egressName)
 		}
 	}
@@ -115,7 +115,7 @@ var _ = Describe("SLB - Egress Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for the NAT gateway to be provisioned and pods registered")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressPodsRegistered(cs, ns.Name, egressName, numPods, waitTime)
 
 		By("Deleting all egress pods")
 		Expect(cs.CoreV1().Pods(ns.Name).DeleteCollection(context.TODO(), metav1.DeleteOptions{},
@@ -163,7 +163,7 @@ var _ = Describe("SLB - Egress Lifecycle", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Verifying the NAT gateway is rebuilt and pods re-registered")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressPodsRegistered(cs, ns.Name, egressName, numPods, waitTime)
 
 		utils.Logf("\n✓ Egress NAT gateway drained to zero and rebuilt")
 	})
@@ -253,7 +253,7 @@ var _ = Describe("SLB - Service Idempotency", Label(slbTestLabel), func() {
 			lastUID = uid
 
 			By(fmt.Sprintf("Cycle %d/%d: waiting for provisioning + registration", c, cycles))
-			eventuallyServiceReconciled(uid, numPods, waitTime)
+			eventuallyServiceReconciled(cs, ns.Name, uid, numPods, waitTime)
 
 			By(fmt.Sprintf("Cycle %d/%d: deleting service and waiting for full teardown", c, cycles))
 			Expect(cs.CoreV1().Services(ns.Name).Delete(context.TODO(), serviceName, metav1.DeleteOptions{})).To(Succeed())
@@ -357,7 +357,7 @@ var _ = Describe("SLB - Dual-Stack Egress", Label(slbTestLabel), func() {
 					continue
 				}
 				for _, svc := range addr.Services {
-					if svc == egressName {
+					if svc == outboundServiceName(egressName) {
 						return true
 					}
 				}
@@ -749,11 +749,11 @@ var _ = Describe("SLB - Dual-Stack Egress", Label(slbTestLabel), func() {
 		By("Asserting the primary-family address references BOTH the egress and the inbound service")
 		Eventually(func() bool {
 			svcs := addressServicesOf(primaryIP)
-			return servicesContain(svcs, egressName) && servicesContain(svcs, lbUID)
+			return servicesContain(svcs, outboundServiceName(egressName)) && servicesContain(svcs, inboundServiceName(lbUID))
 		}, waitTime, defaultPollInterval).Should(BeTrue(),
 			"the primary pod IP %s must reference both egress %q and inbound %q", primaryIP, egressName, lbUID)
 		for _, ip := range ips {
-			Expect(servicesContain(addressServicesOf(ip), egressName)).To(BeTrue(), "family %s must be egress-registered", ip)
+			Expect(servicesContain(addressServicesOf(ip), outboundServiceName(egressName))).To(BeTrue(), "family %s must be egress-registered", ip)
 		}
 		assertAddressLocationFamilyPurity()
 
@@ -763,9 +763,9 @@ var _ = Describe("SLB - Dual-Stack Egress", Label(slbTestLabel), func() {
 		delete(upd.Labels, egressLabel)
 		_, err = cs.CoreV1().Pods(ns.Name).Update(ctx, upd, metav1.UpdateOptions{})
 		Expect(err).NotTo(HaveOccurred())
-		Eventually(func() bool { return !servicesContain(addressServicesOf(primaryIP), egressName) }, waitTime, defaultPollInterval).
+		Eventually(func() bool { return !servicesContain(addressServicesOf(primaryIP), outboundServiceName(egressName)) }, waitTime, defaultPollInterval).
 			Should(BeTrue(), "the egress reference for %s must be removed after the egress label is dropped", primaryIP)
-		Expect(servicesContain(addressServicesOf(primaryIP), lbUID)).To(BeTrue(),
+		Expect(servicesContain(addressServicesOf(primaryIP), inboundServiceName(lbUID))).To(BeTrue(),
 			"the inbound LB reference for %s must survive the egress removal (identities are isolated)", primaryIP)
 		assertAddressLocationFamilyPurity()
 
@@ -919,7 +919,7 @@ func egressLocationForAddress(egressName, podIP string) string {
 				continue
 			}
 			for _, svc := range addr.Services {
-				if svc == egressName {
+				if svc == outboundServiceName(egressName) {
 					return loc.AddressLocation
 				}
 			}
@@ -940,7 +940,7 @@ func podIPOfFamily2(ips []string, ipv6 bool) string {
 }
 
 // addressServicesOf returns the Service Gateway service IDs that reference podIP across all address
-// locations (both inbound LoadBalancer UIDs and outbound egress names), or nil if it is not
+// locations (canonical inbound and outbound names), or nil if it is not
 // registered.
 func addressServicesOf(podIP string) []string {
 	if podIP == "" {

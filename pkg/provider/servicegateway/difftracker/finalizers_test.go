@@ -19,6 +19,10 @@ package difftracker
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -29,10 +33,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+	restfake "k8s.io/client-go/rest/fake"
 	ktesting "k8s.io/client-go/testing"
+	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/component-base/metrics/testutil"
+	"k8s.io/utils/ptr"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
@@ -466,6 +476,7 @@ func TestRemoveServiceGatewayFinalizer(t *testing.T) {
 				UID:        types.UID("test-uid"),
 				Finalizers: []string{"other-finalizer", ServiceGatewayServiceCleanupFinalizer},
 			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
 		}
 
 		kubeClient := fake.NewSimpleClientset(svc)
@@ -649,6 +660,418 @@ func TestRemoveServiceGatewayFinalizer(t *testing.T) {
 	})
 }
 
+func TestRemoveServiceFinalizersDuringRecovery(t *testing.T) {
+	serviceName := inboundServiceName("original")
+	tests := []struct {
+		name        string
+		serviceType v1.ServiceType
+		class       *string
+		deleting    bool
+		replaced    bool
+		noSGW       bool
+		tracked     string
+		wantTracked bool
+		wantRemove  bool
+		wantDone    bool
+	}{
+		{name: "retyped", serviceType: v1.ServiceTypeClusterIP, wantRemove: true, wantDone: true},
+		{name: "foreign class", serviceType: v1.ServiceTypeLoadBalancer, class: ptr.To("example.com/other"), wantRemove: true, wantDone: true},
+		{name: "managed again", serviceType: v1.ServiceTypeLoadBalancer},
+		{name: "deleting load balancer", serviceType: v1.ServiceTypeLoadBalancer, deleting: true, wantRemove: true, wantDone: true},
+		{name: "replacement", serviceType: v1.ServiceTypeClusterIP, replaced: true, wantDone: true},
+		{name: "our finalizer already gone", serviceType: v1.ServiceTypeClusterIP, noSGW: true, wantDone: true},
+		{name: "registered LB", serviceType: v1.ServiceTypeClusterIP, tracked: "lb", wantTracked: true},
+		{name: "same raw outbound identity", serviceType: v1.ServiceTypeClusterIP, tracked: "nat", wantRemove: true, wantDone: true},
+		{name: "pending operation", serviceType: v1.ServiceTypeClusterIP, tracked: "operation", wantTracked: true},
+		{name: "desired service", serviceType: v1.ServiceTypeClusterIP, tracked: "desired", wantTracked: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns", Name: "svc", UID: "original", ResourceVersion: "1",
+					Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, servicehelper.LoadBalancerCleanupFinalizer, "example.com/keep"},
+				},
+				Spec: v1.ServiceSpec{Type: tt.serviceType, LoadBalancerClass: tt.class},
+			}
+			if tt.deleting {
+				svc.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			if tt.replaced {
+				svc.UID = "replacement"
+			}
+			if tt.noSGW {
+				svc.Finalizers = svc.Finalizers[1:]
+			}
+			kube := fake.NewSimpleClientset(svc)
+			dt := &DiffTracker{kubeClient: kube}
+			switch tt.tracked {
+			case "lb":
+				dt.NRPResources.LoadBalancers = utilsets.NewString(serviceName)
+			case "nat":
+				dt.NRPResources.NATGateways = utilsets.NewString(outboundServiceName("original"))
+			case "operation":
+				dt.pendingServiceOps = map[string]*ServiceOperationState{serviceName: {}}
+			case "desired":
+				dt.K8sResources.Services = utilsets.NewString(serviceName)
+			}
+			target := &v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "svc", UID: "original"}}
+			completed, err := dt.removeServiceFinalizers(context.Background(), target, true)
+			if tt.wantTracked {
+				assert.ErrorContains(t, err, "tracked")
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantDone, completed)
+			got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			if tt.wantRemove {
+				assert.Equal(t, []string{"example.com/keep"}, got.Finalizers)
+			} else {
+				assert.Equal(t, svc.Finalizers, got.Finalizers)
+			}
+			updates := 0
+			for _, action := range kube.Actions() {
+				if action.Matches("update", "services") {
+					updates++
+					assert.Equal(t, "1", action.(ktesting.UpdateAction).GetObject().(*v1.Service).ResourceVersion)
+				}
+			}
+			assert.Equal(t, tt.wantRemove, updates == 1)
+			if !tt.wantRemove {
+				assert.Zero(t, updates)
+			}
+		})
+	}
+
+	t.Run("rechecks ownership after a conflict", func(t *testing.T) {
+		svc := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns", Name: "svc", UID: "original", ResourceVersion: "1",
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, servicehelper.LoadBalancerCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+		}
+		kube := fake.NewSimpleClientset(svc)
+		updates := 0
+		kube.PrependReactor("update", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			updates++
+			if updates != 1 {
+				return false, nil, nil
+			}
+			managed := svc.DeepCopy()
+			managed.Spec.Type = v1.ServiceTypeLoadBalancer
+			managed.ResourceVersion = "2"
+			if err := kube.Tracker().Update(v1.SchemeGroupVersion.WithResource("services"), managed, "ns"); err != nil {
+				return true, nil, err
+			}
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "services"}, "svc", fmt.Errorf("Service retyped"))
+		})
+		dt := &DiffTracker{kubeClient: kube}
+		completed, err := dt.removeServiceFinalizers(context.Background(), svc, true)
+		assert.NoError(t, err)
+		assert.False(t, completed)
+		assert.Equal(t, 1, updates)
+		got, err := kube.CoreV1().Services("ns").Get(context.Background(), "svc", metav1.GetOptions{})
+		if assert.NoError(t, err) {
+			assert.Equal(t, svc.Finalizers, got.Finalizers)
+			assert.Equal(t, v1.ServiceTypeLoadBalancer, got.Spec.Type)
+		}
+	})
+
+	t.Run("missing Service", func(t *testing.T) {
+		dt := &DiffTracker{kubeClient: fake.NewSimpleClientset()}
+		completed, err := dt.removeServiceFinalizers(context.Background(),
+			&v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "gone", UID: "original"}}, true)
+		assert.NoError(t, err)
+		assert.True(t, completed)
+	})
+
+	t.Run("cancellation stops local retries", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		kube := fake.NewSimpleClientset()
+		reads := 0
+		kube.PrependReactor("get", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			reads++
+			cancel()
+			return true, nil, apierrors.NewServiceUnavailable("apiserver unavailable")
+		})
+		dt := &DiffTracker{kubeClient: kube}
+		completed, err := dt.removeServiceFinalizers(ctx,
+			&v1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: "ns", Name: "svc", UID: "original"}}, true)
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.False(t, completed)
+		assert.Equal(t, 1, reads)
+	})
+}
+
+func TestRetryServiceFinalizers_RetainsFailuresUntilRecovery(t *testing.T) {
+	RegisterMetrics()
+	recoveredBefore, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	newService := func(name string) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns", Name: name, UID: types.UID(name),
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, "example.com/keep"},
+			},
+			Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+		}
+	}
+	kube := fake.NewSimpleClientset(newService("waiting"), newService("healthy"))
+	var available atomic.Bool
+	var failed atomic.Int32
+	var healthyUpdates atomic.Int32
+	kube.PrependReactor("update", "services", func(action ktesting.Action) (bool, runtime.Object, error) {
+		svc := action.(ktesting.UpdateAction).GetObject().(*v1.Service)
+		if svc.Name == "waiting" && !available.Load() {
+			failed.Add(1)
+			return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "services"}, svc.Name, fmt.Errorf("temporarily denied"))
+		}
+		if svc.Name == "healthy" {
+			healthyUpdates.Add(1)
+		}
+		return false, nil, nil
+	})
+	dt := &DiffTracker{kubeClient: kube}
+	refs := []v1.ObjectReference{
+		{Namespace: "ns", Name: "waiting", UID: "waiting"},
+		{Namespace: "ns", Name: "healthy", UID: "healthy"},
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	updater := &ServiceUpdater{ctx: ctx, diffTracker: dt, activeOps: make(map[string]bool)}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		updater.retryServiceFinalizers(refs)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+
+	if !assert.Eventually(t, func() bool {
+		return failed.Load() >= int32(2*finalizerRetryBackoff.Steps) && healthyUpdates.Load() == 1
+	}, 8*time.Second, 10*time.Millisecond) {
+		return
+	}
+	available.Store(true)
+	select {
+	case <-done:
+	case <-time.After(7 * time.Second):
+		t.Fatal("finalizer retries did not recover")
+	}
+	assert.Equal(t, int32(1), healthyUpdates.Load())
+	for _, name := range []string{"waiting", "healthy"} {
+		got, err := kube.CoreV1().Services("ns").Get(ctx, name, metav1.GetOptions{})
+		if assert.NoError(t, err) {
+			assert.Equal(t, []string{"example.com/keep"}, got.Finalizers)
+		}
+	}
+	recoveredAfter, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	assert.Equal(t, float64(2), recoveredAfter-recoveredBefore)
+	assert.Equal(t, []v1.ObjectReference{{}, {}}, refs, "completed identities must not remain retained in the retry batch")
+}
+
+func TestRetryServiceFinalizers_BoundsAPIAttempts(t *testing.T) {
+	oldTimeout := nrpOperationTimeout.Swap(int64(100 * time.Millisecond))
+	t.Cleanup(func() { nrpOperationTimeout.Store(oldTimeout) })
+	timedOut := make(chan error, 1)
+	client, err := kubernetes.NewForConfigAndClient(&rest.Config{Host: "https://127.0.0.1"},
+		restfake.CreateHTTPClient(func(request *http.Request) (*http.Response, error) {
+			<-request.Context().Done()
+			select {
+			case timedOut <- request.Context().Err():
+			default:
+			}
+			return nil, request.Context().Err()
+		}))
+	if !assert.NoError(t, err) {
+		return
+	}
+	dt := &DiffTracker{kubeClient: client}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	updater := &ServiceUpdater{ctx: ctx, diffTracker: dt, activeOps: make(map[string]bool)}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		updater.retryServiceFinalizers([]v1.ObjectReference{{Namespace: "ns", Name: "svc", UID: "original"}})
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+	})
+	select {
+	case err := <-timedOut:
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.NoError(t, ctx.Err(), "the API attempt must end before the updater context expires")
+	case <-time.After(3 * time.Second):
+		t.Fatal("Kubernetes request did not honor its per-attempt deadline")
+	}
+}
+
+func TestRetryServiceFinalizers_SerializesWithServiceOperations(t *testing.T) {
+	svc := &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns", Name: "svc", UID: "original",
+			Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+		},
+		Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+	}
+	serviceName := ServiceName(svc)
+	kube := fake.NewSimpleClientset(svc)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	operationStarted := make(chan struct{}, 2)
+	updater := &ServiceUpdater{
+		diffTracker: dt, ctx: ctx, activeOps: make(map[string]bool),
+		semaphore: make(chan struct{}, 10),
+		onComplete: func(string, bool, error) {
+			operationStarted <- struct{}{}
+		},
+	}
+	updating := make(chan struct{})
+	release := make(chan struct{})
+	var reserved atomic.Bool
+	kube.PrependReactor("update", "services", func(_ ktesting.Action) (bool, runtime.Object, error) {
+		updater.mu.Lock()
+		reserved.Store(updater.activeOps[serviceName])
+		updater.mu.Unlock()
+		dt.mu.Lock()
+		dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+			ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateUpdateInProgress,
+		}
+		dt.mu.Unlock()
+		updater.processBatch()
+		close(updating)
+		<-release
+		return false, nil, nil
+	})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		updater.retryServiceFinalizers([]v1.ObjectReference{{Namespace: "ns", Name: "svc", UID: "original"}})
+	}()
+	t.Cleanup(func() {
+		cancel()
+		<-done
+		updater.wg.Wait()
+	})
+	select {
+	case <-updating:
+	case <-time.After(3 * time.Second):
+		close(release)
+		t.Fatal("finalizer update did not start")
+	}
+	assert.True(t, reserved.Load(), "the retry must exclude a concurrent worker for the same identity")
+	select {
+	case <-operationStarted:
+		t.Error("a service operation started while its finalizers were being removed")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("finalizer retry did not finish")
+	}
+	select {
+	case <-dt.serviceUpdaterTrigger:
+	default:
+		t.Error("service work skipped during finalization was not requeued")
+	}
+	updater.processBatch()
+	select {
+	case <-operationStarted:
+	case <-time.After(3 * time.Second):
+		t.Fatal("service work did not resume after finalization")
+	}
+}
+
+func TestRetryServiceFinalizers_WaitsForExistingWork(t *testing.T) {
+	serviceName := inboundServiceName("busy")
+	for _, block := range []string{"active operation", "registered resource", "pending operation"} {
+		t.Run(block, func(t *testing.T) {
+			newService := func(name string) *v1.Service {
+				return &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: "ns", Name: name, UID: types.UID(name),
+						Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+					},
+					Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+				}
+			}
+			kube := fake.NewSimpleClientset(newService("busy"), newService("ready"))
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			updater := &ServiceUpdater{ctx: ctx, diffTracker: dt, activeOps: make(map[string]bool)}
+			switch block {
+			case "active operation":
+				updater.activeOps[serviceName] = true
+			case "registered resource":
+				dt.NRPResources.LoadBalancers.Insert(serviceName)
+			case "pending operation":
+				dt.pendingServiceOps[serviceName] = &ServiceOperationState{}
+			}
+			ready := make(chan struct{}, 1)
+			var busyUpdates atomic.Int32
+			kube.PrependReactor("update", "services", func(action ktesting.Action) (bool, runtime.Object, error) {
+				service := action.(ktesting.UpdateAction).GetObject().(*v1.Service)
+				if service.Name == "busy" {
+					busyUpdates.Add(1)
+				} else {
+					select {
+					case ready <- struct{}{}:
+					default:
+					}
+				}
+				return false, nil, nil
+			})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				updater.retryServiceFinalizers([]v1.ObjectReference{
+					{Namespace: "ns", Name: "busy", UID: "busy"},
+					{Namespace: "ns", Name: "ready", UID: "ready"},
+				})
+			}()
+			t.Cleanup(func() {
+				cancel()
+				<-done
+			})
+			select {
+			case <-ready:
+			case <-time.After(3 * time.Second):
+				t.Fatal("one blocked Service prevented another Service's cleanup")
+			}
+			assert.Zero(t, busyUpdates.Load(), "existing work must retain its finalizers")
+			updater.mu.Lock()
+			if block == "active operation" {
+				assert.True(t, updater.activeOps[serviceName], "the retry must not release another worker's slot")
+			}
+			delete(updater.activeOps, serviceName)
+			updater.mu.Unlock()
+			dt.mu.Lock()
+			dt.NRPResources.LoadBalancers.Delete(serviceName)
+			delete(dt.pendingServiceOps, serviceName)
+			dt.mu.Unlock()
+			select {
+			case <-done:
+			case <-time.After(4 * time.Second):
+				t.Fatal("cleanup did not resume after existing work ended")
+			}
+			assert.Equal(t, int32(1), busyUpdates.Load())
+			assert.Empty(t, updater.activeOps)
+		})
+	}
+}
+
 // ================================================================================================
 // POD FINALIZER TESTS
 // ================================================================================================
@@ -704,7 +1127,9 @@ func TestAddPodFinalizer(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
 				Namespace: "default",
+				Labels:    map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"},
 			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
 		}
 
 		kubeClient := fake.NewSimpleClientset(pod)
@@ -726,8 +1151,10 @@ func TestAddPodFinalizer(t *testing.T) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       "test-pod",
 				Namespace:  "default",
+				Labels:     map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"},
 				Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
 			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
 		}
 
 		kubeClient := fake.NewSimpleClientset(pod)
@@ -761,15 +1188,19 @@ func TestAddPodFinalizer(t *testing.T) {
 				Name:       "test-pod",
 				Namespace:  "default",
 				UID:        "uid-live",
+				Labels:     map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"},
 				Finalizers: []string{ServiceGatewayPodCleanupFinalizer},
 			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
 		}
 		livePod := &v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-pod",
 				Namespace: "default",
 				UID:       "uid-live",
+				Labels:    map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"},
 			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
 		}
 
 		kubeClient := fake.NewSimpleClientset(livePod)
@@ -795,7 +1226,9 @@ func TestAddPodFinalizer(t *testing.T) {
 				Name:      "test-pod",
 				Namespace: "default",
 				UID:       "uid-original",
+				Labels:    map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"},
 			},
+			Status: v1.PodStatus{Phase: v1.PodRunning},
 		}
 		replacement := &v1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -819,6 +1252,64 @@ func TestAddPodFinalizer(t *testing.T) {
 		assert.False(t, hasPodFinalizer(got),
 			"a same-name replacement pod (different UID) must not be given the cleanup finalizer")
 	})
+}
+
+func TestAddPodFinalizerRejectsStaleIntent(t *testing.T) {
+	ctx := context.Background()
+	now := metav1.Now()
+
+	tests := []struct {
+		name      string
+		liveLabel string
+		noLabel   bool
+		deleting  bool
+		phase     v1.PodPhase
+	}{
+		{name: "label changed", liveLabel: "egress-b", phase: v1.PodRunning},
+		{name: "label emptied", liveLabel: "", phase: v1.PodRunning},
+		{name: "label removed", noLabel: true, phase: v1.PodRunning},
+		{name: "deleting", liveLabel: "egress-a", deleting: true, phase: v1.PodRunning},
+		{name: "terminal phase failed", liveLabel: "egress-a", phase: v1.PodFailed},
+		{name: "terminal phase succeeded", liveLabel: "egress-a", phase: v1.PodSucceeded},
+	}
+
+	for _, tt := range tests {
+		for _, alreadyHeld := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s (finalizer already held %v)", tt.name, alreadyHeld), func(t *testing.T) {
+				eventPod := &v1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "p",
+						Namespace: "ns",
+						UID:       types.UID("uid-p"),
+						Labels:    map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"},
+					},
+					Status: v1.PodStatus{Phase: v1.PodRunning},
+				}
+				livePod := eventPod.DeepCopy()
+				livePod.Labels = map[string]string{consts.PodLabelServiceEgressGateway: tt.liveLabel}
+				if tt.noLabel {
+					livePod.Labels = nil
+				}
+				livePod.Status.Phase = tt.phase
+				if tt.deleting {
+					livePod.DeletionTimestamp = &now
+				}
+				if alreadyHeld {
+					livePod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+				}
+				kubeClient := fake.NewSimpleClientset(livePod)
+				dt := &DiffTracker{kubeClient: kubeClient}
+
+				err := dt.AddPodFinalizer(ctx, eventPod)
+				assert.ErrorIs(t, err, ErrPodGoneOrReplaced)
+
+				got, err := kubeClient.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, alreadyHeld, hasPodFinalizer(got),
+					"stale add intent must not add a finalizer that would protect a pod we will not register")
+			})
+		}
+	}
 }
 
 func TestRemovePodFinalizer(t *testing.T) {
@@ -849,6 +1340,1727 @@ func TestRemovePodFinalizer(t *testing.T) {
 	})
 }
 
+func unlabelledFinalizerPod(labelValue *string, uid string, podIPs ...string) *v1.Pod {
+	labels := map[string]string{}
+	if labelValue != nil {
+		labels[consts.PodLabelServiceEgressGateway] = *labelValue
+	}
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       "p",
+			Namespace:  "ns",
+			UID:        types.UID(uid),
+			Labels:     labels,
+			Finalizers: []string{"example.com/keep", ServiceGatewayPodCleanupFinalizer},
+		},
+		Status: v1.PodStatus{Phase: v1.PodRunning, HostIP: "10.0.0.1"},
+	}
+	if len(podIPs) > 0 {
+		pod.Status.PodIP = podIPs[0]
+		for _, ip := range podIPs {
+			pod.Status.PodIPs = append(pod.Status.PodIPs, v1.PodIP{IP: ip})
+		}
+	}
+	return pod
+}
+
+func completeEgressCleanup(t *testing.T, dt *DiffTracker, services ...string) {
+	t.Helper()
+	for _, service := range services {
+		dt.mu.Lock()
+		dt.NRPResources.NATGateways.Delete(service)
+		dt.mu.Unlock()
+		assert.NoError(t, dt.RemoveLastPodFinalizers(context.Background(), service))
+	}
+}
+
+func TestPodCleanupMultipleIdentities(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, order := range [][]string{{a, b}, {b, a}} {
+		t.Run(order[0], func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7", "fd00::7")
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(a, b)
+			for location, address := range map[string]string{"10.0.0.1": "10.244.0.7", "fd00::1": "fd00::7"} {
+				dt.NRPResources.Locations[location] = NRPLocation{Addresses: map[string]NRPAddress{
+					address: {Services: utilsets.NewString(a, b)},
+				}}
+			}
+			dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+			pending := dt.pendingPodDeletions["ns/p"]
+			if !assert.NotNil(t, pending) {
+				return
+			}
+			for _, service := range order {
+				cleanup, found := pending.cleanupFor(service)
+				assert.True(t, found)
+				assert.True(t, cleanup.WaitForServiceDeletion)
+				assert.ElementsMatch(t, []string{"10.244.0.7", "fd00::7"}, cleanup.Addresses)
+			}
+			dt.NRPResources.Locations = make(map[string]NRPLocation)
+			assert.False(t, dt.CheckPendingPodDeletions(ctx), "service cleanup owns the wait")
+			completeEgressCleanup(t, dt, order[0])
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "one completed gateway cannot release the other")
+			pending = dt.pendingPodDeletions["ns/p"]
+			if !assert.NotNil(t, pending) {
+				return
+			}
+			assert.False(t, pending.waitsForService(order[0]))
+			assert.True(t, pending.waitsForService(order[1]))
+			completeEgressCleanup(t, dt, order[1])
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			assert.Empty(t, dt.pendingPodDeletions)
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestPodCleanupPreservesServiceVerification(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.8")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert(a, b)
+	dt.K8sResources.Egresses.Insert(b)
+	dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+		"10.244.0.9": {PublicOutboundIdentity: b, OutboundPodKey: "ns/other", OutboundPodUID: "uid-other"},
+	}}
+	dt.outboundIdentityPodRefCount.Store(b, 1)
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString(a)},
+		"10.244.0.8": {Services: utilsets.NewString(b)},
+		"10.244.0.9": {Services: utilsets.NewString(b)},
+	}}
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a, VerifyServiceDrain: true,
+	}
+	dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+	pending := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.True(t, pending.ServiceCleanup[a].VerifyServiceDrain)
+	assert.False(t, pending.ServiceCleanup[b].WaitForServiceDeletion)
+	delete(dt.NRPResources.Locations["10.0.0.1"].Addresses, "10.244.0.8")
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(got), "A's no-IP verification is independent of B's addresses")
+	delete(dt.NRPResources.Locations["10.0.0.1"].Addresses, "10.244.0.7")
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+	assert.Contains(t, dt.K8sResources.Nodes["10.0.0.1"].Pods, "10.244.0.9")
+}
+
+func TestPodCleanupFindsAllIdentitiesAfterIPsAreCleared(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	dt := newTestDiffTracker()
+	dt.kubeClient = fake.NewSimpleClientset(pod)
+	dt.NRPResources.NATGateways.Insert(a, b)
+	dt.K8sResources.Egresses.Insert(b)
+	dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+		"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: b, OutboundPodKey: "ns/p", OutboundPodUID: "uid-p"},
+	}}
+	dt.outboundIdentityPodRefCount.Store(b, 1)
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString(a, b)},
+	}}
+	dt.releaseUnlabelledPodFinalizer(context.Background(), pod, false)
+	pending := dt.pendingPodDeletions["ns/p"]
+	if assert.NotNil(t, pending) {
+		assert.Len(t, pending.ServiceCleanup, 2)
+		assert.True(t, pending.waitsForService(a))
+		assert.True(t, pending.waitsForService(b))
+	}
+}
+
+func TestPodFinalizerRechecksCleanupOnAPIConflict(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a, Addresses: []string{"10.244.0.7"},
+	}
+	attempts := 0
+	kube.PrependReactor("update", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+		attempts++
+		if attempts != 1 {
+			return false, nil, nil
+		}
+		dt.mu.Lock()
+		dt.NRPResources.NATGateways.Insert(b)
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString(b)},
+		}}
+		dt.mu.Unlock()
+		return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "pods"}, "p", fmt.Errorf("concurrent update"))
+	})
+	dt.CheckPendingPodDeletions(ctx)
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(got))
+	assert.Equal(t, 1, attempts, "a conflict retry must re-evaluate cleanup before another write")
+	pending := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.True(t, pending.waitsForService(b))
+	dt.NRPResources.Locations = make(map[string]NRPLocation)
+	completeEgressCleanup(t, dt, b)
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+}
+
+func TestPodFinalizerRegistrationRetriesAfterCancellation(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, family := range []struct {
+		name  string
+		nodes []string
+		ips   []string
+		other []string
+	}{
+		{name: "ipv4", nodes: []string{"10.0.0.1"}, ips: []string{"10.244.0.7"}, other: []string{"10.244.0.9"}},
+		{name: "ipv6", nodes: []string{"fd00::1"}, ips: []string{"fd00::7"}, other: []string{"fd00::9"}},
+		{name: "dual", nodes: []string{"10.0.0.1", "fd00::1"}, ips: []string{"10.244.0.7", "fd00::7"}, other: []string{"10.244.0.9", "fd00::9"}},
+	} {
+		t.Run(family.name, func(t *testing.T) {
+			for _, cancelRegistration := range []bool{false, true} {
+				t.Run(fmt.Sprintf("cancel=%t", cancelRegistration), func(t *testing.T) {
+					ctx := context.Background()
+					label := "egress-a"
+					pod := unlabelledFinalizerPod(&label, "uid-p", family.ips...)
+					pod.Status.HostIP = family.nodes[0]
+					for _, node := range family.nodes {
+						pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: node})
+					}
+					other := unlabelledFinalizerPod(&label, "uid-other", family.other...)
+					other.Name = "other"
+					other.Status.HostIP, other.Status.HostIPs = pod.Status.HostIP, pod.Status.HostIPs
+					kube := fake.NewSimpleClientset(pod, other)
+					dt := newTestDiffTracker()
+					dt.kubeClient = kube
+					dt.podInformerAddPod(pod)
+					dt.podInformerAddPod(other)
+					op := dt.pendingServiceOps[service]
+					if !assert.NotNil(t, op) {
+						return
+					}
+					assert.Equal(t, StateNotStarted, op.State)
+					assert.Len(t, dt.pendingPods[service], 2*len(family.ips))
+					op.State = StateCreationInProgress
+					dt.NRPResources.NATGateways.Insert(service)
+					dt.OnServiceCreationComplete(service, true, nil)
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+
+					lost := pod.DeepCopy()
+					lost.Status.PodIP, lost.Status.PodIPs = "", nil
+					_, err := kube.CoreV1().Pods("ns").Update(ctx, lost, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					dt.reconcileEgressPodUpdate(pod, lost)
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+					pending := dt.pendingPodDeletions["ns/p"]
+					if !assert.NotNil(t, pending) {
+						return
+					}
+					assert.False(t, pending.waitsForService(service))
+					assert.True(t, dt.podCleanupReadyLocked(pending))
+					_, err = kube.CoreV1().Pods("ns").Update(ctx, pod, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+
+					attempt, cancel := context.WithCancel(ctx)
+					defer cancel()
+					gets := 0
+					kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+						gets++
+						if gets == 2 {
+							assert.NotNil(t, dt.pendingPodDeletions["ns/p"].forUID("uid-p"),
+								"registration must retain its retry record through the fresh API check")
+							if cancelRegistration {
+								cancel()
+							}
+						}
+						return false, nil, nil
+					})
+					assert.Equal(t, cancelRegistration, dt.CheckPendingPodDeletions(attempt))
+					assert.Equal(t, 2, gets)
+					if cancelRegistration {
+						assert.NotNil(t, dt.pendingPodDeletions["ns/p"].forUID("uid-p"))
+						for i, ip := range family.ips {
+							assert.Empty(t, dt.K8sResources.Nodes[family.nodes[i]].Pods[ip].PublicOutboundIdentity)
+						}
+					}
+					assert.False(t, dt.CheckPendingPodDeletions(ctx), "a fresh attempt must restore the live Pod without another informer event")
+					for i, ip := range family.ips {
+						assert.Equal(t, "uid-p", dt.K8sResources.Nodes[family.nodes[i]].Pods[ip].OutboundPodUID)
+						assert.Equal(t, "uid-other", dt.K8sResources.Nodes[family.nodes[i]].Pods[family.other[i]].OutboundPodUID)
+					}
+					current, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+					assert.NoError(t, err)
+					assert.True(t, hasPodFinalizer(current))
+					assert.Empty(t, dt.pendingPodDeletions)
+					assert.Empty(t, dt.podFinalizerGuards)
+				})
+			}
+		})
+	}
+}
+
+func TestPodRegistrationRetryPreservesOtherServiceCleanup(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, family := range []struct {
+		name  string
+		nodes []string
+		ips   []string
+		other []string
+		spare []string
+	}{
+		{name: "ipv4", nodes: []string{"10.0.0.1"}, ips: []string{"10.244.0.7"}, other: []string{"10.244.0.9"}, spare: []string{"10.244.0.11"}},
+		{name: "ipv6", nodes: []string{"fd00::1"}, ips: []string{"fd00::7"}, other: []string{"fd00::9"}, spare: []string{"fd00::b"}},
+		{name: "dual", nodes: []string{"10.0.0.1", "fd00::1"}, ips: []string{"10.244.0.7", "fd00::7"}, other: []string{"10.244.0.9", "fd00::9"}, spare: []string{"10.244.0.11", "fd00::b"}},
+	} {
+		t.Run(family.name, func(t *testing.T) {
+			for _, mode := range []string{"cancelled last", "healthy last", "cancelled nonlast"} {
+				t.Run(mode, func(t *testing.T) {
+					ctx := context.Background()
+					makePod := func(name, uid, label string, ips []string) *v1.Pod {
+						pod := unlabelledFinalizerPod(&label, uid, ips...)
+						pod.Name, pod.Status.HostIP = name, family.nodes[0]
+						for _, node := range family.nodes {
+							pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: node})
+						}
+						return pod
+					}
+					podA := makePod("p", "uid-p", "egress-a", family.ips)
+					other := makePod("other", "uid-other", "egress-b", family.other)
+					spare := makePod("spare", "uid-spare", "egress-a", family.spare)
+					kube := fake.NewSimpleClientset(podA, other)
+					dt := newTestDiffTracker()
+					dt.kubeClient = kube
+					dt.podInformerAddPod(podA)
+					dt.podInformerAddPod(other)
+					if mode == "cancelled nonlast" {
+						_, err := kube.CoreV1().Pods("ns").Create(ctx, spare, metav1.CreateOptions{})
+						assert.NoError(t, err)
+						dt.podInformerAddPod(spare)
+					}
+					for _, service := range []string{a, b} {
+						op := dt.pendingServiceOps[service]
+						if !assert.NotNil(t, op) {
+							return
+						}
+						assert.Equal(t, StateNotStarted, op.State)
+						assert.NotEmpty(t, dt.pendingPods[service])
+						op.State = StateCreationInProgress
+						dt.NRPResources.NATGateways.Insert(service)
+						dt.OnServiceCreationComplete(service, true, nil)
+					}
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+
+					unlabelled := podA.DeepCopy()
+					unlabelled.Labels = nil
+					_, err := kube.CoreV1().Pods("ns").Update(ctx, unlabelled, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					unavailable := true
+					kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+						if unavailable {
+							return true, nil, apierrors.NewServiceUnavailable("read unavailable")
+						}
+						return false, nil, nil
+					})
+					dt.podInformerRemovePod(podA)
+					pending := dt.pendingPodDeletions["ns/p"]
+					if !assert.NotNil(t, pending) {
+						return
+					}
+					assert.True(t, pending.ResolutionPending)
+					podB := podA.DeepCopy()
+					podB.Labels[consts.PodLabelServiceEgressGateway] = "egress-b"
+					_, err = kube.CoreV1().Pods("ns").Update(ctx, podB, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					unavailable = false
+
+					attempt, cancel := context.WithCancel(ctx)
+					defer cancel()
+					cancelled := mode != "healthy last"
+					var cancelRegistration context.CancelFunc
+					if cancelled {
+						cancelRegistration = cancel
+					}
+					gets := 0
+					kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+						gets++
+						if gets%2 == 0 && cancelRegistration != nil {
+							cancelRegistration()
+						}
+						return false, nil, nil
+					})
+					assert.True(t, dt.CheckPendingPodDeletions(attempt), "A's new drain still requires acknowledgment")
+					assert.Equal(t, 2, gets)
+					if cancelled {
+						for i, ip := range family.ips {
+							assert.Empty(t, dt.K8sResources.Nodes[family.nodes[i]].Pods[ip].PublicOutboundIdentity)
+						}
+					}
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+					dt.CheckPendingServiceDeletions()
+					pending = dt.pendingPodDeletions["ns/p"]
+					if !assert.NotNil(t, pending) {
+						return
+					}
+					assert.Equal(t, mode != "cancelled nonlast", pending.waitsForService(a))
+					select {
+					case <-dt.locationsUpdaterTrigger:
+					default:
+					}
+					if cancelled {
+						assert.True(t, pending.ResolutionPending)
+						assert.True(t, dt.CheckPendingPodDeletions(attempt))
+						assert.Equal(t, 2, gets)
+						assert.Empty(t, dt.locationsUpdaterTrigger, "cancellation leaves paced retries, not an immediate self-trigger")
+						retryCtx, stopRetry := context.WithCancel(ctx)
+						defer stopRetry()
+						cancelRegistration = stopRetry
+						assert.True(t, dt.CheckPendingPodDeletions(retryCtx))
+						assert.Equal(t, 4, gets)
+						assert.Empty(t, dt.locationsUpdaterTrigger, "repeated cancellation must not bypass updater backoff")
+					}
+
+					cancelRegistration = nil
+					dt.CheckPendingPodDeletions(ctx)
+					for i, ip := range family.ips {
+						got := dt.K8sResources.Nodes[family.nodes[i]].Pods[ip]
+						assert.Equal(t, b, got.PublicOutboundIdentity)
+						assert.Equal(t, "uid-p", got.OutboundPodUID)
+						assert.Equal(t, "uid-other", dt.K8sResources.Nodes[family.nodes[i]].Pods[family.other[i]].OutboundPodUID)
+					}
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+					assert.False(t, dt.CheckPendingPodDeletions(ctx))
+					if mode != "cancelled nonlast" {
+						pending = dt.pendingPodDeletions["ns/p"]
+						if assert.NotNil(t, pending) {
+							assert.True(t, pending.waitsForService(a))
+							assert.False(t, pending.ResolutionPending)
+						}
+						assert.Equal(t, StateDeletionInProgress, dt.pendingServiceOps[a].State)
+					} else {
+						assert.Empty(t, dt.pendingPodDeletions)
+					}
+					select {
+					case <-dt.locationsUpdaterTrigger:
+					default:
+					}
+					assert.False(t, dt.CheckPendingPodDeletions(ctx))
+					assert.Empty(t, dt.locationsUpdaterTrigger)
+					assert.Empty(t, dt.podFinalizerGuards)
+				})
+			}
+		})
+	}
+}
+
+func TestPodFinalizerCompletionPreservesCurrentCreation(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, family := range []struct {
+		name  string
+		nodes []string
+		moved []string
+		old   []string
+		fresh []string
+		peer  []string
+	}{
+		{name: "ipv4", nodes: []string{"10.0.0.1"}, moved: []string{"10.0.0.2"}, old: []string{"10.244.0.7"}, fresh: []string{"10.244.0.8"}, peer: []string{"10.244.0.9"}},
+		{name: "ipv6", nodes: []string{"fd00::1"}, moved: []string{"fd00::2"}, old: []string{"fd00::7"}, fresh: []string{"fd00::8"}, peer: []string{"fd00::9"}},
+		{name: "dual", nodes: []string{"10.0.0.1", "fd00::1"}, moved: []string{"10.0.0.2", "fd00::2"}, old: []string{"10.244.0.7", "fd00::7"}, fresh: []string{"10.244.0.8", "fd00::8"}, peer: []string{"10.244.0.9", "fd00::9"}},
+	} {
+		t.Run(family.name, func(t *testing.T) {
+			for _, mode := range []string{"not_started", "creating", "location_move", "unchanged", "ready", "peer"} {
+				t.Run(mode, func(t *testing.T) {
+					ctx := context.Background()
+					label := "egress-b"
+					pod := unlabelledFinalizerPod(&label, "uid-p", family.old...)
+					pod.Status.HostIP, pod.Status.HostIPs = family.nodes[0], nil
+					for _, node := range family.nodes {
+						pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: node})
+					}
+					kube := fake.NewSimpleClientset(pod)
+					dt := newTestDiffTracker()
+					dt.kubeClient = kube
+					dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+						Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a, IsLastPod: true,
+					}
+					dt.podInformerAddPod(pod)
+					op := dt.pendingServiceOps[b]
+					if !assert.NotNil(t, op) {
+						return
+					}
+					wantState := StateNotStarted
+					if mode != "not_started" {
+						wantState = StateCreationInProgress
+						op.State = StateCreationInProgress
+						inFlight := op.Config
+						op.InFlightConfig = &inFlight
+					}
+					if mode == "peer" {
+						for i, address := range family.peer {
+							dt.AddPodWithUID(b, "ns/q", "uid-q", family.nodes[i], address)
+						}
+					}
+					if mode == "ready" {
+						dt.NRPResources.NATGateways.Insert(b)
+						dt.OnServiceCreationComplete(b, true, nil)
+						dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+						wantState = StateCreated
+					}
+					current := pod.DeepCopy()
+					addresses, locations := family.fresh, family.nodes
+					switch mode {
+					case "location_move":
+						addresses, locations = family.old, family.moved
+					case "unchanged":
+						addresses = family.old
+					}
+					current.Status.PodIP, current.Status.PodIPs = addresses[0], nil
+					for _, address := range addresses {
+						current.Status.PodIPs = append(current.Status.PodIPs, v1.PodIP{IP: address})
+					}
+					current.Status.HostIP, current.Status.HostIPs = locations[0], nil
+					for _, node := range locations {
+						current.Status.HostIPs = append(current.Status.HostIPs, v1.HostIP{IP: node})
+					}
+					_, err := kube.CoreV1().Pods("ns").Update(ctx, current, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					assert.NoError(t, dt.RemoveLastPodFinalizers(ctx, a))
+					assert.Same(t, op, dt.pendingServiceOps[b])
+					assert.Equal(t, wantState, op.State)
+					assert.NotContains(t, dt.pendingServiceDeletions, b)
+					if mode != "ready" {
+						op.State = StateCreationInProgress
+						dt.NRPResources.NATGateways.Insert(b)
+						dt.OnServiceCreationComplete(b, true, nil)
+					}
+					assert.Equal(t, StateCreated, op.State)
+					for i, address := range addresses {
+						assert.Equal(t, "uid-p", dt.K8sResources.Nodes[locations[i]].Pods[address].OutboundPodUID)
+						if mode != "unchanged" {
+							assert.Empty(t, dt.K8sResources.Nodes[family.nodes[i]].Pods[family.old[i]].PublicOutboundIdentity)
+						}
+					}
+					if mode == "peer" {
+						for i, address := range family.peer {
+							assert.Equal(t, "uid-q", dt.K8sResources.Nodes[family.nodes[i]].Pods[address].OutboundPodUID)
+						}
+					}
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+					assert.False(t, dt.CheckPendingPodDeletions(ctx))
+					got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+					assert.NoError(t, err)
+					assert.True(t, hasPodFinalizer(got))
+					assert.Empty(t, dt.pendingPods[b])
+					assert.Empty(t, dt.pendingPodDeletions)
+					assert.Empty(t, dt.podFinalizerGuards)
+				})
+			}
+		})
+	}
+}
+
+func TestPodFinalizerCompletionKeepsAssociationUntilRegistration(t *testing.T) {
+	const a, b, c = "egress-a-natgw", "egress-b-natgw", "egress-c-natgw"
+	for _, ready := range []bool{false, true} {
+		for _, change := range []string{"removed", "emptied", "relabelled"} {
+			t.Run(fmt.Sprintf("ready=%t/%s", ready, change), func(t *testing.T) {
+				ctx := context.Background()
+				label := "egress-b"
+				pod := unlabelledFinalizerPod(&label, "uid-p", "10.244.0.7")
+				kube := fake.NewSimpleClientset(pod)
+				dt := newTestDiffTracker()
+				dt.kubeClient = kube
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a, IsLastPod: true,
+				}
+				dt.podInformerAddPod(pod)
+				op := dt.pendingServiceOps[b]
+				if !assert.NotNil(t, op) {
+					return
+				}
+				op.State = StateCreationInProgress
+				inFlight := op.Config
+				op.InFlightConfig = &inFlight
+				if ready {
+					dt.NRPResources.NATGateways.Insert(b)
+					dt.OnServiceCreationComplete(b, true, nil)
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+				}
+				observed := pod.DeepCopy()
+				observed.Status.PodIP = "10.244.0.8"
+				observed.Status.PodIPs = []v1.PodIP{{IP: "10.244.0.8"}}
+				_, err := kube.CoreV1().Pods("ns").Update(ctx, observed, metav1.UpdateOptions{})
+				assert.NoError(t, err)
+				current := observed.DeepCopy()
+				switch change {
+				case "removed":
+					current.Labels = nil
+				case "emptied":
+					current.Labels[consts.PodLabelServiceEgressGateway] = ""
+				case "relabelled":
+					current.Labels[consts.PodLabelServiceEgressGateway] = "egress-c"
+				}
+				gets := 0
+				kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+					gets++
+					if gets == 2 {
+						assert.NoError(t, kube.Tracker().Update(v1.SchemeGroupVersion.WithResource("pods"), current, "ns"))
+					}
+					return false, nil, nil
+				})
+				assert.NoError(t, dt.RemoveLastPodFinalizers(ctx, a))
+				assert.Equal(t, 2, gets)
+				assert.True(t, dt.outboundAddressDesiredLocked(b, "10.244.0.7"),
+					"an interrupted registration must leave the association available for cleanup")
+				assert.False(t, dt.outboundAddressDesiredLocked(b, "10.244.0.8"))
+				assert.NotContains(t, dt.pendingServiceDeletions, b)
+				if change == "removed" {
+					dt.podInformerRemovePod(observed)
+				} else {
+					dt.reconcileEgressPodUpdate(observed, current)
+				}
+				assert.False(t, dt.outboundAddressDesiredLocked(b, "10.244.0.7"))
+				assert.True(t, op.State == StateDeletionPending || op.State == StateDeletionInProgress)
+				if !ready {
+					dt.NRPResources.NATGateways.Insert(b)
+					dt.OnServiceCreationComplete(b, true, nil)
+				}
+				dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+				dt.CheckPendingServiceDeletions()
+				assert.Equal(t, StateDeletionInProgress, op.State)
+				completeEgressCleanup(t, dt, b)
+				got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, change == "relabelled", hasPodFinalizer(got))
+				assert.Contains(t, got.Finalizers, "example.com/keep")
+				if change == "relabelled" {
+					assert.NotNil(t, dt.pendingServiceOps[c])
+					assert.True(t, dt.outboundAddressDesiredLocked(c, "10.244.0.8"))
+				}
+				assert.Empty(t, dt.pendingPodDeletions)
+				assert.Empty(t, dt.podFinalizerGuards)
+			})
+		}
+	}
+}
+
+func TestPodCleanupNoIPRequiresLocationAcknowledgment(t *testing.T) {
+	const service = "egress-a-natgw"
+	ctx := context.Background()
+	label := "egress-a"
+	pod := unlabelledFinalizerPod(&label, "uid-p", "10.244.0.7")
+	other := unlabelledFinalizerPod(&label, "uid-other", "10.244.0.9")
+	other.Name = "other"
+	kube := fake.NewSimpleClientset(pod, other)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.podInformerAddPod(other)
+	op := dt.pendingServiceOps[service]
+	if !assert.NotNil(t, op) {
+		return
+	}
+	op.State = StateCreationInProgress
+	dt.NRPResources.NATGateways.Insert(service)
+	dt.OnServiceCreationComplete(service, true, nil)
+	dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+	dt.podInformerAddPod(pod)
+	deleting := pod.DeepCopy()
+	deleting.Status.PodIP, deleting.Status.PodIPs = "", nil
+	now := metav1.Now()
+	deleting.DeletionTimestamp = &now
+	_, err := kube.CoreV1().Pods("ns").Update(ctx, deleting, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	dt.podInformerRemovePod(deleting)
+	assert.True(t, dt.checkPendingPodDeletions(ctx, false), "cached absence after an unacknowledged pass cannot release cleanup")
+	current, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(current))
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	current, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(current))
+	assert.Equal(t, "uid-other", dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.9"].OutboundPodUID)
+	assert.Equal(t, StateCreated, op.State)
+}
+
+func TestPodCleanupAcknowledgmentPreservesOtherServiceConditions(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, serviceFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("service_first=%t", serviceFirst), func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(a, b)
+			dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a,
+				Addresses: []string{"10.244.0.7"}, LocationSyncPending: true,
+			}
+			dt.mu.Lock()
+			dt.mergePodDeletionLocked("ns/p", &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: b, IsLastPod: true,
+			})
+			dt.mu.Unlock()
+			if serviceFirst {
+				completeEgressCleanup(t, dt, b)
+			} else {
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+			}
+			current, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(current), "one completed condition cannot acknowledge the other service")
+			if serviceFirst {
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+			} else {
+				completeEgressCleanup(t, dt, b)
+			}
+			current, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(current))
+			assert.Empty(t, dt.pendingPodDeletions)
+		})
+	}
+}
+
+func TestReadyPodCleanupDiscoversAnotherEgress(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert(a, b)
+	dt.K8sResources.Egresses.Insert(b)
+	dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+		"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: b, OutboundPodKey: "ns/p", OutboundPodUID: "uid-p"},
+		"10.244.0.9": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: b, OutboundPodKey: "ns/other", OutboundPodUID: "other-uid"},
+	}}
+	dt.outboundIdentityPodRefCount.Store(b, 2)
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString(b)},
+		"10.244.0.9": {Services: utilsets.NewString(b)},
+	}}
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a, Addresses: []string{"10.244.0.7"},
+	}
+	dt.CheckPendingPodDeletions(ctx)
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(got), "A's ready record cannot release B's still-mapped address")
+	pending := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.Equal(t, []string{"10.244.0.7"}, pending.ServiceCleanup[b].Addresses)
+	assert.False(t, pending.ServiceCleanup[b].WaitForServiceDeletion, "the race is independent of last-Pod cleanup")
+	delete(dt.NRPResources.Locations["10.0.0.1"].Addresses, "10.244.0.7")
+	dt.CheckPendingPodDeletions(ctx)
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+}
+
+func TestUnresolvedPodCleanupRetainsKnownAddresses(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, mappingKnown := range []bool{false, true} {
+		t.Run(fmt.Sprintf("mapping_known=%t", mappingKnown), func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			kube := fake.NewSimpleClientset(pod)
+			unavailable := true
+			kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+				if unavailable {
+					return true, nil, apierrors.NewServiceUnavailable("read unavailable")
+				}
+				return false, nil, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			location := NRPLocation{Addresses: map[string]NRPAddress{
+				"10.244.0.7": {Services: utilsets.NewString(service)},
+			}}
+			if mappingKnown {
+				dt.NRPResources.Locations["10.0.0.1"] = location
+			}
+			dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+			noIPs := pod.DeepCopy()
+			noIPs.Status.PodIP, noIPs.Status.PodIPs = "", nil
+			_, err := kube.CoreV1().Pods("ns").Update(ctx, noIPs, metav1.UpdateOptions{})
+			assert.NoError(t, err)
+			dt.releaseUnlabelledPodFinalizer(ctx, noIPs, false)
+			dt.NRPResources.Locations["10.0.0.1"] = location
+			unavailable = false
+			dt.CheckPendingPodDeletions(ctx)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got))
+			pending := dt.pendingPodDeletions["ns/p"]
+			if assert.NotNil(t, pending) {
+				assert.Equal(t, []string{"10.244.0.7"}, pending.Addresses)
+				assert.True(t, pending.waitsForService(service))
+			}
+		})
+	}
+}
+
+func TestPodRegistrationRetainsUnresolvedCleanup(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, state := range []string{"unknown identity", "single identity", "map identity", "other UID"} {
+		t.Run(state, func(t *testing.T) {
+			ctx := context.Background()
+			label := "egress-b"
+			pod := unlabelledFinalizerPod(&label, "uid-p", "10.244.0.7")
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(a, b)
+			dt.K8sResources.Egresses.Insert(a, b)
+			for _, service := range []string{a, b} {
+				dt.pendingServiceOps[service] = &ServiceOperationState{
+					ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+				}
+			}
+			pending := &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-p",
+				ResolutionPending: true, ResolutionAddresses: []string{"10.244.0.7"},
+			}
+			switch state {
+			case "single identity":
+				pending.ServiceName, pending.Addresses = b, []string{"10.244.0.7"}
+			case "map identity":
+				pending.ServiceCleanup = map[string]podCleanupState{b: {Addresses: []string{"10.244.0.7"}}}
+			case "other UID":
+				pending.ServiceName, pending.Addresses = b, []string{"10.244.0.7"}
+				pending.ResolutionPending, pending.ResolutionAddresses = false, nil
+				pending.OtherUIDs = map[string]*PendingPodDeletion{
+					"uid-old": {
+						Namespace: "ns", Name: "p", UID: "uid-old",
+						ResolutionPending: true, ResolutionAddresses: []string{"10.244.0.7"}, ResolutionServices: []string{a},
+					},
+				}
+			}
+			dt.pendingPodDeletions["ns/p"] = pending
+			dt.podInformerAddPod(pod)
+			pending = dt.pendingPodDeletions["ns/p"]
+			if !assert.NotNil(t, pending) {
+				return
+			}
+			assert.True(t, pending.ResolutionPending, "registering B cannot resolve unknown earlier associations")
+			dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+				"10.244.0.7": {Services: utilsets.NewString(a, b)},
+			}}
+			dt.CheckPendingPodDeletions(ctx)
+			assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[a].State)
+			pending = dt.pendingPodDeletions["ns/p"]
+			if state == "other UID" {
+				assert.Nil(t, pending, "the current UID does not inherit a departed UID's service wait")
+			} else if assert.NotNil(t, pending) {
+				assert.True(t, pending.waitsForService(a))
+			}
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got))
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestPodCleanupWithReusedAddresses(t *testing.T) {
+	const service, earlier = "egress-b-natgw", "egress-a-natgw"
+	for _, state := range []string{
+		"live_IPv4", "live_IPv6", "buffered_IPv4", "buffered_IPv6",
+		"previously_recorded", "different_location", "independent_service_wait",
+		"no_IP_control", "unbacked_control", "unknown_UID_control",
+		"other_service_control", "same_UID_control", "unknown_request_UID_control", "buffered_location_control",
+		"buffered_unknown_UID_control",
+	} {
+		t.Run(state, func(t *testing.T) {
+			ctx := context.Background()
+			address, oldLocation := "10.244.0.7", "10.0.0.1"
+			if strings.Contains(state, "IPv6") {
+				address, oldLocation = "fd00::7", "fd00::1"
+			}
+			old := unlabelledFinalizerPod(nil, "uid-old", address)
+			old.Status.HostIP = oldLocation
+			now := metav1.Now()
+			old.DeletionTimestamp = &now
+			if state == "no_IP_control" {
+				old.Status.PodIP, old.Status.PodIPs = "", nil
+			}
+			if state == "unknown_request_UID_control" {
+				old.UID = ""
+			}
+			kube := fake.NewSimpleClientset(old)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			dt.NRPResources.Locations[oldLocation] = NRPLocation{Addresses: map[string]NRPAddress{
+				address: {Services: utilsets.NewString(service)},
+			}}
+			currentLocation, desiredService := oldLocation, service
+			ownerUID, ownerKey := "uid-new", "other/q"
+			if state == "different_location" || state == "buffered_location_control" {
+				currentLocation = "10.0.0.2"
+			}
+			if state == "unknown_UID_control" || state == "buffered_unknown_UID_control" {
+				ownerUID = ""
+			}
+			if state == "same_UID_control" {
+				ownerUID, ownerKey = "uid-old", "ns/p"
+			}
+			if state == "other_service_control" {
+				desiredService = "egress-c-natgw"
+				dt.NRPResources.NATGateways.Insert(desiredService)
+			}
+			buffered := strings.HasPrefix(state, "buffered")
+			if buffered {
+				dt.pendingPods[service] = []PendingPodUpdate{
+					{PodKey: ownerKey, PodUID: ownerUID, Location: currentLocation, Address: address},
+				}
+			} else if state != "unbacked_control" {
+				dt.K8sResources.Egresses.Insert(desiredService)
+				dt.K8sResources.Nodes[currentLocation] = Node{Pods: map[string]Pod{
+					address: {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: desiredService, OutboundPodKey: ownerKey, OutboundPodUID: ownerUID},
+				}}
+				dt.outboundIdentityPodRefCount.Store(desiredService, 1)
+			}
+			if state == "previously_recorded" {
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: "uid-old", ServiceName: service, Addresses: []string{address},
+				}
+			}
+			if state == "independent_service_wait" {
+				dt.NRPResources.NATGateways.Insert(earlier)
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: "uid-old", ServiceName: earlier, IsLastPod: true,
+				}
+			}
+			recoverUnlabelledPodFinalizers(ctx, dt)
+			dt.CheckPendingPodDeletions(ctx)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			heldBefore := state == "different_location" || state == "independent_service_wait" ||
+				state == "unbacked_control" || state == "unknown_UID_control" ||
+				state == "other_service_control" || state == "same_UID_control" ||
+				state == "unknown_request_UID_control" || state == "buffered_location_control" ||
+				state == "buffered_unknown_UID_control"
+			assert.Equal(t, heldBefore, hasPodFinalizer(got))
+			if buffered {
+				if assert.Len(t, dt.pendingPods[service], 1) {
+					assert.Equal(t, ownerUID, dt.pendingPods[service][0].PodUID)
+				}
+			} else if state != "unbacked_control" && state != "same_UID_control" {
+				desired := dt.K8sResources.Nodes[currentLocation].Pods[address]
+				assert.Equal(t, desiredService, desired.PublicOutboundIdentity)
+				assert.Equal(t, ownerUID, desired.OutboundPodUID)
+			}
+			if state != "unbacked_control" && state != "same_UID_control" && state != "other_service_control" {
+				assert.Equal(t, StateCreated, dt.pendingServiceOps[service].State)
+			}
+			switch state {
+			case "different_location", "buffered_location_control":
+				dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+				dt.CheckPendingPodDeletions(ctx)
+				got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.False(t, hasPodFinalizer(got), "the old location drained; another UID's new mapping must not hold this Pod")
+				if !buffered {
+					assert.True(t, dt.NRPResources.Locations[currentLocation].Addresses[address].Services.Has(service))
+				}
+			case "independent_service_wait":
+				pending := dt.pendingPodDeletions["ns/p"]
+				if !assert.NotNil(t, pending) {
+					return
+				}
+				assert.True(t, pending.waitsForService(earlier))
+				_, exists := pending.cleanupFor(service)
+				assert.False(t, exists, "another UID's mapping must not become this Pod's service cleanup")
+				completeEgressCleanup(t, dt, earlier)
+				got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.False(t, hasPodFinalizer(got))
+			}
+			if !heldBefore || state == "different_location" || state == "buffered_location_control" || state == "independent_service_wait" {
+				assert.NotContains(t, dt.pendingPodDeletions, "ns/p")
+			}
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestPodCleanupUnknownDrainSurvivesRegistration(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert(a, b)
+	dt.K8sResources.Egresses.Insert(b)
+	for _, service := range []string{a, b} {
+		dt.pendingServiceOps[service] = &ServiceOperationState{
+			ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+		}
+	}
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString(a)},
+	}}
+	pending, released := dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+	assert.True(t, pending)
+	assert.False(t, released)
+	current := pod.DeepCopy()
+	current.Labels[consts.PodLabelServiceEgressGateway] = "egress-b"
+	current.Status.PodIP = "10.244.0.8"
+	current.Status.PodIPs = []v1.PodIP{{IP: "10.244.0.8"}}
+	if _, err := kube.CoreV1().Pods("ns").Update(ctx, current, metav1.UpdateOptions{}); !assert.NoError(t, err) {
+		return
+	}
+	dt.mu.Lock()
+	dt.mergePodDeletionLocked("ns/p", &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: b, Addresses: []string{"10.244.0.8"},
+	})
+	dt.mu.Unlock()
+	dt.podInformerAddPod(current)
+	record := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, record) {
+		return
+	}
+	assert.True(t, record.VerifyUnknownEgressDrain)
+	assert.False(t, record.ResolutionPending)
+	assert.False(t, record.waitsForService(a))
+	assert.False(t, record.waitsForService(b))
+	assert.True(t, dt.CheckPendingPodDeletions(ctx))
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[a].State)
+	dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Equal(t, StateCreated, dt.pendingServiceOps[a].State)
+	assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.244.0.8"].Services.Has(b))
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(got), "retiring verification must retain live B's protection")
+	assert.Empty(t, dt.podFinalizerGuards)
+}
+
+func TestUnresolvedPodCleanupDoesNotInheritReplacedUID(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, mapped := range []bool{false, true} {
+		t.Run(fmt.Sprintf("mapped_cleanup=%t", mapped), func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-new")
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+				"10.244.0.7": {Services: utilsets.NewString(service)},
+			}}
+			prior := &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-old",
+				ServiceName: service, Addresses: []string{"10.244.0.7"}, IsLastPod: true,
+			}
+			if mapped {
+				prior.ServiceCleanup = map[string]podCleanupState{
+					service: {Addresses: prior.Addresses, WaitForServiceDeletion: true},
+				}
+				prior.ServiceName, prior.Addresses, prior.IsLastPod = "", nil, false
+			}
+			dt.pendingPodDeletions["ns/p"] = prior
+			pending, released := dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+			assert.True(t, pending)
+			assert.False(t, released)
+			current := dt.pendingPodDeletions["ns/p"].forUID("uid-new")
+			if !assert.NotNil(t, current) {
+				return
+			}
+			assert.True(t, current.VerifyUnknownEgressDrain)
+			assert.Empty(t, current.ServiceName)
+			assert.Empty(t, current.Addresses)
+			assert.Empty(t, current.ServiceCleanup, "the new UID must not inherit the predecessor's service wait")
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "unknown ownership still requires network-drain verification")
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.244.0.7"].Services.Has(service))
+			dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+			assert.False(t, dt.CheckPendingPodDeletions(ctx))
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got), "release after address verification must not wait for the predecessor's gateway deletion")
+			assert.True(t, dt.NRPResources.NATGateways.Has(service))
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestPodFinalizerRetriesReadyReplacementRecord(t *testing.T) {
+	for _, resolving := range []bool{false, true} {
+		t.Run(fmt.Sprintf("resolving=%t", resolving), func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-new")
+			kube := fake.NewSimpleClientset(pod)
+			unavailable := true
+			kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+				if unavailable {
+					return true, nil, apierrors.NewServiceUnavailable("read unavailable")
+				}
+				return false, nil, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			pending := &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-old",
+				ServiceName: "egress-a-natgw", IsLastPod: true,
+				OtherUIDs: map[string]*PendingPodDeletion{
+					"uid-new": {Namespace: "ns", Name: "p", UID: "uid-new", ResolutionPending: resolving},
+				},
+			}
+			dt.pendingPodDeletions["ns/p"] = pending
+			assert.True(t, dt.CheckPendingPodDeletions(ctx), "an unrelated UID's service wait cannot suppress ready or unresolved work")
+			assert.Same(t, pending, dt.pendingPodDeletions["ns/p"])
+			unavailable = false
+			assert.False(t, dt.CheckPendingPodDeletions(ctx))
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			assert.Empty(t, dt.pendingPodDeletions)
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestPodFinalizerCompletionDoesNotCrossUID(t *testing.T) {
+	const service = "egress-a-natgw"
+	ctx := context.Background()
+	backoff := finalizerRetryBackoff
+	finalizerRetryBackoff.Steps = 1
+	t.Cleanup(func() { finalizerRetryBackoff = backoff })
+	pod := unlabelledFinalizerPod(nil, "uid-new")
+	kube := fake.NewSimpleClientset(pod)
+	unavailable := true
+	kube.PrependReactor("update", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+		if unavailable {
+			return true, nil, apierrors.NewServiceUnavailable("finalizer write unavailable")
+		}
+		return false, nil, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-old",
+		ServiceName: service, IsLastPod: true,
+		OtherUIDs: map[string]*PendingPodDeletion{
+			"uid-new": {Namespace: "ns", Name: "p", UID: "uid-new", ResolutionPending: true},
+		},
+	}
+	assert.Error(t, dt.RemoveLastPodFinalizers(ctx, service))
+	pending := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.Equal(t, "uid-new", pending.UID)
+	assert.False(t, pending.waitsForService(service), "an old UID's failed callback cannot add its service wait to the replacement")
+	unavailable = false
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+	assert.Contains(t, got.Finalizers, "example.com/keep")
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Empty(t, dt.podFinalizerGuards)
+}
+
+func TestPodFinalizerRetiresOnlyItsExactRecord(t *testing.T) {
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{Namespace: "ns", Name: "p", UID: "uid-p"}
+	newer := &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-p",
+		ServiceName: "egress-b-natgw", Addresses: []string{"10.244.0.8"}, IsLastPod: true,
+	}
+	kube.PrependReactor("update", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+		dt.mu.Lock()
+		dt.pendingPodDeletions["ns/p"] = newer
+		dt.mu.Unlock()
+		return false, nil, nil
+	})
+	dt.CheckPendingPodDeletions(ctx)
+	assert.Same(t, newer, dt.pendingPodDeletions["ns/p"], "same UID does not identify the same pending work")
+}
+
+func TestPodFinalizerGuardCancellation(t *testing.T) {
+	dt := newTestDiffTracker()
+	unlock, err := dt.lockPodFinalizer(context.Background(), "ns/p")
+	if !assert.NoError(t, err) {
+		return
+	}
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(unlock) }
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		done, err := dt.lockPodFinalizer(ctx, "ns/p")
+		if done != nil {
+			done()
+		}
+		result <- err
+	}()
+	assert.Eventually(t, func() bool {
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
+		return dt.podFinalizerGuards["ns/p"].users == 2
+	}, time.Second, time.Millisecond)
+	otherCtx, cancelOther := context.WithTimeout(context.Background(), time.Second)
+	defer cancelOther()
+	other, err := dt.lockPodFinalizer(otherCtx, "ns/q")
+	if assert.NoError(t, err, "an unrelated Pod must not wait for this guard") {
+		other()
+	}
+	cancel()
+	select {
+	case err := <-result:
+		assert.ErrorIs(t, err, context.Canceled)
+	case <-time.After(time.Second):
+		t.Fatal("cancelled guard waiter did not exit")
+	}
+	release()
+	assert.Empty(t, dt.podFinalizerGuards, "idle guard entries must not accumulate")
+}
+
+func TestReleaseUnlabelledPodFinalizer_DrainsEgressBeforeRelease(t *testing.T) {
+	ctx := context.Background()
+	empty := ""
+	pod := unlabelledFinalizerPod(&empty, "uid-p", "10.244.0.7")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert("egress-a-natgw")
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+		},
+	}
+
+	dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"the finalizer must be held while the unlabelled pod address is still in NRP")
+	pending := dt.pendingPodDeletions["ns/p"]
+	if assert.NotNil(t, pending) {
+		assert.Equal(t, "uid-p", pending.UID)
+		assert.Equal(t, "egress-a-natgw", pending.ServiceName)
+		assert.ElementsMatch(t, []string{"10.244.0.7"}, pending.Addresses)
+		assert.True(t, pending.IsLastPod, "the last Pod keeps the service-cleanup condition")
+	}
+
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{}}
+	dt.CheckPendingPodDeletions(ctx)
+
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+	completeEgressCleanup(t, dt, "egress-a-natgw")
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+	assert.Contains(t, got.Finalizers, "example.com/keep", "other controllers' finalizers must be preserved")
+}
+
+func TestReleaseUnlabelledPodFinalizer_DirectReleaseAndRetryGuards(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("restored live intent reports no pending drain", func(t *testing.T) {
+		const service = "egress-a-natgw"
+		observed := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+		current := observed.DeepCopy()
+		current.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+		kube := fake.NewSimpleClientset(current)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.NATGateways.Insert(service)
+		dt.K8sResources.Egresses.Insert(service)
+		dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+			"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: service, OutboundPodKey: "ns/p", OutboundPodUID: "uid-p"},
+		}}
+		dt.outboundIdentityPodRefCount.Store(service, 1)
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString(service)},
+		}}
+		pending, released := dt.releaseUnlabelledPodFinalizer(ctx, observed, false)
+		assert.False(t, pending)
+		assert.False(t, released)
+		assert.Empty(t, dt.pendingPodDeletions)
+		assert.Equal(t, service, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity)
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.True(t, hasPodFinalizer(got))
+		assert.Contains(t, got.Finalizers, "example.com/keep")
+	})
+
+	t.Run("inbound-only address is not treated as egress", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+		kube := fake.NewSimpleClientset(pod)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.LoadBalancers.Insert("inbound-svc-lb")
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+			Addresses: map[string]NRPAddress{
+				"10.244.0.7": {Services: utilsets.NewString("inbound-svc-lb")},
+			},
+		}
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+		assert.Contains(t, got.Finalizers, "example.com/keep")
+		assert.Empty(t, dt.pendingPodDeletions)
+	})
+
+	t.Run("transient conflict is retried", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p")
+		kube := fake.NewSimpleClientset(pod)
+		failedOnce := false
+		kube.PrependReactor("update", "pods", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			if !failedOnce {
+				failedOnce = true
+				return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "pods"}, "p", fmt.Errorf("stale resourceVersion"))
+			}
+			return false, nil, nil
+		})
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+		assert.False(t, dt.CheckPendingPodDeletions(ctx))
+
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+		assert.True(t, failedOnce)
+	})
+
+	t.Run("persistent removal failure is queued for retry", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p")
+		kube := fake.NewSimpleClientset(pod)
+		kube.PrependReactor("update", "pods", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			return true, nil, apierrors.NewInternalError(fmt.Errorf("apiserver down"))
+		})
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+		if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending) {
+			assert.Equal(t, "uid-p", pending.UID)
+			assert.Empty(t, pending.Addresses)
+		}
+	})
+
+	t.Run("same-name replacement is untouched", func(t *testing.T) {
+		stale := unlabelledFinalizerPod(nil, "uid-old")
+		replacement := unlabelledFinalizerPod(nil, "uid-new")
+		kube := fake.NewSimpleClientset(replacement)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+
+		dt.releaseUnlabelledPodFinalizer(ctx, stale, false)
+
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+			"UID-guarded removal must not strip a same-name replacement")
+	})
+}
+
+func TestReleaseUnlabelledPodFinalizer_LocalStateAndMultipleEgressIdentities(t *testing.T) {
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	for _, egress := range []string{"egress-a-natgw", "egress-b-natgw", "egress-c-natgw"} {
+		dt.NRPResources.NATGateways.Insert(egress)
+	}
+	dt.K8sResources.Egresses.Insert("egress-c-natgw")
+	dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+		"10.244.0.7": {
+			InboundIdentities:      utilsets.NewString(),
+			PublicOutboundIdentity: "egress-c-natgw",
+			OutboundPodKey:         "ns/p",
+			OutboundPodUID:         "uid-p",
+		},
+	}}
+	dt.outboundIdentityPodRefCount.Store("egress-c-natgw", 1)
+	dt.pendingServiceOps["egress-c-natgw"] = &ServiceOperationState{
+		ServiceName: "egress-c-natgw",
+		Config:      NewOutboundServiceConfig("egress-c-natgw", nil),
+		State:       StateCreated,
+	}
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw", "egress-b-natgw", "egress-c-natgw")},
+		},
+	}
+
+	dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+	assert.NotContains(t, dt.K8sResources.Nodes["10.0.0.1"].Pods, "10.244.0.7",
+		"lost-PodIP release must remove tracked desired state so the diff stops publishing it")
+	pending := dt.pendingPodDeletions["ns/p"]
+	if assert.NotNil(t, pending) {
+		assert.ElementsMatch(t, []string{"10.244.0.7"}, pending.ServiceCleanup["egress-a-natgw"].Addresses)
+		assert.ElementsMatch(t, []string{"10.244.0.7"}, pending.ServiceCleanup["egress-b-natgw"].Addresses)
+		assert.ElementsMatch(t, []string{"10.244.0.7"}, pending.ServiceCleanup["egress-c-natgw"].Addresses)
+	}
+
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+		Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-b-natgw", "egress-c-natgw")},
+		},
+	}
+	dt.CheckPendingPodDeletions(ctx)
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"the finalizer must wait for every stale egress identity in a relabel chain to drain")
+
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{}}
+	dt.CheckPendingPodDeletions(ctx)
+	completeEgressCleanup(t, dt, "egress-a-natgw", "egress-b-natgw", "egress-c-natgw")
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+}
+
+func TestReleaseUnlabelledPodFinalizer_IgnoresOtherPodsOfSameEgress(t *testing.T) {
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert("egress-a-natgw")
+	dt.K8sResources.Egresses.Insert("egress-a-natgw")
+	dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+		"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: "egress-a-natgw", OutboundPodKey: "ns/p", OutboundPodUID: "uid-p"},
+		"10.244.0.9": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: "egress-a-natgw", OutboundPodKey: "ns/q", OutboundPodUID: "uid-q"},
+	}}
+	dt.outboundIdentityPodRefCount.Store("egress-a-natgw", 2)
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+		"10.244.0.9": {Services: utilsets.NewString("egress-a-natgw")},
+	}}
+
+	dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+	assert.Contains(t, dt.K8sResources.Nodes["10.0.0.1"].Pods, "10.244.0.9", "another pod of the egress must stay tracked")
+	if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending) {
+		assert.Equal(t, []string{"10.244.0.7"}, pending.Addresses)
+	}
+
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.9": {Services: utilsets.NewString("egress-a-natgw")},
+	}}
+	dt.CheckPendingPodDeletions(ctx)
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"another live pod's address must not gate this pod's release")
+}
+
+func TestReleaseUnlabelledPodFinalizer_LostPodIPsUsesTrackedState(t *testing.T) {
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	pod.Status.PodIP = ""
+	pod.Status.PodIPs = nil
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.K8sResources.Egresses.Insert("egress-a-natgw")
+	dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+		"10.244.0.7": {
+			InboundIdentities:      utilsets.NewString(),
+			PublicOutboundIdentity: "egress-a-natgw",
+			OutboundPodKey:         "ns/p",
+			OutboundPodUID:         "uid-p",
+		},
+	}}
+	dt.outboundIdentityPodRefCount.Store("egress-a-natgw", 1)
+
+	dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+	assert.NotContains(t, dt.K8sResources.Nodes["10.0.0.1"].Pods, "10.244.0.7",
+		"release must remove tracked desired state even if the current pod has lost PodIPs")
+	if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending) {
+		assert.ElementsMatch(t, []string{"10.244.0.7"}, pending.Addresses)
+	}
+}
+
+func TestReleaseUnlabelledPodFinalizer_CancelsBufferedEgressAdd(t *testing.T) {
+	for _, started := range []bool{false, true} {
+		t.Run(fmt.Sprintf("started=%t", started), func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			op := &ServiceOperationState{
+				ServiceName: "egress-a-natgw",
+				Config:      NewOutboundServiceConfig("egress-a-natgw", nil),
+				State:       StateNotStarted,
+			}
+			if started {
+				op.State = StateCreationInProgress
+			}
+			dt.pendingServiceOps["egress-a-natgw"] = op
+			dt.pendingPods["egress-a-natgw"] = []PendingPodUpdate{
+				{PodKey: "ns/p", PodUID: "uid-p", Location: "10.0.0.1", Address: "10.244.0.7"},
+				{PodKey: "ns/other", PodUID: "uid-other", Location: "10.0.0.1", Address: "10.244.0.9"},
+			}
+			dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+			for _, buffered := range dt.pendingPods["egress-a-natgw"] {
+				assert.NotEqual(t, "ns/p", buffered.PodKey)
+			}
+			assert.Contains(t, dt.pendingPods["egress-a-natgw"], PendingPodUpdate{PodKey: "ns/other", PodUID: "uid-other", Location: "10.0.0.1", Address: "10.244.0.9"})
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.Equal(t, started, hasPodFinalizer(got), "only dispatched work requires a location acknowledgment")
+			assert.Equal(t, started, dt.pendingPodDeletions["ns/p"] != nil)
+			assert.False(t, dt.CheckPendingPodDeletions(ctx))
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+		})
+	}
+}
+
+func TestReleaseUnlabelledPodFinalizer_RespectsExistingPendingDrain(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("no-IP pod keeps the finalizer until its recorded drain completes", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p")
+		kube := fake.NewSimpleClientset(pod)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.NATGateways.Insert("egress-a-natgw")
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+		}}
+		dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+			Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: "egress-a-natgw", Addresses: []string{"10.244.0.7"},
+		}
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+			"an existing drain record must not be bypassed by the unlabelled release")
+
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{}}
+		dt.CheckPendingPodDeletions(ctx)
+		completeEgressCleanup(t, dt, "egress-a-natgw")
+		got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+		assert.Contains(t, got.Finalizers, "example.com/keep")
+	})
+
+	t.Run("new egress plan is merged with the recorded drain", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.8")
+		kube := fake.NewSimpleClientset(pod)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.NATGateways.Insert("egress-a-natgw", "egress-b-natgw")
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+			"10.244.0.8": {Services: utilsets.NewString("egress-b-natgw")},
+		}}
+		dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+			Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: "egress-a-natgw", Addresses: []string{"10.244.0.7"},
+		}
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+		if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending) {
+			assert.ElementsMatch(t, []string{"10.244.0.7"}, pending.ServiceCleanup["egress-a-natgw"].Addresses)
+			assert.ElementsMatch(t, []string{"10.244.0.8"}, pending.ServiceCleanup["egress-b-natgw"].Addresses)
+		}
+
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+		}}
+		dt.CheckPendingPodDeletions(ctx)
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+			"the previously recorded address must still gate release")
+	})
+
+	t.Run("new egress plan is merged with a recorded per-service drain", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.8")
+		kube := fake.NewSimpleClientset(pod)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.NATGateways.Insert("egress-a-natgw", "egress-b-natgw")
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+			"10.244.0.8": {Services: utilsets.NewString("egress-b-natgw")},
+		}}
+		dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+			Namespace: "ns", Name: "p", UID: "uid-p",
+			ServiceCleanup: map[string]podCleanupState{"egress-a-natgw": {Addresses: []string{"10.244.0.7"}}},
+		}
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+		if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending) {
+			assert.ElementsMatch(t, []string{"10.244.0.7"}, pending.ServiceCleanup["egress-a-natgw"].Addresses)
+			assert.ElementsMatch(t, []string{"10.244.0.8"}, pending.ServiceCleanup["egress-b-natgw"].Addresses)
+		}
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+		}}
+		dt.CheckPendingPodDeletions(ctx)
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+			"the earlier egress's address must still gate release")
+	})
+
+	t.Run("service-level drain verification is kept when merging", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.8")
+		kube := fake.NewSimpleClientset(pod)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.NATGateways.Insert("egress-a-natgw", "egress-b-natgw")
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+			"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+			"10.244.0.8": {Services: utilsets.NewString("egress-b-natgw")},
+		}}
+		dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+			Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: "egress-a-natgw", VerifyServiceDrain: true,
+		}
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+		for _, held := range []string{"10.244.0.8", "10.244.0.7"} {
+			owner := map[string]string{"10.244.0.7": "egress-a-natgw", "10.244.0.8": "egress-b-natgw"}[held]
+			dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+				held: {Services: utilsets.NewString(owner)},
+			}}
+			dt.CheckPendingPodDeletions(ctx)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+				"both the verified service and the merged address must gate release (%s still in NRP)", held)
+		}
+
+		dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{}}
+		dt.CheckPendingPodDeletions(ctx)
+		completeEgressCleanup(t, dt, "egress-a-natgw", "egress-b-natgw")
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+	})
+
+	t.Run("stale record of a same-name predecessor is not reused", func(t *testing.T) {
+		for _, withIP := range []bool{false, true} {
+			var pod *v1.Pod
+			if withIP {
+				pod = unlabelledFinalizerPod(nil, "uid-new", "10.244.0.8")
+			} else {
+				pod = unlabelledFinalizerPod(nil, "uid-new")
+			}
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			if withIP {
+				dt.NRPResources.NATGateways.Insert("egress-b-natgw")
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.8": {Services: utilsets.NewString("egress-b-natgw")},
+				}}
+			}
+			dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-old", ServiceName: "egress-a-natgw", Addresses: []string{"10.244.0.7"},
+			}
+
+			dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+
+			if withIP {
+				if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending) {
+					assert.Equal(t, "uid-new", pending.UID)
+					assert.NotContains(t, pending.ServiceCleanup, "egress-a-natgw", "stale-UID addresses must not be merged")
+				}
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{}}
+			}
+			dt.CheckPendingPodDeletions(ctx)
+			completeEgressCleanup(t, dt, "egress-b-natgw")
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer, "withIP=%v", withIP)
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+		}
+	})
+
+	t.Run("startup-recovered direct release failure is marked recovered", func(t *testing.T) {
+		pod := unlabelledFinalizerPod(nil, "uid-p")
+		kube := fake.NewSimpleClientset(pod)
+		kube.PrependReactor("update", "pods", func(_ ktesting.Action) (bool, runtime.Object, error) {
+			return true, nil, apierrors.NewInternalError(fmt.Errorf("apiserver down"))
+		})
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+
+		dt.releaseUnlabelledPodFinalizer(ctx, pod, true)
+
+		if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending) {
+			assert.True(t, pending.RecoveredAtStartup)
+		}
+	})
+}
+
 // ================================================================================================
 // PENDING POD DELETION TESTS
 // ================================================================================================
@@ -876,7 +3088,7 @@ func TestCheckPendingPodDeletions_PreservesReplacementPodEntry(t *testing.T) {
 	}
 	// Original entry (uid-a); its address is not in NRP, so it is collected for finalizer removal.
 	dt.pendingPodDeletions[key] = &PendingPodDeletion{
-		Namespace: "default", Name: "test-pod", ServiceUID: "egress-1",
+		Namespace: "default", Name: "test-pod", ServiceName: "egress-1",
 		Addresses: []string{"10.0.0.1"}, IsLastPod: false,
 		UID: "uid-a", Timestamp: time.Now().Format(time.RFC3339),
 	}
@@ -888,7 +3100,7 @@ func TestCheckPendingPodDeletions_PreservesReplacementPodEntry(t *testing.T) {
 			swapped = true
 			dt.mu.Lock()
 			dt.pendingPodDeletions[key] = &PendingPodDeletion{
-				Namespace: "default", Name: "test-pod", ServiceUID: "egress-1",
+				Namespace: "default", Name: "test-pod", ServiceName: "egress-1",
 				Addresses: []string{"10.0.0.2"}, IsLastPod: false,
 				UID: "uid-b", Timestamp: time.Now().Format(time.RFC3339),
 			}
@@ -930,12 +3142,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion - address NOT in NRP
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -977,12 +3189,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion - address IS in NRP
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -1016,12 +3228,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion for LAST pod
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  true, // Last pod!
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   true, // Last pod!
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -1047,12 +3259,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 
 		// Add pending deletion for non-existent pod
 		dt.pendingPodDeletions["default/missing-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "missing-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "missing-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		dt.CheckPendingPodDeletions(ctx)
@@ -1102,12 +3314,12 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 		// A dual-stack pod contributes both its IPv4 and IPv6 addresses; only the IPv6 address is
 		// still mapped in NRP.
 		dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-			Namespace:  "default",
-			Name:       "test-pod",
-			ServiceUID: "egress-1",
-			Addresses:  []string{"10.0.0.1", "fd00::1"},
-			IsLastPod:  false,
-			Timestamp:  time.Now().Format(time.RFC3339),
+			Namespace:   "default",
+			Name:        "test-pod",
+			ServiceName: "egress-1",
+			Addresses:   []string{"10.0.0.1", "fd00::1"},
+			IsLastPod:   false,
+			Timestamp:   time.Now().Format(time.RFC3339),
 		}
 
 		// The IPv4 address has drained but IPv6 has not: the finalizer must stay.
@@ -1135,7 +3347,7 @@ func TestCheckPendingPodDeletions(t *testing.T) {
 // address to the service's NAT Gateway.
 func TestGuardNonLastPodFinalizerRemovedOnlyAfterNRPDrain(t *testing.T) {
 	ctx := context.Background()
-	uid := "egress-drain-gate"
+	serviceName := "egress-drain-gate"
 
 	// Pod "a" is the non-last pod we delete; pod "b" keeps the service (NAT Gateway) alive.
 	podA := &v1.Pod{
@@ -1149,25 +3361,25 @@ func TestGuardNonLastPodFinalizerRemovedOnlyAfterNRPDrain(t *testing.T) {
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	dt.NRPResources.NATGateways.Insert(uid)
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewOutboundServiceConfig(uid, nil),
-		State:      StateCreated,
+	dt.NRPResources.NATGateways.Insert(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewOutboundServiceConfig(serviceName, nil),
+		State:       StateCreated,
 	}
-	dt.AddPod(uid, "ns/a", "10.0.0.1", "10.244.0.1")
-	dt.AddPod(uid, "ns/b", "10.0.0.1", "10.244.0.2")
+	dt.AddPod(serviceName, "ns/a", "10.0.0.1", "10.244.0.1")
+	dt.AddPod(serviceName, "ns/b", "10.0.0.1", "10.244.0.2")
 
 	// NRP currently still maps both addresses (the location sync has not drained "a" yet).
 	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			"10.244.0.1": {Services: utilsets.NewString(uid)},
-			"10.244.0.2": {Services: utilsets.NewString(uid)},
+			"10.244.0.1": {Services: utilsets.NewString(serviceName)},
+			"10.244.0.2": {Services: utilsets.NewString(serviceName)},
 		},
 	}
 
 	// Delete the non-last pod "a".
-	res := dt.DeletePod(uid, "10.0.0.1", []string{"10.244.0.1"}, "ns", "a", "")
+	res := dt.DeletePod(serviceName, "10.0.0.1", []string{"10.244.0.1"}, "ns", "a", "")
 	assert.False(t, res.IsLastPod, "deleting one of two pods is not the last-pod case")
 
 	// It must be enqueued for drain-gated finalizer removal, not stripped inline.
@@ -1231,12 +3443,12 @@ func TestGuardNonLastPodFinalizerRetriesOnTransientUpdateError(t *testing.T) {
 		},
 	}
 	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
-		Namespace:  "ns",
-		Name:       "p",
-		ServiceUID: "egress-1",
-		Addresses:  []string{"10.244.0.1"},
-		IsLastPod:  false,
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Namespace:   "ns",
+		Name:        "p",
+		ServiceName: "egress-1",
+		Addresses:   []string{"10.244.0.1"},
+		IsLastPod:   false,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	// First cycle: the Update fails transiently. The finalizer must remain and the pod must stay
@@ -1265,7 +3477,9 @@ func TestGuardAddPodFinalizerRetriesOnConflict(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "p",
 			Namespace: "ns",
+			Labels:    map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"},
 		},
+		Status: v1.PodStatus{Phase: v1.PodRunning},
 	}
 	kube := fake.NewSimpleClientset(pod)
 
@@ -1295,13 +3509,35 @@ func TestGuardAddPodFinalizerRetriesOnConflict(t *testing.T) {
 // ================================================================================================
 
 func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
+	for _, buffered := range []bool{false, true} {
+		t.Run(fmt.Sprintf("UID ownership buffered=%t", buffered), func(t *testing.T) {
+			const service, location, address = "egress-a-natgw", "10.0.0.1", "10.244.0.7"
+			dt := newTestDiffTracker()
+			dt.NRPResources.Locations[location] = NRPLocation{Addresses: map[string]NRPAddress{
+				address: {Services: utilsets.NewString(service)},
+			}}
+			if buffered {
+				dt.pendingPods[service] = []PendingPodUpdate{
+					{PodKey: "other/q", PodUID: "uid-q", Location: location, Address: address},
+				}
+			} else {
+				dt.K8sResources.Nodes[location] = Node{Pods: map[string]Pod{
+					address: {PublicOutboundIdentity: service, OutboundPodUID: "uid-q", OutboundPodKey: "other/q"},
+				}}
+			}
+			assert.True(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, "uid-q"), "the owning Pod must still wait for its mapping")
+			assert.False(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, "uid-old"), "a different known UID must not wait for the reused mapping")
+			assert.True(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, ""), "anonymous callers retain the service-wide check")
+		})
+	}
+
 	tests := []struct {
-		name       string
-		nrpState   NRPState
-		serviceUID string
-		location   string
-		address    string
-		expected   bool
+		name        string
+		nrpState    NRPState
+		serviceName string
+		location    string
+		address     string
+		expected    bool
 	}{
 		{
 			name: "address exists with service",
@@ -1316,10 +3552,10 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   true,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    true,
 		},
 		{
 			name: "address exists but different service",
@@ -1334,20 +3570,20 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 		{
 			name: "location does not exist",
 			nrpState: NRPState{
 				Locations: map[string]NRPLocation{},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 		{
 			name: "address does not exist in location",
@@ -1362,10 +3598,10 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 		{
 			name: "address exists but services is nil",
@@ -1380,10 +3616,10 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 					},
 				},
 			},
-			serviceUID: "service-1",
-			location:   "192.168.1.1",
-			address:    "10.0.0.1",
-			expected:   false,
+			serviceName: "service-1",
+			location:    "192.168.1.1",
+			address:     "10.0.0.1",
+			expected:    false,
 		},
 	}
 
@@ -1393,7 +3629,7 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 				NRPResources: tt.nrpState,
 			}
 
-			result := dt.outboundAddressInAnyNRPLocationLocked(tt.serviceUID, tt.address)
+			result := dt.outboundAddressInAnyNRPLocationLocked(tt.serviceName, tt.address, "")
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -1420,9 +3656,9 @@ func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
 			},
 		}
 
-		assert.True(t, dt.outboundAddressInAnyNRPLocationLocked("egress-1", "fd00:244::5"),
+		assert.True(t, dt.outboundAddressInAnyNRPLocationLocked("egress-1", "fd00:244::5", ""),
 			"an address registered under a second location must still be found")
-		assert.False(t, dt.outboundAddressInAnyNRPLocationLocked("egress-1", "fd00:244::9"),
+		assert.False(t, dt.outboundAddressInAnyNRPLocationLocked("egress-1", "fd00:244::9", ""),
 			"an address registered under no location must not be reported as present")
 	})
 }
@@ -1469,12 +3705,12 @@ func TestCheckPendingPodDeletions_Concurrent(t *testing.T) {
 	}
 
 	dt.pendingPodDeletions["default/test-pod"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "test-pod",
-		ServiceUID: "egress-1",
-		Addresses:  []string{"10.0.0.1"},
-		IsLastPod:  false,
-		Timestamp:  time.Now().Format(time.RFC3339),
+		Namespace:   "default",
+		Name:        "test-pod",
+		ServiceName: "egress-1",
+		Addresses:   []string{"10.0.0.1"},
+		IsLastPod:   false,
+		Timestamp:   time.Now().Format(time.RFC3339),
 	}
 
 	// Run multiple concurrent checks
@@ -1495,42 +3731,40 @@ func TestCheckPendingPodDeletions_Concurrent(t *testing.T) {
 	assert.Empty(t, dt.pendingPodDeletions)
 }
 
-// TestAddPodPreservesFinalizerOnEgressIdentityChange verifies that re-registering a live pod under a
-// new egress identity drops the pending finalizer-removal record left by the previous identity, so
-// CheckPendingPodDeletions does not strip the still-needed cleanup finalizer once the old identity
-// drains from NRP.
+// Re-registration preserves earlier cleanup without stripping the live Pod's finalizer.
 func TestAddPodPreservesFinalizerOnEgressIdentityChange(t *testing.T) {
 	const (
-		oldEgress = "egress-a"
-		newEgress = "egress-b"
+		oldEgress = "egress-a-natgw"
+		newEgress = "egress-b-natgw"
 		location  = "10.0.0.1"
 		address   = "10.244.0.7"
 	)
 	pod := newFinalizerPod("foo", "uid-live", true)
+	pod.Labels = map[string]string{consts.PodLabelServiceEgressGateway: "egress-b"}
+	pod.Status = v1.PodStatus{Phase: v1.PodRunning, HostIP: location, PodIP: address}
 	kube := fake.NewSimpleClientset(pod)
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
 
 	dt.pendingPodDeletions["default/foo"] = &PendingPodDeletion{
-		Namespace:  "default",
-		Name:       "foo",
-		UID:        "uid-live",
-		ServiceUID: oldEgress,
-		Addresses:  []string{address},
+		Namespace:   "default",
+		Name:        "foo",
+		UID:         "uid-live",
+		ServiceName: oldEgress,
+		Addresses:   []string{address},
 	}
 	dt.NRPResources.NATGateways.Insert(newEgress)
 
 	dt.AddPod(newEgress, "default/foo", location, address)
-	if _, pending := dt.pendingPodDeletions["default/foo"]; pending {
-		t.Fatalf("re-registering a live pod must drop its stale pending finalizer-removal record")
-	}
+	assert.Contains(t, dt.pendingPodDeletions, "default/foo", "the previous identity's cleanup is retained")
 
 	dt.CheckPendingPodDeletions(context.Background())
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "foo", metav1.GetOptions{})
 	assert.NoError(t, err)
 	assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
 		"a live pod under a new egress identity must retain its cleanup finalizer")
+	assert.NotContains(t, dt.pendingPodDeletions, "default/foo", "completed old work is retired without stripping the live Pod")
 }
 
 // TestFinalizerRecoveryGapClosesOnAsyncRemoval pins that the scheduled/recovered gap closes.
@@ -1564,7 +3798,7 @@ func TestFinalizerRecoveryGapClosesOnAsyncRemoval(t *testing.T) {
 		}
 		entry := func(name string, atStartup bool) *PendingPodDeletion {
 			return &PendingPodDeletion{
-				Namespace: "default", Name: name, ServiceUID: "egress-1",
+				Namespace: "default", Name: name, ServiceName: "egress-1",
 				Addresses:          []string{"10.0.0.1"},
 				RecoveredAtStartup: atStartup,
 				Timestamp:          time.Now().Format(time.RFC3339),
@@ -1600,7 +3834,7 @@ func TestFinalizerRecoveryGapClosesOnAsyncRemoval(t *testing.T) {
 		}
 		entry := func(name string, atStartup bool) *PendingPodDeletion {
 			return &PendingPodDeletion{
-				Namespace: "default", Name: name, ServiceUID: "egress-1",
+				Namespace: "default", Name: name, ServiceName: "egress-1",
 				IsLastPod:          true,
 				RecoveredAtStartup: atStartup,
 			}
@@ -1634,6 +3868,37 @@ func TestFinalizerRecoveryGapClosesOnAsyncRemoval(t *testing.T) {
 
 		// A retried delete must not inflate the count.
 		dt.recordServiceFinalizerRecoveryDone("stuck-uid")
+		assert.Equal(t, float64(1), recovered()-before)
+	})
+
+	t.Run("live registration counts only after its canceled attempt is retried", func(t *testing.T) {
+		const service = "egress-a-natgw"
+		label := "egress-a"
+		pod := unlabelledFinalizerPod(&label, "uid-p", "10.244.0.7")
+		kube := fake.NewSimpleClientset(pod)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.NATGateways.Insert(service)
+		dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+			Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: service, RecoveredAtStartup: true,
+		}
+		attempt, cancel := context.WithCancel(ctx)
+		defer cancel()
+		gets := 0
+		kube.PrependReactor("get", "pods", func(ktesting.Action) (bool, runtime.Object, error) {
+			gets++
+			if gets == 2 {
+				cancel()
+			}
+			return false, nil, nil
+		})
+		before := recovered()
+		assert.True(t, dt.CheckPendingPodDeletions(attempt))
+		assert.Zero(t, recovered()-before)
+		assert.False(t, dt.CheckPendingPodDeletions(ctx))
+		assert.Equal(t, "uid-p", dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].OutboundPodUID)
+		assert.Equal(t, float64(1), recovered()-before)
+		assert.False(t, dt.CheckPendingPodDeletions(ctx))
 		assert.Equal(t, float64(1), recovered()-before)
 	})
 }

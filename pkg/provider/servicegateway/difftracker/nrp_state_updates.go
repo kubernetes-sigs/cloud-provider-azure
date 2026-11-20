@@ -100,4 +100,5 @@ func (dt *DiffTracker) UpdateLocationsAddresses(locationData LocationData) {
 			delete(dt.NRPResources.Locations, locationKey)
 		}
 	}
+	dt.acknowledgePodLocationSyncLocked()
 }

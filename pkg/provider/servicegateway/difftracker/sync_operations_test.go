@@ -134,6 +134,16 @@ func TestGetSyncNRPNATGateways(t *testing.T) {
 			expectedAdditions: []string{"egress3", "egress5"},
 			expectedRemovals:  []string{"egress2", "egress4"},
 		},
+		{
+			name:              "default addition is excluded",
+			k8sEgresses:       []string{"DEFAULT-NATGW", "ordinary-natgw"},
+			expectedAdditions: []string{"ordinary-natgw"},
+		},
+		{
+			name:             "default removal is excluded",
+			nrpNATGateways:   []string{"DEFAULT-NATGW", "ordinary-natgw"},
+			expectedRemovals: []string{"ordinary-natgw"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -147,9 +157,10 @@ func TestGetSyncNRPNATGateways(t *testing.T) {
 					NATGateways: utilsets.NewString(tt.nrpNATGateways...),
 				},
 			}
-
 			// Call the function being tested
 			result := dt.GetSyncNRPNATGateways()
+			assert.ElementsMatch(t, utilsets.NewString(tt.k8sEgresses...).UnsortedList(), dt.K8sResources.Egresses.UnsortedList())
+			assert.ElementsMatch(t, utilsets.NewString(tt.nrpNATGateways...).UnsortedList(), dt.NRPResources.NATGateways.UnsortedList())
 
 			// Check additions
 			assert.Equal(t, len(tt.expectedAdditions), result.Additions.Len(),
@@ -442,20 +453,20 @@ func TestGetSyncLocationsAddressesRemovesGoneNode(t *testing.T) {
 // the whole location/node", which is the intended payload for a fully drained node.
 func TestLastPodRemoval_EmitsNodeDeletionPayload(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-last-pod"
+	serviceName := "svc-last-pod"
 	const node = "10.0.0.1"
 	const podIP = "10.244.0.5"
 
 	// Service is created and known to NRP. NRP already reflects the single pod on this node.
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreated,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreated,
 	}
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 	dt.NRPResources.Locations[node] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			podIP: {Services: utilsets.NewString(uid)},
+			podIP: {Services: utilsets.NewString(serviceName)},
 		},
 	}
 
@@ -463,7 +474,7 @@ func TestLastPodRemoval_EmitsNodeDeletionPayload(t *testing.T) {
 	// node entry. We drive it through the production entry point so the node is created by a real
 	// informer flow rather than synthetic state stitching.
 	errs := dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
-		InboundIdentity: uid,
+		InboundIdentity: serviceName,
 		OldAddresses:    nil,
 		NewAddresses:    map[string]string{podIP: node},
 	})
@@ -475,7 +486,7 @@ func TestLastPodRemoval_EmitsNodeDeletionPayload(t *testing.T) {
 	// Step 2: the sole pod for this service is removed. With no other identities on the pod
 	// and no other pods on the node, updateK8sEndpointsLocked deletes the node from K8s state.
 	errs = dt.UpdateK8sEndpoints(UpdateK8sEndpointsInputType{
-		InboundIdentity: uid,
+		InboundIdentity: serviceName,
 		OldAddresses:    map[string]string{podIP: node},
 		NewAddresses:    nil,
 	})

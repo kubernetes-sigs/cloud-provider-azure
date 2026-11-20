@@ -139,6 +139,13 @@ const (
 	ProvisioningStateUnknown = "Unknown"
 )
 
+// ARM client factory
+const (
+	// PlaceholderSubscriptionID is the subscription ID ARM client factories are created with when no
+	// subscription ID is configured, as in cloud-node-manager's default IMDS mode.
+	PlaceholderSubscriptionID = "00000000-0000-0000-0000-000000000000"
+)
+
 // cache
 const (
 	// VMSSNameSeparator is the separator of the vmss names
@@ -253,6 +260,17 @@ const (
 
 	// PodLabelServiceEgressGateway is the label used on the pod
 	PodLabelServiceEgressGateway = "kubernetes.azure.com/service-egress-gateway"
+	// PodAnnotationServiceEgressGatewayResourceGroup specifies the BYO NAT Gateway's resource group.
+	// The NAT Gateway name is the normalized value of PodLabelServiceEgressGateway.
+	PodAnnotationServiceEgressGatewayResourceGroup = "kubernetes.azure.com/service-egress-gateway-resource-group"
+
+	// ServiceGatewayManagedTagKey identifies CCM-managed Azure resources.
+	ServiceGatewayManagedTagKey      = "k8s-azure-ccm-managed"
+	ServiceGatewayManagedTagValue    = "true"
+	ServiceGatewayInboundNameSuffix  = "-lb"
+	ServiceGatewayOutboundNameSuffix = "-natgw"
+
+	ResourceGroupNamePattern = `^[\p{L}\p{Nd}_().-]{0,89}[\p{L}\p{Nd}_()-]$` // codespell:ignore nd
 
 	// ServiceAnnotationLoadBalancerInternal is the annotation used on the service
 	ServiceAnnotationLoadBalancerInternal = "service.beta.kubernetes.io/azure-load-balancer-internal"
@@ -609,6 +627,14 @@ const (
 	// DefaultServiceGatewayResourceName is the fixed ServiceGateway resource name used when
 	// ServiceGatewayEnabled=true. It is not configurable via cloud-provider config.
 	DefaultServiceGatewayResourceName = "servicegateway"
+
+	// DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds is the default minimum time between
+	// consecutive ServiceGateway address-location updates sent to NRP.
+	DefaultServiceGatewayLocationsUpdateIntervalInMilliseconds = 400
+
+	// DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds is the configuration value
+	// indicating that no additional spacing should be applied between NRP address-location updates.
+	DisabledServiceGatewayLocationsUpdateIntervalInMilliseconds = -1
 )
 
 // Azure resource lock

@@ -20,14 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	v1 "k8s.io/api/core/v1"
@@ -148,9 +151,9 @@ func TestBuildInboundServiceResources_EmptyConfig(t *testing.T) {
 	assert.Len(t, lb.Properties.BackendAddressPools, 1)
 }
 
-func TestBuildInboundServiceResources_LongServiceUID(t *testing.T) {
-	// Test with very long service UID
-	longUID := "very-long-service-uid-that-exceeds-normal-length-abcdef123456789012345678901234567890"
+func TestBuildInboundServiceResources_LongServiceName(t *testing.T) {
+	// Test with a very long ServiceGateway service name.
+	longServiceName := "very-long-service-uid-that-exceeds-normal-length-abcdef123456789012345678901234567890"
 
 	config := &InboundConfig{
 		FrontendPorts: []PortMapping{{Port: 80, Protocol: "TCP"}},
@@ -164,13 +167,13 @@ func TestBuildInboundServiceResources_LongServiceUID(t *testing.T) {
 		ServiceGatewayResourceName: "test-sgw",
 	}
 
-	pip, lb, _, err := buildInboundServiceResources(longUID, config, dtConfig)
+	pip, lb, _, err := buildInboundServiceResources(longServiceName, config, dtConfig)
 	assert.NoError(t, err)
 
 	// Should handle long UIDs without truncation
-	assert.Equal(t, longUID, *lb.Name)
-	assert.Equal(t, longUID+"-pip", *pip.Name)
-	assert.Equal(t, longUID, *lb.Properties.BackendAddressPools[0].Name)
+	assert.Equal(t, longServiceName, *lb.Name)
+	assert.Equal(t, longServiceName+"-pip", *pip.Name)
+	assert.Equal(t, longServiceName, *lb.Properties.BackendAddressPools[0].Name)
 }
 
 func TestBuildOutboundServiceResources_NilConfig(t *testing.T) {
@@ -282,15 +285,19 @@ func createTestService(name string, ports []servicePort) *v1.Service {
 
 // newK8sStateForSeeders returns an empty K8sState suitable for the processK8s* seeders.
 func newK8sStateForSeeders(trackedServices ...string) K8sState {
+	services := utilsets.NewString()
+	for _, uid := range trackedServices {
+		services.Insert(inboundServiceName(uid))
+	}
 	return K8sState{
-		Services: utilsets.NewString(trackedServices...),
+		Services: services,
 		Egresses: utilsets.NewString(),
 		Nodes:    make(map[string]Node),
 	}
 }
 
 // newServiceOwnedEndpointSlice builds an EndpointSlice owned by the given Service UID;
-// extractServiceUIDFromEndpointSlice resolves ownership via the Service OwnerReference.
+// newServiceOwnedEndpointSlice records the Kubernetes Service UID in its owner reference.
 func newServiceOwnedEndpointSlice(name, namespace, svcUID string, addrType discoveryv1.AddressType, endpoints []discoveryv1.Endpoint) *discoveryv1.EndpointSlice {
 	return &discoveryv1.EndpointSlice{
 		ObjectMeta: metav1.ObjectMeta{
@@ -368,13 +375,9 @@ func TestProcessK8sEndpoints_SkipsNotReadyEndpoints(t *testing.T) {
 		"an endpoint with Conditions.Ready==false must not be imported into K8s state at init")
 }
 
-// TestInitOutboundRefCount_NotNegativeOnServiceUIDEgressLabelCollision verifies the outbound
-// ref-counter is seeded solely from real egress pods (in New()) and never goes negative when an
-// inbound LoadBalancer service UID happens to equal a pod egress label. A negative seed would
-// trip DeletePod's `counter <= 0` guard and strand the pod (and its NAT gateway).
-func TestInitOutboundRefCount_NotNegativeOnServiceUIDEgressLabelCollision(t *testing.T) {
+func TestInitOutboundRefCount_AllowsSameRawServiceUIDAndEgressLabel(t *testing.T) {
 	const (
-		collideID = "collide-id" // serves as BOTH the inbound svc UID and the egress label
+		collideID = "collide-id"
 		nodeName  = "node-1"
 		nodeIP    = "10.0.0.21"
 		podIP     = "10.244.3.3"
@@ -389,17 +392,20 @@ func TestInitOutboundRefCount_NotNegativeOnServiceUIDEgressLabelCollision(t *tes
 		Spec: v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
 	}
 	pod := newEgressPod("pod-collide", "default", collideID, nodeName, podIP, nodeIP, v1.PodRunning)
-	kube := fake.NewSimpleClientset(svc, pod)
+	control := newEgressPod("pod-control", "default", "ordinary-egress", nodeName, "10.244.3.4", nodeIP, v1.PodRunning)
+	kube := fake.NewSimpleClientset(svc, pod, control)
 
 	k8s := newK8sStateForSeeders()
 
-	// Build the cold-start K8s state: inbound LB service + colliding egress pod.
+	// The same raw identity must seed separate inbound and outbound state.
 	_, _, err := processK8sServices(context.Background(), kube, &k8s)
 	assert.NoError(t, err)
 	_, err = processK8sEgresses(context.Background(), kube, &k8s)
 	assert.NoError(t, err)
+	member := k8s.Nodes[nodeIP].Pods[podIP]
+	member.InboundIdentities = utilsets.NewString(inboundServiceName(collideID))
+	k8s.Nodes[nodeIP].Pods[podIP] = member
 
-	// New() seeds outboundIdentityPodRefCount from the egress pods now present in k8s state.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	nrp := NRPState{
@@ -419,19 +425,62 @@ func TestInitOutboundRefCount_NotNegativeOnServiceUIDEgressLabelCollision(t *tes
 		t.FailNow()
 	}
 
-	v, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(collideID))
-	assert.True(t, ok, "the colliding egress identity must be seeded")
-	assert.GreaterOrEqual(t, v.(int), 0,
-		"an inbound-UID/egress-label collision must not seed a negative outbound ref-count (got %v)", v)
-	assert.Equal(t, 1, v.(int),
-		"the outbound ref-count must equal the egress pod count (1)")
+	count, ok := dt.outboundIdentityPodRefCount.Load(outboundServiceName(collideID))
+	assert.True(t, ok)
+	assert.Equal(t, 1, count)
+	assert.True(t, dt.K8sResources.Egresses.Has(outboundServiceName(collideID)))
+	member = dt.K8sResources.Nodes[nodeIP].Pods[podIP]
+	assert.Equal(t, outboundServiceName(collideID), member.PublicOutboundIdentity)
+	assert.Equal(t, "default/pod-collide", member.OutboundPodKey)
+	assert.True(t, member.InboundIdentities.Has(inboundServiceName(collideID)), "inbound membership must survive")
+	v, ok := dt.outboundIdentityPodRefCount.Load(outboundServiceName("ordinary-egress"))
+	assert.True(t, ok)
+	assert.Equal(t, 1, v, "ordinary egress pods still seed their ref-count")
+	res := dt.DeletePod(outboundServiceName(collideID), nodeIP, []string{podIP}, "default", "pod-collide", "")
+	assert.True(t, res.IsLastPod)
+	assert.True(t, podIPTracked(&dt.K8sResources, podIP), "an egress delete must leave inbound membership intact")
+	assert.True(t, dt.K8sResources.Services.Has(inboundServiceName(collideID)))
+	assert.Contains(t, dt.pendingServiceDeletions, outboundServiceName(collideID))
+}
 
-	// A correct (non-negative) counter must allow DeletePod to complete.
-	res := dt.DeletePod(collideID, nodeIP, []string{podIP}, "default", "pod-collide", "")
-	assert.True(t, res.IsLastPod,
-		"with exactly one live egress pod the ref-count must be 1 (last pod)")
-	assert.False(t, podIPTracked(&dt.K8sResources, podIP),
-		"DeletePod must remove the egress pod")
+func TestInitPreservesRegisteredOutboundOwner(t *testing.T) {
+	const uid, other, hostIP, podIP = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "other-inbound", "10.0.0.1", "10.244.0.5"
+	inboundName, outboundName, otherName := inboundServiceName(uid), outboundServiceName(uid), inboundServiceName(other)
+	k8s := newK8sStateForSeeders()
+	k8s.Services.Insert(inboundName, otherName)
+	k8s.Egresses.Insert(outboundName)
+	k8s.Nodes[hostIP] = Node{Pods: map[string]Pod{
+		podIP: {
+			InboundIdentities: utilsets.NewString(inboundName, otherName), PublicOutboundIdentity: outboundName,
+			OutboundPodKey: "ns/egress", OutboundPodUID: "pod-uid",
+		},
+		"10.244.0.9": {InboundIdentities: utilsets.NewString(inboundName)},
+	}}
+	nrp := NRPState{
+		LoadBalancers: utilsets.NewString(otherName), NATGateways: utilsets.NewString(outboundName),
+		Locations:             map[string]NRPLocation{},
+		OutboundNATGatewayIDs: map[string]string{outboundName: byoNATGatewayARMID(uid)},
+	}
+	ctrl := gomock.NewController(t)
+	dt, err := New(logr.Discard(), k8s, nrp, testConfig(), mock_azclient.NewMockClientFactory(ctrl), fake.NewSimpleClientset())
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.True(t, dt.K8sResources.Services.Has(inboundName), "inbound desired state is independent of outbound registration")
+	assert.True(t, dt.K8sResources.Services.Has(otherName))
+	assert.True(t, dt.K8sResources.Egresses.Has(outboundName))
+	member := dt.K8sResources.Nodes[hostIP].Pods[podIP]
+	assert.Equal(t, outboundName, member.PublicOutboundIdentity)
+	assert.Equal(t, "pod-uid", member.OutboundPodUID)
+	assert.True(t, member.InboundIdentities.Has(inboundName))
+	assert.True(t, member.InboundIdentities.Has(otherName))
+	assert.Contains(t, dt.K8sResources.Nodes[hostIP].Pods, "10.244.0.9")
+	count, ok := dt.outboundIdentityPodRefCount.Load(outboundName)
+	assert.True(t, ok)
+	assert.Equal(t, 1, count)
+	assert.Equal(t, byoNATGatewayARMID(uid), dt.byoNATGatewayID(outboundName))
+	assert.True(t, dt.GetSyncLoadBalancerServices().Additions.Has(inboundName))
+	assert.Zero(t, dt.GetSyncNRPNATGateways().Removals.Len())
 }
 
 // TestRecoverStuckFinalizers_KeepsFinalizerWhenAzureResourceExists verifies that a service whose
@@ -457,7 +506,7 @@ func TestRecoverStuckFinalizers_KeepsFinalizerWhenAzureResourceExists(t *testing
 	services := &v1.ServiceList{Items: []v1.Service{*svc}}
 
 	// A real Azure LB exists for the UID even though it is absent from NRPResources.
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(uid), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(inboundServiceName(uid)), nil)
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "svc-crash", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -487,8 +536,8 @@ func TestRecoverStuckFinalizers_KeepsFinalizerWhenOnlyPIPExists(t *testing.T) {
 	// The PIP exists in Azure but its static address has not been allocated yet (nil IPAddress) - the
 	// crash-after-PIP-create window. Existence must still be recognized (by name, via
 	// pipNamesInAzureFromList) so the Service finalizer is preserved for orphan cleanup.
-	azurePIPs := []*armnetwork.PublicIPAddress{{Name: ptr.To(uid + "-pip")}}
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), utilsets.NewString(), pipNamesInAzureFromList(azurePIPs))
+	azurePIPs := []*armnetwork.PublicIPAddress{{Name: ptr.To(PublicIPName(inboundServiceName(uid)))}}
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), pipNamesInAzureFromList(azurePIPs))
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "svc-pip", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -535,7 +584,7 @@ func TestRecoverStuckFinalizers_RemovesFinalizerWhenNoAzureResource(t *testing.T
 	dt.kubeClient = kube
 	services := &v1.ServiceList{Items: []v1.Service{*svc}}
 
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), nil)
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "svc-clean", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -566,13 +615,13 @@ func TestRecoverStuckFinalizers_SeedsAllDualStackAddresses(t *testing.T) {
 	dt.kubeClient = kube
 
 	egressPods := &v1.PodList{Items: []v1.Pod{*pod}}
-	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), nil)
 
 	entry := dt.pendingPodDeletions["default/ds-terminating"]
 	if assert.NotNil(t, entry, "a Terminating dual-stack egress pod must be seeded for drain-gated finalizer removal") {
 		assert.ElementsMatch(t, []string{v4, v6}, entry.Addresses,
 			"recovery must seed every IP family so the finalizer waits for both to drain")
-		assert.Equal(t, "corp-egress", entry.ServiceUID)
+		assert.Equal(t, outboundServiceName("corp-egress"), entry.ServiceName)
 	}
 }
 
@@ -599,7 +648,7 @@ func TestRecoverStuckFinalizers_NoIPPodUsesServiceDrainVerification(t *testing.T
 	}
 
 	egressPods := &v1.PodList{Items: []v1.Pod{*pod}}
-	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, nil, egressPods, nil, utilsets.NewString(), nil)
 
 	got, err := kube.CoreV1().Pods("default").Get(context.Background(), "no-ip-terminating", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -609,7 +658,955 @@ func TestRecoverStuckFinalizers_NoIPPodUsesServiceDrainVerification(t *testing.T
 	if assert.NotNil(t, entry) {
 		assert.True(t, entry.VerifyServiceDrain)
 		assert.Empty(t, entry.Addresses)
-		assert.Equal(t, "corp-egress", entry.ServiceUID)
+		assert.Equal(t, outboundServiceName("corp-egress"), entry.ServiceName)
+	}
+}
+
+func TestInitializeFromCluster_CompletesAfterAllAdditionsAreRejected(t *testing.T) {
+	const uid = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	for _, scenario := range []string{"reserved egress", "rejected inbound only", "empty control"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := newOutboundMocks(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
+				Name: ptr.To(DefaultOutboundNATGatewayName),
+				Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+					ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), IsDefault: ptr.To(true),
+				},
+			}}, nil).AnyTimes()
+			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			lb.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.nat.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.pip.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			var objects []runtime.Object
+			if scenario != "empty control" {
+				service := newInboundService(uid)
+				service.Annotations = map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue}
+				objects = append(objects, service)
+			}
+			if scenario == "reserved egress" {
+				pod := newEgressPod("reserved", "default", "default", "node", "10.244.0.5", "10.0.0.1", v1.PodRunning)
+				pod.Annotations = map[string]string{consts.PodAnnotationServiceEgressGatewayResourceGroup: "byo-rg"}
+				node := &v1.Node{
+					ObjectMeta: metav1.ObjectMeta{Name: "node"},
+					Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.1"}}},
+				}
+				objects = append(objects, pod, node)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			dt, err := InitializeFromCluster(ctx, testConfig(), m.factory, fake.NewSimpleClientset(objects...))
+			if dt != nil {
+				defer cleanupOnError(dt)
+			}
+			if !assert.NoError(t, err, "no undispatched addition may leave initialization waiting without work") {
+				return
+			}
+			assert.True(t, dt.InitialSyncDone)
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.False(t, dt.K8sResources.Egresses.Has(outboundServiceName("default")))
+			assert.Equal(t, scenario != "empty control", dt.K8sResources.Services.Has(inboundServiceName(uid)))
+		})
+	}
+}
+
+func TestInitializeFromCluster_SeparatesInboundAndOutboundPodFinalizers(t *testing.T) {
+	const identity = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	inboundName, outboundName := inboundServiceName(identity), outboundServiceName(identity)
+	for _, tc := range []struct {
+		name, egress                  string
+		keepIP, backend, retryRemoval bool
+		outboundOwner                 bool
+	}{
+		{name: "same raw identity without IPs", egress: identity, backend: true},
+		{name: "retained IP", egress: identity, keepIP: true, backend: true},
+		{name: "distinct identity", egress: "other-egress", backend: true},
+		{name: "no inbound backend", egress: identity},
+		{name: "finalizer removal retry", egress: identity, backend: true, retryRemoval: true},
+		{name: "registered inbound and outbound both survive", egress: identity, backend: true, outboundOwner: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			m := newOutboundMocks(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			registered := &armnetwork.ServiceGatewayService{
+				Name:       ptr.To(inboundName),
+				Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeInbound)},
+			}
+			loadBalancers := []*armnetwork.LoadBalancer{{Name: ptr.To(inboundName)}}
+			registeredServices := []*armnetwork.ServiceGatewayService{registered}
+			serviceNames := []*string{ptr.To(inboundName)}
+			if tc.outboundOwner {
+				registeredServices = append(registeredServices, &armnetwork.ServiceGatewayService{
+					Name: ptr.To(outboundName),
+					Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+						ServiceType:        ptr.To(armnetwork.ServiceTypeOutbound),
+						PublicNatGatewayID: ptr.To(byoNATGatewayARMID(identity)),
+					},
+				})
+				serviceNames = append(serviceNames, ptr.To(outboundName))
+			}
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(registeredServices, nil).AnyTimes()
+			var locations []*armnetwork.ServiceGatewayAddressLocationResponse
+			if tc.backend {
+				locations = []*armnetwork.ServiceGatewayAddressLocationResponse{{
+					AddressLocation: ptr.To("10.0.0.1"),
+					Addresses:       []*armnetwork.ServiceGatewayAddress{{Address: ptr.To("10.244.0.10"), Services: serviceNames}},
+				}}
+			}
+			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(locations, nil).AnyTimes()
+			lb.EXPECT().List(gomock.Any(), "rg").Return(loadBalancers, nil).AnyTimes()
+			m.nat.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.pip.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			service := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{Name: "inbound", Namespace: "ns", UID: types.UID(identity)},
+				Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer, Ports: []v1.ServicePort{{Port: 80, Protocol: v1.ProtocolTCP}}},
+			}
+			node := &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: "node"},
+				Status:     v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: "10.0.0.1"}}},
+			}
+			slice := &discoveryv1.EndpointSlice{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "inbound-backends", Namespace: "ns",
+					Labels:          map[string]string{discoveryv1.LabelServiceName: service.Name},
+					OwnerReferences: []metav1.OwnerReference{{Kind: "Service", Name: service.Name, UID: service.UID}},
+				},
+				AddressType: discoveryv1.AddressTypeIPv4,
+			}
+			if tc.backend {
+				slice.Endpoints = []discoveryv1.Endpoint{{
+					NodeName: ptr.To(node.Name), Addresses: []string{"10.244.0.10"},
+					Conditions: discoveryv1.EndpointConditions{Ready: ptr.To(true)},
+				}}
+			}
+			pod := newTestPod("ns", "colliding", tc.egress, "", "", v1.PodFailed, ptr.To(metav1.Now()))
+			pod.UID, pod.Spec.NodeName = "pod-uid", node.Name
+			pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+			if tc.keepIP {
+				pod.Status.HostIP, pod.Status.PodIP = "10.0.0.1", "10.244.0.5"
+			}
+			kube := fake.NewSimpleClientset(service, node, slice, pod)
+			if tc.outboundOwner {
+				active := newTestPod("ns", "active", identity, "10.0.0.1", "10.244.0.10", v1.PodRunning, nil)
+				active.Spec.NodeName = node.Name
+				active.UID = "active-uid"
+				_, err := kube.CoreV1().Pods("ns").Create(context.Background(), active, metav1.CreateOptions{})
+				if !assert.NoError(t, err) {
+					return
+				}
+			}
+			var updates atomic.Int32
+			kube.PrependReactor("update", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				if updates.Add(1) == 1 && tc.retryRemoval {
+					return true, nil, apierrors.NewServiceUnavailable("retry finalizer removal")
+				}
+				return false, nil, nil
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			dt, err := InitializeFromCluster(ctx, testConfig(), m.factory, kube)
+			if dt != nil {
+				defer cleanupOnError(dt)
+			}
+			if !assert.NoError(t, err) {
+				return
+			}
+			current, err := kube.CoreV1().Pods("ns").Get(ctx, pod.Name, metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.False(t, hasPodFinalizer(current))
+			assert.True(t, dt.NRPResources.LoadBalancers.Has(inboundName))
+			assert.Empty(t, dt.pendingPodDeletions)
+			if tc.backend {
+				member := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.10"]
+				assert.True(t, member.InboundIdentities.Has(inboundName))
+				assert.True(t, dt.NRPResources.Locations["10.0.0.1"].Addresses["10.244.0.10"].Services.Has(inboundName))
+				if tc.outboundOwner {
+					assert.Equal(t, outboundName, member.PublicOutboundIdentity)
+					assert.Equal(t, byoNATGatewayARMID(identity), dt.byoNATGatewayID(outboundName))
+				}
+			}
+			if tc.retryRemoval {
+				assert.GreaterOrEqual(t, updates.Load(), int32(2))
+			}
+		})
+	}
+}
+
+func TestRecoverStuckFinalizers_PreservesExistingOutboundDrain(t *testing.T) {
+	const identity = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	for _, existing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("existing=%t", existing), func(t *testing.T) {
+			pod := newTestPod("ns", "colliding", identity, "", "", v1.PodFailed, ptr.To(metav1.Now()))
+			pod.UID = "pod-uid"
+			pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.LoadBalancers.Insert(inboundServiceName(identity))
+			prior := &PendingPodDeletion{
+				Namespace: pod.Namespace, Name: pod.Name, UID: string(pod.UID),
+				ServiceName: outboundServiceName("previous-egress"), Addresses: []string{"10.244.0.5"}, IsLastPod: true,
+			}
+			if existing {
+				dt.pendingPodDeletions["ns/colliding"] = prior
+			} else {
+				dt.NRPResources.NATGateways.Insert(outboundServiceName(identity))
+			}
+			recoverStuckFinalizers(context.Background(), dt, nil, &v1.PodList{Items: []v1.Pod{*pod}}, nil, nil, nil)
+			pending := dt.pendingPodDeletions["ns/colliding"]
+			if assert.NotNil(t, pending) {
+				assert.Equal(t, string(pod.UID), pending.UID)
+				assert.True(t, pending.RecoveredAtStartup)
+				if existing {
+					cleanup, found := pending.cleanupFor(outboundServiceName("previous-egress"))
+					assert.True(t, found)
+					assert.True(t, cleanup.WaitForServiceDeletion)
+					assert.Equal(t, []string{"10.244.0.5"}, cleanup.Addresses)
+				} else {
+					assert.True(t, pending.VerifyServiceDrain)
+				}
+			}
+			for _, action := range kube.Actions() {
+				assert.NotEqual(t, "update", action.GetVerb(), "a genuine drain must not release the finalizer")
+			}
+			assert.Empty(t, dt.locationsUpdaterTrigger, "recovery must not trigger before initialization accounting starts")
+		})
+	}
+}
+
+func TestRecoverStuckFinalizers_UnfilteredUnlabelledPodSweep(t *testing.T) {
+	ctx := context.Background()
+	now := metav1.Now()
+	empty := ""
+
+	tests := []struct {
+		name      string
+		label     *string
+		deleting  bool
+		nrpHolds  bool
+		wantDrain bool
+	}{
+		{name: "c1 label removed live", deleting: false, nrpHolds: true, wantDrain: true},
+		{name: "c2 label empty live", label: &empty, deleting: false, nrpHolds: true, wantDrain: true},
+		{name: "c3 deleting then label removed", deleting: true, nrpHolds: true, wantDrain: true},
+		{name: "c4 deleting then label empty", label: &empty, deleting: true, nrpHolds: true, wantDrain: true},
+		{name: "removed label without NRP", deleting: false},
+		{name: "empty label without NRP", label: &empty, deleting: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := unlabelledFinalizerPod(tt.label, "uid-p", "10.244.0.7")
+			if tt.deleting {
+				pod.DeletionTimestamp = &now
+			}
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			if tt.nrpHolds {
+				dt.NRPResources.NATGateways.Insert("egress-a-natgw")
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
+					Addresses: map[string]NRPAddress{
+						"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+					},
+				}
+			}
+
+			RegisterMetrics()
+			read := func() (recovered, scheduled float64) {
+				r, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+				assert.NoError(t, err)
+				s, err := testutil.GetCounterMetricValue(finalizersRecoveryScheduledTotal)
+				assert.NoError(t, err)
+				return r, s
+			}
+			r0, s0 := read()
+
+			var egressPods *v1.PodList
+			if tt.label != nil {
+				egressPods = &v1.PodList{Items: []v1.Pod{*pod.DeepCopy()}}
+			}
+			recoverStuckFinalizers(ctx, dt, nil, egressPods, nil, utilsets.NewString(), nil)
+
+			r1, s1 := read()
+			if tt.wantDrain {
+				assert.Equal(t, 1.0, s1-s0, "a drain handed to tracking is scheduled")
+				assert.Zero(t, r1-r0, "a drain handed to tracking is not yet recovered")
+			} else {
+				assert.Equal(t, 1.0, r1-r0, "a direct release is recovered")
+				assert.Zero(t, s1-s0, "a direct release is not scheduled")
+			}
+
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			if tt.wantDrain {
+				assert.Contains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+					"startup recovery must drain unlabelled pod addresses before release")
+				if assert.Contains(t, dt.pendingPodDeletions, "ns/p") {
+					assert.True(t, dt.pendingPodDeletions["ns/p"].RecoveredAtStartup,
+						"a startup-scheduled drain must close the recovery gap once released")
+				}
+				dt.podInformerAddPod(pod)
+				if assert.Contains(t, dt.pendingPodDeletions, "ns/p") {
+					assert.True(t, dt.pendingPodDeletions["ns/p"].RecoveredAtStartup,
+						"the informer's initial Add must keep the startup recovery mark")
+				}
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{}}
+				dt.CheckPendingPodDeletions(ctx)
+				completeEgressCleanup(t, dt, "egress-a-natgw")
+				r2, _ := read()
+				assert.Equal(t, 1.0, r2-r1, "the drained release closes the recovery gap")
+				got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+			}
+			assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+			assert.Contains(t, got.Finalizers, "example.com/keep",
+				"only this controller's finalizer should be removed")
+		})
+	}
+}
+
+func TestBeginInitialization_DefersTriggersBufferedByStartupRecovery(t *testing.T) {
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	failed := false
+	kube.PrependReactor("update", "pods", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+		if !failed {
+			failed = true
+			return true, nil, apierrors.NewServiceUnavailable("apiserver busy")
+		}
+		return false, nil, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+
+	recoverStuckFinalizers(ctx, dt, nil, nil, nil, utilsets.NewString(), nil)
+	dt.triggerServiceUpdater()
+	assert.Len(t, dt.locationsUpdaterTrigger, 1, "the retry queued by startup recovery nudges the updater")
+
+	dt.mu.Lock()
+	deferredLocations, deferredService := dt.beginInitializationLocked()
+	dt.mu.Unlock()
+
+	assert.True(t, deferredLocations)
+	assert.True(t, deferredService)
+	assert.Empty(t, dt.locationsUpdaterTrigger, "updaters must not see a recovery trigger before startup reconciliation is queued")
+	assert.Empty(t, dt.serviceUpdaterTrigger)
+	assert.Zero(t, atomic.LoadInt32(&dt.pendingUpdaterTriggers))
+
+	dt.triggerLocationsUpdater()
+	assert.Equal(t, int32(1), atomic.LoadInt32(&dt.pendingUpdaterTriggers), "a re-sent trigger is tracked")
+	<-dt.locationsUpdaterTrigger
+	assert.True(t, dt.CheckPendingPodDeletions(ctx), "the first acknowledged pass reaches the injected API failure")
+	atomic.AddInt32(&dt.pendingUpdaterTriggers, -1)
+	dt.checkInitializationComplete()
+	select {
+	case <-dt.initCompletionChecker:
+		t.Fatal("initialization completed before the queued finalizer retry succeeded")
+	default:
+	}
+	dt.triggerLocationsUpdater()
+	<-dt.locationsUpdaterTrigger
+	assert.False(t, dt.CheckPendingPodDeletions(ctx))
+	atomic.AddInt32(&dt.pendingUpdaterTriggers, -1)
+	dt.checkInitializationComplete()
+	select {
+	case <-dt.initCompletionChecker:
+	default:
+		t.Fatal("initialization must complete once the re-sent trigger is processed")
+	}
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer)
+}
+
+func TestRecoverStuckFinalizers_UnlabelledPodSweepPaginates(t *testing.T) {
+	ctx := context.Background()
+	labelled := unlabelledFinalizerPod(nil, "uid-l", "10.244.0.6")
+	labelled.Name = "labelled"
+	labelled.Labels = map[string]string{consts.PodLabelServiceEgressGateway: "egress-a"}
+	unlabelled := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+	unrelated := unlabelledFinalizerPod(nil, "uid-u", "10.244.0.8")
+	unrelated.Name = "unrelated"
+	unrelated.Finalizers = nil
+	kube := fake.NewSimpleClientset(labelled, unlabelled, unrelated)
+	var calls []metav1.ListOptions
+	kube.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		opts := action.(k8stesting.ListActionImpl).GetListOptions()
+		calls = append(calls, opts)
+		if opts.Continue == "" {
+			return true, &v1.PodList{ListMeta: metav1.ListMeta{Continue: "t1"}, Items: []v1.Pod{*labelled, *unrelated}}, nil
+		}
+		return true, &v1.PodList{Items: []v1.Pod{*unlabelled}}, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.NRPResources.NATGateways.Insert("egress-a-natgw")
+	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+		"10.244.0.7": {Services: utilsets.NewString("egress-a-natgw")},
+	}}
+
+	RegisterMetrics()
+	recovered0, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	scheduled0, err := testutil.GetCounterMetricValue(finalizersRecoveryScheduledTotal)
+	assert.NoError(t, err)
+
+	recoverStuckFinalizers(ctx, dt, nil, nil, nil, utilsets.NewString(), nil)
+
+	recovered1, err := testutil.GetCounterMetricValue(finalizersRecoveredTotal)
+	assert.NoError(t, err)
+	scheduled1, err := testutil.GetCounterMetricValue(finalizersRecoveryScheduledTotal)
+	assert.NoError(t, err)
+	assert.Equal(t, 1.0, scheduled1-scheduled0, "only the unlabelled pod with our finalizer is recovered")
+	assert.Zero(t, recovered1-recovered0, "labelled pods and pods without our finalizer are not counted")
+
+	if assert.Len(t, calls, 2) {
+		assert.Equal(t, int64(500), calls[0].Limit)
+		assert.Equal(t, "t1", calls[1].Continue)
+	}
+	if pending := dt.pendingPodDeletions["ns/p"]; assert.NotNil(t, pending, "a pod on a later page must be recovered") {
+		assert.True(t, pending.RecoveredAtStartup)
+	}
+	assert.NotContains(t, dt.pendingPodDeletions, "ns/labelled", "labelled pods are left to the egress recovery path")
+}
+
+func TestRecoverUnlabelledPodsRetriesIncompleteLists(t *testing.T) {
+	for _, laterPage := range []bool{false, true} {
+		t.Run(fmt.Sprintf("later_page=%t", laterPage), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			pod := unlabelledFinalizerPod(nil, "uid-p")
+			kube := fake.NewSimpleClientset(pod)
+			var options []metav1.ListOptions
+			kube.PrependReactor("list", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+				opts := action.(k8stesting.ListActionImpl).GetListOptions()
+				options = append(options, opts)
+				if len(options) == 1 && laterPage {
+					return true, &v1.PodList{ListMeta: metav1.ListMeta{Continue: "next"}}, nil
+				}
+				if len(options) == 1 || laterPage && len(options) == 2 {
+					return true, nil, apierrors.NewServiceUnavailable("transient list failure")
+				}
+				return false, nil, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			pending, direct := recoverUnlabelledPodFinalizers(ctx, dt)
+			assert.NoError(t, ctx.Err())
+			assert.Equal(t, 1, pending)
+			assert.Zero(t, direct)
+			if laterPage {
+				assert.Len(t, options, 3)
+				assert.Equal(t, "next", options[1].Continue)
+			} else {
+				assert.Len(t, options, 2)
+			}
+			assert.Empty(t, options[len(options)-1].Continue, "an incomplete scan restarts from the first page")
+			for _, opts := range options {
+				assert.Equal(t, int64(500), opts.Limit)
+				assert.Empty(t, opts.LabelSelector)
+			}
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "an unknown no-IP observation awaits a serialized location pass")
+			assert.False(t, dt.CheckPendingPodDeletions(ctx))
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsKeepsListedAddresses(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, tt := range []struct {
+		name        string
+		clearIPs    bool
+		mapped      bool
+		replacement bool
+		wantHeld    bool
+	}{
+		{name: "lost IPs", clearIPs: true, mapped: true, wantHeld: true},
+		{name: "stable status", mapped: true, wantHeld: true},
+		{name: "no mapping", clearIPs: true},
+		{name: "replacement", clearIPs: true, mapped: true, replacement: true, wantHeld: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			listed := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			listed.DeletionTimestamp = ptr.To(metav1.Now())
+			current := listed.DeepCopy()
+			if tt.clearIPs {
+				current.Status.PodIP, current.Status.PodIPs = "", nil
+			}
+			if tt.replacement {
+				current.UID = "uid-new"
+			}
+			kube := fake.NewSimpleClientset(current)
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*listed.DeepCopy()}}, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			if tt.mapped {
+				dt.NRPResources.NATGateways.Insert(service)
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: utilsets.NewString(service)},
+				}}
+			}
+			recoverUnlabelledPodFinalizers(ctx, dt)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Equal(t, tt.wantHeld, hasPodFinalizer(got))
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			if tt.mapped && !tt.replacement {
+				pending := dt.pendingPodDeletions["ns/p"]
+				if assert.NotNil(t, pending) {
+					assert.Contains(t, pending.Addresses, "10.244.0.7")
+					assert.True(t, pending.waitsForService(service))
+				}
+			}
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsStopsOnCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	calls := 0
+	kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		calls++
+		cancel()
+		return true, nil, apierrors.NewServiceUnavailable("list unavailable")
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	pending, direct := recoverUnlabelledPodFinalizers(ctx, dt)
+	assert.Zero(t, pending+direct)
+	assert.Equal(t, 1, calls)
+	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Empty(t, dt.podFinalizerGuards)
+}
+
+func TestRecoverUnlabelledPodsDoesNotPublishAfterCancellation(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, cancelAt := range []int{0, 2, 3} {
+		t.Run(fmt.Sprintf("cancel_at_GET=%d", cancelAt), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			listed := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			current := listed.DeepCopy()
+			current.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			kube := fake.NewSimpleClientset(current)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.K8sResources.Egresses.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*listed.DeepCopy()}}, nil
+			})
+			gets := 0
+			kube.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				gets++
+				if gets == 1 {
+					return true, nil, apierrors.NewServiceUnavailable("read unavailable")
+				}
+				if cancelAt != 0 && gets == cancelAt {
+					cancel()
+				}
+				return true, current.DeepCopy(), nil
+			})
+			recovered, released := recoverUnlabelledPodFinalizers(ctx, dt)
+			assert.Equal(t, 1, recovered)
+			assert.Zero(t, released)
+			if cancelAt != 0 {
+				cancel()
+				assert.True(t, dt.CheckPendingPodDeletions(ctx), "cancellation must leave the unresolved work owned")
+				assert.Empty(t, dt.K8sResources.Nodes)
+				assert.Empty(t, dt.pendingPods)
+			} else {
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+				assert.Equal(t, service, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity)
+			}
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsCancellationReleasesGuardWait(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, tt := range []struct {
+		name           string
+		cancelFollowup bool
+		deleting       bool
+	}{
+		{name: "live control"},
+		{name: "live cancellation", cancelFollowup: true},
+		{name: "deleting control", deleting: true},
+		{name: "deleting cancellation", cancelFollowup: true, deleting: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			listed := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			current := listed.DeepCopy()
+			current.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			if tt.deleting {
+				current.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			kube := fake.NewSimpleClientset(current)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.K8sResources.Egresses.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*listed.DeepCopy()}}, nil
+			})
+			var gets atomic.Int32
+			var recovering atomic.Bool
+			recovering.Store(true)
+			guardHeld := make(chan func(), 1)
+			kube.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				n := gets.Add(1)
+				if n == 1 {
+					return true, nil, apierrors.NewServiceUnavailable("read unavailable")
+				}
+				if n == 2 && recovering.Load() {
+					unlock, err := dt.lockPodFinalizer(context.Background(), "ns/p")
+					if err != nil {
+						return true, nil, err
+					}
+					guardHeld <- unlock
+				}
+				return true, current.DeepCopy(), nil
+			})
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				defer recovering.Store(false)
+				recoverUnlabelledPodFinalizers(ctx, dt)
+			}()
+			var unlock func()
+			var once sync.Once
+			release := func() {
+				if unlock != nil {
+					once.Do(unlock)
+				}
+			}
+			defer func() {
+				cancel()
+				release()
+				select {
+				case <-done:
+				case <-time.After(3 * time.Second):
+					t.Error("recovery did not stop after releasing the held guard")
+				}
+			}()
+			select {
+			case unlock = <-guardHeld:
+				if !assert.Eventually(t, func() bool {
+					dt.mu.Lock()
+					defer dt.mu.Unlock()
+					guard := dt.podFinalizerGuards["ns/p"]
+					return guard != nil && guard.users >= 2
+				}, 3*time.Second, time.Millisecond, "follow-up never reached its guard wait") {
+					return
+				}
+				if tt.cancelFollowup {
+					cancel()
+					select {
+					case <-done:
+					case <-time.After(time.Second):
+						t.Error("cancelled recovery must not wait for an unrelated holder to release its Pod guard")
+					}
+				}
+				release()
+			case <-done:
+				// Deferring the failed lookup to its existing retry owner needs no follow-up wait.
+			case <-time.After(3 * time.Second):
+				t.Fatal("recovery neither returned nor attempted its follow-up")
+			}
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				t.Fatal("recovery did not finish")
+			}
+			if tt.cancelFollowup {
+				cancel()
+			} else {
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+				if tt.deleting {
+					pending := dt.pendingPodDeletions["ns/p"]
+					if assert.NotNil(t, pending) {
+						assert.True(t, pending.waitsForService(service))
+					}
+					assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[service].State)
+				} else {
+					assert.Equal(t, service, dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity)
+				}
+			}
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsWaitsForUnknownDrain(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, state := range []string{
+		"unbacked outbound", "no NRP mapping", "desired same location", "buffered same location",
+		"desired different location", "buffered different location", "inbound mapping",
+		"reserved mapping", "unregistered outbound", "unowned address",
+	} {
+		t.Run(state, func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p")
+			pod.DeletionTimestamp = ptr.To(metav1.Now())
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(service)
+			dt.pendingServiceOps[service] = &ServiceOperationState{
+				ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+			}
+			mappedService := service
+			switch state {
+			case "inbound mapping":
+				mappedService = "inbound-uid-lb"
+				dt.NRPResources.LoadBalancers.Insert(mappedService)
+			case "reserved mapping":
+				mappedService = "default-natgw"
+				dt.NRPResources.NATGateways.Insert(mappedService)
+			case "unregistered outbound":
+				dt.NRPResources.NATGateways.Delete(service)
+			}
+			if state != "no NRP mapping" {
+				services := utilsets.NewString(mappedService)
+				if state == "unowned address" {
+					services = nil
+				}
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: services},
+				}}
+			}
+			location := "10.0.0.1"
+			if strings.Contains(state, "different location") {
+				location = "10.0.0.2"
+			}
+			if strings.HasPrefix(state, "desired") {
+				dt.K8sResources.Egresses.Insert(service)
+				dt.K8sResources.Nodes[location] = Node{Pods: map[string]Pod{
+					"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: service, OutboundPodKey: "ns/q", OutboundPodUID: "uid-q"},
+				}}
+				dt.outboundIdentityPodRefCount.Store(service, 1)
+			}
+			if strings.HasPrefix(state, "buffered") {
+				dt.pendingPods[service] = []PendingPodUpdate{
+					{PodKey: "ns/q", PodUID: "uid-q", Location: location, Address: "10.244.0.7"},
+				}
+			}
+			wantHeld := state == "unbacked outbound" || strings.Contains(state, "different location")
+			recovered, released := recoverUnlabelledPodFinalizers(ctx, dt)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.True(t, hasPodFinalizer(got), "cached absence alone cannot exclude an outstanding publication")
+			assert.Contains(t, got.Finalizers, "example.com/keep")
+			assert.Equal(t, StateCreated, dt.pendingServiceOps[service].State, "unknown ownership must not guess a gateway deletion target")
+			assert.Equal(t, 1, recovered)
+			assert.Zero(t, released)
+			assert.True(t, dt.checkPendingPodDeletions(ctx, false), "a failed location pass is not an acknowledgment")
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got))
+			assert.Equal(t, wantHeld, dt.CheckPendingPodDeletions(ctx))
+			if wantHeld {
+				dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+				assert.False(t, dt.CheckPendingPodDeletions(ctx))
+				assert.Equal(t, StateCreated, dt.pendingServiceOps[service].State)
+			}
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+			assert.Empty(t, dt.pendingPodDeletions)
+			assert.Empty(t, dt.podFinalizerGuards)
+		})
+	}
+}
+
+func TestRecoverUnlabelledPodsKeepsChangedIntentEvidence(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, state := range []string{
+		"live B without IPs", "unlabelled", "finalizer removed", "gone", "replacement", "restored A", "restored A before sync",
+	} {
+		t.Run(state, func(t *testing.T) {
+			ctx := context.Background()
+			observed := unlabelledFinalizerPod(nil, "uid-old", "10.244.0.7")
+			current := observed.DeepCopy()
+			switch state {
+			case "live B without IPs", "replacement":
+				current.Labels[consts.PodLabelServiceEgressGateway] = "egress-b"
+				current.Status.HostIP, current.Status.PodIP, current.Status.PodIPs = "", "", nil
+				if state == "replacement" {
+					current.UID = "uid-new"
+				}
+			case "finalizer removed":
+				current.Finalizers = []string{"example.com/keep"}
+			case "restored A", "restored A before sync":
+				current.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			}
+			kube := fake.NewSimpleClientset()
+			if state != "gone" {
+				_, err := kube.CoreV1().Pods("ns").Create(ctx, current, metav1.CreateOptions{})
+				if !assert.NoError(t, err) {
+					return
+				}
+			}
+			kube.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+				return true, &v1.PodList{Items: []v1.Pod{*observed.DeepCopy()}}, nil
+			})
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(a, b)
+			dt.K8sResources.Egresses.Insert(a, b)
+			for _, service := range []string{a, b} {
+				dt.pendingServiceOps[service] = &ServiceOperationState{
+					ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+				}
+			}
+			dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+				"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: a, OutboundPodKey: "ns/p", OutboundPodUID: "uid-old"},
+			}}
+			dt.outboundIdentityPodRefCount.Store(a, 1)
+			if state != "restored A before sync" {
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: utilsets.NewString(a)},
+				}}
+			}
+			recovered, directCleaned := recoverUnlabelledPodFinalizers(ctx, dt)
+			if state != "gone" {
+				dt.podInformerAddPod(current)
+				dt.reconcileEgressPodUpdate(current, current)
+				got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, current.UID, got.UID)
+				assert.Equal(t, state != "finalizer removed", hasPodFinalizer(got))
+				assert.Contains(t, got.Finalizers, "example.com/keep")
+			}
+			desired := dt.K8sResources.Nodes["10.0.0.1"].Pods["10.244.0.7"].PublicOutboundIdentity == a
+			if state == "restored A" || state == "restored A before sync" {
+				assert.True(t, desired)
+				assert.Equal(t, StateCreated, dt.pendingServiceOps[a].State)
+				assert.Zero(t, recovered)
+				assert.Zero(t, directCleaned, "a retained live finalizer was not removed")
+				assert.Empty(t, dt.pendingPodDeletions)
+			} else {
+				assert.False(t, desired)
+				assert.Equal(t, StateDeletionPending, dt.pendingServiceOps[a].State)
+			}
+		})
+	}
+}
+
+func TestRecoverStuckFinalizersMergesMatchingUIDRecord(t *testing.T) {
+	const service = "egress-a-natgw"
+	ctx := context.Background()
+	pod := unlabelledFinalizerPod(nil, "uid-current")
+	pod.DeletionTimestamp = ptr.To(metav1.Now())
+	old := pod.DeepCopy()
+	old.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+	old.Status.HostIP = ""
+	kube := fake.NewSimpleClientset(pod)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.setBYONATGatewayID(service, byoNATGatewayARMID("external-a"))
+	dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+		Namespace: "ns", Name: "p", UID: "uid-old", ServiceName: "old-natgw", IsLastPod: true,
+		OtherUIDs: map[string]*PendingPodDeletion{
+			"uid-current": {Namespace: "ns", Name: "p", UID: "uid-current", ResolutionPending: true},
+		},
+	}
+	recoverStuckFinalizers(ctx, dt, nil, &v1.PodList{Items: []v1.Pod{*old}}, nil, nil, nil)
+	pending := dt.pendingPodDeletions["ns/p"].forUID("uid-current")
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.True(t, pending.waitsForService(service))
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.True(t, hasPodFinalizer(got))
+	assert.Equal(t, byoNATGatewayARMID("external-a"), dt.byoNATGatewayID(service))
+	completeEgressCleanup(t, dt, service)
+	got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.False(t, hasPodFinalizer(got))
+}
+
+func TestRecoverStuckFinalizersMergesLabelRemovalBetweenLists(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, unregisteredBYO := range []bool{false, true} {
+		t.Run(fmt.Sprintf("unregistered_BYO=%t", unregisteredBYO), func(t *testing.T) {
+			ctx := context.Background()
+			pod := unlabelledFinalizerPod(nil, "uid-p", "10.244.0.7")
+			pod.DeletionTimestamp = ptr.To(metav1.Now())
+			old := pod.DeepCopy()
+			old.Labels[consts.PodLabelServiceEgressGateway] = "egress-a"
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.NRPResources.NATGateways.Insert(b)
+			services := utilsets.NewString(b)
+			if unregisteredBYO {
+				dt.setBYONATGatewayID(a, byoNATGatewayARMID("external-a"))
+				old.Status.HostIP, old.Status.PodIP, old.Status.PodIPs = "", "", nil
+			} else {
+				dt.NRPResources.NATGateways.Insert(a)
+				services.Insert(a)
+			}
+			dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+				"10.244.0.7": {Services: services},
+			}}
+			recoverStuckFinalizers(ctx, dt, nil, &v1.PodList{Items: []v1.Pod{*old}}, nil, nil, nil)
+			pending := dt.pendingPodDeletions["ns/p"]
+			if !assert.NotNil(t, pending) {
+				return
+			}
+			assert.True(t, pending.waitsForService(a))
+			assert.True(t, pending.waitsForService(b))
+			if unregisteredBYO {
+				assert.True(t, pending.ServiceCleanup[a].VerifyServiceDrain)
+				assert.Equal(t, byoNATGatewayARMID("external-a"), dt.byoNATGatewayID(a))
+			}
+			completeEgressCleanup(t, dt, a)
+			got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "the older filtered snapshot cannot erase B's work")
+			dt.NRPResources.Locations = make(map[string]NRPLocation)
+			completeEgressCleanup(t, dt, b)
+			got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(got))
+		})
 	}
 }
 
@@ -620,16 +1617,16 @@ func TestRecoverStuckFinalizers_NoIPPodUsesServiceDrainVerification(t *testing.T
 // single un-provisionable service would otherwise stall the whole cloud-provider init.
 func TestCheckInitializationComplete_ParkedOpDoesNotBlockCompletion(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-init-parked"
+	serviceName := "svc-init-parked"
 
 	// Set up the initialization state the engine uses during cold start.
 	atomic.StoreInt32(&dt.isInitializing, 1)
 	dt.initCompletionChecker = make(chan struct{})
 
 	// Retry-exhausted parked op: retryGate skips it and it is not terminal, but it must not block init.
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID:             uid,
-		Config:                 NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName:            serviceName,
+		Config:                 NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State:                  StateCreationInProgress,
 		RetryCount:             maxServiceRetries,
 		RetriesExhausted:       true,
@@ -674,15 +1671,15 @@ func TestShouldTriggerInitialLocationSync(t *testing.T) {
 // genuinely still in flight (not parked, not created) keeps initial sync open.
 func TestCheckInitializationComplete_InProgressOpBlocksCompletion(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-init-inflight"
+	serviceName := "svc-init-inflight"
 
 	atomic.StoreInt32(&dt.isInitializing, 1)
 	dt.initCompletionChecker = make(chan struct{})
 
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid,
-		Config:     NewInboundServiceConfig(uid, makeInboundConfig(80)),
-		State:      StateCreationInProgress,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
+		State:       StateCreationInProgress,
 	}
 
 	dt.checkInitializationComplete()
@@ -694,6 +1691,79 @@ func TestCheckInitializationComplete_InProgressOpBlocksCompletion(t *testing.T) 
 	assert.Equal(t, int32(1), atomic.LoadInt32(&dt.isInitializing), "isInitializing must stay set while work is pending")
 }
 
+func TestCheckInitializationComplete_RejectedCreationDoesNotBlockCompletion(t *testing.T) {
+	const serviceName = "egress-rejected"
+	initializing := func(op *ServiceOperationState) *DiffTracker {
+		dt := newTestDiffTracker()
+		atomic.StoreInt32(&dt.isInitializing, 1)
+		dt.initCompletionChecker = make(chan struct{})
+		dt.pendingServiceOps[serviceName] = op
+		return dt
+	}
+	initDone := func(dt *DiffTracker) bool {
+		dt.checkInitializationComplete()
+		select {
+		case <-dt.initCompletionChecker:
+			return true
+		default:
+			return false
+		}
+	}
+
+	for _, tc := range []struct {
+		name         string
+		err          error
+		wasRejected  bool
+		wantRejected bool
+	}{
+		{name: "a rejection", err: egressRejectedError{errors.New("NAT Gateway does not exist")}, wantRejected: true},
+		{name: "a wrapped rejection", err: fmt.Errorf("attempt: %w", egressRejectedError{errors.New("access denied")}), wantRejected: true},
+		{name: "no member remains", err: fmt.Errorf("%w: %q", errNoEgressMember, serviceName), wantRejected: true},
+		{name: "a pod read was forbidden, not absent", err: apierrors.NewForbidden(v1.Resource("pods"), "pod", errors.New("denied"))},
+		{name: "a transient failure", err: errors.New("ARM failure")},
+		{name: "a transient failure after a rejection", err: errors.New("ARM failure"), wasRejected: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dt := initializing(&ServiceOperationState{ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateCreationInProgress,
+				CreationRejected: tc.wasRejected})
+
+			dt.OnServiceCreationComplete(serviceName, false, tc.err)
+			op := dt.pendingServiceOps[serviceName]
+			assert.Equal(t, StateNotStarted, op.State, "the creation is retried")
+			assert.True(t, op.NextRetryAt.After(time.Now()), "with backoff")
+			assert.Equal(t, tc.wantRejected, op.CreationRejected)
+
+			newTestServiceUpdater(dt).processBatch()
+			assert.Zero(t, atomic.LoadInt32(&dt.pendingUpdaterTriggers))
+			assert.Equal(t, tc.wantRejected, initDone(dt), "only rejected configurations and confirmed member absence may defer creation")
+		})
+	}
+
+	t.Run("a dispatched retry holds the initial sync open while it runs", func(t *testing.T) {
+		dt := initializing(&ServiceOperationState{ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil),
+			State: StateCreationInProgress, CreationRejected: true})
+		assert.False(t, initDone(dt))
+	})
+
+	t.Run("success, a retry reset and a re-creation after deletion clear the rejection", func(t *testing.T) {
+		dt := newTestDiffTracker()
+		dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil),
+			State: StateCreationInProgress, CreationRejected: true}
+		dt.OnServiceCreationComplete(serviceName, true, nil)
+		assert.False(t, dt.pendingServiceOps[serviceName].CreationRejected, "success")
+
+		op := &ServiceOperationState{CreationRejected: true}
+		resetRetryStateLocked(op)
+		assert.False(t, op.CreationRejected, "retry reset")
+
+		dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil),
+			State: StateDeletionInProgress, CreationRejected: true, RecreateAfterDeletion: true}
+		dt.OnServiceCreationComplete(serviceName, true, nil)
+		assert.Equal(t, StateNotStarted, dt.pendingServiceOps[serviceName].State, "re-created")
+		assert.False(t, dt.pendingServiceOps[serviceName].CreationRejected, "re-creation after a deletion")
+	})
+}
+
 // TestEgressRefCount_Robust verifies the outbound (NAT Gateway) ref-count lifecycle:
 //
 //   - Two AddPod calls for the same egress identity and pod (an informer Add followed by an Update
@@ -703,49 +1773,49 @@ func TestCheckInitializationComplete_InProgressOpBlocksCompletion(t *testing.T) 
 //   - A subsequent stale DeletePod is a no-op and the ref-count never goes negative.
 func TestEgressRefCount_Robust(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "egress-refcount"
+	serviceName := "egress-refcount"
 	const node = "10.0.0.1"
 	const podIP = "10.244.0.9"
 
 	// Outbound service already exists in NRP (the AddPod no-tracking-yet path).
-	dt.NRPResources.NATGateways.Insert(uid)
+	dt.NRPResources.NATGateways.Insert(serviceName)
 
 	// First AddPod registers the pod and bumps the counter to 1.
-	dt.AddPod(uid, "ns/pod-a", node, podIP)
-	v, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(uid))
+	dt.AddPod(serviceName, "ns/pod-a", node, podIP)
+	v, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(serviceName))
 	if assert.True(t, ok, "first AddPod must register the egress identity in the ref-counter") {
 		assert.Equal(t, 1, v.(int), "first AddPod must set the ref-count to 1")
 	}
 
 	// Second AddPod for the SAME identity + SAME pod must be idempotent: counter stays at 1.
-	dt.AddPod(uid, "ns/pod-a", node, podIP)
-	v, _ = dt.outboundIdentityPodRefCount.Load(strings.ToLower(uid))
+	dt.AddPod(serviceName, "ns/pod-a", node, podIP)
+	v, _ = dt.outboundIdentityPodRefCount.Load(strings.ToLower(serviceName))
 	assert.Equal(t, 1, v.(int),
 		"duplicate AddPod for the same egress identity + pod must be idempotent (ref-count stays at 1)")
 
 	// Removing the last pod must report IsLastPod=true and drop the counter entry to 0
 	// (the sync.Map key is removed on counter==1 by decrementOutboundRefCount).
-	res := dt.DeletePod(uid, node, []string{podIP}, "ns", "pod-a", "")
+	res := dt.DeletePod(serviceName, node, []string{podIP}, "ns", "pod-a", "")
 	assert.True(t, res.IsLastPod, "removing the only pod must report IsLastPod=true exactly once")
-	_, stillExists := dt.outboundIdentityPodRefCount.Load(strings.ToLower(uid))
+	_, stillExists := dt.outboundIdentityPodRefCount.Load(strings.ToLower(serviceName))
 	assert.False(t, stillExists,
 		"last-pod removal must delete the ref-count key (counter went 1 → 0)")
 
 	// The teardown path must run EXACTLY ONCE — the service is marked for deletion.
-	op := dt.pendingServiceOps[uid]
+	op := dt.pendingServiceOps[serviceName]
 	if assert.NotNil(t, op, "last-pod removal must synthesize a deletion-tracking entry") {
 		assert.Equal(t, StateDeletionPending, op.State,
 			"last-pod removal must mark the service StateDeletionPending exactly once")
 	}
-	_, queued := dt.pendingServiceDeletions[uid]
+	_, queued := dt.pendingServiceDeletions[serviceName]
 	assert.True(t, queued, "last-pod removal must enqueue PendingServiceDeletion exactly once")
 
 	// A stale duplicate DeletePod must be a no-op (the pod is no longer in live state) and
 	// must not drive the counter negative. We can also call AddPod again as the same pod
 	// (synthesizing a same-name replacement) and re-delete it without a negative counter.
-	dup := dt.DeletePod(uid, node, []string{podIP}, "ns", "pod-a", "")
+	dup := dt.DeletePod(serviceName, node, []string{podIP}, "ns", "pod-a", "")
 	assert.False(t, dup.IsLastPod, "stale duplicate DeletePod must be a no-op (IsLastPod=false)")
-	if v, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(uid)); ok {
+	if v, ok := dt.outboundIdentityPodRefCount.Load(strings.ToLower(serviceName)); ok {
 		if cnt, _ := v.(int); cnt < 0 {
 			t.Fatalf("egress ref-count went negative after duplicate delete: %d", cnt)
 		}
@@ -781,6 +1851,23 @@ func TestProcessK8sEgresses_SkipsTerminatedPhases(t *testing.T) {
 	assert.True(t, podIPTracked(&k8s, pendingIP), "a Pending egress pod must be imported")
 	assert.False(t, podIPTracked(&k8s, succeededIP), "a Succeeded egress pod must not be imported")
 	assert.False(t, podIPTracked(&k8s, failedIP), "a Failed egress pod must not be imported")
+}
+
+func TestProcessK8sEgresses_RejectsReservedLabels(t *testing.T) {
+	for _, label := range []string{"default", "DEFAULT", "default-natgw", "DEFAULT-NATGW"} {
+		t.Run(label, func(t *testing.T) {
+			k8s := newK8sStateForSeeders()
+			kube := fake.NewSimpleClientset(
+				newEgressPod("reserved", "default", label, "node-1", "10.244.5.1", "10.0.0.30", v1.PodRunning),
+				newEgressPod("ordinary", "default", "team-natgw", "node-1", "10.244.5.2", "10.0.0.30", v1.PodRunning),
+			)
+			_, err := processK8sEgresses(context.Background(), kube, &k8s)
+			assert.NoError(t, err)
+			assert.False(t, podIPTracked(&k8s, "10.244.5.1"))
+			assert.True(t, podIPTracked(&k8s, "10.244.5.2"))
+			assert.ElementsMatch(t, []string{outboundServiceName("team-natgw")}, k8s.Egresses.UnsortedList())
+		})
+	}
 }
 
 // TestProcessK8sEgresses_SkipsMalformedIPs verifies the cold-start seeder rejects egress pods with a
@@ -941,7 +2028,7 @@ func TestReconcileServices_AppliesRuntimeAdmissionOnStartup(t *testing.T) {
 	ports := []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}}
 	foreignClass := "example.com/other-controller"
 
-	serviceUIDToService := map[string]*v1.Service{
+	serviceNameToService := map[string]*v1.Service{
 		internalUID: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "internal", Namespace: "ns", UID: types.UID(internalUID),
@@ -969,7 +2056,7 @@ func TestReconcileServices_AppliesRuntimeAdmissionOnStartup(t *testing.T) {
 		NATGatewayUpdates: SyncServicesReturnType{Additions: utilsets.NewString()},
 	}
 
-	dt.reconcileServices(syncOps, serviceUIDToService)
+	dt.reconcileServices(syncOps, serviceNameToService)
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
@@ -994,10 +2081,10 @@ func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
 	dt.config = testConfig()
 	dt.kubeClient = fake.NewSimpleClientset()
 
-	serviceUIDToService := make(map[string]*v1.Service)
+	serviceNameToService := make(map[string]*v1.Service)
 	for i := 0; i < 50; i++ {
 		uid := fmt.Sprintf("svc-%d", i)
-		serviceUIDToService[uid] = &v1.Service{
+		serviceNameToService[uid] = &v1.Service{
 			ObjectMeta: metav1.ObjectMeta{Name: uid, Namespace: "ns", UID: types.UID(uid)},
 			Spec:       v1.ServiceSpec{Type: v1.ServiceTypeLoadBalancer},
 		}
@@ -1023,7 +2110,7 @@ func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
 	}()
 
 	for i := 0; i < 20; i++ {
-		recoverServiceExternalIPs(context.Background(), dt, serviceUIDToService, map[string]string{})
+		recoverServiceExternalIPs(context.Background(), dt, serviceNameToService, map[string]string{})
 	}
 
 	close(stop)
@@ -1035,19 +2122,38 @@ func TestRecoverServiceExternalIPs_SnapshotsNRPStateUnderLock(t *testing.T) {
 	assert.True(t, stillTracked, "recovery must only read the NRP LoadBalancer set, never mutate it")
 }
 
-// TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes pins that orphan
-// classification consults Kubernetes desired state, not only NRP.
-//
-// A Public IP with no NRP registration is the crash-mid-create state: the address was allocated
-// before the LoadBalancer and ServiceGateway registration completed. The restart's re-create can
-// park (terminal spec failure, or retries exhausted), and parked operations do not block
-// initialization, so this cleanup runs while the Service is still being reconciled. Treating that
-// as an orphan destroys an in-use address and forces a new one on the next successful create.
+func TestCleanupOrphanedPublicIPs_KeepsUnownedPublicIPs(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	factory := mock_azclient.NewMockClientFactory(ctrl)
+	client := mock_publicipaddressclient.NewMockInterface(ctrl)
+	factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+	client.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	dt := newTestDiffTracker()
+	dt.config = testConfig()
+	dt.networkClientFactory = factory
+
+	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
+		nil,
+		{},
+		{Name: ptr.To("payments-natgw-pip")},
+		{Name: ptr.To("payments-natgw-pip-v6")},
+		{Name: ptr.To("11111111-1111-1111-1111-111111111111-lb-pip")},
+		{Name: ptr.To("old-outbound-natgw-pip"), Tags: map[string]*string{"k8s-azure-egress-identity": ptr.To("old-outbound")}},
+		{Name: ptr.To("old-inbound-lb-pip"), Tags: map[string]*string{"k8s-azure-service-uid": ptr.To("old-inbound")}},
+		{Name: ptr.To("unknown-marker-natgw-pip"), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown")}},
+		{Name: ptr.To("uppercase-natgw-pip"), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("TRUE")}},
+	}))
+}
+
+// TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes checks
+// that a desired Service's detached Public IP after partial creation is not an orphan,
+// even if admission or exhausted retries prevent it from reaching NRP during initialization.
 func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *testing.T) {
 	const (
-		desiredUID = "11111111-1111-1111-1111-111111111111"
-		egressUID  = "team-egress"
-		orphanUID  = "22222222-2222-2222-2222-222222222222"
+		desiredServiceName = "11111111-1111-1111-1111-111111111111-lb"
+		egressName         = "team-egress-natgw"
+		orphanServiceName  = "22222222-2222-2222-2222-222222222222-lb"
 	)
 
 	ctrl := gomock.NewController(t)
@@ -1072,35 +2178,34 @@ func TestCleanupOrphanedPublicIPs_KeepsPIPForServiceStillDesiredInKubernetes(t *
 	dt.config = testConfig()
 	dt.networkClientFactory = mockFactory
 	// Both are desired in Kubernetes but neither has reached NRP yet.
-	dt.K8sResources.Services.Insert(desiredUID)
-	dt.K8sResources.Egresses.Insert(egressUID)
+	dt.K8sResources.Services.Insert(desiredServiceName)
+	dt.K8sResources.Egresses.Insert(egressName)
 
-	detached := func(name string) *armnetwork.PublicIPAddress {
+	detached := func(identity string) *armnetwork.PublicIPAddress {
 		return &armnetwork.PublicIPAddress{
-			Name:       ptr.To(name),
+			Name:       ptr.To(PublicIPName(identity)),
+			Etag:       ptr.To(`W/"pip-version"`),
+			Tags:       managedResourceTags(),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 		}
 	}
+	orphan := detached(orphanServiceName)
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", PublicIPName(orphanServiceName), nil).Return(orphan, nil).Times(1)
 
 	assert.NoError(t, dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{
-		detached(PublicIPName(desiredUID)),
-		detached(PublicIPName(egressUID)),
-		detached(PublicIPName(orphanUID)),
+		detached(desiredServiceName),
+		detached(egressName),
+		orphan,
 	}))
 
-	assert.NotContains(t, deleted, PublicIPName(desiredUID),
+	assert.NotContains(t, deleted, PublicIPName(desiredServiceName),
 		"the Public IP of a Service Kubernetes still wants must not be deleted as an orphan")
-	assert.NotContains(t, deleted, PublicIPName(egressUID),
+	assert.NotContains(t, deleted, PublicIPName(egressName),
 		"the Public IP of an egress identity Kubernetes still wants must not be deleted as an orphan")
-	assert.Contains(t, deleted, PublicIPName(orphanUID),
+	assert.Contains(t, deleted, PublicIPName(orphanServiceName),
 		"a Public IP desired by neither Kubernetes nor NRP must still be cleaned up")
 }
 
-// TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress pins what the sweeper may and may
-// not delete. The resource group is the cluster's managed node resource group, so every "*-pip" in
-// it belongs to this controller and an unused one is a leak, whether it is named from a Service UUID
-// or from an egress pod label. What still has to survive is an address that is attached, reserved
-// for the default gateway, or wanted by a Kubernetes object.
 func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) {
 	run := func(t *testing.T, pips []*armnetwork.PublicIPAddress) []string {
 		ctrl := gomock.NewController(t)
@@ -1109,6 +2214,9 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 		mockFactory := mock_azclient.NewMockClientFactory(ctrl)
 		mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
 		mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+		for _, pip := range pips {
+			mockPIP.EXPECT().Get(gomock.Any(), "rg", derefString(pip.Name), nil).Return(pip, nil).MaxTimes(1)
+		}
 
 		// The sweep deletes in parallel through a worker pool, so the recorder must be locked.
 		var deletedMu sync.Mutex
@@ -1131,30 +2239,149 @@ func TestCleanupOrphanedPublicIPs_SweepsEveryUnusedManagedAddress(t *testing.T) 
 	detached := func(name string) *armnetwork.PublicIPAddress {
 		return &armnetwork.PublicIPAddress{
 			Name:       ptr.To(name),
+			Etag:       ptr.To(`W/"pip-version"`),
+			Tags:       managedResourceTags(),
 			Properties: &armnetwork.PublicIPAddressPropertiesFormat{},
 		}
 	}
 
-	const managedOrphan = "22222222-2222-2222-2222-222222222222-pip"
+	const managedOrphan = "22222222-2222-2222-2222-222222222222-lb-pip"
+	inbound := detached(managedOrphan)
+	inbound.Tags = map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(consts.ServiceGatewayManagedTagValue)}
+	attached := detached("attached-natgw-pip")
+	attached.Properties.IPConfiguration = &armnetwork.IPConfiguration{ID: ptr.To("/ipConfigurations/attached")}
 
 	deleted := run(t, []*armnetwork.PublicIPAddress{
-		detached("team-egress-pip"),
-		detached("team-egress-pip-v6"),
-		detached(managedOrphan),
+		detached("team-egress-natgw-pip"),
+		detached("team-egress-natgw-pip-v6"),
+		inbound,
 		detached(PublicIPName(DefaultOutboundNATGatewayName)),
+		detached(PublicIPNameV6(DefaultOutboundNATGatewayName)),
 		detached("not-one-of-ours"),
+		{Name: ptr.To("legacy-pip")},
+		{Name: ptr.To("foreign-natgw-pip-v6"), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown")}},
+		attached,
 	})
 
 	assert.Contains(t, deleted, managedOrphan,
 		"a managed Service address desired by neither Kubernetes nor NRP must be cleaned up")
-	assert.Contains(t, deleted, "team-egress-pip",
+	assert.Contains(t, deleted, "team-egress-natgw-pip",
 		"an unused egress address is a leak: its NAT Gateway is already gone, so nothing else deletes it")
-	assert.Contains(t, deleted, "team-egress-pip-v6",
+	assert.Contains(t, deleted, "team-egress-natgw-pip-v6",
 		"the IPv6 half of an egress identity leaks the same way as the IPv4 half")
 	assert.NotContains(t, deleted, PublicIPName(DefaultOutboundNATGatewayName),
 		"the cluster's default egress address is RP-owned and must never be deleted")
 	assert.NotContains(t, deleted, "not-one-of-ours",
 		"a name that does not follow the controller's convention must be left alone")
+	assert.ElementsMatch(t, []string{"team-egress-natgw-pip", "team-egress-natgw-pip-v6", managedOrphan}, deleted)
+}
+
+func TestCleanupOrphanedPublicIPs_RechecksOwnership(t *testing.T) {
+	const identity = "payments-natgw"
+	for _, tc := range []struct {
+		name       string
+		live       *armnetwork.PublicIPAddress
+		readErr    error
+		deleteErr  error
+		wantDelete bool
+		wantError  bool
+	}{
+		{name: "still owned", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: managedResourceTags()}, wantDelete: true},
+		{name: "owned without ETag", live: &armnetwork.PublicIPAddress{Tags: managedResourceTags()}, wantError: true},
+		{name: "tag removed", live: &armnetwork.PublicIPAddress{}},
+		{name: "marker changed", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("unknown")}}},
+		{name: "marker revoked", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("false")}}},
+		{name: "only old identity tag remains", live: &armnetwork.PublicIPAddress{Tags: map[string]*string{"k8s-azure-egress-identity": ptr.To(identity)}}},
+		{name: "already absent", readErr: notFoundError()},
+		{name: "read failed", readErr: errors.New("PIP read failed"), wantError: true},
+		{name: "nil successful read", wantError: true},
+		{name: "delete failed", live: &armnetwork.PublicIPAddress{Etag: ptr.To(`W/"pip-version"`), Tags: managedResourceTags()},
+			deleteErr: errors.New("PIP delete failed"), wantDelete: true, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			client := mock_publicipaddressclient.NewMockInterface(ctrl)
+			factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+			client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).Return(tc.live, tc.readErr).Times(1)
+			if tc.wantDelete {
+				client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(tc.deleteErr).Times(1)
+			}
+			dt := newTestDiffTracker()
+			dt.config = testConfig()
+			dt.networkClientFactory = factory
+			err := dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{{
+				Name: ptr.To(PublicIPName(identity)), Tags: managedResourceTags(),
+			}})
+			if tc.wantError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCleanupOrphanedPublicIPs_ConflictWaitsForAnotherPass(t *testing.T) {
+	const identity = "payments-natgw"
+	conflict := &azcore.ResponseError{
+		StatusCode: http.StatusPreconditionFailed, ErrorCode: "PreconditionFailed",
+		RawResponse: &http.Response{StatusCode: http.StatusPreconditionFailed, Request: &http.Request{Method: http.MethodDelete}},
+	}
+	for _, tc := range []struct {
+		name        string
+		managedType string
+		retryError  error
+	}{
+		{name: "same marker with a new version", managedType: consts.ServiceGatewayManagedTagValue},
+		{name: "revoked marker is preserved", managedType: "false"},
+		{name: "second conflict is reported", managedType: consts.ServiceGatewayManagedTagValue, retryError: conflict},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			factory := mock_azclient.NewMockClientFactory(ctrl)
+			client := mock_publicipaddressclient.NewMockInterface(ctrl)
+			factory.EXPECT().GetPublicIPAddressClient().Return(client).AnyTimes()
+			pip := &armnetwork.PublicIPAddress{
+				Name: ptr.To(PublicIPName(identity)), Etag: ptr.To(`W/"v1"`), Tags: managedResourceTags(),
+			}
+			fresh := &armnetwork.PublicIPAddress{
+				Name: pip.Name, Etag: ptr.To(`W/"v2"`), Tags: map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To(tc.managedType)},
+			}
+			gets := 0
+			firstRead := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).
+				DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.PublicIPAddress, error) {
+					gets++
+					return pip, nil
+				}).Times(1)
+			firstDelete := client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(conflict).After(firstRead)
+			refresh := client.EXPECT().Get(gomock.Any(), "rg", PublicIPName(identity), nil).
+				DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.PublicIPAddress, error) {
+					gets++
+					return fresh, nil
+				}).After(firstDelete)
+			if tc.managedType == consts.ServiceGatewayManagedTagValue {
+				client.EXPECT().Delete(gomock.Any(), "rg", PublicIPName(identity)).Return(tc.retryError).After(refresh).Times(1)
+			}
+			dt := newTestDiffTracker()
+			dt.config, dt.networkClientFactory = testConfig(), factory
+			err := dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{pip})
+			assert.Error(t, err)
+			assert.Equal(t, 1, gets, "a sweep must not perform an immediate ownership refresh")
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+
+			err = dt.cleanupOrphanedPublicIPs(context.Background(), []*armnetwork.PublicIPAddress{pip})
+			assert.Equal(t, 2, gets)
+			if tc.retryError != nil {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
 // TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling pins that startup recovery
@@ -1196,7 +2423,7 @@ func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing
 		// Its LoadBalancer still exists in Azure, so recovery must defer to the diff.
 		recoverStuckFinalizers(context.Background(), dt,
 			&v1.ServiceList{Items: []v1.Service{*svcScheduled}}, nil, nil,
-			utilsets.NewString(strings.ToLower(string(svcScheduled.UID))), utilsets.NewString(), utilsets.NewString())
+			utilsets.NewString(ServiceName(svcScheduled)), utilsets.NewString())
 		r1, s1, _ := read()
 		assert.Equal(t, float64(0), r1-r0, "the finalizer is still on the Service; it was not recovered")
 		assert.Equal(t, float64(1), s1-s0, "handing it to the diff must be counted as scheduled work")
@@ -1209,15 +2436,140 @@ func TestRecoverStuckFinalizers_CountsRemovalSeparatelyFromScheduling(t *testing
 		})
 		failing := newProviderDiffTracker(t, ctrl, kube)
 
-		r0, _, f0 := read()
+		r0, s0, f0 := read()
 		// No Azure resource anywhere, so recovery takes the direct-removal path -- which fails.
-		recoverStuckFinalizers(context.Background(), failing,
+		pending := recoverStuckFinalizers(context.Background(), failing,
 			&v1.ServiceList{Items: []v1.Service{*svcScheduled}}, nil, nil,
-			utilsets.NewString(), utilsets.NewString(), utilsets.NewString())
-		r1, _, f1 := read()
-		assert.Equal(t, float64(1), f1-f0, "a forgotten Service finalizer removal must be counted")
+			utilsets.NewString(), utilsets.NewString())
+		r1, s1, f1 := read()
+		assert.Equal(t, float64(1), f1-f0, "a failed Service finalizer removal must be counted")
+		assert.Equal(t, float64(1), s1-s0, "the failed removal remains scheduled for retry")
 		assert.Equal(t, float64(0), r1-r0, "a failed removal must not be reported as a recovery")
+		assert.Equal(t, []v1.ObjectReference{{Namespace: svcScheduled.Namespace, Name: svcScheduled.Name, UID: svcScheduled.UID}}, pending)
 	})
+}
+
+func TestInitializeFromCluster_RetriesServiceFinalizersWithoutBlockingStartup(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		verb        string
+		stopUpdater bool
+		cancel      bool
+	}{
+		{name: "GET recovers", verb: "get"},
+		{name: "UPDATE recovers", verb: "update"},
+		{name: "updater stops during retry", verb: "update", stopUpdater: true},
+		{name: "runtime context is cancelled", verb: "get", cancel: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+			mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+			mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+			mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+
+			mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+			mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+			mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+			mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+			mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+			mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+			mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "ns", Name: "retyped", UID: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+					Finalizers: []string{ServiceGatewayServiceCleanupFinalizer, "service.kubernetes.io/load-balancer-cleanup", "example.com/keep"},
+				},
+				Spec: v1.ServiceSpec{Type: v1.ServiceTypeClusterIP},
+			}
+			kube := fake.NewSimpleClientset(svc)
+			var available atomic.Bool
+			var failed atomic.Int32
+			releaseRetry := make(chan struct{})
+			var releaseOnce sync.Once
+			release := func() { releaseOnce.Do(func() { close(releaseRetry) }) }
+			defer release()
+			kube.PrependReactor(tt.verb, "services", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+				if !available.Load() {
+					calls := failed.Add(1)
+					if tt.stopUpdater && calls > int32(finalizerRetryBackoff.Steps) {
+						<-releaseRetry
+					}
+					return true, nil, apierrors.NewServiceUnavailable("apiserver unavailable")
+				}
+				return false, nil, nil
+			})
+
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+			if !assert.NoError(t, err) || !assert.NotNil(t, dt) {
+				return
+			}
+			t.Cleanup(func() {
+				available.Store(true)
+				cancel()
+				dt.serviceUpdater.Stop()
+				dt.locationsUpdater.Stop()
+			})
+			assert.True(t, dt.InitialSyncDone)
+			assert.GreaterOrEqual(t, failed.Load(), int32(finalizerRetryBackoff.Steps))
+			got, err := kube.Tracker().Get(v1.SchemeGroupVersion.WithResource("services"), "ns", "retyped")
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.Contains(t, got.(*v1.Service).Finalizers, ServiceGatewayServiceCleanupFinalizer)
+
+			if tt.stopUpdater || tt.cancel {
+				if !assert.Eventually(t, func() bool {
+					return failed.Load() > int32(finalizerRetryBackoff.Steps)
+				}, 3*time.Second, 5*time.Millisecond) {
+					return
+				}
+				if tt.cancel {
+					cancel()
+				}
+				stopped := make(chan struct{})
+				go func() {
+					dt.serviceUpdater.Stop()
+					close(stopped)
+				}()
+				if tt.stopUpdater {
+					select {
+					case <-dt.serviceUpdater.ctx.Done():
+					case <-time.After(time.Second):
+						t.Fatal("Stop did not cancel its context")
+					}
+					select {
+					case <-stopped:
+						t.Error("Stop returned before its finalizer retry exited")
+					case <-time.After(100 * time.Millisecond):
+					}
+					release()
+				}
+				select {
+				case <-stopped:
+				case <-time.After(time.Second):
+					t.Fatal("stopping the updater did not stop its finalizer retry")
+				}
+				calls := failed.Load()
+				time.Sleep(200 * time.Millisecond)
+				assert.Equal(t, calls, failed.Load(), "cleanup must not issue requests after Stop returns")
+				return
+			}
+
+			available.Store(true)
+			assert.Eventually(t, func() bool {
+				got, err := kube.CoreV1().Services("ns").Get(ctx, "retyped", metav1.GetOptions{})
+				return err == nil && len(got.Finalizers) == 1 && got.Finalizers[0] == "example.com/keep"
+			}, 5*time.Second, 10*time.Millisecond, "cleanup must recover without a restart or another Service event")
+		})
+	}
 }
 
 // TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer pins that recovery keys on
@@ -1245,7 +2597,7 @@ func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *te
 	services := &v1.ServiceList{Items: []v1.Service{*retyped, *stillLB}}
 
 	// No Azure resource exists for either, so recovery should strip both finalizers directly.
-	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), utilsets.NewString(), nil)
+	recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(), nil)
 
 	got, err := kube.CoreV1().Services("default").Get(context.Background(), "was-lb", metav1.GetOptions{})
 	assert.NoError(t, err)
@@ -1255,6 +2607,47 @@ func TestRecoverStuckFinalizers_RecoversServiceRetypedAwayFromLoadBalancer(t *te
 	gotLB, err := kube.CoreV1().Services("default").Get(context.Background(), "still-lb", metav1.GetOptions{})
 	assert.NoError(t, err)
 	assert.False(t, hasServiceGatewayFinalizer(gotLB), "control: a LoadBalancer Service recovers as before")
+}
+
+// TestRecoverStuckFinalizers_RecoversAliveServiceRetypedAwayFromLoadBalancer pins that a live Service
+// retyped away from LoadBalancer, or claimed by another LoadBalancerClass, is recovered too. It is not desired, so without this its finalizer,
+// added by a create the CCM never finished, is only released after it is deleted and the CCM restarts.
+// A live LoadBalancer Service is the control: its finalizer is owned by the normal lifecycle.
+func TestRecoverStuckFinalizers_RecoversAliveServiceRetypedAwayFromLoadBalancer(t *testing.T) {
+	newLive := func(name, uid string, svcType v1.ServiceType) *v1.Service {
+		return &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "default", UID: types.UID(uid),
+				Finalizers: []string{ServiceGatewayServiceCleanupFinalizer},
+			},
+			Spec: v1.ServiceSpec{Type: svcType},
+		}
+	}
+	retyped := newLive("retyped", "uid-retyped", v1.ServiceTypeClusterIP)
+	retypedWithLB := newLive("retyped-lb", "uid-retyped-lb", v1.ServiceTypeClusterIP)
+	foreignClass := newLive("foreign-class", "uid-foreign-class", v1.ServiceTypeLoadBalancer)
+	foreignClass.Spec.LoadBalancerClass = ptr.To("example.com/other-controller")
+	liveLB := newLive("live-lb", "uid-live-lb", v1.ServiceTypeLoadBalancer)
+
+	kube := fake.NewSimpleClientset(retyped, retypedWithLB, foreignClass, liveLB)
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	services := &v1.ServiceList{Items: []v1.Service{*retyped, *retypedWithLB, *foreignClass, *liveLB}}
+
+	pending := recoverStuckFinalizers(context.Background(), dt, services, nil, nil, utilsets.NewString(ServiceName(retypedWithLB)), nil)
+	assert.Empty(t, pending, "existing Azure resources must stay on the normal cleanup path")
+
+	get := func(name string) *v1.Service {
+		svc, err := kube.CoreV1().Services("default").Get(context.Background(), name, metav1.GetOptions{})
+		assert.NoError(t, err)
+		return svc
+	}
+	assert.False(t, hasServiceGatewayFinalizer(get("retyped")), "a retyped Service with no Azure resource must be released")
+	assert.True(t, hasServiceGatewayFinalizer(get("retyped-lb")), "the finalizer anchors the cleanup of an existing load balancer")
+	assert.Contains(t, dt.recoveredServiceFinalizers, ServiceName(retypedWithLB))
+	assert.False(t, hasServiceGatewayFinalizer(get("foreign-class")), "a Service claimed by another LoadBalancerClass is not desired either")
+	assert.True(t, hasServiceGatewayFinalizer(get("live-lb")), "control: a live LoadBalancer Service is not recovered")
+	assert.NotContains(t, dt.recoveredServiceFinalizers, ServiceName(liveLB))
 }
 
 // TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway pins that ownership is decided
@@ -1287,21 +2680,21 @@ func TestProcessK8sServices_ExcludesServicesNotOwnedByServiceGateway(t *testing.
 	kube := fake.NewSimpleClientset(owned, foreignClass, internal)
 	k8s := &K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}}
 
-	_, serviceUIDToService, err := processK8sServices(context.Background(), kube, k8s)
+	_, serviceNameToService, err := processK8sServices(context.Background(), kube, k8s)
 	assert.NoError(t, err)
 
-	assert.True(t, k8s.Services.Has("uid-owned"), "control: a Service ServiceGateway owns must stay desired")
-	assert.Contains(t, serviceUIDToService, "uid-owned")
+	assert.True(t, k8s.Services.Has(inboundServiceName("uid-owned")), "control: a Service ServiceGateway owns must stay desired")
+	assert.Contains(t, serviceNameToService, inboundServiceName("uid-owned"))
 
-	assert.False(t, k8s.Services.Has("uid-foreign"),
+	assert.False(t, k8s.Services.Has(inboundServiceName("uid-foreign")),
 		"a Service claimed by another LoadBalancerClass must not be desired, or ServiceGateway keeps syncing it forever")
 
 	// An admission rejection is a mutated spec on a Service that may already be serving. Excluding
 	// it would make the diff read it as removed and destroy its live LoadBalancer and Public IP on
 	// the next restart, which is not what the runtime path does with the same Service.
-	assert.True(t, k8s.Services.Has("uid-internal"),
+	assert.True(t, k8s.Services.Has(inboundServiceName("uid-internal")),
 		"a Service inbound admission rejects must stay desired so its live Azure resources are not deleted")
-	assert.Contains(t, serviceUIDToService, "uid-internal",
+	assert.Contains(t, serviceNameToService, inboundServiceName("uid-internal"),
 		"reconcileServices needs the Service object to re-apply admission and decline to provision it")
 }
 
@@ -1334,8 +2727,8 @@ func TestProcessK8sServices_ForeignServiceBecomesRemoval(t *testing.T) {
 // TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively pins how NRP service types are
 // parsed. A service dropped here is absent from NRPState while still present in Azure, which is what
 // scheduleOrphanedResourceDeletions treats as an orphan, so an unrecognized type costs the live
-// resource. InboundOutbound counts as both, casing must not matter, and a genuinely unknown type
-// fails initialization rather than proceeding on a partial view.
+// resource. Canonical names must match the service type; unknown or inconsistent data fails
+// initialization rather than proceeding on a partial view.
 func TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively(t *testing.T) {
 	svc := func(name, serviceType string) *armnetwork.ServiceGatewayService {
 		return &armnetwork.ServiceGatewayService{
@@ -1350,12 +2743,20 @@ func TestFetchServiceGatewayServices_MatchesServiceTypeCaseInsensitively(t *test
 		wantLB, wantNAT []string
 		wantErr         bool
 	}{
-		{"canonical", []*armnetwork.ServiceGatewayService{svc("lb", "Inbound"), svc("nat", "Outbound")},
-			[]string{"lb"}, []string{"nat"}, false},
-		{"lowercase", []*armnetwork.ServiceGatewayService{svc("lb", "inbound"), svc("nat", "outbound")},
-			[]string{"lb"}, []string{"nat"}, false},
-		{"inbound outbound counts as both", []*armnetwork.ServiceGatewayService{svc("both", "InboundOutbound")},
-			[]string{"both"}, []string{"both"}, false},
+		{"canonical", []*armnetwork.ServiceGatewayService{svc("svc-lb", "Inbound"), svc("svc-natgw", "Outbound")},
+			[]string{"svc-lb"}, []string{"svc-natgw"}, false},
+		{"lowercase type", []*armnetwork.ServiceGatewayService{svc("svc-lb", "inbound"), svc("svc-natgw", "outbound")},
+			[]string{"svc-lb"}, []string{"svc-natgw"}, false},
+		{"mixed case name", []*armnetwork.ServiceGatewayService{svc("SVC-LB", "Inbound"), svc("SVC-NATGW", "Outbound")},
+			[]string{"svc-lb"}, []string{"svc-natgw"}, false},
+		{"ambiguous non-default type", []*armnetwork.ServiceGatewayService{svc("svc-lb", "InboundOutbound")},
+			nil, nil, true},
+		{"wrong name kind", []*armnetwork.ServiceGatewayService{svc("svc-lb", "Outbound")},
+			nil, nil, true},
+		{"old name is unsupported", []*armnetwork.ServiceGatewayService{svc("old-name", "Inbound")},
+			nil, nil, true},
+		{"combined RP default remains protected", []*armnetwork.ServiceGatewayService{svc(DefaultOutboundNATGatewayName, "InboundOutbound")},
+			[]string{DefaultOutboundNATGatewayName}, nil, false},
 		{"unknown type fails initialization", []*armnetwork.ServiceGatewayService{svc("weird", "Sideways")},
 			nil, nil, true},
 	}
@@ -1410,11 +2811,11 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 
 	dt := newTestDiffTracker()
 	dt.kubeClient = kube
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.NRPResources.LoadBalancers.Insert(inboundServiceName(uid))
 
 	recoverServiceExternalIPs(context.Background(), dt,
-		map[string]*v1.Service{uid: svc},
-		map[string]string{strings.ToLower(PublicIPName(uid)): "20.30.40.50"})
+		map[string]*v1.Service{inboundServiceName(uid): svc},
+		map[string]string{PublicIPName(inboundServiceName(uid)): "20.30.40.50"})
 
 	assert.Greater(t, atomic.LoadInt32(&patches), int32(1),
 		"a transient failure must be retried, not swallowed")
@@ -1431,19 +2832,20 @@ func TestRecoverServiceExternalIPs_RetriesTransientPatchFailure(t *testing.T) {
 // own "kubernetes" LoadBalancers among them.
 func TestScheduleOrphanedResourceDeletions_SkipsNonUUIDLoadBalancers(t *testing.T) {
 	const orphanUUID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	orphanName := inboundServiceName(orphanUUID)
 	dt := newTestDiffTracker()
 
-	azureLBs := utilsets.NewString("kubernetes", "kubernetes-internal", "customer-lb", orphanUUID)
+	azureLBs := utilsets.NewString("kubernetes", "kubernetes-internal", "customer-lb", orphanUUID, orphanName)
 	scheduleOrphanedResourceDeletions(dt, azureLBs, utilsets.NewString(), utilsets.NewString())
 
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-	for _, name := range []string{"kubernetes", "kubernetes-internal", "customer-lb"} {
+	for _, name := range []string{"kubernetes", "kubernetes-internal", "customer-lb", orphanUUID} {
 		_, scheduled := dt.pendingServiceOps[name]
 		assert.False(t, scheduled, "%q is not a managed LoadBalancer and must never be scheduled for deletion", name)
 	}
-	_, scheduled := dt.pendingServiceOps[orphanUUID]
-	assert.True(t, scheduled, "control: a genuine UUID-named orphan must still be collected")
+	_, scheduled := dt.pendingServiceOps[orphanName]
+	assert.True(t, scheduled, "control: a canonical inbound orphan must still be collected")
 }
 
 // TestParseLocationAddresses_ReadsAddressesAndServices pins that the startup NRP snapshot is
@@ -1568,12 +2970,12 @@ func TestReconcileServices_OutboundAdditionsCarryClusterIPFamilies(t *testing.T)
 	}
 	dualNodeIPs := map[string][]string{"dual": {"10.0.0.1", "fd00::1"}}
 
-	const uid = "team-egress"
+	const serviceName = "team-egress"
 
 	familiesOf := func(t *testing.T, dt *DiffTracker) (families []string, natHasV6 bool, pipCount int) {
 		t.Helper()
 		dt.mu.Lock()
-		op := dt.pendingServiceOps[uid]
+		op := dt.pendingServiceOps[serviceName]
 		dt.mu.Unlock()
 		if op == nil {
 			t.Fatalf("no pending service operation was created")
@@ -1581,7 +2983,7 @@ func TestReconcileServices_OutboundAdditionsCarryClusterIPFamilies(t *testing.T)
 		if op.Config.OutboundConfig != nil {
 			families = op.Config.OutboundConfig.IPFamilies
 		}
-		pips, nat, _ := buildOutboundServiceResources(uid, op.Config.OutboundConfig, dt.config)
+		pips, nat, _ := buildOutboundServiceResources(serviceName, op.Config.OutboundConfig, dt.config)
 		return families, len(nat.Properties.PublicIPAddressesV6) > 0, len(pips)
 	}
 
@@ -1591,7 +2993,7 @@ func TestReconcileServices_OutboundAdditionsCarryClusterIPFamilies(t *testing.T)
 				Additions: utilsets.NewString(), Removals: utilsets.NewString(),
 			},
 			NATGatewayUpdates: SyncServicesReturnType{
-				Additions: utilsets.NewString(uid), Removals: utilsets.NewString(),
+				Additions: utilsets.NewString(serviceName), Removals: utilsets.NewString(),
 			},
 		}, map[string]*v1.Service{})
 	}
@@ -1599,7 +3001,7 @@ func TestReconcileServices_OutboundAdditionsCarryClusterIPFamilies(t *testing.T)
 	// Reference: the runtime pod path, which does have a Node lister.
 	runtimeTracker := newTestDiffTracker()
 	setTestNodeLister(t, runtimeTracker, dualNode())
-	runtimeTracker.addPod(uid, "ns/pod-1", "pod-uid-1", "loc-1", "10.244.0.5")
+	runtimeTracker.addPod(serviceName, "ns/pod-1", "pod-uid-1", "loc-1", "10.244.0.5")
 	runtimeFamilies, runtimeHasV6, runtimePIPs := familiesOf(t, runtimeTracker)
 
 	assert.Equal(t, []string{"IPv4", "IPv6"}, runtimeFamilies)
@@ -1647,6 +3049,55 @@ func TestSeedClusterAddressFamilies_OnlyIPv6NodeAddressesCount(t *testing.T) {
 		"an IPv4-mapped address is an IPv4 address")
 	assert.False(t, seeded(map[string][]string{"a": {"not-an-ip"}}))
 	assert.False(t, seeded(nil))
+}
+
+func TestInitializeFromCluster_RecoveryRetryDoesNotSkipInitialSync(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	mockFactory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockFactory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	failed := false
+	kube.PrependReactor("update", "pods", func(_ k8stesting.Action) (bool, runtime.Object, error) {
+		if !failed {
+			failed = true
+			return true, nil, apierrors.NewServiceUnavailable("apiserver busy")
+		}
+		return false, nil, nil
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	dt, err := InitializeFromCluster(ctx, testConfig(), mockFactory, kube)
+	assert.NoError(t, err)
+	if dt == nil {
+		t.Fatal("InitializeFromCluster returned no tracker")
+	}
+	got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+	assert.NoError(t, err)
+	assert.NotContains(t, got.Finalizers, ServiceGatewayPodCleanupFinalizer,
+		"the retried release completes during the initial sync")
+	assert.Contains(t, got.Finalizers, "example.com/keep")
+	assert.Zero(t, atomic.LoadInt32(&dt.pendingUpdaterTriggers))
+	dt.mu.Lock()
+	assert.Empty(t, dt.pendingPodDeletions)
+	dt.mu.Unlock()
 }
 
 // TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes pins the production wiring: the
@@ -1704,6 +3155,7 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 	}
 
 	dual := initWithNodes(t, node("dual", "10.0.0.1", "fd00::1"))
+	assert.Equal(t, map[string][]string{"dual": {"10.0.0.1", "fd00::1"}}, dual.startupNodeIPs)
 	assert.True(t, dual.clusterHasIPv6.Load(),
 		"a dual-stack cluster must be observed during init, while no Node lister exists yet")
 	dual.mu.Lock()
@@ -1720,4 +3172,812 @@ func TestInitializeFromCluster_SeedsClusterAddressFamiliesFromNodes(t *testing.T
 	v4Families := v4Only.outboundIPFamiliesLocked()
 	v4Only.mu.Unlock()
 	assert.Equal(t, []string{"IPv4"}, v4Families)
+}
+
+func TestFetchServiceGatewayServices_RecordsNATGatewaysAndSkipsDefault(t *testing.T) {
+	natID := func(rg, name string) string {
+		return "/subscriptions/sub/resourceGroups/" + rg + "/providers/Microsoft.Network/natGateways/" + name
+	}
+	outbound := func(name, natGatewayID string, isDefault bool) *armnetwork.ServiceGatewayService {
+		return &armnetwork.ServiceGatewayService{Name: ptr.To(name), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+			ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), PublicNatGatewayID: ptr.To(natGatewayID), IsDefault: ptr.To(isDefault)}}
+	}
+	for _, tc := range []struct {
+		name, serviceName, resourceGroup, gatewayName string
+		protectedNames                                []string
+	}{
+		{name: "managed default", serviceName: "default-natgw", resourceGroup: "rg", gatewayName: "default-natgw",
+			protectedNames: []string{"default-natgw"}},
+		{name: "BYO default", serviceName: "default-natgw", resourceGroup: "vnet-rg", gatewayName: "corp-nat",
+			protectedNames: []string{"default-natgw"}},
+		{name: "default identified by flag", serviceName: "custom-default", resourceGroup: "rg", gatewayName: "byo-nat",
+			protectedNames: []string{"custom-default", "byo-nat"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+			mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+			mockFactory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+			mockSGW.EXPECT().GetServices(gomock.Any(), gomock.Any(), gomock.Any()).Return([]*armnetwork.ServiceGatewayService{
+				outbound(tc.serviceName, natID(tc.resourceGroup, tc.gatewayName), true),
+				outbound("egress-a-natgw", natID("rg", "egress-a-natgw"), false),
+				outbound("Byo-natgw", natID("vnet-rg", "byo"), false),
+			}, nil)
+
+			nrp := &NRPState{LoadBalancers: utilsets.NewString(), NATGateways: utilsets.NewString(), Locations: map[string]NRPLocation{}}
+			assert.NoError(t, fetchServiceGatewayServices(context.Background(), testConfig(), mockFactory, nrp))
+			assert.ElementsMatch(t, []string{"egress-a-natgw", "byo-natgw"}, nrp.NATGateways.UnsortedList())
+			assert.Equal(t, map[string]string{"egress-a-natgw": natID("rg", "egress-a-natgw"), "byo-natgw": natID("vnet-rg", "byo")}, nrp.OutboundNATGatewayIDs)
+			if assert.NotNil(t, nrp.ReservedOutboundServices) {
+				assert.ElementsMatch(t, []string{tc.serviceName}, nrp.ReservedOutboundServices.UnsortedList())
+			}
+			if assert.NotNil(t, nrp.UnmanagedNATGateways) {
+				assert.ElementsMatch(t, tc.protectedNames, nrp.UnmanagedNATGateways.UnsortedList())
+			}
+
+			k8s := newK8sStateForSeeders()
+			k8s.Egresses.Insert(tc.serviceName, "byo-natgw", "new-natgw")
+			dt, err := New(logr.Discard(), k8s, *nrp, testConfig(), mockFactory, fake.NewSimpleClientset())
+			if !assert.NoError(t, err) {
+				return
+			}
+			assert.False(t, dt.K8sResources.Egresses.Has(tc.serviceName))
+			result := dt.GetSyncNRPNATGateways()
+			assert.ElementsMatch(t, []string{"new-natgw"}, result.Additions.UnsortedList())
+			assert.ElementsMatch(t, []string{"egress-a-natgw"}, result.Removals.UnsortedList())
+			assert.Equal(t, natID("vnet-rg", "byo"), dt.byoNATGatewayID("byo-natgw"))
+		})
+	}
+}
+
+func TestFetchAzureNATGateways_MarksNATGatewaysNotCreatedByThisController(t *testing.T) {
+	cfg := testConfig()
+	pip := func(rg, name string) *armnetwork.SubResource {
+		return &armnetwork.SubResource{ID: ptr.To("/subscriptions/sub/resourceGroups/" + rg + "/providers/Microsoft.Network/publicIPAddresses/" + name)}
+	}
+	nat := func(name string, tags map[string]*string, props armnetwork.NatGatewayPropertiesFormat) *armnetwork.NatGateway {
+		return &armnetwork.NatGateway{Name: ptr.To(name), Tags: tags, Properties: &props}
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFactory := mock_azclient.NewMockClientFactory(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockFactory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.NatGateway{
+		nat("tagged", managedResourceTags(), armnetwork.NatGatewayPropertiesFormat{}),
+		nat("untagged", nil, armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{pip("RG", "Untagged-pip")},
+			PublicIPAddressesV6: []*armnetwork.SubResource{pip("rg", "untagged-pip-v6")}}),
+		nat("no-addresses", nil, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("unknown-marker", map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("x")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("empty-tag", map[string]*string{consts.ServiceGatewayManagedTagKey: nil}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("old-identity", map[string]*string{"k8s-azure-egress-identity": ptr.To("old-identity")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("uppercase", map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("OUTBOUND")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("inbound", map[string]*string{consts.ServiceGatewayManagedTagKey: ptr.To("inbound")}, armnetwork.NatGatewayPropertiesFormat{}),
+		nat("foreign-address", nil, armnetwork.NatGatewayPropertiesFormat{PublicIPAddresses: []*armnetwork.SubResource{pip("rg", "corp-ip")}}),
+	}, nil)
+
+	nrp := &NRPState{}
+	names, err := fetchAzureNATGateways(context.Background(), cfg, mockFactory, nrp)
+	assert.NoError(t, err)
+	assert.Equal(t, 9, names.Len(), "every NAT Gateway still counts as existing")
+	if assert.NotNil(t, nrp.UnmanagedNATGateways) {
+		assert.ElementsMatch(t, []string{"untagged", "no-addresses", "unknown-marker", "empty-tag", "old-identity", "uppercase", "inbound", "foreign-address"},
+			nrp.UnmanagedNATGateways.UnsortedList())
+	}
+}
+
+func TestNewTracksOnlyBYONATGateways(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	nrp := emptyNRPState()
+	nrp.OutboundNATGatewayIDs = map[string]string{
+		"managed":  "/subscriptions/sub/resourceGroups/RG/providers/Microsoft.Network/natGateways/managed",
+		"byo":      "/subscriptions/sub/resourceGroups/vnet-rg/providers/Microsoft.Network/natGateways/byo",
+		"othersub": "/subscriptions/other/resourceGroups/rg/providers/Microsoft.Network/natGateways/othersub",
+	}
+	cfg := testConfig()
+	dt, err := New(logr.Discard(), K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
+		nrp, cfg, mock_azclient.NewMockClientFactory(ctrl), fake.NewSimpleClientset())
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Empty(t, dt.byoNATGatewayID("managed"))
+	assert.Equal(t, nrp.OutboundNATGatewayIDs["byo"], dt.byoNATGatewayID("BYO"))
+	assert.Empty(t, dt.byoNATGatewayID("othersub"), "a NAT Gateway in another subscription cannot be read or unlinked through this cluster's clients")
+	assert.Nil(t, dt.NRPResources.OutboundNATGatewayIDs)
+	assert.Len(t, nrp.OutboundNATGatewayIDs, 3, "the caller's startup snapshot must not be mutated")
+}
+
+func TestRecoverUnregisteredBYOLinks(t *testing.T) {
+	cfg := testConfig()
+	boom := errors.New("ARM unavailable")
+	linked := byoNATGateway("recovery")
+	linked.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+	unlinked := byoNATGateway("recovery")
+	foreign := byoNATGateway("recovery")
+	foreign.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To("another-service-gateway")}
+	unknown := byoNATGateway("recovery")
+	unknown.Properties = nil
+
+	for _, tc := range []struct {
+		name        string
+		raw         string
+		groups      []string
+		gateway     *armnetwork.NatGateway
+		readErr     error
+		active      bool
+		registered  bool
+		noFinalizer bool
+		wantReads   int
+		wantTarget  bool
+		wantErr     string
+	}{
+		{name: "linked departed member", groups: []string{byoNATGatewayRG}, gateway: linked, wantReads: 1, wantTarget: true},
+		{name: "same target is read once", groups: []string{byoNATGatewayRG, byoNATGatewayRG}, gateway: linked, wantReads: 1, wantTarget: true},
+		{name: "a reserved raw label does not discard a declared cleanup target", raw: "default-natgw", groups: []string{byoNATGatewayRG}, gateway: linked, wantReads: 1, wantTarget: true},
+		{name: "active member without addresses keeps the gateway", groups: []string{byoNATGatewayRG}, active: true},
+		{name: "registered identity is not rediscovered", groups: []string{byoNATGatewayRG}, registered: true},
+		{name: "reserved identity", raw: "default", groups: []string{byoNATGatewayRG}},
+		{name: "no finalizer means no cleanup claim", groups: []string{byoNATGatewayRG}, noFinalizer: true},
+		{name: "managed selection", groups: []string{""}},
+		{name: "invalid group", groups: []string{"invalid/rg"}},
+		{name: "node group is not BYO", groups: []string{"RG"}},
+		{name: "gateway already gone", groups: []string{byoNATGatewayRG}, readErr: notFoundError(), wantReads: 1},
+		{name: "no backlink", groups: []string{byoNATGatewayRG}, gateway: unlinked, wantReads: 1},
+		{name: "another gateway's backlink", groups: []string{byoNATGatewayRG}, gateway: foreign, wantReads: 1},
+		{name: "read failure keeps recovery incomplete", groups: []string{byoNATGatewayRG}, readErr: boom, wantReads: 1, wantErr: "ARM unavailable"},
+		{name: "unreadable properties keep recovery incomplete", groups: []string{byoNATGatewayRG}, gateway: unknown, wantReads: 1, wantErr: "cleanup link state is unknown"},
+		{name: "permission refusal permits manual cleanup", groups: []string{byoNATGatewayRG}, readErr: &azcore.ResponseError{StatusCode: http.StatusForbidden}, wantReads: 1},
+		{name: "conflicting linked targets are not guessed", groups: []string{byoNATGatewayRG, "another-rg"}, gateway: linked, wantReads: 2, wantErr: "conflicting unregistered BYO cleanup targets"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := tc.raw
+			if raw == "" {
+				raw = "recovery"
+			}
+			identity := outboundServiceName(raw)
+			pods := &v1.PodList{}
+			for i, group := range tc.groups {
+				pod := egressTestPod(fmt.Sprintf("departed-%d", i), types.UID(fmt.Sprintf("uid-%d", i)), raw, group)
+				pod.DeletionTimestamp = ptr.To(metav1.Now())
+				if !tc.noFinalizer {
+					pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+				}
+				pods.Items = append(pods.Items, *pod)
+			}
+			if tc.active {
+				pods.Items = append(pods.Items, *egressTestPod("active", "active-uid", strings.ToUpper(raw), byoNATGatewayRG))
+			}
+			m := newOutboundMocks(gomock.NewController(t))
+			if tc.wantReads > 0 {
+				m.nat.EXPECT().Get(gomock.Any(), gomock.Any(), raw, nil).
+					DoAndReturn(func(_ context.Context, group, _ string, _ *string) (*armnetwork.NatGateway, error) {
+						if tc.readErr != nil {
+							return nil, tc.readErr
+						}
+						result := *tc.gateway
+						result.ID = ptr.To(fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", group, raw))
+						result.Name = ptr.To(raw)
+						return &result, nil
+					}).Times(tc.wantReads)
+			}
+			dt := newTestDiffTracker()
+			dt.config, dt.networkClientFactory = cfg, m.factory
+			if tc.registered {
+				dt.NRPResources.NATGateways.Insert(identity)
+			}
+			recovered, err := dt.recoverUnregisteredBYOLinks(context.Background(), pods)
+			if tc.wantErr != "" {
+				assert.ErrorContains(t, err, tc.wantErr)
+				assert.Empty(t, recovered)
+			} else {
+				assert.NoError(t, err)
+				if tc.wantTarget {
+					assert.Equal(t, []string{identity}, recovered)
+					assert.Equal(t, fmt.Sprintf(consts.NatGatewayIDTemplate, "sub", byoNATGatewayRG, raw), dt.byoNATGatewayID(identity))
+				} else {
+					assert.Empty(t, recovered)
+					assert.Empty(t, dt.byoNATGatewayID(identity))
+				}
+			}
+			assert.Empty(t, dt.pendingServiceOps)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+			assert.Empty(t, dt.locationsUpdaterTrigger)
+		})
+	}
+}
+
+func TestRecoverStuckFinalizers_UnregisteredBYOLinkOwnsFinalizer(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		registered bool
+		noIPs      bool
+		live       bool
+		completed  bool
+	}{
+		{name: "unregistered"},
+		{name: "unregistered without addresses", noIPs: true},
+		{name: "completed unregistered member", completed: true},
+		{name: "registered control", registered: true},
+		{name: "live member is not recovered", live: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := byoPod("recovery", byoNATGatewayRG)
+			identity := outboundServiceName("recovery")
+			pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+			pod.Status.HostIP, pod.Status.PodIP = "10.0.0.1", "10.244.0.9"
+			if tc.noIPs {
+				pod.Status.HostIP, pod.Status.PodIP = "", ""
+			}
+			if tc.completed {
+				pod.Status.Phase = v1.PodSucceeded
+			} else if !tc.live {
+				pod.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			dt := newTestDiffTracker()
+			dt.kubeClient = fake.NewSimpleClientset(pod)
+			dt.setBYONATGatewayID(identity, byoNATGatewayARMID("recovery"))
+			if tc.registered {
+				dt.NRPResources.NATGateways.Insert(identity)
+			}
+			recoverStuckFinalizers(context.Background(), dt, nil, &v1.PodList{Items: []v1.Pod{*pod}}, nil, nil, nil)
+			pending := dt.pendingPodDeletions["ns/pod"]
+			if tc.live {
+				assert.Nil(t, pending)
+			} else if assert.NotNil(t, pending) {
+				assert.Equal(t, !tc.registered, pending.IsLastPod)
+				assert.Equal(t, tc.noIPs, pending.VerifyServiceDrain)
+				assert.True(t, pending.RecoveredAtStartup)
+				assert.Equal(t, string(pod.UID), pending.UID)
+			}
+		})
+	}
+}
+
+func TestInitializeFromClusterRecoversUnregisteredBYOLinks(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		registered     bool
+		noAddresses    bool
+		completed      bool
+		dualStack      bool
+		failUnlinkOnce bool
+		recoveryErr    error
+		noProperties   bool
+		unlabelled     bool
+		emptyLabel     bool
+	}{
+		{name: "successful link before failed registration"},
+		{name: "addresses already cleared", noAddresses: true},
+		{name: "completed member", completed: true},
+		{name: "dual-stack member", dualStack: true},
+		{name: "transient unlink is retried before release", failUnlinkOnce: true},
+		{name: "registered restart control", registered: true},
+		{name: "registered live label removed", registered: true, unlabelled: true},
+		{name: "registered deleting empty label dual-stack", registered: true, unlabelled: true, emptyLabel: true, dualStack: true, failUnlinkOnce: true},
+		{name: "failed discovery keeps the finalizer", recoveryErr: errors.New("discovery unavailable")},
+		{name: "unknown link state keeps the finalizer", noProperties: true},
+		{name: "permission refusal permits manual repair", recoveryErr: &azcore.ResponseError{StatusCode: http.StatusForbidden}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			const raw = "startup-egress"
+			identity := outboundServiceName(raw)
+			cfg := testConfig()
+			pod := byoPod(raw, byoNATGatewayRG)
+			pod.Finalizers = []string{ServiceGatewayPodCleanupFinalizer}
+			pod.Spec.NodeName = "node"
+			pod.Status.Phase = v1.PodRunning
+			pod.Status.HostIP, pod.Status.PodIP = "10.0.0.1", "10.244.0.9"
+			pod.Status.HostIPs = []v1.HostIP{{IP: pod.Status.HostIP}}
+			pod.Status.PodIPs = []v1.PodIP{{IP: pod.Status.PodIP}}
+			node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "node"},
+				Status: v1.NodeStatus{Addresses: []v1.NodeAddress{{Type: v1.NodeInternalIP, Address: pod.Status.HostIP}}}}
+			if tc.dualStack {
+				pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: "fd00::1"})
+				pod.Status.PodIPs = append(pod.Status.PodIPs, v1.PodIP{IP: "fd01::9"})
+				node.Status.Addresses = append(node.Status.Addresses, v1.NodeAddress{Type: v1.NodeInternalIP, Address: "fd00::1"})
+			}
+			kube := fake.NewSimpleClientset(pod, node)
+			ctrl := gomock.NewController(t)
+			m := newOutboundMocks(ctrl)
+			lb := mock_loadbalancerclient.NewMockInterface(ctrl)
+			m.factory.EXPECT().GetLoadBalancerClient().Return(lb).AnyTimes()
+			lb.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.nat.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			m.pip.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+			var locations []*armnetwork.ServiceGatewayAddressLocationResponse
+			if tc.unlabelled {
+				locations = []*armnetwork.ServiceGatewayAddressLocationResponse{{
+					AddressLocation: ptr.To("10.0.0.1"),
+					Addresses: []*armnetwork.ServiceGatewayAddress{{
+						Address: ptr.To("10.244.0.9"), Services: []*string{ptr.To(identity)},
+					}},
+				}}
+				if tc.dualStack {
+					locations = append(locations, &armnetwork.ServiceGatewayAddressLocationResponse{
+						AddressLocation: ptr.To("fd00::1"),
+						Addresses: []*armnetwork.ServiceGatewayAddress{{
+							Address: ptr.To("fd01::9"), Services: []*string{ptr.To(identity)},
+						}},
+					})
+				}
+				m.sgw.EXPECT().UpdateAddressLocations(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+			}
+			m.sgw.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(locations, nil).AnyTimes()
+			m.nat.EXPECT().Get(gomock.Any(), "rg", identity, nil).Return(nil, notFoundError()).AnyTimes()
+			for _, name := range OutboundPublicIPNames(identity) {
+				m.pip.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(nil, notFoundError()).AnyTimes()
+			}
+			var mu sync.Mutex
+			gateway := byoNATGateway(raw)
+			var registration *armnetwork.ServiceGatewayService
+			unlinkAttempts := 0
+			recovering := false
+			m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, raw, nil).
+				DoAndReturn(func(context.Context, string, string, *string) (*armnetwork.NatGateway, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					if recovering && tc.recoveryErr != nil {
+						return nil, tc.recoveryErr
+					}
+					result := *gateway
+					properties := *gateway.Properties
+					result.Properties = &properties
+					if recovering && tc.noProperties {
+						result.Properties = nil
+					}
+					return &result, nil
+				}).AnyTimes()
+			m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, raw, gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, value armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					if natGatewayServiceGatewayID(&value) == "" {
+						unlinkAttempts++
+						if !tc.registered || tc.unlabelled {
+							current, err := kube.CoreV1().Pods("ns").Get(ctx, "pod", metav1.GetOptions{})
+							assert.NoError(t, err)
+							if current != nil {
+								assert.True(t, hasPodFinalizer(current), "unlink must finish before finalizer release")
+							}
+						}
+						if tc.failUnlinkOnce && unlinkAttempts == 1 {
+							return nil, errors.New("temporary unlink failure")
+						}
+					}
+					gateway = &value
+					return &value, nil
+				}).AnyTimes()
+			m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").
+				DoAndReturn(func(context.Context, string, string) ([]*armnetwork.ServiceGatewayService, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					if registration == nil {
+						return nil, nil
+					}
+					result := *registration
+					properties := *registration.Properties
+					result.Properties = &properties
+					return []*armnetwork.ServiceGatewayService{&result}, nil
+				}).AnyTimes()
+			registrationFailure := errors.New("registration did not apply")
+			m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).
+				DoAndReturn(func(_ context.Context, _, _ string, request armnetwork.ServiceGatewayUpdateServicesRequest) error {
+					mu.Lock()
+					defer mu.Unlock()
+					entry := request.ServiceRequests[0]
+					if ptr.Deref(entry.IsDelete, false) {
+						registration = nil
+						return nil
+					}
+					if derefString(entry.Service.Properties.PublicNatGatewayID) != "" && !tc.registered {
+						return registrationFailure
+					}
+					registration = entry.Service
+					return nil
+				}).AnyTimes()
+			before := newTestDiffTracker()
+			before.config, before.kubeClient, before.networkClientFactory = cfg, kube, m.factory
+			completion := &outboundCompletion{}
+			outboundUpdater(before, completion).createOutboundService(identity, &OutboundConfig{}, "create", "ns", "pod")
+			called, success, err := completion.result()
+			assert.True(t, called)
+			assert.Equal(t, tc.registered, success)
+			if tc.registered {
+				assert.NoError(t, err)
+			} else {
+				assert.ErrorIs(t, err, registrationFailure)
+			}
+			assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(gateway))
+			assert.Equal(t, byoNATGatewayARMID(raw), before.byoNATGatewayID(identity))
+			if tc.completed {
+				pod.Status.Phase = v1.PodSucceeded
+			} else {
+				pod.DeletionTimestamp = ptr.To(metav1.Now())
+			}
+			if tc.noAddresses {
+				pod.Status.HostIP, pod.Status.PodIP = "", ""
+				pod.Status.HostIPs, pod.Status.PodIPs = nil, nil
+			}
+			if tc.unlabelled {
+				if tc.emptyLabel {
+					pod.Labels[consts.PodLabelServiceEgressGateway] = ""
+				} else {
+					delete(pod.Labels, consts.PodLabelServiceEgressGateway)
+					pod.DeletionTimestamp = nil
+				}
+			}
+			if _, err := kube.CoreV1().Pods("ns").Update(ctx, pod, metav1.UpdateOptions{}); !assert.NoError(t, err) {
+				return
+			}
+			mu.Lock()
+			recovering = true
+			mu.Unlock()
+			restarted, err := InitializeFromCluster(ctx, cfg, m.factory, kube)
+			if restarted != nil {
+				defer cleanupOnError(restarted)
+			}
+			if tc.noProperties || (tc.recoveryErr != nil && !isAccessDeniedOrLocked(tc.recoveryErr)) {
+				assert.Error(t, err)
+				current, getErr := kube.CoreV1().Pods("ns").Get(ctx, "pod", metav1.GetOptions{})
+				assert.NoError(t, getErr)
+				assert.True(t, hasPodFinalizer(current))
+				mu.Lock()
+				assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(gateway))
+				assert.Zero(t, unlinkAttempts)
+				mu.Unlock()
+				return
+			}
+			if !assert.NoError(t, err) {
+				return
+			}
+			current, err := kube.CoreV1().Pods("ns").Get(ctx, "pod", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.False(t, hasPodFinalizer(current))
+			mu.Lock()
+			if tc.recoveryErr != nil {
+				assert.Equal(t, cfg.ServiceGatewayResourceID(), natGatewayServiceGatewayID(gateway))
+				assert.Zero(t, unlinkAttempts)
+			} else {
+				assert.Empty(t, natGatewayServiceGatewayID(gateway))
+				assert.Equal(t, 1+wantedCalls(tc.failUnlinkOnce), unlinkAttempts)
+			}
+			mu.Unlock()
+			assert.Empty(t, restarted.pendingServiceOps)
+			assert.Empty(t, restarted.pendingPodDeletions)
+			assert.Empty(t, restarted.byoNATGatewayID(identity))
+			assert.True(t, restarted.InitialSyncDone)
+		})
+	}
+}
+
+func TestRestartedControllerOnlyUnlinksBYONATGateway(t *testing.T) {
+	const identity = "byo"
+	serviceName := outboundServiceName(identity)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := newOutboundMocks(ctrl)
+	m.expectNoManagedOutboundResources(serviceName, 1)
+	cfg := testConfig()
+	registered := []*armnetwork.ServiceGatewayService{{Name: ptr.To(serviceName), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+		ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), PublicNatGatewayID: ptr.To(byoNATGatewayARMID(identity))}}}
+	m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(registered, nil).Times(2)
+	linked := byoNATGateway(identity)
+	linked.Properties.ServiceGateway = &armnetwork.SubResource{ID: ptr.To(cfg.ServiceGatewayResourceID())}
+	m.nat.EXPECT().Get(gomock.Any(), byoNATGatewayRG, identity, gomock.Any()).Return(linked, nil).Times(1)
+
+	nrp := emptyNRPState()
+	if !assert.NoError(t, fetchServiceGatewayServices(context.Background(), cfg, m.factory, &nrp)) {
+		return
+	}
+	dt, err := New(logr.Discard(), K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
+		nrp, cfg, m.factory, fake.NewSimpleClientset())
+	if !assert.NoError(t, err) {
+		return
+	}
+
+	cleared := false
+	m.nat.EXPECT().CreateOrUpdate(gomock.Any(), byoNATGatewayRG, identity, gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, n armnetwork.NatGateway) (*armnetwork.NatGateway, error) {
+			assert.Nil(t, n.Properties.ServiceGateway.ID, "the Service Gateway link must be cleared")
+			assert.Len(t, n.Properties.PublicIPAddresses, 1, "the BYO NAT Gateway's addresses must be kept")
+			cleared = true
+			return &n, nil
+		})
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+	// No Delete expectations: deleting the BYO NAT Gateway or Public IPs fails the test.
+
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceName: serviceName, Config: NewOutboundServiceConfig(serviceName, nil), State: StateDeletionInProgress}
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(serviceName, "corr")
+
+	_, success, completionErr := got.result()
+	assert.True(t, success, "%v", completionErr)
+	assert.True(t, cleared, "the BYO NAT Gateway must be unlinked")
+	dt.OnServiceCreationComplete(serviceName, success, completionErr)
+	assert.Empty(t, dt.byoNATGatewayID(serviceName))
+}
+
+// TestRestartedBetweenTheTwoUnlinkStepsLeavesTheBYOLink verifies that recovery cannot
+// resolve the BYO NAT Gateway after its registration reference is cleared.
+func TestRestartedBetweenTheTwoUnlinkStepsLeavesTheBYOLink(t *testing.T) {
+	const identity = "byo-natgw"
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := newOutboundMocks(ctrl)
+	cfg := testConfig()
+	registered := []*armnetwork.ServiceGatewayService{{Name: ptr.To(identity), Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{
+		ServiceType: ptr.To(armnetwork.ServiceTypeOutbound)}}}
+	m.sgw.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return(registered, nil).AnyTimes()
+	m.nat.EXPECT().Get(gomock.Any(), "rg", identity, gomock.Any()).Return(nil, notFoundError()).AnyTimes()
+	m.nat.EXPECT().Delete(gomock.Any(), "rg", identity).Return(nil).AnyTimes()
+	for _, name := range OutboundPublicIPNames(identity) {
+		m.pip.EXPECT().Get(gomock.Any(), "rg", name, nil).Return(nil, notFoundError()).Times(1)
+	}
+	m.pip.EXPECT().Delete(gomock.Any(), "rg", gomock.Any()).Times(0)
+	m.sgw.EXPECT().UpdateServices(gomock.Any(), "rg", "sgw", gomock.Any()).Return(nil).AnyTimes()
+
+	nrp := emptyNRPState()
+	if !assert.NoError(t, fetchServiceGatewayServices(context.Background(), cfg, m.factory, &nrp)) {
+		return
+	}
+	dt, err := New(logr.Discard(), K8sState{Services: utilsets.NewString(), Egresses: utilsets.NewString(), Nodes: map[string]Node{}},
+		nrp, cfg, m.factory, fake.NewSimpleClientset())
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Empty(t, dt.byoNATGatewayID(identity), "nothing names its BYO NAT Gateway any more")
+
+	dt.pendingServiceOps[identity] = &ServiceOperationState{ServiceName: identity, Config: NewOutboundServiceConfig(identity, nil), State: StateDeletionInProgress}
+	got := &outboundCompletion{}
+	outboundUpdater(dt, got).deleteOutboundService(identity, "corr")
+
+	_, success, completionErr := got.result()
+	assert.True(t, success, "%v", completionErr)
+}
+
+type initClients struct {
+	factory       *mock_azclient.MockClientFactory
+	provisionings atomic.Int32
+}
+
+// newInitClients returns a ServiceGateway holding only the RP-owned default NAT gateway, with
+// lbs in the resource group, counting LB/PIP creations.
+func newInitClients(t *testing.T, lbs []*armnetwork.LoadBalancer, onLBDelete func()) *initClients {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+
+	c := &initClients{factory: mock_azclient.NewMockClientFactory(ctrl)}
+	mockSGW := mock_servicegatewayclient.NewMockInterface(ctrl)
+	mockLB := mock_loadbalancerclient.NewMockInterface(ctrl)
+	mockNAT := mock_natgatewayclient.NewMockInterface(ctrl)
+	mockPIP := mock_publicipaddressclient.NewMockInterface(ctrl)
+
+	c.factory.EXPECT().GetServiceGatewayClient().Return(mockSGW).AnyTimes()
+	c.factory.EXPECT().GetLoadBalancerClient().Return(mockLB).AnyTimes()
+	c.factory.EXPECT().GetNatGatewayClient().Return(mockNAT).AnyTimes()
+	c.factory.EXPECT().GetPublicIPAddressClient().Return(mockPIP).AnyTimes()
+
+	mockSGW.EXPECT().GetServices(gomock.Any(), "rg", "sgw").Return([]*armnetwork.ServiceGatewayService{{
+		Name:       ptr.To(DefaultOutboundNATGatewayName),
+		Properties: &armnetwork.ServiceGatewayServicePropertiesFormat{ServiceType: ptr.To(armnetwork.ServiceTypeOutbound), IsDefault: ptr.To(true)},
+	}}, nil).AnyTimes()
+	mockSGW.EXPECT().GetAddressLocations(gomock.Any(), "rg", "sgw").Return(nil, nil).AnyTimes()
+	mockSGW.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockSGW.EXPECT().UpdateServices(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	mockLB.EXPECT().List(gomock.Any(), "rg").Return(lbs, nil).AnyTimes()
+	mockLB.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, lb armnetwork.LoadBalancer) (*armnetwork.LoadBalancer, error) {
+			c.provisionings.Add(1)
+			return &lb, nil
+		}).AnyTimes()
+	mockLB.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string) error {
+			if onLBDelete != nil {
+				onLBDelete()
+			}
+			return nil
+		}).AnyTimes()
+	mockNAT.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().List(gomock.Any(), "rg").Return(nil, nil).AnyTimes()
+	mockPIP.EXPECT().Get(gomock.Any(), "rg", gomock.Any(), nil).Return(nil, notFoundError()).AnyTimes()
+	mockPIP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _, _ string, pip armnetwork.PublicIPAddress) (*armnetwork.PublicIPAddress, error) {
+			c.provisionings.Add(1)
+			return &pip, nil
+		}).AnyTimes()
+	mockPIP.EXPECT().Delete(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	return c
+}
+
+func internalLBService() *v1.Service {
+	return &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "internal",
+			Namespace:   "default",
+			UID:         types.UID("11111111-1111-1111-1111-111111111111"),
+			Annotations: map[string]string{consts.ServiceAnnotationLoadBalancerInternal: consts.TrueAnnotationValue},
+		},
+		Spec: v1.ServiceSpec{
+			Type:  v1.ServiceTypeLoadBalancer,
+			Ports: []v1.ServicePort{{Name: "http", Protocol: v1.ProtocolTCP, Port: 80}},
+		},
+	}
+}
+
+func withInitialSyncProgressInterval(t *testing.T, d time.Duration) {
+	t.Helper()
+	prev := initialSyncProgressInterval.Load()
+	initialSyncProgressInterval.Store(int64(d))
+	t.Cleanup(func() { initialSyncProgressInterval.Store(prev) })
+}
+
+type initResult struct {
+	dt  *DiffTracker
+	err error
+}
+
+func initializeAsync(ctx context.Context, clients *initClients, services ...*v1.Service) <-chan initResult {
+	objects := make([]runtime.Object, 0, len(services))
+	for _, svc := range services {
+		objects = append(objects, svc)
+	}
+	result := make(chan initResult, 1)
+	go func() {
+		dt, err := InitializeFromCluster(ctx, testConfig(), clients.factory, fake.NewSimpleClientset(objects...))
+		result <- initResult{dt: dt, err: err}
+	}()
+	return result
+}
+
+// TestInitializeFromCluster_CompletesWhenEveryAdditionIsDeclinedByAdmission pins that a declined
+// addition, which is never dispatched, does not block startup. The periodic re-check is disabled.
+func TestInitializeFromCluster_CompletesWhenEveryAdditionIsDeclinedByAdmission(t *testing.T) {
+	withInitialSyncProgressInterval(t, time.Hour)
+	clients := newInitClients(t, nil, nil)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	select {
+	case r := <-initializeAsync(ctx, clients, internalLBService()):
+		assert.NoError(t, r.err)
+		if assert.NotNil(t, r.dt) {
+			defer cleanupOnError(r.dt)
+			assert.True(t, r.dt.InitialSyncDone)
+			r.dt.mu.Lock()
+			assert.True(t, r.dt.K8sResources.Services.Has(inboundServiceName("11111111-1111-1111-1111-111111111111")))
+			assert.Empty(t, r.dt.pendingServiceOps)
+			r.dt.mu.Unlock()
+		}
+		assert.Zero(t, clients.provisionings.Load())
+	case <-time.After(10 * time.Second):
+		t.Fatal("InitializeFromCluster did not complete")
+	}
+}
+
+// TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined pins that the
+// completion check runs after orphan deletions are scheduled.
+func TestInitializeFromCluster_WaitsForOrphanDeletionsWhenAdditionsAreDeclined(t *testing.T) {
+	withInitialSyncProgressInterval(t, time.Hour)
+	const orphan = "22222222-2222-2222-2222-222222222222-lb"
+
+	deleting := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	clients := newInitClients(t, []*armnetwork.LoadBalancer{{Name: ptr.To(orphan)}}, func() {
+		once.Do(func() { close(deleting) })
+		<-release
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	result := initializeAsync(ctx, clients, internalLBService())
+
+	select {
+	case <-deleting:
+	case r := <-result:
+		close(release)
+		if r.dt != nil {
+			defer cleanupOnError(r.dt)
+		}
+		t.Fatalf("InitializeFromCluster returned (err=%v) before the orphan deletion started", r.err)
+	case <-time.After(10 * time.Second):
+		close(release)
+		t.Fatal("the orphaned load balancer was never deleted")
+	}
+
+	select {
+	case r := <-result:
+		close(release)
+		if r.dt != nil {
+			defer cleanupOnError(r.dt)
+		}
+		t.Fatalf("InitializeFromCluster returned (err=%v) while an orphan deletion was in flight", r.err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case r := <-result:
+		if r.dt != nil {
+			defer cleanupOnError(r.dt)
+		}
+		assert.NoError(t, r.err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("InitializeFromCluster did not complete after the orphan deletion finished")
+	}
+}
+
+func initializingDiffTracker() *DiffTracker {
+	dt := newTestDiffTracker()
+	dt.initCompletionChecker = make(chan struct{})
+	atomic.StoreInt32(&dt.isInitializing, 1)
+	return dt
+}
+
+// progressLog returns a logger that records what it logs. Only the waiting goroutine logs to it.
+func progressLog() (logr.Logger, *[]string) {
+	var logs []string
+	return funcr.New(func(_, args string) { logs = append(logs, args) }, funcr.Options{}), &logs
+}
+
+func TestWaitForInitialSyncReportingProgress_AlreadyCompletedDoesNotLogStall(t *testing.T) {
+	withInitialSyncProgressInterval(t, time.Hour)
+	dt := initializingDiffTracker()
+	dt.checkInitializationComplete()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	logger, logs := progressLog()
+	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
+	logged := strings.Join(*logs, "\n")
+	assert.NotContains(t, logged, "initial sync completed on the periodic re-check")
+	assert.NotContains(t, logged, "initial sync has not completed")
+}
+
+func TestWaitForInitialSyncReportingProgress_CompletesMissedSignalOnTick(t *testing.T) {
+	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+	dt := initializingDiffTracker()
+	dt.pendingServiceOps["svc-lb"] = &ServiceOperationState{State: StateCreationInProgress}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var logs []string
+	logger := funcr.New(func(_, args string) {
+		logs = append(logs, args)
+		if strings.Contains(args, "initial sync has not completed") {
+			// Leave completion unsignaled so the next tick must detect it.
+			dt.mu.Lock()
+			delete(dt.pendingServiceOps, "svc-lb")
+			dt.mu.Unlock()
+		}
+	}, funcr.Options{})
+	assert.NoError(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
+	assert.Equal(t, int32(0), atomic.LoadInt32(&dt.isInitializing))
+	logged := strings.Join(logs, "\n")
+	assert.Contains(t, logged, "initial sync completed on the periodic re-check")
+	assert.Contains(t, logged, "initial sync has not completed")
+}
+
+func TestWaitForInitialSyncReportingProgress_TickDoesNotCompleteOutstandingWork(t *testing.T) {
+	withInitialSyncProgressInterval(t, 20*time.Millisecond)
+	dt := initializingDiffTracker()
+	dt.pendingServiceOps["svc-lb"] = &ServiceOperationState{State: StateCreationInProgress}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	logger, logs := progressLog()
+	assert.Error(t, waitForInitialSyncReportingProgress(ctx, dt, logger))
+	assert.Equal(t, int32(1), atomic.LoadInt32(&dt.isInitializing))
+	logged := strings.Join(*logs, "\n")
+	assert.Contains(t, logged, "initial sync has not completed", "a stalled sync must stay loud")
+	assert.NotContains(t, logged, "initial sync completed on the periodic re-check")
 }

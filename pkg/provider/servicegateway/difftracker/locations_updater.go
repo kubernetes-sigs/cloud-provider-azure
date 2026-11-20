@@ -77,6 +77,13 @@ type LocationsUpdater struct {
 	// retry backoff. Accessed only from the single Run goroutine (process), so no lock.
 	failureCount int
 
+	// lastUpdateEnd is when the last address-location update sent to NRP returned, whether it
+	// succeeded or not. Run waits until config.LocationsUpdateInterval has passed since then before
+	// starting the next run; only process sets it, right after the NRP call returns, so a run with
+	// nothing to send does not move it. Accessed only from the single Run goroutine (process), so no
+	// lock.
+	lastUpdateEnd time.Time
+
 	// wg tracks the Run loop so Stop can wait for an in-flight sync to finish. Cancelling alone
 	// would let Stop return while process is still inside an NRP call and about to mutate tracker
 	// state, so an initialization failure could tear down and report while that work continues.
@@ -120,6 +127,10 @@ func (lu *LocationsUpdater) Run() {
 
 		case <-lu.diffTracker.locationsUpdaterTrigger:
 			lu.logger.V(4).Info("Triggered LocationsUpdater")
+			if !lu.waitForRunInterval() {
+				lu.logger.V(2).Info("Context cancelled, stopping LocationsUpdater")
+				return
+			}
 			// Bound each attempt so a hung/slow NRP call cannot pin the single worker and starve all
 			// other services' location/finalizer syncs; a timeout fails into the deferred backoffAndRetry.
 			attemptCtx, cancel := context.WithTimeout(lu.ctx, getNRPOperationTimeout())
@@ -177,13 +188,12 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			// queue - so initialization could complete against NRP state this sync never
 			// reconciled, and a recovery arriving one second later was thrown away.
 			//
-			// Keep retrying instead: either NRP recovers and startup proceeds correctly, or the
-			// inside the window and startup proceeds correctly, or the deadline expires and
-			// WaitForInitialSync fails InitializeFromCluster loudly. The backoff is capped at
+			// Keep retrying instead: startup stays blocked until NRP recovers; there is no
+			// deadline (see waitForInitialSyncReportingProgress). The backoff is capped at
 			// locationsRetryMaxDelay with jitter, so this cannot hot-loop against a struggling
 			// NRP. Reported once per outage rather than every attempt.
 			if lu.failureCount == getMaxInitLocationSyncAttempts() {
-				lu.logger.Error(lastSyncErr, "NRP location sync still failing during initialization; retrying until the initial-sync deadline",
+				lu.logger.Error(lastSyncErr, "NRP location sync still failing during initialization; retrying until it succeeds while cloud-controller-manager startup stays blocked",
 					"attempts", lu.failureCount)
 				recordLocationSyncAbandoned(locationSyncAbandonReasonInitAttempts)
 			}
@@ -264,6 +274,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 
 	// Call NRP Service Gateway API to update locations/addresses
 	err := lu.diffTracker.updateNRPSGWAddressLocations(ctx, lu.diffTracker.config.ServiceGatewayResourceName, locationsDTO)
+	lu.lastUpdateEnd = time.Now()
 	if err != nil {
 		lastSyncErr = err
 		if httpStatus, errCode := extractAzureErrorInfo(err); isTerminalLocationSyncStatus(httpStatus) {
@@ -279,7 +290,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 			// not be left Terminating because another Service contributed a malformed entry to the
 			// shared batch.
 			lu.diffTracker.CheckPendingServiceDeletions()
-			readyRemovalPending := lu.diffTracker.CheckPendingPodDeletions(ctx)
+			readyRemovalPending := lu.diffTracker.checkPendingPodDeletions(ctx, false)
 			// Those checks only advance work whose addresses already left NRP. The batch was
 			// abandoned unapplied, so anything still waiting has no future trigger: keep retrying
 			// instead of taking the terminal shortcut.
@@ -309,7 +320,7 @@ func (lu *LocationsUpdater) process(ctx context.Context) {
 	// to NRP and reflected in NRPResources above, so any non-last pod whose address has now
 	// left NRP gets its finalizer removed here. Last-pod entries are skipped (their finalizers
 	// are removed after NAT Gateway deletion by RemoveLastPodFinalizers).
-	readyRemovalPending := lu.diffTracker.CheckPendingPodDeletions(ctx)
+	readyRemovalPending := lu.diffTracker.checkPendingPodDeletions(ctx, false)
 	if lu.initPodFinalizersStillPending() || readyRemovalPending {
 		// Retry instead of reporting success: during init this keeps WaitForInitialSync blocked
 		// until finalizers clear; post-init it reschedules a backoff retry for a ready non-last
@@ -367,6 +378,29 @@ func computeRetryBackoff(attempt int) time.Duration {
 // Throttling (429), conflict (409), not-found (404) and 5xx are transient and remain retryable.
 func isTerminalLocationSyncStatus(httpStatus int) bool {
 	return httpStatus == http.StatusBadRequest || httpStatus == http.StatusUnprocessableEntity
+}
+
+// waitForRunInterval waits for the configured interval after the last NRP update returns. Zero disables it.
+// It does not wait before the first update or after an idle period, and a run with nothing to send
+// does not restart the interval. It returns false if the updater is stopped while waiting.
+func (lu *LocationsUpdater) waitForRunInterval() bool {
+	interval := lu.diffTracker.config.LocationsUpdateInterval
+	if interval <= 0 || lu.lastUpdateEnd.IsZero() {
+		return true
+	}
+	wait := interval - time.Since(lu.lastUpdateEnd)
+	if wait <= 0 {
+		return true
+	}
+	lu.logger.V(4).Info("Delaying location sync run to keep the minimum interval", "delay", wait, "interval", interval)
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	select {
+	case <-lu.ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 // backoffAndRetry waits a bounded, jittered delay and then re-triggers the LocationsUpdater

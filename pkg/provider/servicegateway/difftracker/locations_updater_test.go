@@ -19,6 +19,7 @@ package difftracker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -26,15 +27,381 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/component-base/metrics/testutil"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/mock_azclient"
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/servicegatewayclient/mock_servicegatewayclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+// newIntervalTestUpdater returns a LocationsUpdater whose tracker is configured with interval and
+// whose ServiceGateway client is sgw. The updater is not started.
+func newIntervalTestUpdater(ctx context.Context, t *testing.T, interval time.Duration, sgw *mock_servicegatewayclient.MockInterface) (*LocationsUpdater, *DiffTracker) {
+	t.Helper()
+	factory := mock_azclient.NewMockClientFactory(gomock.NewController(t))
+	factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+
+	dt := newTestDiffTracker()
+	dt.networkClientFactory = factory
+	dt.config = testConfig()
+	dt.config.LocationsUpdateInterval = interval
+	return NewLocationsUpdater(ctx, dt), dt
+}
+
+// addInboundPod adds a pod of the tracked inbound Service so the next pass has a location diff.
+func addInboundPod(dt *DiffTracker, nodeName, podIP string) {
+	serviceName := inboundServiceName("svc")
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+	node, ok := dt.K8sResources.Nodes[nodeName]
+	if !ok {
+		node = newNode()
+		dt.K8sResources.Nodes[nodeName] = node
+	}
+	pod := newPod()
+	pod.InboundIdentities = utilsets.NewString(serviceName)
+	node.Pods[podIP] = pod
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceName: serviceName, State: StateCreated}
+}
+
+func TestWaitForRunInterval(t *testing.T) {
+	const interval = 200 * time.Millisecond
+	sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+
+	t.Run("no wait before the first update", func(t *testing.T) {
+		lu, _ := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+		start := time.Now()
+		assert.True(t, lu.waitForRunInterval())
+		assert.Less(t, time.Since(start), interval/2)
+	})
+
+	t.Run("no wait once the interval has passed", func(t *testing.T) {
+		lu, _ := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+		lu.lastUpdateEnd = time.Now().Add(-2 * interval)
+		start := time.Now()
+		assert.True(t, lu.waitForRunInterval())
+		assert.Less(t, time.Since(start), interval/2)
+	})
+
+	t.Run("waits for the rest of the interval", func(t *testing.T) {
+		const longInterval = 400 * time.Millisecond
+		lu, _ := newIntervalTestUpdater(context.Background(), t, longInterval, sgw)
+		lu.lastUpdateEnd = time.Now().Add(-longInterval * 3 / 4)
+		start := time.Now()
+		assert.True(t, lu.waitForRunInterval())
+		assert.GreaterOrEqual(t, time.Since(lu.lastUpdateEnd), longInterval)
+		assert.Less(t, time.Since(start), longInterval/2, "only the rest of the interval is waited")
+	})
+
+	t.Run("zero interval disables the wait", func(t *testing.T) {
+		lu, _ := newIntervalTestUpdater(context.Background(), t, 0, sgw)
+		lu.lastUpdateEnd = time.Now()
+		start := time.Now()
+		assert.True(t, lu.waitForRunInterval())
+		assert.Less(t, time.Since(start), 50*time.Millisecond)
+	})
+
+	t.Run("returns promptly when stopped", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		lu, _ := newIntervalTestUpdater(ctx, t, 10*time.Second, sgw)
+		lu.lastUpdateEnd = time.Now()
+		time.AfterFunc(50*time.Millisecond, cancel)
+		start := time.Now()
+		assert.False(t, lu.waitForRunInterval())
+		assert.Less(t, time.Since(start), 2*time.Second)
+	})
+}
+
+// runIntervalTestUpdater starts lu and stops it when the test ends.
+func runIntervalTestUpdater(t *testing.T, lu *LocationsUpdater) {
+	t.Helper()
+	stopped := make(chan struct{})
+	go func() {
+		lu.Run()
+		close(stopped)
+	}()
+	t.Cleanup(func() {
+		lu.Stop()
+		<-stopped
+	})
+}
+
+// updateRecorder records when each address-location update reaches NRP and when it returns, after
+// latency, answering with the errors in answers in turn (nil once they run out).
+type updateRecorder struct {
+	mu           sync.Mutex
+	starts, ends []time.Time
+	answers      []error
+	latency      time.Duration
+}
+
+func (r *updateRecorder) update(_ context.Context, _, _ string, _ armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+	r.mu.Lock()
+	r.starts = append(r.starts, time.Now())
+	var err error
+	if len(r.answers) > 0 {
+		err, r.answers = r.answers[0], r.answers[1:]
+	}
+	r.mu.Unlock()
+	time.Sleep(r.latency)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ends = append(r.ends, time.Now())
+	return err
+}
+
+// calls returns how many updates have returned.
+func (r *updateRecorder) calls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.ends)
+}
+
+// TestLocationsUpdater_RunsWithNothingToSendDoNotDelayTheNextUpdate checks that the interval spaces the
+// updates sent to NRP, not the runs: a run with nothing to send, which makes no NRP call, neither waits
+// for an interval of its own making nor delays the next update.
+func TestLocationsUpdater_RunsWithNothingToSendDoNotDelayTheNextUpdate(t *testing.T) {
+	const interval = 600 * time.Millisecond
+
+	t.Run("a run with nothing to send before the first update", func(t *testing.T) {
+		rec := &updateRecorder{}
+		sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+		sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(1)
+		lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+		runIntervalTestUpdater(t, lu)
+
+		dt.triggerLocationsUpdater() // no location diff: no NRP call
+		time.Sleep(50 * time.Millisecond)
+		addInboundPod(dt, "node-1", "10.0.0.1")
+		triggered := time.Now()
+		dt.triggerLocationsUpdater()
+
+		assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		assert.Less(t, rec.starts[0].Sub(triggered), interval/2, "a run that sent nothing must not delay the next update")
+	})
+
+	t.Run("a run with nothing to send after an update", func(t *testing.T) {
+		rec := &updateRecorder{}
+		sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+		sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(2)
+		lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+		runIntervalTestUpdater(t, lu)
+
+		addInboundPod(dt, "node-1", "10.0.0.1")
+		dt.triggerLocationsUpdater()
+		assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+		rec.mu.Lock()
+		firstEnd := rec.ends[0]
+		rec.mu.Unlock()
+
+		// This run waits for the interval after the update, then finds nothing to send.
+		dt.triggerLocationsUpdater()
+		time.Sleep(time.Until(firstEnd.Add(interval + 200*time.Millisecond)))
+		addInboundPod(dt, "node-2", "10.0.0.2")
+		triggered := time.Now()
+		dt.triggerLocationsUpdater()
+
+		assert.Eventually(t, func() bool { return rec.calls() == 2 }, 5*time.Second, 5*time.Millisecond)
+		rec.mu.Lock()
+		defer rec.mu.Unlock()
+		assert.Less(t, rec.starts[1].Sub(triggered), interval/3,
+			"the interval since the last update has passed: the run that sent nothing in between must not restart it")
+	})
+}
+
+// TestLocationsUpdater_FailedUpdateAlsoStartsTheInterval checks that an update NRP did not accept counts as
+// an update sent: the next one, which the next change starts, is still spaced by the interval.
+func TestLocationsUpdater_FailedUpdateAlsoStartsTheInterval(t *testing.T) {
+	const interval = 300 * time.Millisecond
+	for _, tc := range []struct {
+		name   string
+		answer error
+	}{
+		// A 400 is final for that batch: nothing retries it, only the next change.
+		{name: "refused", answer: &azcore.ResponseError{StatusCode: http.StatusBadRequest, ErrorCode: "InvalidRequest"}},
+		// A 429 is retried after a backoff, which a change arriving meanwhile ends at once.
+		{name: "throttled", answer: &azcore.ResponseError{StatusCode: http.StatusTooManyRequests, ErrorCode: "TooManyRequests"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := &updateRecorder{answers: []error{tc.answer}}
+			sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+			sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(2)
+			lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+			runIntervalTestUpdater(t, lu)
+
+			addInboundPod(dt, "node-1", "10.0.0.1")
+			dt.triggerLocationsUpdater()
+			assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+			addInboundPod(dt, "node-2", "10.0.0.2")
+			dt.triggerLocationsUpdater()
+
+			assert.Eventually(t, func() bool { return rec.calls() == 2 }, 5*time.Second, 5*time.Millisecond)
+			rec.mu.Lock()
+			defer rec.mu.Unlock()
+			gap := rec.starts[1].Sub(rec.ends[0])
+			assert.GreaterOrEqual(t, gap, interval, "the update after a failed one must wait for the interval")
+			assert.Less(t, gap, locationsRetryBaseDelay, "control: the next change, not a retry backoff, started the update")
+		})
+	}
+}
+
+func TestLocationsUpdaterAdvancesResolvedPodServiceCleanup(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, tt := range []struct {
+		name           string
+		alreadyPending bool
+		initializing   bool
+	}{
+		{name: "quiet post-init resolution"},
+		{name: "already pending cleanup", alreadyPending: true},
+		{name: "initialization retry", initializing: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			label := "egress-b"
+			pod := unlabelledFinalizerPod(&label, "uid-p")
+			now := metav1.Now()
+			pod.DeletionTimestamp = &now
+			kube := fake.NewSimpleClientset(pod)
+			dt := newTestDiffTracker()
+			dt.kubeClient = kube
+			dt.networkClientFactory = mock_azclient.NewMockClientFactory(gomock.NewController(t))
+			dt.config = testConfig()
+			dt.NRPResources.NATGateways.Insert(a, b)
+			dt.K8sResources.Egresses.Insert(a, b)
+			dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+				"10.244.0.9": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: b, OutboundPodKey: "ns/q", OutboundPodUID: "uid-q"},
+			}}
+			dt.outboundIdentityPodRefCount.Store(b, 1)
+			dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+				"10.244.0.9": {Services: utilsets.NewString(b)},
+			}}
+			for _, service := range []string{a, b} {
+				dt.pendingServiceOps[service] = &ServiceOperationState{
+					ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+				}
+			}
+			dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+				Namespace: "ns", Name: "p", UID: "uid-p",
+				ResolutionPending:   true,
+				ResolutionAddresses: []string{"10.244.0.7"}, ResolutionServices: []string{a, b},
+				ServiceCleanup: map[string]podCleanupState{
+					a: {Addresses: []string{"10.244.0.7"}, WaitForServiceDeletion: tt.alreadyPending},
+					b: {Addresses: []string{"10.244.0.7"}},
+				},
+			}
+			if tt.alreadyPending {
+				dt.mu.Lock()
+				dt.markOutboundServiceForDeletionLocked(a)
+				dt.mu.Unlock()
+			}
+			if tt.initializing {
+				atomic.StoreInt32(&dt.isInitializing, 1)
+			}
+			assert.Empty(t, dt.GetSyncLocationsAddresses().Locations)
+			assert.Empty(t, dt.locationsUpdaterTrigger)
+			assert.Empty(t, dt.serviceUpdaterTrigger)
+			lu := NewLocationsUpdater(context.Background(), dt)
+			go lu.Run()
+			defer lu.Stop()
+			dt.triggerLocationsUpdater()
+			assert.Eventually(t, func() bool {
+				dt.mu.Lock()
+				defer dt.mu.Unlock()
+				return dt.pendingServiceOps[a].State == StateDeletionInProgress
+			}, 3*time.Second, 10*time.Millisecond, "resolved cleanup must advance without another informer event")
+			got, err := kube.CoreV1().Pods("ns").Get(context.Background(), "p", metav1.GetOptions{})
+			assert.NoError(t, err)
+			assert.True(t, hasPodFinalizer(got), "A's worker still owns finalizer completion")
+		})
+	}
+}
+
+// TestLocationsUpdater_SpacesConsecutiveNRPCalls drives Run: the first update is sent at once, and the
+// next one starts no sooner than the interval after the previous one returned.
+func TestLocationsUpdater_SpacesConsecutiveNRPCalls(t *testing.T) {
+	const interval = 300 * time.Millisecond
+	// The latency tells the return of an update from its start.
+	rec := &updateRecorder{latency: 150 * time.Millisecond}
+	sgw := mock_servicegatewayclient.NewMockInterface(gomock.NewController(t))
+	sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(rec.update).Times(2)
+	lu, dt := newIntervalTestUpdater(context.Background(), t, interval, sgw)
+	runIntervalTestUpdater(t, lu)
+
+	addInboundPod(dt, "node-1", "10.0.0.1")
+	triggered := time.Now()
+	dt.triggerLocationsUpdater()
+	assert.Eventually(t, func() bool { return rec.calls() == 1 }, 5*time.Second, 5*time.Millisecond)
+	rec.mu.Lock()
+	assert.Less(t, rec.starts[0].Sub(triggered), interval/2, "the first update must not be delayed")
+	rec.mu.Unlock()
+
+	addInboundPod(dt, "node-2", "10.0.0.2")
+	dt.triggerLocationsUpdater()
+	assert.Eventually(t, func() bool { return rec.calls() == 2 }, 5*time.Second, 5*time.Millisecond)
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	assert.GreaterOrEqual(t, rec.starts[1].Sub(rec.ends[0]), interval,
+		"the next update must start at least the interval after the previous one returned")
+}
+
+func TestLocationsUpdaterRetriesUnresolvedPodWithoutLocationChanges(t *testing.T) {
+	pod := unlabelledFinalizerPod(nil, "uid-p")
+	kube := fake.NewSimpleClientset(pod)
+	var gets atomic.Int32
+	kube.PrependReactor("get", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		if gets.Add(1) <= 2 {
+			return true, nil, apierrors.NewServiceUnavailable("transient Pod lookup")
+		}
+		return false, nil, nil
+	})
+	dt := newTestDiffTracker()
+	dt.kubeClient = kube
+	dt.networkClientFactory = mock_azclient.NewMockClientFactory(gomock.NewController(t))
+	dt.config = testConfig()
+	dt.releaseUnlabelledPodFinalizer(context.Background(), pod, false)
+	pending := dt.pendingPodDeletions["ns/p"]
+	if !assert.NotNil(t, pending) {
+		return
+	}
+	assert.True(t, pending.ResolutionPending)
+	lu := NewLocationsUpdater(context.Background(), dt)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		lu.Run()
+	}()
+	defer func() {
+		lu.Stop()
+		<-done
+	}()
+	assert.Eventually(t, func() bool {
+		obj, err := kube.Tracker().Get(v1.SchemeGroupVersion.WithResource("pods"), "ns", "p")
+		if err != nil || hasPodFinalizer(obj.(*v1.Pod)) {
+			return false
+		}
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
+		return len(dt.pendingPodDeletions) == 0 && len(dt.podFinalizerGuards) == 0
+	}, 5*time.Second, 20*time.Millisecond, "a quiet cluster must retry discovery without another event")
+	assert.GreaterOrEqual(t, gets.Load(), int32(4))
+	dt.mu.Lock()
+	assert.Empty(t, dt.pendingPodDeletions)
+	assert.Empty(t, dt.podFinalizerGuards)
+	dt.mu.Unlock()
+}
 
 // TestLocationsUpdaterRetriesAfterSyncFailure verifies that a failed NRP location sync is
 // retried automatically (with backoff) rather than left unsynced until an unrelated future
@@ -65,7 +432,7 @@ func TestLocationsUpdaterRetriesAfterSyncFailure(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -121,7 +488,7 @@ func TestLocationsUpdater_HungSyncTimesOutAndRecovers(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -176,6 +543,223 @@ func TestLocationsUpdaterBackoffShortCircuitsOnTrigger(t *testing.T) {
 
 // TestLocationsUpdater_TerminalErrorNotRetried checks that a deterministic NRP rejection (HTTP 400)
 // abandons the batch instead of retrying the identical payload forever.
+func TestLocationsUpdaterAcknowledgesPodDrainBeforeRelease(t *testing.T) {
+	const service = "egress-a-natgw"
+	for _, family := range []struct {
+		name  string
+		nodes []string
+		ips   []string
+		other []string
+		next  []string
+	}{
+		{name: "ipv4", nodes: []string{"10.0.0.1"}, ips: []string{"10.244.0.7"}, other: []string{"10.244.0.9"}, next: []string{"10.244.0.10"}},
+		{name: "ipv6", nodes: []string{"fd00::1"}, ips: []string{"fd00::7"}, other: []string{"fd00::9"}, next: []string{"fd00::a"}},
+		{name: "dual", nodes: []string{"10.0.0.1", "fd00::1"}, ips: []string{"10.244.0.7", "fd00::7"}, other: []string{"10.244.0.9", "fd00::9"}, next: []string{"10.244.0.10", "fd00::a"}},
+	} {
+		t.Run(family.name, func(t *testing.T) {
+			for _, status := range []int{0, http.StatusBadRequest, http.StatusUnprocessableEntity} {
+				t.Run(fmt.Sprintf("first_status=%d", status), func(t *testing.T) {
+					ctx := context.Background()
+					label := "egress-a"
+					makePod := func(name, uid string, addresses []string) *v1.Pod {
+						pod := unlabelledFinalizerPod(&label, uid, addresses...)
+						pod.Name, pod.Status.HostIP = name, family.nodes[0]
+						for _, node := range family.nodes {
+							pod.Status.HostIPs = append(pod.Status.HostIPs, v1.HostIP{IP: node})
+						}
+						return pod
+					}
+					pod, other := makePod("p", "uid-p", family.ips), makePod("other", "uid-other", family.other)
+					kube := fake.NewSimpleClientset(pod, other)
+					dt := newTestDiffTracker()
+					dt.kubeClient = kube
+					dt.podInformerAddPod(other)
+					op := dt.pendingServiceOps[service]
+					if !assert.NotNil(t, op) {
+						return
+					}
+					op.State = StateCreationInProgress
+					dt.NRPResources.NATGateways.Insert(service)
+					dt.OnServiceCreationComplete(service, true, nil)
+					dt.UpdateLocationsAddresses(dt.GetSyncLocationsAddresses())
+					select {
+					case <-dt.locationsUpdaterTrigger:
+					default:
+					}
+					dt.podInformerAddPod(pod)
+					ctrl := gomock.NewController(t)
+					factory := mock_azclient.NewMockClientFactory(ctrl)
+					sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+					factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+					addEntered, removeEntered := make(chan struct{}), make(chan struct{})
+					releaseAdd, releaseRemove := make(chan struct{}), make(chan struct{})
+					var addOnce, removeOnce sync.Once
+					resumeAdd := func() { addOnce.Do(func() { close(releaseAdd) }) }
+					resumeRemove := func() { removeOnce.Do(func() { close(releaseRemove) }) }
+					var calls atomic.Int32
+					sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+						DoAndReturn(func(context.Context, string, string, armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+							switch calls.Add(1) {
+							case 1:
+								close(addEntered)
+								<-releaseAdd
+								if status != 0 {
+									return &azcore.ResponseError{StatusCode: status, ErrorCode: "InvalidRequest"}
+								}
+							case 2:
+								close(removeEntered)
+								<-releaseRemove
+							}
+							return nil
+						}).AnyTimes()
+					dt.networkClientFactory, dt.config = factory, testConfig()
+					lu := NewLocationsUpdater(ctx, dt)
+					stopped := make(chan struct{})
+					go func() {
+						defer close(stopped)
+						lu.Run()
+					}()
+					defer func() {
+						resumeAdd()
+						resumeRemove()
+						lu.Stop()
+						<-stopped
+					}()
+					select {
+					case <-addEntered:
+					case <-time.After(3 * time.Second):
+						t.Fatal("NRP add was not dispatched")
+					}
+					empty := pod.DeepCopy()
+					empty.Labels[consts.PodLabelServiceEgressGateway] = ""
+					_, err := kube.CoreV1().Pods("ns").Update(ctx, empty, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					dt.reconcileEgressPodUpdate(pod, empty)
+					deleting := empty.DeepCopy()
+					now := metav1.Now()
+					deleting.DeletionTimestamp = &now
+					_, err = kube.CoreV1().Pods("ns").Update(ctx, deleting, metav1.UpdateOptions{})
+					assert.NoError(t, err)
+					dt.reconcileEgressPodUpdate(empty, deleting)
+					current, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+					assert.NoError(t, err)
+					assert.True(t, hasPodFinalizer(current), "duplicate events cannot acknowledge an outstanding publication")
+					if status != 0 {
+						next := makePod("other", "uid-other", family.next)
+						_, err := kube.CoreV1().Pods("ns").Update(ctx, next, metav1.UpdateOptions{})
+						assert.NoError(t, err)
+						dt.reconcileEgressPodUpdate(other, next)
+					}
+					resumeAdd()
+					select {
+					case <-removeEntered:
+					case <-time.After(3 * time.Second):
+						t.Fatal("cleanup did not continue after the first response")
+					}
+					current, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+					assert.NoError(t, err)
+					assert.True(t, hasPodFinalizer(current), "neither an acknowledged add nor a failed pass acknowledges the removal")
+					dt.mu.Lock()
+					pending := dt.pendingPodDeletions["ns/p"]
+					if assert.NotNil(t, pending) {
+						cleanup, found := pending.cleanupFor(service)
+						assert.True(t, found)
+						assert.True(t, cleanup.LocationSyncPending)
+					}
+					dt.mu.Unlock()
+					resumeRemove()
+					assert.Eventually(t, func() bool {
+						current, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+						return err == nil && !hasPodFinalizer(current)
+					}, 3*time.Second, time.Millisecond)
+				})
+			}
+		})
+	}
+}
+
+func TestLocationsUpdaterRetriesUnchangedPodDrainWithBackoff(t *testing.T) {
+	const a, b = "egress-a-natgw", "egress-b-natgw"
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnprocessableEntity} {
+		for _, unknown := range []bool{false, true} {
+			t.Run(fmt.Sprintf("status=%d/unknown=%t", status, unknown), func(t *testing.T) {
+				label := "egress-b"
+				pod := unlabelledFinalizerPod(&label, "uid-p", "10.244.0.7")
+				dt := newTestDiffTracker()
+				dt.kubeClient = fake.NewSimpleClientset(pod)
+				dt.NRPResources.NATGateways.Insert(a, b)
+				dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{Addresses: map[string]NRPAddress{
+					"10.244.0.7": {Services: utilsets.NewString(a)},
+				}}
+				dt.K8sResources.Nodes["10.0.0.1"] = Node{Pods: map[string]Pod{
+					"10.244.0.7": {InboundIdentities: utilsets.NewString(), PublicOutboundIdentity: b, OutboundPodKey: "ns/p", OutboundPodUID: "uid-p"},
+				}}
+				dt.outboundIdentityPodRefCount.Store(b, 1)
+				dt.pendingServiceOps[a] = &ServiceOperationState{
+					ServiceName: a, Config: NewOutboundServiceConfig(a, nil), State: StateDeletionPending,
+				}
+				dt.pendingServiceOps[b] = &ServiceOperationState{
+					ServiceName: b, Config: NewOutboundServiceConfig(b, nil), State: StateCreated,
+				}
+				dt.pendingServiceDeletions[a] = &PendingServiceDeletion{ServiceName: a}
+				dt.pendingPodDeletions["ns/p"] = &PendingPodDeletion{
+					Namespace: "ns", Name: "p", UID: "uid-p", ServiceName: a,
+					Addresses: []string{"10.244.0.7"}, IsLastPod: true, VerifyUnknownEgressDrain: unknown,
+				}
+				ctrl := gomock.NewController(t)
+				factory := mock_azclient.NewMockClientFactory(ctrl)
+				sgw := mock_servicegatewayclient.NewMockInterface(ctrl)
+				factory.EXPECT().GetServiceGatewayClient().Return(sgw).AnyTimes()
+				first, second := make(chan struct{}), make(chan struct{})
+				var calls atomic.Int32
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				sgw.EXPECT().UpdateAddressLocations(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(context.Context, string, string, armnetwork.ServiceGatewayUpdateAddressLocationsRequest) error {
+						switch calls.Add(1) {
+						case 1:
+							close(first)
+						case 2:
+							close(second)
+							cancel()
+						}
+						return &azcore.ResponseError{StatusCode: status, ErrorCode: "InvalidRequest"}
+					}).AnyTimes()
+				dt.networkClientFactory, dt.config = factory, testConfig()
+				lu := NewLocationsUpdater(ctx, dt)
+				lu.failureCount = 6
+				stopped := make(chan struct{})
+				go func() {
+					defer close(stopped)
+					lu.Run()
+				}()
+				defer func() {
+					lu.Stop()
+					<-stopped
+				}()
+				dt.triggerLocationsUpdater()
+				select {
+				case <-first:
+				case <-time.After(3 * time.Second):
+					t.Fatal("locations update was never attempted")
+				}
+				select {
+				case <-second:
+					t.Error("unchanged drain bypassed the scheduled backoff")
+				case <-time.After(time.Second):
+				}
+				cancel()
+				lu.Stop()
+				<-stopped
+				assert.Equal(t, int32(1), calls.Load())
+				assert.Equal(t, 7, lu.failureCount, "cleanup must remain retryable, not take the terminal shortcut")
+				assert.True(t, dt.pendingPodDeletions["ns/p"].waitsForService(a))
+				assert.Empty(t, dt.podFinalizerGuards)
+			})
+		}
+	}
+}
+
 func TestLocationsUpdater_TerminalErrorNotRetried(t *testing.T) {
 	RegisterMetrics()
 	before, err := testutil.GetCounterMetricValue(locationSyncTerminalErrorsTotal)
@@ -204,7 +788,7 @@ func TestLocationsUpdater_TerminalErrorNotRetried(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -267,12 +851,12 @@ func TestLocationsUpdater_TerminalErrorStillDrainsUnrelatedDeletions(t *testing.
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("poison")
-	dt.pendingServiceOps["poison"] = &ServiceOperationState{ServiceUID: "poison", State: StateCreated}
+	dt.pendingServiceOps["poison"] = &ServiceOperationState{ServiceName: "poison", State: StateCreated}
 
 	// "innocent" is unrelated: it holds no NRP addresses at all, so its drain is already complete
 	// and CheckPendingServiceDeletions must promote it to StateDeletionInProgress.
-	dt.pendingServiceOps["innocent"] = &ServiceOperationState{ServiceUID: "innocent", State: StateDeletionPending}
-	dt.pendingServiceDeletions["innocent"] = &PendingServiceDeletion{ServiceUID: "innocent", IsInbound: true}
+	dt.pendingServiceOps["innocent"] = &ServiceOperationState{ServiceName: "innocent", State: StateDeletionPending}
+	dt.pendingServiceDeletions["innocent"] = &PendingServiceDeletion{ServiceName: "innocent", IsInbound: true}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -299,22 +883,13 @@ func TestLocationsUpdater_TerminalErrorStillDrainsUnrelatedDeletions(t *testing.
 		"a Service with no NRP addresses must still drain when an unrelated Service poisons the batch")
 }
 
-// TestLocationsUpdater_InitDoesNotHangOnSustainedTransientError verifies that a retryable NRP error
-// which never clears cannot block initialization indefinitely.
-//
-// backoffAndRetry re-triggers before the in-flight trigger counter is decremented, so
-// initialization stays blocked until a sync succeeds. Unbounded, a sustained 503 keeps
-// pendingUpdaterTriggers above zero, WaitForInitialSync never returns, and InitializeFromCluster,
-// Runtime.Start and startServiceController all hang. startControllers runs sequentially and starts
-// informers only afterwards, so every remaining CCM controller is left unstarted.
-// TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError pins that a never-clearing
+// TestLocationsUpdater_InitKeepsRetryingOnSustainedTransientError pins that a never-clearing
 // transient NRP error is never abandoned during initialization. Abandoning retired the in-flight
 // trigger, which let WaitForInitialSync return success and startup proceed against NRP state the
 // sync had never reconciled - and discarded an NRP recovery arriving moments later.
 //
-// The contract is now: keep retrying, and if NRP has not recovered by the initial-sync deadline,
-// surface that as an error so InitializeFromCluster fails loudly rather than silently continuing.
-func TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError(t *testing.T) {
+// The contract is now: keep retrying and keep initialization blocked until NRP recovers.
+func TestLocationsUpdater_InitKeepsRetryingOnSustainedTransientError(t *testing.T) {
 	prev := maxInitLocationSyncAttempts.Load()
 	maxInitLocationSyncAttempts.Store(1)
 	defer maxInitLocationSyncAttempts.Store(prev)
@@ -343,7 +918,7 @@ func TestLocationsUpdater_InitFailsLoudlyOnSustainedTransientError(t *testing.T)
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	// Put the tracker in the initializing state the real startup path uses.
 	dt.initCompletionChecker = make(chan struct{})
@@ -403,8 +978,8 @@ func TestLocationsUpdater_TerminalErrorRetriedWhileDeletionDrainPending(t *testi
 		Addresses: map[string]NRPAddress{"10.0.0.1": {Services: utilsets.NewString("svc")}},
 	}
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateDeletionPending}
-	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceUID: "svc", IsInbound: true}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateDeletionPending}
+	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceName: "svc", IsInbound: true}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -455,8 +1030,8 @@ func TestLocationsUpdater_DrainKeepsRetryingPastAttemptCap(t *testing.T) {
 		Addresses: map[string]NRPAddress{"10.0.0.1": {Services: utilsets.NewString("svc")}},
 	}
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateDeletionPending}
-	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceUID: "svc", IsInbound: true}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateDeletionPending}
+	dt.pendingServiceDeletions["svc"] = &PendingServiceDeletion{ServiceName: "svc", IsInbound: true}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -492,11 +1067,11 @@ func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
 	defer ctrl.Finish()
 
 	const (
-		nodeIP  = "10.0.0.1"
-		podIP   = "10.244.0.7"
-		svcUID  = "svc"
-		wantRG  = "rg"
-		wantSGW = "sgw"
+		nodeIP      = "10.0.0.1"
+		podIP       = "10.244.0.7"
+		serviceName = "svc"
+		wantRG      = "rg"
+		wantSGW     = "sgw"
 	)
 
 	captured := make(chan armnetwork.ServiceGatewayUpdateAddressLocationsRequest, 8)
@@ -516,12 +1091,12 @@ func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
 	dt.config = testConfig()
 
 	pod := newPod()
-	pod.InboundIdentities = utilsets.NewString(svcUID)
+	pod.InboundIdentities = utilsets.NewString(serviceName)
 	node := newNode()
 	node.Pods[podIP] = pod
 	dt.K8sResources.Nodes[nodeIP] = node
-	dt.NRPResources.LoadBalancers.Insert(svcUID)
-	dt.pendingServiceOps[svcUID] = &ServiceOperationState{ServiceUID: svcUID, State: StateCreated}
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{ServiceName: serviceName, State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	stopped := make(chan struct{})
@@ -564,7 +1139,7 @@ func TestLocationsUpdater_SendsExactAddressPayloadToNRP(t *testing.T) {
 			names = append(names, *n)
 		}
 	}
-	assert.Equal(t, []string{svcUID}, names,
+	assert.Equal(t, []string{serviceName}, names,
 		"the address must be attributed to the owning service, or NRP routes it for the wrong service")
 }
 
@@ -599,7 +1174,7 @@ func TestLocationsUpdater_StopWaitsForInFlightSync(t *testing.T) {
 	node.Pods["10.0.0.1"] = pod
 	dt.K8sResources.Nodes["node-1"] = node
 	dt.NRPResources.LoadBalancers.Insert("svc")
-	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceUID: "svc", State: StateCreated}
+	dt.pendingServiceOps["svc"] = &ServiceOperationState{ServiceName: "svc", State: StateCreated}
 
 	lu := NewLocationsUpdater(context.Background(), dt)
 	go lu.Run()

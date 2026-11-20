@@ -212,7 +212,7 @@ var _ = Describe("SLB - Dataplane", Label(slbTestLabel, "SLB-Dataplane"), func()
 		Expect(err).NotTo(HaveOccurred())
 		utils.Logf("Created service %s (UID %s)", created.Name, created.UID)
 
-		eventuallyServiceReconciled(string(created.UID), wantEndpoints, 5*time.Minute)
+		eventuallyServiceReconciled(cs, ns.Name, string(created.UID), wantEndpoints, 5*time.Minute)
 
 		var ip string
 		Eventually(func() string {

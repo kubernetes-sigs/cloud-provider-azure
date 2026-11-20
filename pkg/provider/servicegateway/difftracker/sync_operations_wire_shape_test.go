@@ -29,12 +29,12 @@ import (
 // Per-address removal should emit an empty ServiceRef for that address.
 func TestGuardSyncOps_PerAddressRemoval_EmptyServiceRef(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-removed"
+	serviceName := "svc-removed"
 	// NRP knows about the LB and one address backed by `uid`.
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			"10.244.0.5": {Services: utilsets.NewString(uid)},
+			"10.244.0.5": {Services: utilsets.NewString(serviceName)},
 		},
 	}
 	// K8s side: node exists and pod exists at that address, but it no
@@ -64,13 +64,13 @@ func TestGuardSyncOps_PerAddressRemoval_EmptyServiceRef(t *testing.T) {
 // Missing K8s nodes should emit PartialUpdate with an empty Addresses map.
 func TestGuardSyncOps_WholeNodeRemoval_EmitsEmptyAddresses(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid1, uid2 := "svc-a", "svc-b"
-	dt.NRPResources.LoadBalancers.Insert(uid1, uid2)
+	serviceName1, serviceName2 := "svc-a", "svc-b"
+	dt.NRPResources.LoadBalancers.Insert(serviceName1, serviceName2)
 	// NRP knows about two addresses on a node…
 	dt.NRPResources.Locations["10.0.0.99"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			"10.244.9.1": {Services: utilsets.NewString(uid1)},
-			"10.244.9.2": {Services: utilsets.NewString(uid2)},
+			"10.244.9.1": {Services: utilsets.NewString(serviceName1)},
+			"10.244.9.2": {Services: utilsets.NewString(serviceName2)},
 		},
 	}
 	// …but K8s has no record of node 10.0.0.99 (the node is gone).
@@ -93,20 +93,20 @@ func TestGuardSyncOps_WholeNodeRemoval_EmitsEmptyAddresses(t *testing.T) {
 // Matching K8s and NRP state should produce no sync location entries.
 func TestGuardSyncOps_NoSpuriousLocationEntries(t *testing.T) {
 	dt := newTestDiffTracker()
-	uid := "svc-stable"
-	dt.NRPResources.LoadBalancers.Insert(uid)
+	serviceName := "svc-stable"
+	dt.NRPResources.LoadBalancers.Insert(serviceName)
 	dt.NRPResources.Locations["10.0.0.1"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
-			"10.244.0.5": {Services: utilsets.NewString(uid)},
+			"10.244.0.5": {Services: utilsets.NewString(serviceName)},
 		},
 	}
-	dt.pendingServiceOps[uid] = &ServiceOperationState{
-		ServiceUID: uid, Config: NewInboundServiceConfig(uid, makeInboundConfig(80)),
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName, Config: NewInboundServiceConfig(serviceName, makeInboundConfig(80)),
 		State: StateCreated,
 	}
 	node := newNode()
 	pod := newPod()
-	pod.InboundIdentities.Insert(uid)
+	pod.InboundIdentities.Insert(serviceName)
 	node.Pods["10.244.0.5"] = pod
 	dt.K8sResources.Nodes["10.0.0.1"] = node
 
@@ -127,10 +127,10 @@ func TestSyncOps_ParkedLiveLBRemainsReadyToSync(t *testing.T) {
 	dt.NRPResources.LoadBalancers.Insert(live) // live has an LB in NRP; pending does not.
 
 	dt.pendingServiceOps[live] = &ServiceOperationState{
-		ServiceUID: live, Config: NewInboundServiceConfig(live, nil), State: StateNotStarted,
+		ServiceName: live, Config: NewInboundServiceConfig(live, nil), State: StateNotStarted,
 	}
 	dt.pendingServiceOps[pending] = &ServiceOperationState{
-		ServiceUID: pending, Config: NewInboundServiceConfig(pending, nil), State: StateNotStarted,
+		ServiceName: pending, Config: NewInboundServiceConfig(pending, nil), State: StateNotStarted,
 	}
 
 	livePod, pendingPod := newPod(), newPod()
