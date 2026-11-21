@@ -29,6 +29,7 @@ pkg/
     azure_backoff.go              Backoff and retry logic
     azure_lock.go                 Concurrent access locking
     azure_*_repo.go               Data access and repository pattern
+    servicegateway/              SGW runtime, informer wiring, and difftracker
     azure_fakes.go                Manual test fakes
     azure_mock_*.go               Generated mocks
   azclient/                     Azure SDK client wrappers; do not call Azure SDK directly

@@ -130,6 +130,8 @@ func InitializeFromCluster(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
+	computeClientFactory azclient.ClientFactory,
+	nodeProvider NSGNodeProvider,
 	kubeClient kubernetes.Interface,
 ) (*DiffTracker, error) {
 	logger := log.FromContextOrBackground(ctx)
@@ -149,16 +151,20 @@ func InitializeFromCluster(
 
 	// Build K8s state from cluster (also returns lists for reuse by recoverStuckFinalizers).
 	// The node-IPs map is reused below to decide the cluster's egress address families.
-	k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPs, err := buildK8sState(ctx, kubeClient)
+	k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPs, nodes, err := buildK8sState(ctx, kubeClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build K8s state: %w", err)
 	}
 
 	// Build NRP state from Azure (includes pipNameToIP for External IP recovery)
 	// We keep currentLoadBalancersInNRP and currentNATGatewaysInNRP to identify and clean up orphaned Azure resources
-	nrp, currentLoadBalancersInNRP, currentNATGatewaysInNRP, azurePIPs, pipNameToIP, err := buildNRPState(ctx, config, networkClientFactory)
+	nrp, azureLoadBalancers, currentNATGatewaysInNRP, azurePIPs, pipNameToIP, err := buildNRPState(ctx, config, networkClientFactory)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build NRP state: %w", err)
+	}
+	currentLoadBalancersInNRP := utilsets.NewString()
+	for name := range azureLoadBalancers {
+		currentLoadBalancersInNRP.Insert(name)
 	}
 
 	// Existence set of every Azure PIP name, independent of whether its address has been allocated
@@ -168,13 +174,17 @@ func InitializeFromCluster(
 	pipNamesInAzure := pipNamesInAzureFromList(azurePIPs)
 
 	// Initialize DiffTracker with computed state
-	diffTracker, err := initializeDiffTrackerWithState(log.FromContextOrBackground(ctx), k8s, nrp, config, networkClientFactory, kubeClient)
+	diffTracker, err := initializeDiffTrackerWithState(log.FromContextOrBackground(ctx), k8s, nrp, config, networkClientFactory, computeClientFactory, nodeProvider, kubeClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize DiffTracker: %w", err)
 	}
 	diffTracker.initializeEndpointSlicesCache(endpointSliceList)
 	diffTracker.startupNodeIPs = nodeNameToIPs
 	diffTracker.seedClusterAddressFamilies(nodeNameToIPs)
+	nicPolicies, err := diffTracker.discoverNICPolicies(ctx, nodes, serviceNameToService)
+	if err != nil {
+		return nil, err
+	}
 
 	unregisteredBYO, err := diffTracker.recoverUnregisteredBYOLinks(ctx, egressPodList)
 	if err != nil {
@@ -210,14 +220,14 @@ func InitializeFromCluster(
 	syncOperations := diffTracker.GetSyncOperations()
 	logSyncOperations(syncOperations)
 
-	// Setup initialization mode and start updaters
-	deferredLocationsTrigger, deferredServiceTrigger, err := startInitialization(ctx, diffTracker, serviceFinalizerRetries)
-	if err != nil {
-		return nil, err
-	}
+	// Queue startup recovery before either updater can finish initialization.
+	diffTracker.mu.Lock()
+	deferredLocationsTrigger, deferredServiceTrigger := diffTracker.beginInitializationLocked()
+	diffTracker.mu.Unlock()
 
 	// Reconcile services (create/delete LBs and NAT Gateways in Azure)
 	diffTracker.reconcileServices(syncOperations, serviceNameToService)
+	diffTracker.prepareNICPolicyInitialization(serviceNameToService, azureLoadBalancers, pipNameToIP, nicPolicies)
 	if deferredServiceTrigger {
 		diffTracker.triggerServiceUpdater()
 	}
@@ -257,6 +267,21 @@ func InitializeFromCluster(
 		logger.V(2).Info("Triggered initial location sync", "deletions", hasDeletions, "onlyExisting", hasOnlyExistingServices, "recoveredItems", hasRecoveredItems, "existingNRPServices", hasExistingNRPServices)
 		diffTracker.triggerLocationsUpdater()
 	}
+	diffTracker.mu.Lock()
+	if diffTracker.hasDirtyNICPoliciesLocked() || diffTracker.locationRecoveryPending {
+		diffTracker.triggerLocationsUpdater()
+	}
+	for _, op := range diffTracker.pendingServiceOps {
+		if op.State == StateUpdateInProgress {
+			diffTracker.triggerServiceUpdater()
+			break
+		}
+	}
+	diffTracker.mu.Unlock()
+	if err := startInitialization(ctx, diffTracker, serviceFinalizerRetries); err != nil {
+		return nil, err
+	}
+	diffTracker.checkInitializationComplete()
 
 	// Their last-pod entries keep initialization open until all startup work is queued.
 	for _, identity := range unregisteredBYO {
@@ -278,6 +303,9 @@ func InitializeFromCluster(
 		cleanupOnError(diffTracker)
 		return nil, fmt.Errorf("waiting for initial sync: %w", err)
 	}
+	diffTracker.mu.Lock()
+	diffTracker.wakeNICPolicyWorkLocked()
+	diffTracker.mu.Unlock()
 	logger.V(2).Info("Completed initialization operations")
 
 	// Recover External IPs for services that were mid-provisioning when CCM crashed.
@@ -325,12 +353,12 @@ func validateInitializationInputs(kubeClient kubernetes.Interface, networkClient
 }
 
 // buildK8sState fetches and constructs the complete K8s state (services, endpoints, egresses).
-// Also returns the node-name -> all-internal-IPs map (used internally for family-matched location
-// keys); callers may ignore it.
+// Also returns all internal IPs and the Node objects from the same LIST for family-matched
+// location keys and pass-local NIC ownership recovery.
 func buildK8sState(
 	ctx context.Context,
 	kubeClient kubernetes.Interface,
-) (K8sState, *v1.ServiceList, map[string]*v1.Service, *discoveryv1.EndpointSliceList, *v1.PodList, map[string][]string, error) {
+) (K8sState, *v1.ServiceList, map[string]*v1.Service, *discoveryv1.EndpointSliceList, *v1.PodList, map[string][]string, map[string]*v1.Node, error) {
 	k8s := K8sState{
 		Services: utilsets.NewString(),
 		Egresses: utilsets.NewString(),
@@ -338,30 +366,30 @@ func buildK8sState(
 	}
 
 	// Build node name to IPs mapping (all internal IPs per node, both families on dual-stack)
-	nodeNameToIPsMap, err := buildNodeNameToIPsMap(ctx, kubeClient)
+	nodeNameToIPsMap, nodes, err := buildNodeNameToIPsMap(ctx, kubeClient)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process services
 	serviceList, serviceNameToService, err := processK8sServices(ctx, kubeClient, &k8s)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process endpoint slices
 	endpointSliceList, err := processK8sEndpoints(ctx, kubeClient, &k8s, nodeNameToIPsMap)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
 	// Fetch and process egress pods
 	egressPodList, err := processK8sEgresses(ctx, kubeClient, &k8s)
 	if err != nil {
-		return K8sState{}, nil, nil, nil, nil, nil, err
+		return K8sState{}, nil, nil, nil, nil, nil, nil, err
 	}
 
-	return k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPsMap, nil
+	return k8s, serviceList, serviceNameToService, endpointSliceList, egressPodList, nodeNameToIPsMap, nodes, nil
 }
 
 // buildNodeNameToIPsMap maps each node name to ALL of its NodeInternalIPs. On a dual-stack node
@@ -369,17 +397,20 @@ func buildK8sState(
 // first one) lets init pick the IP-family-matched location key, mirroring the runtime EndpointSlice
 // path (endpointSliceAddresses) so init and runtime agree on the location key for the
 // same pod. A mismatch would orphan IPv6 (or IPv4) locations across a CCM restart.
-func buildNodeNameToIPsMap(ctx context.Context, kubeClient kubernetes.Interface) (map[string][]string, error) {
+// The returned Node inventory reuses that LIST for startup ownership checks.
+func buildNodeNameToIPsMap(ctx context.Context, kubeClient kubernetes.Interface) (map[string][]string, map[string]*v1.Node, error) {
 	logger := log.FromContextOrBackground(ctx)
 	nodeList, err := kubeClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list nodes: %w", err)
+		return nil, nil, fmt.Errorf("failed to list nodes: %w", err)
 	}
 	logger.V(2).Info("Listed Kubernetes nodes", "nodes", len(nodeList.Items))
 
 	nodeNameToIPsMap := make(map[string][]string, len(nodeList.Items))
+	nodes := make(map[string]*v1.Node, len(nodeList.Items))
 	for i := range nodeList.Items {
 		n := &nodeList.Items[i]
+		nodes[n.Name] = n
 		for _, addr := range n.Status.Addresses {
 			if addr.Type == v1.NodeInternalIP {
 				// Canonicalize so location keys match runtime (endpointSliceAddresses)
@@ -390,7 +421,7 @@ func buildNodeNameToIPsMap(ctx context.Context, kubeClient kubernetes.Interface)
 		}
 	}
 	logger.V(4).Info("Built node IPs map", "nodes", len(nodeNameToIPsMap))
-	return nodeNameToIPsMap, nil
+	return nodeNameToIPsMap, nodes, nil
 }
 
 // SelectSameFamilyNodeIP returns the deterministic node location key for a pod address of the given
@@ -1001,7 +1032,7 @@ func buildNRPState(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
-) (NRPState, *utilsets.IgnoreCaseSet, *utilsets.IgnoreCaseSet, []*armnetwork.PublicIPAddress, map[string]string, error) {
+) (NRPState, map[string]*armnetwork.LoadBalancer, *utilsets.IgnoreCaseSet, []*armnetwork.PublicIPAddress, map[string]string, error) {
 	nrp := NRPState{
 		LoadBalancers: utilsets.NewString(),
 		NATGateways:   utilsets.NewString(),
@@ -1159,7 +1190,7 @@ func fetchAzureLoadBalancers(
 	ctx context.Context,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
-) (*utilsets.IgnoreCaseSet, error) {
+) (map[string]*armnetwork.LoadBalancer, error) {
 	logger := log.FromContextOrBackground(ctx)
 	lbclient := networkClientFactory.GetLoadBalancerClient()
 	lbs, err := lbclient.List(ctx, config.ResourceGroup)
@@ -1167,13 +1198,13 @@ func fetchAzureLoadBalancers(
 		return nil, fmt.Errorf("failed to list load balancers: %w", err)
 	}
 
-	currentLBs := utilsets.NewString()
+	currentLBs := make(map[string]*armnetwork.LoadBalancer)
 	for _, lb := range lbs {
-		if lb.Name != nil {
-			currentLBs.Insert(strings.ToLower(*lb.Name))
+		if lb != nil && lb.Name != nil {
+			currentLBs[strings.ToLower(*lb.Name)] = lb
 		}
 	}
-	logger.V(2).Info("Fetched Azure load balancers", "loadBalancers", currentLBs.Len())
+	logger.V(2).Info("Fetched Azure load balancers", "loadBalancers", len(currentLBs))
 	return currentLBs, nil
 }
 
@@ -1258,9 +1289,11 @@ func initializeDiffTrackerWithState(
 	nrp NRPState,
 	config Config,
 	networkClientFactory azclient.ClientFactory,
+	computeClientFactory azclient.ClientFactory,
+	nodeProvider NSGNodeProvider,
 	kubeClient kubernetes.Interface,
 ) (*DiffTracker, error) {
-	return New(logger, k8s, nrp, config, networkClientFactory, kubeClient)
+	return New(logger, k8s, nrp, config, networkClientFactory, computeClientFactory, nodeProvider, kubeClient)
 }
 
 // logSyncOperations logs the sync operations summary
@@ -1269,12 +1302,9 @@ func logSyncOperations(syncOps *SyncDiffTrackerReturnType) {
 	logger.V(2).Info("Computed sync operations", "loadBalancerAdditions", syncOps.LoadBalancerUpdates.Additions.Len(), "loadBalancerRemovals", syncOps.LoadBalancerUpdates.Removals.Len(), "natGatewayAdditions", syncOps.NATGatewayUpdates.Additions.Len(), "natGatewayRemovals", syncOps.NATGatewayUpdates.Removals.Len(), "locations", len(syncOps.LocationData.Locations))
 }
 
-// startInitialization sets up initialization mode and starts updaters
-func startInitialization(ctx context.Context, diffTracker *DiffTracker, serviceFinalizerRetries []v1.ObjectReference) (deferredLocationsTrigger, deferredServiceTrigger bool, err error) {
+// startInitialization starts updaters after startup reconciliation has been queued.
+func startInitialization(ctx context.Context, diffTracker *DiffTracker, serviceFinalizerRetries []v1.ObjectReference) error {
 	logger := log.FromContextOrBackground(ctx)
-	diffTracker.mu.Lock()
-	deferredLocationsTrigger, deferredServiceTrigger = diffTracker.beginInitializationLocked()
-	diffTracker.mu.Unlock()
 
 	logger.V(2).Info("Started ServiceUpdater and LocationsUpdater")
 	diffTracker.serviceUpdater = NewServiceUpdater(ctx, diffTracker, diffTracker.OnServiceCreationComplete, diffTracker.GetServiceUpdaterTrigger())
@@ -1292,7 +1322,7 @@ func startInitialization(ctx context.Context, diffTracker *DiffTracker, serviceF
 
 	// Give updaters time to start their event loops
 	time.Sleep(50 * time.Millisecond)
-	return deferredLocationsTrigger, deferredServiceTrigger, nil
+	return nil
 }
 
 // beginInitializationLocked enters initialization mode and drains pending updater triggers.

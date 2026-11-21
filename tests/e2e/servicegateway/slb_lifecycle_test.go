@@ -531,7 +531,7 @@ var _ = Describe("Container Load Balancer Lifecycle", Label(slbTestLabel), func(
 			"the Service Gateway must register exactly the v2 pod IPs and drop every v1 pod IP")
 
 		utils.Logf("After selector update: exactly the %d v2 pod IPs are registered (%d v1 pods deregistered)",
-			len(wantAddrs), len(podIPSet(v1Pods.Items)))
+			len(wantAddrs), len(v1Pods.Items))
 
 		utils.Logf("\n✓ Service selector update test passed: v1 → v2")
 	})

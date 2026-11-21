@@ -21,7 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -304,9 +308,48 @@ func getNatGatewayPublicIPs(natGatewayID string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolve public IP %s: %v, output: %s", pip.ID, err, string(ipOut))
 		}
-		if ip := ipv4Regexp.FindString(string(ipOut)); ip != "" {
-			ips = append(ips, ip)
+		if ip := net.ParseIP(strings.TrimSpace(string(ipOut))); ip != nil {
+			ips = append(ips, ip.String())
 		}
 	}
 	return ips, nil
+}
+
+func TestGetNatGatewayPublicIPs(t *testing.T) {
+	for _, tt := range []struct {
+		name, ipv4, ipv6 string
+		want             []string
+	}{
+		{"IPv4", "198.51.100.1", "", []string{"198.51.100.1"}},
+		{"IPv6", "", "2001:db8::1", []string{"2001:db8::1"}},
+		{"dual-stack", "198.51.100.1", "2001:db8::1", []string{"198.51.100.1", "2001:db8::1"}},
+		{"canonical addresses", " 198.51.100.1 ", "2001:0db8:0:0:0:0:0:1", []string{"198.51.100.1", "2001:db8::1"}},
+		{"pending allocation", "", "", nil},
+		{"invalid output", "not-an-address", "999.1.1.1", nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			directory := t.TempDir()
+			script := fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "rest" ]; then
+    printf '%%s\n' '{"properties":{"publicIpAddresses":[{"id":"/publicIPAddresses/ipv4"}],"publicIpAddressesV6":[{"id":"/publicIPAddresses/ipv6"}]}}'
+elif [ "$1" = "network" ]; then
+    case "$*" in
+        */ipv4*) printf '%%s\n' '%s' ;;
+        */ipv6*) printf '%%s\n' '%s' ;;
+        *) echo "unexpected public IP request" >&2; exit 9 ;;
+    esac
+else
+    echo "unexpected Azure CLI request" >&2
+    exit 9
+fi
+`, tt.ipv4, tt.ipv6)
+			// #nosec G306 -- this owner-only test fixture must be executable by runAz.
+			g.Expect(os.WriteFile(filepath.Join(directory, "az"), []byte(script), 0o700)).To(Succeed())
+			t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+			got, err := getNatGatewayPublicIPs("/subscriptions/test/resourceGroups/test/providers/Microsoft.Network/natGateways/test")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(got).To(Equal(tt.want))
+		})
+	}
 }

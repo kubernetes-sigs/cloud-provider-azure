@@ -19,6 +19,7 @@ package servicegateway
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -393,7 +394,9 @@ var _ = Describe("Container Load Balancer Multi-Node Tests", Label(slbTestLabel,
 				}
 			}
 			if len(addresses) > 0 {
-				sgAddressLocations[loc.AddressLocation] = addresses
+				hostIP := net.ParseIP(loc.AddressLocation)
+				Expect(hostIP).NotTo(BeNil())
+				sgAddressLocations[hostIP.String()] = addresses
 			}
 		}
 

@@ -2319,6 +2319,36 @@ func TestPodCleanupWithReusedAddresses(t *testing.T) {
 }
 
 func TestPodCleanupUnknownDrainSurvivesRegistration(t *testing.T) {
+	t.Run("uncertain mapping keeps unknown drain", func(t *testing.T) {
+		const service, location, address = "egress-a-natgw", "10.0.0.1", "10.244.0.7"
+		ctx := context.Background()
+		pod := unlabelledFinalizerPod(nil, "uid-p")
+		kube := fake.NewSimpleClientset(pod)
+		dt := newTestDiffTracker()
+		dt.kubeClient = kube
+		dt.NRPResources.NATGateways.Insert(service)
+		dt.pendingServiceOps[service] = &ServiceOperationState{
+			ServiceName: service, Config: NewOutboundServiceConfig(service, nil), State: StateCreated,
+		}
+		dt.pendingLocationUpdates[location] = NRPLocation{Addresses: map[string]NRPAddress{
+			address: {Services: utilsets.NewString(service)},
+		}}
+		pending, released := dt.releaseUnlabelledPodFinalizer(ctx, pod, false)
+		assert.True(t, pending)
+		assert.False(t, released)
+		assert.True(t, dt.CheckPendingPodDeletions(ctx), "an uncertain unbacked mapping still requires a corrective ACK")
+		got, err := kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.True(t, hasPodFinalizer(got), "unknown drain must include possibly published addresses")
+
+		dt.UpdateLocationsAddresses(LocationData{Action: FullUpdate, Locations: map[string]Location{}})
+		assert.False(t, dt.CheckPendingPodDeletions(ctx))
+		got, err = kube.CoreV1().Pods("ns").Get(ctx, "p", metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.False(t, hasPodFinalizer(got))
+		assert.Empty(t, dt.pendingPodDeletions)
+	})
+
 	const a, b = "egress-a-natgw", "egress-b-natgw"
 	ctx := context.Background()
 	pod := unlabelledFinalizerPod(nil, "uid-p")
@@ -3509,26 +3539,32 @@ func TestGuardAddPodFinalizerRetriesOnConflict(t *testing.T) {
 // ================================================================================================
 
 func TestOutboundAddressInAnyNRPLocationLocked(t *testing.T) {
-	for _, buffered := range []bool{false, true} {
-		t.Run(fmt.Sprintf("UID ownership buffered=%t", buffered), func(t *testing.T) {
-			const service, location, address = "egress-a-natgw", "10.0.0.1", "10.244.0.7"
-			dt := newTestDiffTracker()
-			dt.NRPResources.Locations[location] = NRPLocation{Addresses: map[string]NRPAddress{
-				address: {Services: utilsets.NewString(service)},
-			}}
-			if buffered {
-				dt.pendingPods[service] = []PendingPodUpdate{
-					{PodKey: "other/q", PodUID: "uid-q", Location: location, Address: address},
+	for _, uncertain := range []bool{false, true} {
+		for _, buffered := range []bool{false, true} {
+			t.Run(fmt.Sprintf("UID ownership uncertain=%t/buffered=%t", uncertain, buffered), func(t *testing.T) {
+				const service, location, address = "egress-a-natgw", "10.0.0.1", "10.244.0.7"
+				dt := newTestDiffTracker()
+				resources := dt.NRPResources.Locations
+				if uncertain {
+					resources = dt.pendingLocationUpdates
 				}
-			} else {
-				dt.K8sResources.Nodes[location] = Node{Pods: map[string]Pod{
-					address: {PublicOutboundIdentity: service, OutboundPodUID: "uid-q", OutboundPodKey: "other/q"},
+				resources[location] = NRPLocation{Addresses: map[string]NRPAddress{
+					address: {Services: utilsets.NewString(service)},
 				}}
-			}
-			assert.True(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, "uid-q"), "the owning Pod must still wait for its mapping")
-			assert.False(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, "uid-old"), "a different known UID must not wait for the reused mapping")
-			assert.True(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, ""), "anonymous callers retain the service-wide check")
-		})
+				if buffered {
+					dt.pendingPods[service] = []PendingPodUpdate{
+						{PodKey: "other/q", PodUID: "uid-q", Location: location, Address: address},
+					}
+				} else {
+					dt.K8sResources.Nodes[location] = Node{Pods: map[string]Pod{
+						address: {PublicOutboundIdentity: service, OutboundPodUID: "uid-q", OutboundPodKey: "other/q"},
+					}}
+				}
+				assert.True(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, "uid-q"), "the owning Pod must still wait for its mapping")
+				assert.False(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, "uid-old"), "a different known UID must not wait for the reused mapping")
+				assert.True(t, dt.outboundAddressInAnyNRPLocationLocked(service, address, ""), "anonymous callers retain the service-wide check")
+			})
+		}
 	}
 
 	tests := []struct {

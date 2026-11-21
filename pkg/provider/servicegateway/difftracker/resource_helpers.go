@@ -545,6 +545,14 @@ func ExtractInboundConfigFromService(service *v1.Service) *InboundConfig {
 		config.IdleTimeoutMinutes = idleTimeout
 	}
 
+	if value, present := service.Annotations[consts.ServiceAnnotationAllowedIPRanges]; present {
+		var err error
+		config.AllowedIPRanges, err = parseNSGSourceRanges(value)
+		if err != nil {
+			config.InvalidAllowedRanges = err.Error()
+		}
+	}
+
 	return config
 }
 
@@ -639,6 +647,13 @@ func AdmitInboundService(service *v1.Service) (*InboundConfig, error) {
 func ValidateInboundConfig(config *InboundConfig) error {
 	if config == nil {
 		return nil
+	}
+
+	if config.InvalidAllowedRanges != "" {
+		return &InboundConfigValidationError{
+			Reason:  consts.ServiceGatewayInvalidSourceRangesReason,
+			Message: fmt.Sprintf("annotation %q: %s", consts.ServiceAnnotationAllowedIPRanges, config.InvalidAllowedRanges),
+		}
 	}
 
 	// ipFamilies has at most two entries (two == dual-stack); PodIP backends are single-stack.

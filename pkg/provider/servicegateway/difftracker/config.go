@@ -52,6 +52,10 @@ type Config struct {
 	// LocationsUpdateInterval is the minimum time between the return of an address-location update sent
 	// to NRP and the start of the next LocationsUpdater run. Zero disables the spacing.
 	LocationsUpdateInterval time.Duration
+
+	// SecurityGroupName identifies the cluster NSG whose NIC association SGW may replace.
+	SecurityGroupName          string
+	SecurityGroupResourceGroup string
 }
 
 func (c *Config) networkResourceSubscriptionID() string {
