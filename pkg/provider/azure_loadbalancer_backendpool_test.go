@@ -958,6 +958,32 @@ func TestAddNodeIPAddressesToBackendPoolDeduplicates(t *testing.T) {
 	}
 }
 
+func TestGetBackendPoolNodeNamesWithMissingNodeNames(t *testing.T) {
+	az := &Cloud{
+		nodePrivateIPToNodeNameMap: map[string]string{"10.0.0.1": "node1"},
+	}
+	bp := buildTestLoadBalancerBackendPoolWithIPs(testClusterName, []string{"10.0.0.1", "10.0.0.2"})
+	bi := &backendPoolTypeNodeIP{az}
+	assert.ElementsMatch(t, []string{"node1", ""}, bi.getBackendPoolNodeNames(bp))
+}
+
+func TestAddNodeIPAddressesToBackendPoolWithMissingNodeNames(t *testing.T) {
+	az := &Cloud{
+		nodePrivateIPToNodeNameMap: map[string]string{"10.0.0.1": "Node1"},
+	}
+	bp := buildTestLoadBalancerBackendPoolWithIPs(testClusterName, nil)
+	assert.True(t, az.addNodeIPAddressesToBackendPool(bp, []string{"10.0.0.1", "10.0.0.2"}))
+	addresses := bp.Properties.LoadBalancerBackendAddresses
+	if !assert.Len(t, addresses, 2) {
+		return
+	}
+	assert.Equal(t, "Node1", ptr.Deref(addresses[0].Name, ""))
+	assert.Equal(t, "10.0.0.1", ptr.Deref(addresses[0].Properties.IPAddress, ""))
+	assert.NotNil(t, addresses[1].Name)
+	assert.Equal(t, "", ptr.Deref(addresses[1].Name, ""))
+	assert.Equal(t, "10.0.0.2", ptr.Deref(addresses[1].Properties.IPAddress, ""))
+}
+
 func TestGetBackendPrivateIPsNodeIPConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
