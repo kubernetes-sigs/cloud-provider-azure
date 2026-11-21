@@ -24,6 +24,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"sort"
@@ -1101,6 +1102,95 @@ func egressRegisteredErr(egressName string, wantAddresses int) error {
 	return nil
 }
 
+func TestEgressPodsRegisteredErr(t *testing.T) {
+	oldSubscription, oldGroup, oldGateway, oldVersion := subscriptionID, resourceGroupName, serviceGatewayName, apiVersion
+	subscriptionID, resourceGroupName, serviceGatewayName, apiVersion = "test", "test", "test", "2025-01-01"
+	t.Cleanup(func() {
+		subscriptionID, resourceGroupName, serviceGatewayName, apiVersion = oldSubscription, oldGroup, oldGateway, oldVersion
+	})
+	for _, tt := range []struct {
+		name        string
+		addresses   [][]string
+		registered  []string
+		wantPods    int
+		missingNAT  bool
+		wantErrPart string
+	}{
+		{"IPv4", [][]string{{"10.1.0.1"}, {"10.1.0.2"}}, []string{"10.1.0.1", "10.1.0.2"}, 2, false, ""},
+		{"dual-stack", [][]string{{"10.1.0.1", "fd00:1::1"}, {"10.1.0.2", "fd00:1::2"}}, []string{"10.1.0.1", "fd00:1::1", "10.1.0.2", "fd00:1::2"}, 2, false, ""},
+		{"mixed families", [][]string{{"10.1.0.1"}, {"10.1.0.2", "fd00:1::2"}}, []string{"10.1.0.1", "10.1.0.2", "fd00:1::2"}, 2, false, ""},
+		{"shared address", [][]string{{"10.1.0.1"}, {"10.1.0.1"}}, []string{"10.1.0.1"}, 2, false, ""},
+		{"missing family", [][]string{{"10.1.0.1", "fd00:1::1"}}, []string{"10.1.0.1"}, 1, false, "do not match"},
+		{"stale address", [][]string{{"10.1.0.1"}}, []string{"10.1.0.1", "10.1.0.2"}, 1, false, "do not match"},
+		{"wrong address with equal count", [][]string{{"10.1.0.1"}}, []string{"10.1.0.2"}, 1, false, "do not match"},
+		{"missing Pod with equal address count", [][]string{{"10.1.0.1", "fd00:1::1"}}, []string{"10.1.0.1", "fd00:1::1"}, 2, false, "1 active pods, want 2"},
+		{"unassigned Pod", [][]string{{}}, nil, 1, false, "no assigned IP"},
+		{"missing NAT", [][]string{{"10.1.0.1"}}, []string{"10.1.0.1"}, 1, true, "no NAT Gateway ID"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			cs := fake.NewSimpleClientset()
+			for i, addresses := range tt.addresses {
+				pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf("pod-%d", i), Namespace: "test", Labels: map[string]string{egressLabel: "egress"},
+				}, Status: v1.PodStatus{
+					Phase: v1.PodRunning, HostIP: "10.0.0.1",
+					HostIPs: []v1.HostIP{{IP: "10.0.0.1"}, {IP: "fd00::1"}},
+				}}
+				for _, address := range addresses {
+					pod.Status.PodIPs = append(pod.Status.PodIPs, v1.PodIP{IP: address})
+				}
+				_, err := cs.CoreV1().Pods("test").Create(context.Background(), pod, metav1.CreateOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+			now := metav1.Now()
+			_, err := cs.CoreV1().Pods("test").Create(context.Background(), &v1.Pod{ObjectMeta: metav1.ObjectMeta{
+				Name: "terminating", Namespace: "test", Labels: map[string]string{egressLabel: "egress"},
+				DeletionTimestamp: &now,
+			}}, metav1.CreateOptions{})
+			g.Expect(err).NotTo(HaveOccurred())
+			service := ServiceGatewayService{Name: outboundServiceName("egress")}
+			service.Properties.ServiceType = "Outbound"
+			if !tt.missingNAT {
+				service.Properties.PublicNatGatewayID = "/subscriptions/test/resourceGroups/test/providers/Microsoft.Network/natGateways/egress-natgw"
+			}
+			services, err := json.Marshal(ServiceGatewayServicesResponse{Value: []ServiceGatewayService{service}})
+			g.Expect(err).NotTo(HaveOccurred())
+			var locations ServiceGatewayAddressLocationsResponse
+			for _, host := range []string{"10.0.0.1", "fd00::1"} {
+				location := ServiceGatewayAddressLocation{AddressLocation: host}
+				for _, address := range tt.registered {
+					if (net.ParseIP(address).To4() == nil) == (net.ParseIP(host).To4() == nil) {
+						location.Addresses = append(location.Addresses, Address{Address: address, Services: []string{outboundServiceName("egress")}})
+					}
+				}
+				if len(location.Addresses) > 0 {
+					locations.Value = append(locations.Value, location)
+				}
+			}
+			addresses, err := json.Marshal(locations)
+			g.Expect(err).NotTo(HaveOccurred())
+			directory := t.TempDir()
+			script := fmt.Sprintf(`#!/bin/sh
+case "$*" in
+    *"/services?"*) printf '%%s\n' '%s' ;;
+    *"/addressLocations?"*) printf '%%s\n' '%s' ;;
+    *) echo "unexpected Azure CLI request" >&2; exit 9 ;;
+esac
+`, services, addresses)
+			// #nosec G306 -- this owner-only Azure CLI fixture must be executable.
+			g.Expect(os.WriteFile(filepath.Join(directory, "az"), []byte(script), 0o700)).To(Succeed())
+			t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+			err = egressPodsRegisteredErr(cs, "test", "egress", tt.wantPods)
+			if tt.wantErrPart != "" {
+				g.Expect(err).To(MatchError(ContainSubstring(tt.wantErrPart)))
+			} else {
+				g.Expect(err).NotTo(HaveOccurred())
+			}
+		})
+	}
+}
+
 // eventuallyServiceReconciled polls until the inbound service is fully reconciled in
 // Azure and the Service Gateway, with a separate Ready-pod count and exact address set.
 func eventuallyServiceReconciled(cs clientset.Interface, namespace, serviceUID string, wantPods int, timeout time.Duration) {
@@ -1387,7 +1477,7 @@ func eventuallyAzureCleanup(timeout time.Duration) {
 		"Service Gateway, address locations and egress Public IPs should be free of test resources after cleanup")
 }
 
-// egressIPv6PublicIPsCleanedUpErr returns nil once no IPv6 egress Public IP remains in Azure.
+// egressIPv6PublicIPsCleanedUpErr requires test egress Public IP cleanup, retaining the default gateway's PIP.
 //
 // A marked "-natgw-pip-v6" belongs to a managed dual-stack egress NAT Gateway, so
 // any survivor is a leak. This is a global check like serviceGatewayCleanupErr: the other cleanup
@@ -1409,7 +1499,8 @@ func egressIPv6PublicIPsCleanedUpErr() error {
 	leaked := []string{}
 	for i := range publicIPs {
 		if publicIPs[i].Tags[consts.ServiceGatewayManagedTagKey] == consts.ServiceGatewayManagedTagValue &&
-			strings.HasSuffix(publicIPs[i].Name, "-natgw-pip-v6") {
+			strings.HasSuffix(strings.ToLower(publicIPs[i].Name), "-natgw-pip-v6") &&
+			!strings.EqualFold(publicIPs[i].Name, "default-natgw-pip-v6") {
 			leaked = append(leaked, publicIPs[i].Name)
 		}
 	}
@@ -1417,4 +1508,45 @@ func egressIPv6PublicIPsCleanedUpErr() error {
 		return fmt.Errorf("IPv6 egress Public IPs still exist after cleanup (leaked): %v", leaked)
 	}
 	return nil
+}
+
+func TestEgressIPv6PublicIPsCleanup(t *testing.T) {
+	managed := func(name string) AzurePublicIP {
+		return AzurePublicIP{Name: name, Tags: map[string]string{
+			consts.ServiceGatewayManagedTagKey: consts.ServiceGatewayManagedTagValue,
+		}}
+	}
+	for _, tt := range []struct {
+		name string
+		pips []AzurePublicIP
+		leak string
+	}{
+		{"empty", nil, ""},
+		{"default IPv6 is retained", []AzurePublicIP{managed("default-natgw-pip-v6")}, ""},
+		{"default name case", []AzurePublicIP{managed("DEFAULT-NATGW-pip-v6")}, ""},
+		{"test leak beside default", []AzurePublicIP{managed("default-natgw-pip-v6"), managed("test-egress-natgw-pip-v6")}, "test-egress-natgw-pip-v6"},
+		{"similar prefix is not reserved", []AzurePublicIP{managed("default-natgw-other-natgw-pip-v6")}, "default-natgw-other-natgw-pip-v6"},
+		{"managed name case", []AzurePublicIP{managed("TEST-EGRESS-NATGW-PIP-V6")}, "TEST-EGRESS-NATGW-PIP-V6"},
+		{"unmarked owner resource is retained", []AzurePublicIP{{Name: "owner-natgw-pip-v6"}}, ""},
+		{"foreign marker is retained", []AzurePublicIP{{Name: "owner-natgw-pip-v6", Tags: map[string]string{
+			consts.ServiceGatewayManagedTagKey: "another-owner",
+		}}}, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			data, err := json.Marshal(tt.pips)
+			g.Expect(err).NotTo(HaveOccurred())
+			directory := t.TempDir()
+			script := fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' '%s'\n", data)
+			// #nosec G306 -- owner-only executable Azure CLI fixture.
+			g.Expect(os.WriteFile(filepath.Join(directory, "az"), []byte(script), 0o700)).To(Succeed())
+			t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+			err = egressIPv6PublicIPsCleanedUpErr()
+			if tt.leak == "" {
+				g.Expect(err).NotTo(HaveOccurred())
+			} else {
+				g.Expect(err).To(MatchError(ContainSubstring(tt.leak)))
+			}
+		})
+	}
 }

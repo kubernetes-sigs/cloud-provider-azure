@@ -1489,25 +1489,27 @@ func (dt *DiffTracker) podDeletionNeedsProcessingLocked(pending *PendingPodDelet
 }
 
 func (dt *DiffTracker) hasUnbackedOutboundMappingLocked() bool {
-	for location, nrpLocation := range dt.NRPResources.Locations {
-		for address, nrpAddress := range nrpLocation.Addresses {
-			if nrpAddress.Services == nil {
-				continue
-			}
-			for _, serviceName := range nrpAddress.Services.UnsortedList() {
-				if !dt.NRPResources.NATGateways.Has(serviceName) || !dt.isOutboundIdentityLocked(serviceName) ||
-					dt.outboundPodExistsLocked(serviceName, location, address) {
+	for _, resources := range []map[string]NRPLocation{dt.NRPResources.Locations, dt.pendingLocationUpdates} {
+		for location, nrpLocation := range resources {
+			for address, nrpAddress := range nrpLocation.Addresses {
+				if nrpAddress.Services == nil {
 					continue
 				}
-				backed := false
-				for _, pending := range dt.pendingPods[serviceName] {
-					if pending.Location == location && pending.Address == address {
-						backed = true
-						break
+				for _, serviceName := range nrpAddress.Services.UnsortedList() {
+					if !dt.NRPResources.NATGateways.Has(serviceName) || !dt.isOutboundIdentityLocked(serviceName) ||
+						dt.outboundPodExistsLocked(serviceName, location, address) {
+						continue
 					}
-				}
-				if !backed {
-					return true
+					backed := false
+					for _, pending := range dt.pendingPods[serviceName] {
+						if pending.Location == location && pending.Address == address {
+							backed = true
+							break
+						}
+					}
+					if !backed {
+						return true
+					}
 				}
 			}
 		}
@@ -1588,17 +1590,19 @@ func (dt *DiffTracker) checkPendingPodDeletions(ctx context.Context, acknowledge
 	return false
 }
 
-// serviceHasUnbackedNRPAddressLocked reports whether NRP maps an address to the service that is not
-// backed by current live or buffered desired pod state. It is used for terminating pods first
+// serviceHasUnbackedNRPAddressLocked reports whether a confirmed or possibly published address for
+// the service is not backed by current live or buffered desired pod state. It is used for terminating pods first
 // observed without PodIPs, where the exact old address set cannot be reconstructed. Requires dt.mu.
 func (dt *DiffTracker) serviceHasUnbackedNRPAddressLocked(serviceName string) (string, bool) {
-	for _, nrpLocation := range dt.NRPResources.Locations {
-		for address, nrpAddress := range nrpLocation.Addresses {
-			if nrpAddress.Services == nil || !nrpAddress.Services.Has(serviceName) {
-				continue
-			}
-			if !dt.outboundAddressDesiredLocked(serviceName, address) {
-				return address, true
+	for _, resources := range []map[string]NRPLocation{dt.NRPResources.Locations, dt.pendingLocationUpdates} {
+		for _, nrpLocation := range resources {
+			for address, nrpAddress := range nrpLocation.Addresses {
+				if nrpAddress.Services == nil || !nrpAddress.Services.Has(serviceName) {
+					continue
+				}
+				if !dt.outboundAddressDesiredLocked(serviceName, address) {
+					return address, true
+				}
 			}
 		}
 	}
@@ -1645,18 +1649,20 @@ func (dt *DiffTracker) podAddressStillInNRPLocked(pending *PendingPodDeletion) (
 	return "", false
 }
 
-// outboundAddressInAnyNRPLocationLocked reports whether the given address is registered in NRP for
-// the service under any node location. A known UID excludes mappings positively owned by another
+// outboundAddressInAnyNRPLocationLocked reports whether the given address is confirmed or possibly
+// published for the service under any node location. A known UID excludes mappings positively owned by another
 // Pod; an empty UID keeps the service-wide check. Must be called with dt.mu held.
 func (dt *DiffTracker) outboundAddressInAnyNRPLocationLocked(serviceName, address, uid string) bool {
-	for location, nrpLocation := range dt.NRPResources.Locations {
-		nrpAddress, ok := nrpLocation.Addresses[address]
-		if !ok {
-			continue
-		}
-		if nrpAddress.Services != nil && nrpAddress.Services.Has(serviceName) &&
-			!dt.outboundAddressOwnedByDifferentUIDLocked(serviceName, location, address, uid) {
-			return true
+	for _, resources := range []map[string]NRPLocation{dt.NRPResources.Locations, dt.pendingLocationUpdates} {
+		for location, nrpLocation := range resources {
+			nrpAddress, ok := nrpLocation.Addresses[address]
+			if !ok {
+				continue
+			}
+			if nrpAddress.Services != nil && nrpAddress.Services.Has(serviceName) &&
+				!dt.outboundAddressOwnedByDifferentUIDLocked(serviceName, location, address, uid) {
+				return true
+			}
 		}
 	}
 	return false

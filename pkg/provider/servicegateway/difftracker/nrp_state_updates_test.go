@@ -165,6 +165,30 @@ func TestUpdateNRPNATGateways(t *testing.T) {
 	}
 }
 func TestUpdateLocationsAddresses(t *testing.T) {
+	t.Run("withdrawal ACK retires uncertain publication before acknowledging Pod drain", func(t *testing.T) {
+		const service, location, address, key = "egress-natgw", "10.0.0.1", "10.244.0.7", "ns/deleted"
+		dt := newTestDiffTracker()
+		dt.pendingLocationUpdates[location] = NRPLocation{Addresses: map[string]NRPAddress{
+			address: {Services: sets.NewString(service)},
+		}}
+		dt.pendingPodDeletions[key] = &PendingPodDeletion{
+			UID: "deleted-uid", ServiceName: service, Addresses: []string{address}, LocationSyncPending: true,
+		}
+		dt.mu.Lock()
+		assert.False(t, dt.podLocationsDrainedLocked(dt.pendingPodDeletions[key]))
+		dt.mu.Unlock()
+
+		dt.UpdateLocationsAddresses(LocationData{Action: PartialUpdate, Locations: map[string]Location{
+			location: {AddressUpdateAction: PartialUpdate, Addresses: map[string]Address{}},
+		}})
+
+		dt.mu.Lock()
+		defer dt.mu.Unlock()
+		assert.Empty(t, dt.pendingLocationUpdates)
+		assert.False(t, dt.pendingPodDeletions[key].LocationSyncPending)
+		assert.True(t, dt.podCleanupReadyLocked(dt.pendingPodDeletions[key]))
+	})
+
 	tests := []struct {
 		name         string
 		initialState *DiffTracker

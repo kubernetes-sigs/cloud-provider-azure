@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"k8s.io/client-go/kubernetes/fake"
 
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -46,17 +48,23 @@ func TestGuardAddService_EmptyNameIsNoOp(t *testing.T) {
 	}
 }
 
-// TestGuardAddService_IdempotentForExistingNRPLB verifies that AddService is a
-// no-op when the LB already exists in NRP (recovery / restart safety): no
-// pendingServiceOps entry, no trigger.
+// TestGuardAddService_IdempotentForExistingNRPLB verifies that recovery restores
+// tracking without dispatching creation, and duplicate adds preserve that state.
 func TestGuardAddService_IdempotentForExistingNRPLB(t *testing.T) {
-	dt := newTestDiffTracker()
+	dt := newProviderDiffTracker(t, gomock.NewController(t), fake.NewSimpleClientset())
 	serviceName := "svc-existing"
 	dt.NRPResources.LoadBalancers.Insert(serviceName)
 
-	assert.NoError(t, dt.AddService(NewInboundServiceConfig(serviceName, makeInboundConfig(80))))
-	_, tracked := dt.pendingServiceOps[serviceName]
-	assert.False(t, tracked, "AddService must be idempotent when LB exists in NRP")
+	config := NewInboundServiceConfig(serviceName, makeInboundConfig(80))
+	assert.NoError(t, dt.AddService(config))
+	op := dt.pendingServiceOps[serviceName]
+	if !assert.NotNil(t, op) {
+		return
+	}
+	assert.Equal(t, StateCreated, op.State)
+	assert.Equal(t, config, op.Config)
+	assert.NoError(t, dt.AddService(config))
+	assert.Same(t, op, dt.pendingServiceOps[serviceName], "duplicate AddService must preserve the recovered operation")
 	select {
 	case <-dt.serviceUpdaterTrigger:
 		t.Fatal("AddService for existing NRP LB must not fire trigger")
@@ -64,8 +72,8 @@ func TestGuardAddService_IdempotentForExistingNRPLB(t *testing.T) {
 	}
 }
 
-// TestGuardAddService_IdempotentForExistingNRPNAT same as above for the
-// outbound (NAT Gateway) path.
+// TestGuardAddService_IdempotentForExistingNRPNAT verifies that an existing NAT
+// Gateway needs no additional operation state.
 func TestGuardAddService_IdempotentForExistingNRPNAT(t *testing.T) {
 	dt := newTestDiffTracker()
 	serviceName := "egress-existing"

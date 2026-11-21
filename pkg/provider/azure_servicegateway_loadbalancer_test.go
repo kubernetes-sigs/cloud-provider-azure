@@ -33,7 +33,7 @@ func TestCloudSelectsStableServiceGatewayLoadBalancer(t *testing.T) {
 	assert.Same(t, az, legacy)
 
 	az.ServiceGatewayEnabled = true
-	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, nil, nil)
+	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, nil, nil, nil, nil)
 	first, supported := az.LoadBalancer()
 	assert.True(t, supported)
 	assert.NotSame(t, az, first)
@@ -44,7 +44,7 @@ func TestCloudSelectsStableServiceGatewayLoadBalancer(t *testing.T) {
 
 func TestServiceGatewayLoadBalancerRequiresRuntimeInitialization(t *testing.T) {
 	az := &Cloud{Config: *serviceGatewayConfig()}
-	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, nil, nil)
+	az.serviceGatewayRuntime = servicegateway.NewRuntime(az.Config, nil, nil, nil, nil)
 	loadBalancer, _ := az.LoadBalancer()
 	service := getTestService("servicegateway-not-started", v1.ProtocolTCP, nil, false, 80)
 
