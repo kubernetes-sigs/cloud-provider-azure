@@ -18,8 +18,10 @@ package provider
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,6 +30,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/stretchr/testify/assert"
 
 	"go.uber.org/mock/gomock"
@@ -36,17 +39,48 @@ import (
 	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	clientgotesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/utils/ptr"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/backendaddresspoolclient/mock_backendaddresspoolclient"
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/policy/retryrepectthrottled"
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
+	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
+
+// getBackendPoolUpdaterMetrics returns the current latency observation count
+// and failure count for the local service backend pool updater metric.
+func getBackendPoolUpdaterMetrics(t *testing.T) (latencyCount uint64, failureCount float64) {
+	t.Helper()
+	const request = "services_local_update_backend_pool"
+	families, err := legacyregistry.DefaultGatherer.Gather()
+	if err != nil {
+		t.Fatalf("failed to gather metrics: %v", err)
+	}
+	for _, f := range families {
+		for _, m := range f.GetMetric() {
+			for _, lp := range m.GetLabel() {
+				if lp.GetName() == "request" && lp.GetValue() == request {
+					switch f.GetName() {
+					case "cloudprovider_azure_op_duration_seconds":
+						latencyCount = m.GetHistogram().GetSampleCount()
+					case "cloudprovider_azure_op_failure_count":
+						failureCount = m.GetCounter().GetValue()
+					}
+				}
+			}
+		}
+	}
+	return
+}
 
 func TestEndpointSliceFromDeleteEvent(t *testing.T) {
 	endpointSlice := &discovery_v1.EndpointSlice{
@@ -95,9 +129,9 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	removeOperationPool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	addOperationPool2 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"})
+	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	removeOperationPool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	addOperationPool2 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool2", []string{"10.0.0.1", "10.0.0.2"})
 
 	testCases := []struct {
 		name                               string
@@ -211,7 +245,7 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 		{
 			name: "add operation deduplicates IPs in empty pool",
 			operations: []batchOperation{
-				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2"}),
+				getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2"}),
 			},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}),
@@ -226,8 +260,8 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 		{
 			name: "remove-then-add deduplicates IPs",
 			operations: []batchOperation{
-				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
-				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2"}),
+				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
+				getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2"}),
 			},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
@@ -242,8 +276,8 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 		{
 			name: "add-then-remove deduplicates IPs and removes target",
 			operations: []batchOperation{
-				getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2", "10.0.0.3", "10.0.0.3"}),
-				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.2"}),
+				getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2", "10.0.0.3", "10.0.0.3"}),
+				getRemoveIPsFromBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.2"}),
 			},
 			existingBackendPools: []*armnetwork.BackendAddressPool{
 				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"}),
@@ -268,9 +302,14 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 				cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb2"})
 			}
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			svc.Namespace = "ns1"
 			client := fake.NewSimpleClientset(&svc)
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
 			mockbpClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
 			if len(tc.existingBackendPools) > 0 {
 				mockbpClient.EXPECT().Get(
@@ -376,7 +415,7 @@ func TestLoadBalancerBackendPoolUpdater(t *testing.T) {
 }
 
 func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
-	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	addOperationPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
 
 	testCases := []struct {
 		name                               string
@@ -430,9 +469,14 @@ func TestLoadBalancerBackendPoolUpdaterFailed(t *testing.T) {
 			cloud.localServiceNameToServiceInfoMap = sync.Map{}
 			cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			svc.Namespace = "ns1"
 			client := fake.NewSimpleClientset(&svc)
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
 			mockLBClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
 			mockBPClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
 			mockLBClient.EXPECT().Get(
@@ -596,9 +640,14 @@ func TestEndpointSlicesInformer(t *testing.T) {
 				cloud.localServiceNameToServiceInfoMap.Store("test/svc1", &serviceInfo{lbName: "lb1"})
 			}
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			svc.Namespace = "test"
 			client := fake.NewSimpleClientset(&svc, tc.existingEPS)
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
 			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
 			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
@@ -680,8 +729,8 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 			existingEPS: getTestEndpointSlice("eps1", "test", "svc1", "node1"),
 			updatedEPS:  getTestEndpointSlice("eps1", "test", "svc1", "node2", "node2", "node2"),
 			expectedOps: []*loadBalancerBackendPoolUpdateOperation{
-				getRemoveIPsFromBackendPoolOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.1"}),
-				getAddIPsToBackendPoolOperation("test/svc1", "lb1", "test-svc1", []string{"10.0.0.2"}),
+				getRemoveIPsFromBackendPoolOperation("test/svc1", "svc1", "lb1", "test-svc1", []string{"10.0.0.1"}),
+				getAddIPsToBackendPoolOperation("test/svc1", "svc1", "lb1", "test-svc1", []string{"10.0.0.2"}),
 			},
 		},
 		{
@@ -705,9 +754,14 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 			}
 
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			svc.Namespace = "test"
 			client := fake.NewSimpleClientset(&svc, tc.existingEPS)
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
 
 			// Create updater without starting run() so we can inspect queued operations.
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Hour)
@@ -733,6 +787,194 @@ func TestEndpointSlicesInformerDeduplicatesNodeIPs(t *testing.T) {
 				actual = append(actual, op.(*loadBalancerBackendPoolUpdateOperation))
 			}
 			assert.Equal(t, tc.expectedOps, actual)
+		})
+	}
+}
+
+func TestEndpointSlicesInformerQueuesOperationsWithServiceUID(t *testing.T) {
+	const currentSvcUID types.UID = "current-service-uid"
+
+	for _, tc := range []struct {
+		name                         string
+		endpointSliceOwnerReferences []metav1.OwnerReference
+		serviceAbsent                bool
+		serviceDeleting              bool
+		expectedServiceUID           types.UID
+	}{
+		{
+			name: "uses the Service owner UID when it differs from the current Service UID",
+			endpointSliceOwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "v1", Kind: "Service", Name: "svc1", UID: "other-service-uid", Controller: ptr.To(true),
+			}},
+			expectedServiceUID: "other-service-uid",
+		},
+		{
+			name: "uses the Service owner UID when it matches the current Service UID",
+			endpointSliceOwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "v1", Kind: "Service", Name: "svc1", UID: currentSvcUID, Controller: ptr.To(true),
+			}},
+			expectedServiceUID: currentSvcUID,
+		},
+		{
+			name: "uses the current Service UID when the EndpointSlice owner is an Endpoints object",
+			endpointSliceOwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "v1", Kind: "Endpoints", Name: "svc1", UID: "endpoints-uid", Controller: ptr.To(true),
+			}},
+			expectedServiceUID: currentSvcUID,
+		},
+		{
+			name: "uses the current Service UID when the Service owner reference has a different API version",
+			endpointSliceOwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "v2", Kind: "Service", Name: "svc1", UID: "other-service-uid", Controller: ptr.To(true),
+			}},
+			expectedServiceUID: currentSvcUID,
+		},
+		{
+			name: "uses the current Service UID when the Service owner name differs from the service-name label",
+			endpointSliceOwnerReferences: []metav1.OwnerReference{{
+				APIVersion: "v1", Kind: "Service", Name: "other-service", UID: "other-service-uid", Controller: ptr.To(true),
+			}},
+			expectedServiceUID: currentSvcUID,
+		},
+		{
+			name: "uses the Service owner UID when an Endpoints owner reference comes first",
+			endpointSliceOwnerReferences: []metav1.OwnerReference{
+				{APIVersion: "v1", Kind: "Endpoints", Name: "svc1", UID: "endpoints-uid"},
+				{APIVersion: "v1", Kind: "Service", Name: "svc1", UID: "other-service-uid", Controller: ptr.To(true)},
+			},
+			expectedServiceUID: "other-service-uid",
+		},
+		{
+			name:               "uses the current Service UID when the EndpointSlice has no Service owner reference",
+			expectedServiceUID: currentSvcUID,
+		},
+		{
+			name:          "queues no operations without a Service owner reference when the Service is absent",
+			serviceAbsent: true,
+		},
+		{
+			name:            "queues no operations without a Service owner reference when the Service is deleting",
+			serviceDeleting: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := GetTestCloud(gomock.NewController(t))
+			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{{Name: "lb1"}}
+			cloud.localServiceNameToServiceInfoMap.Store("default/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+			cloud.nodePrivateIPs = map[string]*utilsets.IgnoreCaseSet{
+				"node1": utilsets.NewString("10.0.0.1"),
+				"node2": utilsets.NewString("10.0.0.2"),
+			}
+			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			svc.UID = currentSvcUID
+			svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+			if tc.serviceDeleting {
+				now := metav1.Now()
+				svc.DeletionTimestamp = &now
+				svc.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+			}
+			endpointSlice := getTestEndpointSlice("eps1", "default", "svc1", "node1")
+			endpointSlice.OwnerReferences = tc.endpointSliceOwnerReferences
+			objects := []runtime.Object{endpointSlice}
+			if !tc.serviceAbsent {
+				objects = append(objects, &svc)
+			}
+			client := fake.NewSimpleClientset(objects...)
+			informerFactory := informers.NewSharedInformerFactory(client, 0)
+			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			updater := newLoadBalancerBackendPoolUpdater(cloud, time.Hour)
+			cloud.backendPoolUpdater = updater
+			cloud.setUpEndpointSlicesInformer(informerFactory)
+			stopCh := make(chan struct{})
+			stopInformers := sync.OnceFunc(func() {
+				close(stopCh)
+				informerFactory.Shutdown()
+			})
+			t.Cleanup(stopInformers)
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
+
+			updatedSlice := endpointSlice.DeepCopy()
+			updatedSlice.Endpoints[0].NodeName = ptr.To("node2")
+			_, err := client.DiscoveryV1().EndpointSlices("default").Update(context.Background(), updatedSlice, metav1.UpdateOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !assert.Eventually(t, func() bool {
+				cachedSlice, found := cloud.endpointSlicesCache.Load("default/eps1")
+				return found && ptr.Deref(cachedSlice.(*discovery_v1.EndpointSlice).Endpoints[0].NodeName, "") == "node2"
+			}, 5*time.Second, 10*time.Millisecond) {
+				t.FailNow()
+			}
+
+			// The cache write precedes UID validation. Wait for the handler to finish
+			// before asserting that an update queued no operations.
+			stopInformers()
+			var expectedOperations []batchOperation
+			if tc.expectedServiceUID != "" {
+				expectedOperations = []batchOperation{
+					getRemoveIPsFromBackendPoolOperation("default/svc1", tc.expectedServiceUID, "lb1", "default-svc1", []string{"10.0.0.1"}),
+					getAddIPsToBackendPoolOperation("default/svc1", tc.expectedServiceUID, "lb1", "default-svc1", []string{"10.0.0.2"}),
+				}
+			}
+			assert.Equal(t, expectedOperations, updater.drainOperations())
+		})
+	}
+}
+
+func TestGetLocalServiceEndpointsNodeNamesFiltersStaleServiceUIDs(t *testing.T) {
+	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	svc.UID = "current-service-uid"
+	staleSlice := getTestEndpointSlice("stale-service-slice", svc.Namespace, svc.Name, "stale-service-node")
+	staleSlice.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "v1", Kind: "Service", Name: svc.Name, UID: "other-service-uid", Controller: ptr.To(true),
+	}}
+	currentSlice := getTestEndpointSlice("current-service-slice", svc.Namespace, svc.Name, "current-service-node")
+	currentSlice.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "v1", Kind: "Service", Name: svc.Name, UID: svc.UID, Controller: ptr.To(true),
+	}}
+	endpointsOwnedSlice := getTestEndpointSlice("endpoints-owned-slice", svc.Namespace, svc.Name, "endpoints-owned-slice-node")
+	endpointsOwnedSlice.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "v1", Kind: "Endpoints", Name: svc.Name, UID: "endpoints-uid", Controller: ptr.To(true),
+	}}
+	noOwnerReferenceSlice := getTestEndpointSlice("no-owner-reference-slice", svc.Namespace, svc.Name, "no-owner-reference-slice-node")
+	emptySlice := currentSlice.DeepCopy()
+	emptySlice.Name = "empty-service-slice"
+	emptySlice.Endpoints = nil
+
+	for _, tc := range []struct {
+		name              string
+		endpointSlices    []*discovery_v1.EndpointSlice
+		expectedNodeNames *utilsets.IgnoreCaseSet
+	}{
+		{
+			name:              "excludes stale Service-owned slices while retaining current and non-Service-owned slices associated with the same Service",
+			endpointSlices:    []*discovery_v1.EndpointSlice{staleSlice, currentSlice, endpointsOwnedSlice, noOwnerReferenceSlice},
+			expectedNodeNames: utilsets.NewString("current-service-node", "endpoints-owned-slice-node", "no-owner-reference-slice-node"),
+		},
+		{
+			name: "returns nil when no matching EndpointSlices are cached",
+		},
+		{
+			name:           "returns nil when all matching EndpointSlices belong to a different Service UID",
+			endpointSlices: []*discovery_v1.EndpointSlice{staleSlice},
+		},
+		{
+			name:              "returns a non-nil empty set when the current Service's EndpointSlice has zero endpoints",
+			endpointSlices:    []*discovery_v1.EndpointSlice{emptySlice},
+			expectedNodeNames: utilsets.NewString(),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := GetTestCloud(gomock.NewController(t))
+			for _, endpointSlice := range tc.endpointSlices {
+				cloud.endpointSlicesCache.Store(endpointSlice.Namespace+"/"+endpointSlice.Name, endpointSlice)
+			}
+
+			nodeNames := cloud.getLocalServiceEndpointsNodeNames(&svc)
+
+			assert.Equal(t, tc.expectedNodeNames, nodeNames)
 		})
 	}
 }
@@ -771,10 +1013,15 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 			cloud := GetTestCloud(ctrl)
 			cloud.localServiceNameToServiceInfoMap.Store("default/svc1", &serviceInfo{lbName: "lb1"})
 			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			svc.UID = "current-service-uid"
 			client := fake.NewSimpleClientset(&svc)
 			cloud.KubeClient = client
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
 			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
 			cloud.LoadBalancerBackendPoolUpdateIntervalInSeconds = 1
 			cloud.LoadBalancerSKU = consts.LoadBalancerSKUStandard
 			cloud.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
@@ -855,8 +1102,8 @@ func TestCheckAndApplyLocalServiceBackendPoolUpdates(t *testing.T) {
 }
 
 func TestCountOperations(t *testing.T) {
-	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	op2 := getRemoveIPsFromBackendPoolOperation("ns1/svc2", "lb1", "pool1", []string{"10.0.0.2"})
+	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getRemoveIPsFromBackendPoolOperation("ns1/svc2", "svc2", "lb1", "pool1", []string{"10.0.0.2"})
 
 	tests := []struct {
 		name     string
@@ -908,8 +1155,8 @@ func TestCountOperations(t *testing.T) {
 }
 
 func TestDrainOperations(t *testing.T) {
-	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"})
+	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "svc2", "lb1", "pool2", []string{"10.0.0.2"})
 
 	testCases := []struct {
 		name       string
@@ -979,11 +1226,101 @@ func TestDrainOperations(t *testing.T) {
 	})
 }
 
+func TestHasParkedOperations(t *testing.T) {
+	cloud := &Cloud{}
+	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+	for _, tc := range []struct {
+		name     string
+		ops      []batchOperation
+		expected bool
+	}{
+		{name: "empty slice", ops: nil, expected: false},
+		{name: "zero nextEligibleAt", ops: []batchOperation{
+			getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}),
+		}, expected: false},
+		{name: "past nextEligibleAt", ops: func() []batchOperation {
+			op := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+			op.nextEligibleAt = time.Now().Add(-time.Minute)
+			return []batchOperation{op}
+		}(), expected: false},
+		{name: "future nextEligibleAt", ops: func() []batchOperation {
+			op := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+			op.nextEligibleAt = time.Now().Add(5 * time.Minute)
+			return []batchOperation{op}
+		}(), expected: true},
+		{name: "mix of past and future", ops: func() []batchOperation {
+			op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+			op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "svc2", "lb1", "pool1", []string{"10.0.0.2"})
+			op2.nextEligibleAt = time.Now().Add(5 * time.Minute)
+			return []batchOperation{op1, op2}
+		}(), expected: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.expected, u.hasParkedOperations(tc.ops))
+		})
+	}
+}
+
+func TestRequeueOperations(t *testing.T) {
+	op1 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	op2 := getAddIPsToBackendPoolOperation("ns1/svc2", "svc2", "lb1", "pool1", []string{"10.0.0.2"})
+	op3 := getAddIPsToBackendPoolOperation("ns1/svc3", "svc3", "lb1", "pool1", []string{"10.0.0.3"})
+
+	t.Run("requeue to empty queue", func(t *testing.T) {
+		cloud := &Cloud{}
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		u.requeueOperations([]batchOperation{op1, op2})
+
+		ops := u.drainOperations()
+		assert.Equal(t, []batchOperation{op1, op2}, ops)
+	})
+
+	t.Run("requeue prepends before existing", func(t *testing.T) {
+		cloud := &Cloud{}
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(op3)
+
+		u.requeueOperations([]batchOperation{op1, op2})
+
+		ops := u.drainOperations()
+		assert.Equal(t, []batchOperation{op1, op2, op3}, ops)
+	})
+
+	t.Run("acquires updater lock", func(t *testing.T) {
+		cloud := &Cloud{}
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		u.lock.Lock()
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			u.requeueOperations([]batchOperation{op1})
+		}()
+
+		select {
+		case <-done:
+			t.Fatal("requeueOperations returned while lock was held")
+		case <-time.After(100 * time.Millisecond):
+		}
+
+		u.lock.Unlock()
+
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("requeueOperations did not complete after lock released")
+		}
+	})
+}
+
 func TestGroupOperations(t *testing.T) {
-	addPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	removePool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"})
-	addPool1WithExtra := getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
-	addPool2 := getAddIPsToBackendPoolOperation("ns1/svc2", "lb1", "pool2", []string{"10.0.0.2"})
+	addPool1 := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	removePool1 := getRemoveIPsFromBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+	addPool1WithExtra := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1", "10.0.0.2"})
+	addPool2 := getAddIPsToBackendPoolOperation("ns1/svc2", "svc2", "lb1", "pool2", []string{"10.0.0.2"})
 
 	testCases := []struct {
 		name           string
@@ -1043,9 +1380,22 @@ func TestGroupOperations(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cloud := &Cloud{}
+			var svcObjects []runtime.Object
 			for k, v := range tc.localServices {
 				cloud.localServiceNameToServiceInfoMap.Store(k, v)
+				parts := strings.Split(k, "/")
+				svcObjects = append(svcObjects, &v1.Service{
+					ObjectMeta: metav1.ObjectMeta{Namespace: parts[0], Name: parts[1], UID: types.UID(parts[1])},
+				})
 			}
+			client := fake.NewSimpleClientset(svcObjects...)
+			informerFactory := informers.NewSharedInformerFactory(client, 0)
+			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
+
 			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
 
 			groups := u.groupOperations(context.Background(), tc.operations)
@@ -1059,6 +1409,51 @@ func TestGroupOperations(t *testing.T) {
 			}
 		})
 	}
+
+	for _, tc := range []struct {
+		name      string
+		svcObject *v1.Service
+	}{
+		{
+			name: "skips operation for service in map but deleted from informer",
+		},
+		{
+			name: "skips operation for service with DeletionTimestamp",
+			svcObject: &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:         "ns1",
+					Name:              "svc1",
+					UID:               "svc1",
+					DeletionTimestamp: &metav1.Time{Time: time.Now()},
+					Finalizers:        []string{"service.kubernetes.io/load-balancer-cleanup"},
+				},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud := &Cloud{}
+			cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
+
+			var objs []runtime.Object
+			if tc.svcObject != nil {
+				objs = append(objs, tc.svcObject)
+			}
+			client := fake.NewSimpleClientset(objs...)
+			informerFactory := informers.NewSharedInformerFactory(client, 0)
+			cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+			stopCh := make(chan struct{})
+			t.Cleanup(func() { close(stopCh) })
+			informerFactory.Start(stopCh)
+			informerFactory.WaitForCacheSync(stopCh)
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			op := getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+
+			groups := u.groupOperations(context.Background(), []batchOperation{op})
+
+			assert.Equal(t, 0, len(groups))
+		})
+	}
 }
 
 func TestLoadBalancerBackendPoolUpdaterSerializesWithServiceReconcileLock(t *testing.T) {
@@ -1070,9 +1465,14 @@ func TestLoadBalancerBackendPoolUpdaterSerializesWithServiceReconcileLock(t *tes
 	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
 
 	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	svc.Namespace = "ns1"
 	client := fake.NewSimpleClientset(&svc)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 
 	existingBP := getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{})
 	mockBPClient := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
@@ -1091,7 +1491,7 @@ func TestLoadBalancerBackendPoolUpdaterSerializesWithServiceReconcileLock(t *tes
 	).Return(nil, nil)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// Hold serviceReconcileLock to simulate the main reconcile path.
 	cloud.serviceReconcileLock.Lock()
@@ -1130,9 +1530,14 @@ func TestLoadBalancerBackendPoolUpdaterAddOperationNotBlockedDuringProcess(t *te
 	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
 
 	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	svc.Namespace = "ns1"
 	client := fake.NewSimpleClientset(&svc)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 
 	// Block the ARM Get call so process() is in the middle of ARM work.
 	armBlocked := make(chan struct{})
@@ -1152,7 +1557,7 @@ func TestLoadBalancerBackendPoolUpdaterAddOperationNotBlockedDuringProcess(t *te
 	).Return(nil, nil)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	processDone := make(chan struct{})
 	go func() {
@@ -1171,7 +1576,7 @@ func TestLoadBalancerBackendPoolUpdaterAddOperationNotBlockedDuringProcess(t *te
 	addDone := make(chan struct{})
 	go func() {
 		defer close(addDone)
-		u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.2"}))
+		u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.2"}))
 	}()
 
 	select {
@@ -1215,7 +1620,7 @@ func TestLoadBalancerBackendPoolUpdaterPreservesOperationsOnLeaseLockFailure(t *
 	)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// No ARM mock expectations, ARM call should not happen.
 	u.process(context.Background())
@@ -1234,9 +1639,14 @@ func TestLoadBalancerBackendPoolUpdaterCompletesOnUnlockFailure(t *testing.T) {
 	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
 
 	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	svc.Namespace = "ns1"
 	client := fake.NewSimpleClientset(&svc)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 
 	// Fail the second lease update (releaseLease), let the first (acquireLease) pass.
 	var updateCount int32
@@ -1268,7 +1678,7 @@ func TestLoadBalancerBackendPoolUpdaterCompletesOnUnlockFailure(t *testing.T) {
 	).Return(nil, nil)
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// ARM calls should complete despite unlock failure.
 	u.process(context.Background())
@@ -1287,16 +1697,21 @@ func TestLoadBalancerBackendPoolUpdaterFiltersOperationsWhenLBChangedDuringProce
 	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
 
 	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	svc.Namespace = "ns1"
 	client := fake.NewSimpleClientset(&svc)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 
 	// No ARM mock expectations. The operation targets lb1 but the service moves
 	// to lb2 while process() is blocked on serviceReconcileLock, so groupOperations
 	// filters it.
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// Hold serviceReconcileLock to simulate the main reconcile loop running.
 	cloud.serviceReconcileLock.Lock()
@@ -1339,15 +1754,20 @@ func TestLoadBalancerBackendPoolUpdaterRemoveOperationCancelsOperationsBeforeDra
 	cloud.localServiceNameToServiceInfoMap.Store("ns1/svc1", &serviceInfo{lbName: "lb1"})
 
 	svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+	svc.Namespace = "ns1"
 	client := fake.NewSimpleClientset(&svc)
 	informerFactory := informers.NewSharedInformerFactory(client, 0)
 	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 
 	// No ARM mock expectations. removeOperation cancels the operation
 	// before process() drains the queue.
 
 	u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
-	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+	u.addOperation(getAddIPsToBackendPoolOperation("ns1/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
 
 	// Hold serviceReconcileLock to simulate the main reconcile loop running.
 	cloud.serviceReconcileLock.Lock()
@@ -1379,4 +1799,1423 @@ func TestLoadBalancerBackendPoolUpdaterRemoveOperationCancelsOperationsBeforeDra
 	u.lock.Lock()
 	assert.Equal(t, 0, len(u.operations))
 	u.lock.Unlock()
+}
+
+// setupRetryTest creates a Cloud with a fake event recorder, service lister,
+// and mock backend pool client for retry tests. Each call creates a fresh
+// gomock.Controller scoped to t (auto-Finish via t.Cleanup). svcNames defaults
+// to ["svc1"] when omitted. All services are registered in
+// localServiceNameToServiceInfoMap with lbName "lb1".
+func setupRetryTest(t *testing.T, maxRetries int, svcNames ...string) (
+	*Cloud, *record.FakeRecorder, *mock_backendaddresspoolclient.MockInterface, cache.Store,
+) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+
+	cloud := GetTestCloud(ctrl)
+	cloud.localServiceNameToServiceInfoMap = sync.Map{}
+
+	if len(svcNames) == 0 {
+		svcNames = []string{"svc1"}
+	}
+
+	var svcObjects []runtime.Object
+	for _, name := range svcNames {
+		cloud.localServiceNameToServiceInfoMap.Store("default/"+name, &serviceInfo{lbName: "lb1"})
+		svc := getTestService(name, v1.ProtocolTCP, nil, false)
+		svcObjects = append(svcObjects, &svc)
+	}
+	cloud.LoadBalancerBackendPoolUpdateMaxRetries = ptr.To(maxRetries)
+
+	fakeRecorder := record.NewFakeRecorder(100)
+	cloud.eventRecorder = fakeRecorder
+
+	client := fake.NewSimpleClientset(svcObjects...)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	cloud.serviceLister = informerFactory.Core().V1().Services().Lister()
+	svcStore := informerFactory.Core().V1().Services().Informer().GetStore()
+
+	stopCh := make(chan struct{})
+	t.Cleanup(func() { close(stopCh) })
+	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
+
+	mockBP := cloud.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+	return cloud, fakeRecorder, mockBP, svcStore
+}
+
+// drainEvents reads all buffered events from a FakeRecorder without blocking.
+func drainEvents(recorder *record.FakeRecorder) []string {
+	var events []string
+	for {
+		select {
+		case e := <-recorder.Events:
+			events = append(events, e)
+		default:
+			return events
+		}
+	}
+}
+
+// assertEventReasons asserts events match the expected reasons in order.
+func assertEventReasons(t *testing.T, events []string, expectedReasons ...string) {
+	t.Helper()
+	if len(events) != len(expectedReasons) {
+		t.Fatalf("expected %d events, got %d: %v", len(expectedReasons), len(events), events)
+	}
+	for i, reason := range expectedReasons {
+		assert.Contains(t, events[i], reason)
+	}
+}
+
+func TestLoadBalancerBackendPoolUpdaterServiceRecreation(t *testing.T) {
+	for _, tc := range []struct {
+		name                           string
+		throttled                      bool
+		recreateService                bool
+		queueRecreatedServiceOperation bool
+	}{
+		{
+			name:            "drops the original Service's add and remove operations after recreation instead of retrying a 409 conflict",
+			recreateService: true,
+		},
+		{
+			name:            "drops the original Service's add and remove operations after recreation without waiting for RetryAfter",
+			throttled:       true,
+			recreateService: true,
+		},
+		{
+			name:                           "drops the original Service's add and remove operations before RetryAfter and applies the recreated Service's operation",
+			throttled:                      true,
+			recreateService:                true,
+			queueRecreatedServiceOperation: true,
+		},
+		{name: "retries add and remove operations when the Service UID is unchanged"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, svcStore := setupRetryTest(t, 3)
+			originalSvc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			originalSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+			if err := svcStore.Update(&originalSvc); err != nil {
+				t.Fatal(err)
+			}
+
+			operations := []*loadBalancerBackendPoolUpdateOperation{
+				getAddIPsToBackendPoolOperation("default/svc1", originalSvc.UID, "lb1", "default-svc1", []string{"10.0.0.1"}),
+				getRemoveIPsFromBackendPoolOperation("default/svc1", originalSvc.UID, "lb1", "default-svc1", []string{"10.0.0.2"}),
+			}
+			var updateErr error = &azcore.ResponseError{StatusCode: http.StatusConflict}
+			if tc.throttled {
+				updateErr = &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(time.Hour)}
+			}
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "default-svc1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.2"}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "default-svc1", gomock.Any()).Return(nil, updateErr).Times(1)
+			updater := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			for _, operation := range operations {
+				updater.addOperation(operation)
+			}
+			// Fail the first update so both operations remain queued for the original Service.
+			updater.process(context.Background())
+			assert.Equal(t, len(operations), updater.countOperations())
+			for _, operation := range operations {
+				assert.Equal(t, 1, operation.retryAttempts)
+				assert.Equal(t, tc.throttled, operation.nextEligibleAt.After(time.Now()))
+			}
+			assertEventReasons(t, drainEvents(recorder), consts.LoadBalancerBackendPoolUpdateRetrying)
+
+			if tc.recreateService {
+				// Simulate Service recreation in the informer cache without clearing the pending retries.
+				if err := svcStore.Delete(&originalSvc); err != nil {
+					t.Fatal(err)
+				}
+				cloud.localServiceNameToServiceInfoMap.Delete("default/svc1")
+				recreatedSvc := originalSvc.DeepCopy()
+				recreatedSvc.UID = "recreated-service-uid"
+				if err := svcStore.Add(recreatedSvc); err != nil {
+					t.Fatal(err)
+				}
+				cloud.localServiceNameToServiceInfoMap.Store("default/svc1", newServiceInfo(consts.IPVersionIPv4String, "lb1"))
+				if tc.queueRecreatedServiceOperation {
+					updater.addOperation(getAddIPsToBackendPoolOperation("default/svc1", recreatedSvc.UID, "lb1", "default-svc1", []string{"10.0.0.3"}))
+				}
+			}
+
+			currentPool := getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{"10.0.0.2"})
+			var retryGets, retryUpdates int
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "default-svc1").DoAndReturn(
+				func(_ context.Context, _ string, _ string, _ string) (*armnetwork.BackendAddressPool, error) {
+					retryGets++
+					return currentPool, nil
+				},
+			).MaxTimes(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "default-svc1", gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ string, _ string, _ string, pool armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+					retryUpdates++
+					return &pool, nil
+				},
+			).MaxTimes(1)
+			latencyCountBefore, failureCountBefore := getBackendPoolUpdaterMetrics(t)
+			updater.process(context.Background())
+
+			var actualIPs []string
+			for _, address := range currentPool.Properties.LoadBalancerBackendAddresses {
+				actualIPs = append(actualIPs, ptr.Deref(address.Properties.IPAddress, ""))
+			}
+			latencyCountAfter, failureCountAfter := getBackendPoolUpdaterMetrics(t)
+			assert.Zero(t, updater.countOperations())
+			assert.Equal(t, failureCountBefore, failureCountAfter)
+			if tc.recreateService && !tc.queueRecreatedServiceOperation {
+				assert.Zero(t, retryGets)
+				assert.Zero(t, retryUpdates)
+				assert.ElementsMatch(t, []string{"10.0.0.2"}, actualIPs)
+				assert.Empty(t, drainEvents(recorder))
+				assert.Equal(t, latencyCountBefore, latencyCountAfter)
+			} else {
+				assert.Equal(t, 1, retryGets)
+				assert.Equal(t, 1, retryUpdates)
+				expectedIPs := []string{"10.0.0.1"}
+				if tc.queueRecreatedServiceOperation {
+					expectedIPs = []string{"10.0.0.2", "10.0.0.3"}
+				}
+				assert.ElementsMatch(t, expectedIPs, actualIPs)
+				assertEventReasons(t, drainEvents(recorder), consts.LoadBalancerBackendPoolUpdated)
+				assert.Equal(t, latencyCountBefore+1, latencyCountAfter)
+			}
+		})
+	}
+}
+
+func TestLoadBalancerBackendPoolUpdaterServiceRecreatedDuringARM(t *testing.T) {
+	for _, tc := range []struct {
+		name                 string
+		updateErr            error
+		expectedLatencyCount uint64
+	}{
+		{
+			name:      "409 conflict drops the original Service's operation without retrying",
+			updateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+		},
+		{
+			name:      "ThrottleError drops the original Service's operation without waiting for RetryAfter",
+			updateErr: &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(time.Hour)},
+		},
+		{
+			name:      "500 error after SDK retries records no failure metric or event for the recreated Service",
+			updateErr: &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
+		},
+		{
+			name:      "non-retriable error records no failure metric or event for the recreated Service",
+			updateErr: fmt.Errorf("connection reset"),
+		},
+		{
+			name:                 "successful update records one latency observation but no event for the recreated Service",
+			expectedLatencyCount: 1,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, svcStore := setupRetryTest(t, 3)
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "default-svc1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "default-svc1", nil), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "default-svc1", gomock.Any()).DoAndReturn(
+				func(_ context.Context, _ string, _ string, _ string, _ armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+					// Simulate the informer observing a recreated Service after groupOperations
+					// has accepted the original UID, but before CreateOrUpdate returns.
+					recreatedSvc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+					recreatedSvc.UID = "recreated-service-uid"
+					recreatedSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+					if err := svcStore.Update(&recreatedSvc); err != nil {
+						t.Fatal(err)
+					}
+					return nil, tc.updateErr
+				},
+			).Times(1)
+			updater := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			updater.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "default-svc1", []string{"10.0.0.1"}))
+			latencyCountBefore, failureCountBefore := getBackendPoolUpdaterMetrics(t)
+
+			var uidLogEntries []map[string]interface{}
+			logger := funcr.NewJSON(func(message string) {
+				var entry map[string]interface{}
+				if !assert.NoError(t, json.Unmarshal([]byte(message), &entry)) {
+					return
+				}
+				if _, found := entry["operationServiceUID"]; found {
+					uidLogEntries = append(uidLogEntries, entry)
+				}
+			}, funcr.Options{Verbosity: 4})
+
+			updater.process(log.NewContext(context.Background(), logger))
+
+			assert.Zero(t, updater.countOperations())
+			assert.Empty(t, drainEvents(recorder))
+			latencyCountAfter, failureCountAfter := getBackendPoolUpdaterMetrics(t)
+			assert.Equal(t, latencyCountBefore+tc.expectedLatencyCount, latencyCountAfter)
+			assert.Equal(t, failureCountBefore, failureCountAfter)
+			assert.Len(t, uidLogEntries, 1)
+			for _, entry := range uidLogEntries {
+				assert.Equal(t, "default/svc1", entry["service"])
+				assert.Equal(t, "svc1", entry["operationServiceUID"])
+				assert.Equal(t, "recreated-service-uid", entry["currentServiceUID"])
+				assert.Equal(t, true, entry["serviceExists"])
+				assert.Equal(t, false, entry["serviceDeleting"])
+			}
+		})
+	}
+}
+
+func TestLoadBalancerBackendPoolUpdaterNotifyFiltersServiceUIDs(t *testing.T) {
+	staleOperation := getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "default-svc1", nil)
+	currentOperation := getAddIPsToBackendPoolOperation("default/svc1", "current-service-uid", "lb1", "default-svc1", nil)
+	for _, tc := range []struct {
+		name               string
+		operations         []batchOperation
+		serviceAbsent      bool
+		serviceDeleting    bool
+		expectedEventCount int
+	}{
+		{
+			name:       "emits no event for an operation with a different Service UID",
+			operations: []batchOperation{staleOperation},
+		},
+		{
+			name:               "skips duplicate stale operations and emits one event for the current Service",
+			operations:         []batchOperation{staleOperation, staleOperation, currentOperation, currentOperation},
+			expectedEventCount: 1,
+		},
+		{
+			name:               "emits one event when a stale operation precedes the current Service's operations",
+			operations:         []batchOperation{staleOperation, currentOperation, currentOperation},
+			expectedEventCount: 1,
+		},
+		{
+			name:               "emits one event when a stale operation is between the current Service's operations",
+			operations:         []batchOperation{currentOperation, staleOperation, currentOperation},
+			expectedEventCount: 1,
+		},
+		{
+			name:          "emits no event when the Service is absent",
+			operations:    []batchOperation{currentOperation},
+			serviceAbsent: true,
+		},
+		{
+			name:            "emits no event when the Service is deleting",
+			operations:      []batchOperation{currentOperation},
+			serviceDeleting: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, _, svcStore := setupRetryTest(t, 3)
+			svc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			svc.UID = "current-service-uid"
+			if tc.serviceDeleting {
+				now := metav1.Now()
+				svc.DeletionTimestamp = &now
+				svc.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+			}
+			if tc.serviceAbsent {
+				if err := svcStore.Delete(&svc); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := svcStore.Update(&svc); err != nil {
+					t.Fatal(err)
+				}
+			}
+			updater := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+			var uidLogEntries []map[string]interface{}
+			logger := funcr.NewJSON(func(message string) {
+				var entry map[string]interface{}
+				if !assert.NoError(t, json.Unmarshal([]byte(message), &entry)) {
+					return
+				}
+				if _, found := entry["operationServiceUID"]; found {
+					uidLogEntries = append(uidLogEntries, entry)
+				}
+			}, funcr.Options{Verbosity: 4})
+
+			updater.notify(log.NewContext(context.Background(), logger), v1.EventTypeNormal, consts.LoadBalancerBackendPoolUpdated, "updated", tc.operations...)
+
+			events := drainEvents(recorder)
+			assert.Len(t, events, tc.expectedEventCount)
+			for _, event := range events {
+				assert.Contains(t, event, consts.LoadBalancerBackendPoolUpdated)
+			}
+			expectedCurrentUID := string(svc.UID)
+			if tc.serviceAbsent {
+				expectedCurrentUID = ""
+			}
+			assert.Len(t, uidLogEntries, 1)
+			for _, entry := range uidLogEntries {
+				assert.Equal(t, expectedCurrentUID, entry["currentServiceUID"])
+				assert.Equal(t, !tc.serviceAbsent, entry["serviceExists"])
+				assert.Equal(t, tc.serviceDeleting, entry["serviceDeleting"])
+			}
+		})
+	}
+}
+
+func TestLoadBalancerBackendPoolUpdaterRetry(t *testing.T) {
+	// Error Classification
+	for _, tc := range []struct {
+		name              string
+		maxRetries        int
+		getErr            error
+		createOrUpdateErr error
+		expectedQueue     int
+		expectedEventType string
+		expectedEvent     string
+		terminalMsg       string
+	}{
+		{
+			name:              "successful update emits Updated event",
+			maxRetries:        3,
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeNormal,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdated,
+		},
+		{
+			name:              "500 from SDK retry emits Failed event",
+			maxRetries:        3,
+			getErr:            &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateFailed,
+			terminalMsg:       "SDK retries exhausted",
+		},
+		{
+			name:              "408 from SDK retry emits Failed event",
+			maxRetries:        3,
+			getErr:            &azcore.ResponseError{StatusCode: http.StatusRequestTimeout},
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateFailed,
+			terminalMsg:       "SDK retries exhausted",
+		},
+		{
+			name:              "502 from SDK retry emits Failed event",
+			maxRetries:        3,
+			getErr:            &azcore.ResponseError{StatusCode: http.StatusBadGateway},
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateFailed,
+			terminalMsg:       "SDK retries exhausted",
+		},
+		{
+			name:              "503 from SDK retry emits Failed event",
+			maxRetries:        3,
+			getErr:            &azcore.ResponseError{StatusCode: http.StatusServiceUnavailable},
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateFailed,
+			terminalMsg:       "SDK retries exhausted",
+		},
+		{
+			name:              "504 from SDK retry emits Failed event",
+			maxRetries:        3,
+			getErr:            &azcore.ResponseError{StatusCode: http.StatusGatewayTimeout},
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateFailed,
+			terminalMsg:       "SDK retries exhausted",
+		},
+		{
+			name:          "404 not found is dropped without event",
+			maxRetries:    3,
+			getErr:        &azcore.ResponseError{StatusCode: http.StatusNotFound},
+			expectedQueue: 0,
+		},
+		{
+			name:              "non-ARM error emits Failed event",
+			maxRetries:        3,
+			getErr:            fmt.Errorf("connection reset"),
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateFailed,
+			terminalMsg:       "non-retriable",
+		},
+		{
+			name:              "retriable 409 with MaxRetries 0 emits Failed event on first failure",
+			maxRetries:        0,
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+			expectedQueue:     0,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateFailed,
+		},
+		{
+			name:              "409 conflict requeues and emits Retrying event",
+			maxRetries:        3,
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+			expectedQueue:     1,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateRetrying,
+		},
+		{
+			name:              "412 precondition failed requeues and emits Retrying event",
+			maxRetries:        3,
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusPreconditionFailed},
+			expectedQueue:     1,
+			expectedEventType: v1.EventTypeWarning,
+			expectedEvent:     consts.LoadBalancerBackendPoolUpdateRetrying,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, _ := setupRetryTest(t, tc.maxRetries)
+
+			if tc.getErr != nil {
+				mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(nil, tc.getErr).Times(1)
+			} else {
+				mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+					getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+				).Times(1)
+				mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(nil, tc.createOrUpdateErr).Times(1)
+			}
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+			u.process(context.Background())
+
+			assert.Equal(t, tc.expectedQueue, u.countOperations())
+
+			latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+
+			switch tc.expectedEvent {
+			case consts.LoadBalancerBackendPoolUpdateFailed:
+				assert.Equal(t, latencyBefore+1, latencyAfter, "failed operation should record one metric observation")
+				assert.Equal(t, failureBefore+1, failureAfter, "failed operation should increment failure counter")
+			case consts.LoadBalancerBackendPoolUpdated:
+				assert.Equal(t, latencyBefore+1, latencyAfter, "successful operation should record one metric observation")
+				assert.Equal(t, failureBefore, failureAfter, "successful operation should not increment failure counter")
+			case consts.LoadBalancerBackendPoolUpdateRetrying:
+				assert.Equal(t, latencyBefore, latencyAfter, "retrying operation should not record any metric")
+				assert.Equal(t, failureBefore, failureAfter, "retrying operation should not increment failure counter")
+			default:
+				assert.Equal(t, latencyBefore, latencyAfter, "stale operation should not record any metric")
+				assert.Equal(t, failureBefore, failureAfter, "stale operation should not increment failure counter")
+			}
+
+			events := drainEvents(recorder)
+			if tc.expectedEvent == "" {
+				assert.Empty(t, events, "expected no events")
+			} else {
+				assert.Equal(t, 1, len(events), "expected exactly one event")
+				if len(events) > 0 {
+					assert.Contains(t, events[0], tc.expectedEventType, "unexpected event type")
+					assert.Contains(t, events[0], tc.expectedEvent)
+
+					// Assert message format based on error classification.
+					if tc.terminalMsg != "" {
+						assert.Contains(t, events[0], tc.terminalMsg)
+					} else {
+						assert.NotContains(t, events[0], "SDK retries exhausted")
+						assert.NotContains(t, events[0], "non-retriable")
+					}
+					switch tc.expectedEvent {
+					case consts.LoadBalancerBackendPoolUpdateFailed:
+						if tc.terminalMsg == "" {
+							assert.Contains(t, events[0], "retries")
+							assert.Contains(t, events[0], "retrigger")
+						}
+					case consts.LoadBalancerBackendPoolUpdateRetrying:
+						assert.Contains(t, events[0], "will retry")
+					case consts.LoadBalancerBackendPoolUpdated:
+						assert.Contains(t, events[0], "updated successfully")
+					}
+
+					// Assert the causal error string appears in the event message.
+					errToCheck := tc.getErr
+					if errToCheck == nil {
+						errToCheck = tc.createOrUpdateErr
+					}
+					if errToCheck != nil {
+						assert.Contains(t, events[0], errToCheck.Error())
+					}
+				}
+			}
+		})
+	}
+
+	// Retriable Error Paths
+	for _, tc := range []struct {
+		name              string
+		getErr            error
+		createOrUpdateErr error
+	}{
+		{
+			name:   "ThrottleError from Get parks until RetryAfter",
+			getErr: &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(5 * time.Minute)},
+		},
+		{
+			name:              "ThrottleError from CreateOrUpdate parks until RetryAfter",
+			createOrUpdateErr: &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(5 * time.Minute)},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, _ := setupRetryTest(t, 3)
+
+			if tc.getErr != nil {
+				mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(nil, tc.getErr).Times(1)
+			} else {
+				mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+					getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+				).Times(1)
+				mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(nil, tc.createOrUpdateErr).Times(1)
+			}
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+			// Tick 1: ThrottleError, requeues with backoff.
+			u.process(context.Background())
+			assert.Equal(t, 1, u.countOperations())
+			assertEventReasons(t, drainEvents(recorder), consts.LoadBalancerBackendPoolUpdateRetrying)
+
+			latencyBeforePark, failureBeforePark := getBackendPoolUpdaterMetrics(t)
+
+			// Tick 2: still parked, skipped.
+			u.process(context.Background())
+			assert.Equal(t, 1, u.countOperations())
+			assert.Empty(t, drainEvents(recorder), "expected no events")
+
+			latencyAfterPark, failureAfterPark := getBackendPoolUpdaterMetrics(t)
+			assert.Equal(t, latencyBeforePark, latencyAfterPark, "parked tick should not record any metric")
+			assert.Equal(t, failureBeforePark, failureAfterPark, "parked tick should not increment failure counter")
+
+			ops := u.drainOperations()
+			assert.Equal(t, 1, len(ops))
+			lbOp := ops[0].(*loadBalancerBackendPoolUpdateOperation)
+			assert.Equal(t, 1, lbOp.retryAttempts, "retryAttempts should not increment on parked tick")
+			assert.True(t, lbOp.nextEligibleAt.After(time.Now()), "nextEligibleAt should still be in the future")
+		})
+	}
+
+	for _, tc := range []struct {
+		name              string
+		createOrUpdateErr error
+	}{
+		{
+			name:              "ThrottleError with past RetryAfter requeues without parking",
+			createOrUpdateErr: &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(-time.Second)},
+		},
+		{
+			name:              "409 requeues then succeeds on next tick",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, _ := setupRetryTest(t, 3)
+
+			// Tick 1: retriable error, requeues.
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(nil, tc.createOrUpdateErr).Times(1)
+			// Tick 2: succeeds.
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(nil, nil).Times(1)
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+			u.process(context.Background())
+			assert.Equal(t, 1, u.countOperations())
+
+			u.process(context.Background())
+			assert.Equal(t, 0, u.countOperations())
+
+			assertEventReasons(t, drainEvents(recorder), consts.LoadBalancerBackendPoolUpdateRetrying, consts.LoadBalancerBackendPoolUpdated)
+		})
+	}
+
+	// Parking Behavior
+	t.Run("parked op in group blocks entire group from processing", func(t *testing.T) {
+		cloud, recorder, _, _ := setupRetryTest(t, 3)
+
+		// No ARM mock expectations: parked ops should not make ARM calls.
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		parkedOp := getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		parkedOp.nextEligibleAt = time.Now().Add(5 * time.Minute)
+		parkedOp.retryAttempts = 1
+		u.addOperation(parkedOp)
+
+		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.2"}))
+
+		u.process(context.Background())
+
+		// Both ops should be requeued without ARM calls, retryAttempts unchanged.
+		ops := u.drainOperations()
+		assert.Equal(t, 2, len(ops))
+		for _, op := range ops {
+			lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+			if lbOp.nodeIPs[0] == "10.0.0.1" {
+				assert.Equal(t, 1, lbOp.retryAttempts, "parked op retryAttempts should be unchanged")
+			} else {
+				assert.Equal(t, 0, lbOp.retryAttempts, "fresh op retryAttempts should be unchanged")
+			}
+		}
+
+		assert.Empty(t, drainEvents(recorder), "expected no events")
+	})
+
+	t.Run("fresh op added while group is parked is applied after parked op on eligible tick", func(t *testing.T) {
+		cloud, _, mockBP, _ := setupRetryTest(t, 3)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+		// Tick 1: fresh remove added during call, ThrottleError parks.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").DoAndReturn(
+			func(_ context.Context, _, _, _ string) (*armnetwork.BackendAddressPool, error) {
+				u.addOperation(getRemoveIPsFromBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+				return nil, &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(100 * time.Millisecond)}
+			},
+		).Times(1)
+		// Tick 2: both ops applied in order, succeeds.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).DoAndReturn(
+			func(_ context.Context, _, _, _ string, bp armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+				assert.Empty(t, bp.Properties.LoadBalancerBackendAddresses,
+					"expected empty pool: parked add should be applied before fresh remove")
+				return nil, nil
+			},
+		).Times(1)
+
+		u.process(context.Background())
+		assert.Equal(t, 2, u.countOperations())
+
+		// Sleep so nextEligibleAt passes.
+		time.Sleep(150 * time.Millisecond)
+
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+	})
+
+	// Retry Budget
+	t.Run("repeated failures exhaust retry budget and emit failed event with guidance", func(t *testing.T) {
+		cloud, recorder, mockBP, _ := setupRetryTest(t, 1)
+
+		conflictErr := &azcore.ResponseError{StatusCode: http.StatusConflict}
+		// Tick 1: 409, requeues (retryAttempts 0->1, within budget).
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, conflictErr,
+		).Times(1)
+		// Tick 2: 409, exhausted (retryAttempts=1 >= maxRetries).
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, conflictErr,
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+		u.process(context.Background())
+		assert.Equal(t, 1, u.countOperations())
+
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+
+		events := drainEvents(recorder)
+		assertEventReasons(t, events, consts.LoadBalancerBackendPoolUpdateRetrying, consts.LoadBalancerBackendPoolUpdateFailed)
+		assert.Contains(t, events[1], "after 1 retries")
+		assert.Contains(t, events[1], conflictErr.Error())
+		assert.Contains(t, events[1], "retrigger")
+		assert.NotContains(t, events[1], "SDK retries exhausted")
+		assert.NotContains(t, events[1], "non-retriable")
+	})
+
+	t.Run("each op in group maintains its own retry counter across failures", func(t *testing.T) {
+		cloud, _, mockBP, _ := setupRetryTest(t, 3)
+
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		opA := getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		opA.retryAttempts = 1
+		u.addOperation(opA)
+
+		opB := getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.2"})
+		u.addOperation(opB)
+
+		u.process(context.Background())
+
+		// Both requeued since neither exhausted (maxRetries=3).
+		assert.Equal(t, 2, u.countOperations())
+
+		ops := u.drainOperations()
+		assert.Equal(t, 2, len(ops))
+		for _, op := range ops {
+			lbOp := op.(*loadBalancerBackendPoolUpdateOperation)
+			if lbOp.nodeIPs[0] == "10.0.0.1" {
+				assert.Equal(t, 2, lbOp.retryAttempts) // was 1, now 2
+			} else {
+				assert.Equal(t, 1, lbOp.retryAttempts) // was 0, now 1
+			}
+		}
+	})
+
+	t.Run("exhausted op is dropped while remaining op with budget is requeued", func(t *testing.T) {
+		cloud, _, mockBP, _ := setupRetryTest(t, 2, "svc1", "svc2")
+
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		opA := getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		opA.retryAttempts = 2
+		u.addOperation(opA)
+
+		opB := getAddIPsToBackendPoolOperation("default/svc2", "svc2", "lb1", "pool1", []string{"10.0.0.2"})
+		u.addOperation(opB)
+
+		u.process(context.Background())
+
+		assert.Equal(t, 1, u.countOperations())
+		ops := u.drainOperations()
+		assert.Equal(t, "default/svc2", ops[0].(*loadBalancerBackendPoolUpdateOperation).serviceName)
+	})
+
+	t.Run("retry followed by success records success metric without failure metric", func(t *testing.T) {
+		cloud, _, mockBP, _ := setupRetryTest(t, 3)
+
+		// Tick 1: 409, requeues.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+		).Times(1)
+		// Tick 2: succeeds.
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(nil, nil).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+		latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+		u.process(context.Background())
+		assert.Equal(t, 1, u.countOperations())
+
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+
+		latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+		assert.Equal(t, failureBefore, failureAfter, "failure metric should not increment for retried-then-succeeded operation")
+		assert.Equal(t, latencyBefore+1, latencyAfter, "expected exactly one metric observation (success)")
+	})
+
+	// Event Dedup
+	type opSpec struct {
+		svcKey        string
+		ips           []string
+		retryAttempts int
+	}
+	for _, tc := range []struct {
+		name            string
+		maxRetries      int
+		svcNames        []string
+		ops             []opSpec
+		expectedQueue   int
+		expectedReasons []string
+	}{
+		{
+			name:       "multiple services in same group each receive their own event",
+			maxRetries: 3,
+			svcNames:   []string{"svc1", "svc2"},
+			ops: []opSpec{
+				{svcKey: "default/svc1", ips: []string{"10.0.0.1"}},
+				{svcKey: "default/svc2", ips: []string{"10.0.0.2"}},
+			},
+			expectedQueue:   2,
+			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateRetrying, consts.LoadBalancerBackendPoolUpdateRetrying},
+		},
+		{
+			name:       "multiple ops for same service produce only one event",
+			maxRetries: 3,
+			ops: []opSpec{
+				{svcKey: "default/svc1", ips: []string{"10.0.0.1"}},
+				{svcKey: "default/svc1", ips: []string{"10.0.0.2"}},
+			},
+			expectedQueue:   2,
+			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateRetrying},
+		},
+		{
+			name:       "two exhausted ops for same service produce only one failed event",
+			maxRetries: 0,
+			ops: []opSpec{
+				{svcKey: "default/svc1", ips: []string{"10.0.0.1"}},
+				{svcKey: "default/svc1", ips: []string{"10.0.0.2"}},
+			},
+			expectedQueue:   0,
+			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateFailed},
+		},
+		{
+			// This edge case (same service receiving both events) is a consequence of the
+			// diff-based operation model and will be eliminated by the desired-state follow-up.
+			name:       "same service with mixed budgets emits Failed before Retrying",
+			maxRetries: 2,
+			ops: []opSpec{
+				{svcKey: "default/svc1", ips: []string{"10.0.0.1"}, retryAttempts: 2},
+				{svcKey: "default/svc1", ips: []string{"10.0.0.2"}},
+			},
+			expectedQueue:   1,
+			expectedReasons: []string{consts.LoadBalancerBackendPoolUpdateFailed, consts.LoadBalancerBackendPoolUpdateRetrying},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, _ := setupRetryTest(t, tc.maxRetries, tc.svcNames...)
+
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+				nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+			).Times(1)
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			for _, op := range tc.ops {
+				svc, exists, err := cloud.getLatestService(op.svcKey, false)
+				if err != nil || !exists {
+					t.Fatalf("Service fixture %s not found: %v", op.svcKey, err)
+				}
+				o := getAddIPsToBackendPoolOperation(op.svcKey, svc.UID, "lb1", "pool1", op.ips)
+				o.retryAttempts = op.retryAttempts
+				u.addOperation(o)
+			}
+
+			u.process(context.Background())
+
+			assert.Equal(t, tc.expectedQueue, u.countOperations())
+			assertEventReasons(t, drainEvents(recorder), tc.expectedReasons...)
+		})
+	}
+
+	// Staleness
+	for _, tc := range []struct {
+		name              string
+		createOrUpdateErr error
+		mutate            func(*Cloud, cache.Store, *v1.Service)
+	}{
+		{
+			name:              "op that becomes stale during ARM call is dropped at requeue",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+			mutate: func(cloud *Cloud, _ cache.Store, _ *v1.Service) {
+				cloud.localServiceNameToServiceInfoMap.Delete("default/svc1")
+			},
+		},
+		{
+			name:              "op with changed load balancer during ARM call is dropped at requeue",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+			mutate: func(cloud *Cloud, _ cache.Store, _ *v1.Service) {
+				cloud.localServiceNameToServiceInfoMap.Store("default/svc1", &serviceInfo{lbName: "lb2"})
+			},
+		},
+		{
+			name:              "op for service marked for deletion during ARM call is dropped at requeue",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+			mutate: func(_ *Cloud, store cache.Store, svc *v1.Service) {
+				deletingSvc := svc.DeepCopy()
+				now := metav1.Now()
+				deletingSvc.DeletionTimestamp = &now
+				deletingSvc.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+				_ = store.Update(deletingSvc)
+			},
+		},
+		{
+			name:              "op for service gone from informer during ARM call is dropped at requeue",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+			mutate: func(_ *Cloud, store cache.Store, svc *v1.Service) {
+				_ = store.Delete(svc)
+			},
+		},
+		{
+			name:              "op for service marked for deletion during ARM call is dropped on SDK-exhausted error",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
+			mutate: func(_ *Cloud, store cache.Store, svc *v1.Service) {
+				deletingSvc := svc.DeepCopy()
+				now := metav1.Now()
+				deletingSvc.DeletionTimestamp = &now
+				deletingSvc.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+				_ = store.Update(deletingSvc)
+			},
+		},
+		{
+			name:              "op for service marked for deletion during ARM call is dropped on terminal error",
+			createOrUpdateErr: fmt.Errorf("connection reset"),
+			mutate: func(_ *Cloud, store cache.Store, svc *v1.Service) {
+				deletingSvc := svc.DeepCopy()
+				now := metav1.Now()
+				deletingSvc.DeletionTimestamp = &now
+				deletingSvc.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+				_ = store.Update(deletingSvc)
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, svcStore := setupRetryTest(t, 3)
+
+			svcObj := svcStore.List()[0].(*v1.Service)
+
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).DoAndReturn(
+				func(_ context.Context, _, _, _ string, _ armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+					tc.mutate(cloud, svcStore, svcObj)
+					return nil, tc.createOrUpdateErr
+				},
+			).Times(1)
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+			u.process(context.Background())
+
+			assert.Equal(t, 0, u.countOperations())
+			assert.Empty(t, drainEvents(recorder), "expected no events")
+
+			latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+			assert.Equal(t, latencyBefore, latencyAfter, "dropped operation should not record any metric")
+			assert.Equal(t, failureBefore, failureAfter, "dropped operation should not increment failure counter")
+		})
+	}
+
+	// Mixed group with deleting and non-deleting services. Not possible in production
+	// (each local service gets its own backend pool) but tests consistent behavior.
+	for _, tc := range []struct {
+		name              string
+		createOrUpdateErr error
+	}{
+		{
+			name:              "SDK-exhausted error for mixed group skips event for deleting service",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusInternalServerError},
+		},
+		{
+			name:              "terminal error for mixed group skips event for deleting service",
+			createOrUpdateErr: fmt.Errorf("connection reset"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, svcStore := setupRetryTest(t, 3, "svc1", "svc2")
+
+			svc1 := svcStore.List()[0].(*v1.Service)
+
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).DoAndReturn(
+				func(_ context.Context, _, _, _ string, _ armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+					deletingSvc := svc1.DeepCopy()
+					now := metav1.Now()
+					deletingSvc.DeletionTimestamp = &now
+					deletingSvc.Finalizers = []string{"service.kubernetes.io/load-balancer-cleanup"}
+					_ = svcStore.Update(deletingSvc)
+					return nil, tc.createOrUpdateErr
+				},
+			).Times(1)
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc2", "svc2", "lb1", "pool1", []string{"10.0.0.2"}))
+
+			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+			u.process(context.Background())
+
+			assert.Equal(t, 0, u.countOperations())
+
+			events := drainEvents(recorder)
+			assert.Equal(t, 1, len(events), "expected one event for the non-deleting service only")
+			assert.Contains(t, events[0], consts.LoadBalancerBackendPoolUpdateFailed)
+
+			latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+			assert.Equal(t, latencyBefore+1, latencyAfter, "ARM failure should still record metric")
+			assert.Equal(t, failureBefore+1, failureAfter, "ARM failure should still increment failure counter")
+		})
+	}
+
+	for _, tc := range []struct {
+		name              string
+		createOrUpdateErr error
+	}{
+		{
+			name:              "queued retry is dropped after service changes from Local to Cluster",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+		},
+		{
+			name:              "parked retry is dropped after service changes from Local to Cluster",
+			createOrUpdateErr: &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(5 * time.Minute)},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, svcStore := setupRetryTest(t, 3)
+			localSvc := getTestService("svc1", v1.ProtocolTCP, nil, false)
+			localSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+			if err := svcStore.Update(&localSvc); err != nil {
+				t.Fatal(err)
+			}
+
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "default-svc1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "default-svc1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "default-svc1", gomock.Any()).Return(nil, tc.createOrUpdateErr).Times(1)
+
+			updater := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			updater.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "default-svc1", []string{"10.0.0.1"}))
+			updater.process(context.Background())
+			assert.Equal(t, 1, updater.countOperations())
+			assertEventReasons(t, drainEvents(recorder), consts.LoadBalancerBackendPoolUpdateRetrying)
+
+			clusterSvc := localSvc.DeepCopy()
+			clusterSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyCluster
+			if err := svcStore.Update(clusterSvc); err != nil {
+				t.Fatal(err)
+			}
+			cloud.localServiceNameToServiceInfoMap.Delete("default/svc1")
+			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+			updater.process(context.Background())
+
+			assert.Equal(t, 0, updater.countOperations())
+			assert.Empty(t, drainEvents(recorder))
+			latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+			assert.Equal(t, latencyBefore, latencyAfter)
+			assert.Equal(t, failureBefore, failureAfter)
+		})
+	}
+
+	t.Run("op that becomes stale between ticks is dropped at next grouping", func(t *testing.T) {
+		cloud, recorder, mockBP, _ := setupRetryTest(t, 3)
+
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+			nil, &azcore.ResponseError{StatusCode: http.StatusConflict},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+		latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+		// Tick 1: 409, requeues.
+		u.process(context.Background())
+		assert.Equal(t, 1, u.countOperations())
+
+		// Delete service from map between ticks.
+		cloud.localServiceNameToServiceInfoMap.Delete("default/svc1")
+
+		// Tick 2: stale, filtered without call.
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+
+		// Only the retrying event from tick 1 should be present.
+		assertEventReasons(t, drainEvents(recorder), consts.LoadBalancerBackendPoolUpdateRetrying)
+
+		latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+		assert.Equal(t, latencyBefore, latencyAfter, "dropped operation should not record any metric")
+		assert.Equal(t, failureBefore, failureAfter, "dropped operation should not increment failure counter")
+	})
+
+	t.Run("parked op that becomes stale is dropped when eligible", func(t *testing.T) {
+		cloud, recorder, _, _ := setupRetryTest(t, 3)
+
+		// No ARM mock expectations: parked ops and stale ops should not make ARM calls.
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		// Add op with nextEligibleAt in the near future.
+		op := getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		op.nextEligibleAt = time.Now().Add(50 * time.Millisecond)
+		op.retryAttempts = 1
+		u.addOperation(op)
+
+		latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+		// Tick 1: not yet eligible, skipped.
+		u.process(context.Background())
+		assert.Equal(t, 1, u.countOperations())
+
+		// Sleep past nextEligibleAt and delete service.
+		time.Sleep(60 * time.Millisecond)
+		cloud.localServiceNameToServiceInfoMap.Delete("default/svc1")
+
+		// Tick 2: eligible but stale, filtered.
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+
+		// No events on either tick (parked, then stale drop).
+		assert.Empty(t, drainEvents(recorder), "expected no events")
+
+		latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+		assert.Equal(t, latencyBefore, latencyAfter, "dropped operation should not record any metric")
+		assert.Equal(t, failureBefore, failureAfter, "dropped operation should not increment failure counter")
+	})
+
+	// Lifecycle
+	for _, tc := range []struct {
+		name              string
+		createOrUpdateErr error
+	}{
+		{
+			name:              "removeOperation removes parked op from queue",
+			createOrUpdateErr: &retryrepectthrottled.ThrottleError{RetryAfter: time.Now().Add(5 * time.Minute)},
+		},
+		{
+			name:              "removeOperation removes requeued op from queue",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, _, mockBP, _ := setupRetryTest(t, 3)
+
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).Return(
+				nil, tc.createOrUpdateErr,
+			).Times(1)
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+			u.process(context.Background())
+			assert.Equal(t, 1, u.countOperations())
+
+			u.removeOperation("default/svc1")
+			assert.Equal(t, 0, u.countOperations())
+		})
+	}
+
+	t.Run("retry requeue is serialized with removeOperation under serviceReconcileLock", func(t *testing.T) {
+		cloud, _, mockBP, _ := setupRetryTest(t, 3)
+
+		armBlocked := make(chan struct{})
+		armUnblock := make(chan struct{})
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).DoAndReturn(
+			func(_ context.Context, _, _, _ string, _ armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+				close(armBlocked)
+				<-armUnblock
+				return nil, &azcore.ResponseError{StatusCode: http.StatusConflict}
+			},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+		// Start process() in goroutine; it acquires serviceReconcileLock.
+		processDone := make(chan struct{})
+		go func() {
+			defer close(processDone)
+			u.process(context.Background())
+		}()
+
+		// Wait for process() to be mid-ARM-call.
+		<-armBlocked
+
+		// Simulate main reconcile path trying to acquire serviceReconcileLock.
+		lockAcquired := make(chan struct{})
+		lockDone := make(chan struct{})
+		go func() {
+			cloud.serviceReconcileLock.Lock()
+			close(lockAcquired)
+			u.removeOperation("default/svc1")
+			cloud.serviceReconcileLock.Unlock()
+			close(lockDone)
+		}()
+
+		// Verify lock is NOT acquired while process() is mid-flight.
+		select {
+		case <-lockAcquired:
+			t.Fatal("serviceReconcileLock acquired while process() is mid-flight")
+		case <-time.After(200 * time.Millisecond):
+			// Expected: blocked.
+		}
+
+		// Unblock ARM; returns 409, requeues, then releases lock.
+		close(armUnblock)
+		<-processDone
+
+		// Wait for lock goroutine to fully complete.
+		select {
+		case <-lockDone:
+		case <-time.After(5 * time.Second):
+			t.Fatal("lock goroutine did not complete")
+		}
+
+		// Op was requeued by process, then removed by removeOperation.
+		assert.Equal(t, 0, u.countOperations())
+	})
+
+	t.Run("retry requeue is serialized with service deletion under serviceReconcileLock", func(t *testing.T) {
+		cloud, _, mockBP, _ := setupRetryTest(t, 3)
+
+		armBlocked := make(chan struct{})
+		armUnblock := make(chan struct{})
+		mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+			getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+		).Times(1)
+		mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).DoAndReturn(
+			func(_ context.Context, _, _, _ string, _ armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+				close(armBlocked)
+				<-armUnblock
+				return nil, &azcore.ResponseError{StatusCode: http.StatusConflict}
+			},
+		).Times(1)
+
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+		u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+		// Start process() in goroutine; it acquires serviceReconcileLock.
+		processDone := make(chan struct{})
+		go func() {
+			defer close(processDone)
+			u.process(context.Background())
+		}()
+
+		// Wait for process() to be mid-ARM-call.
+		<-armBlocked
+
+		// Simulate main reconcile path trying to delete service from map.
+		lockAcquired := make(chan struct{})
+		lockDone := make(chan struct{})
+		go func() {
+			cloud.serviceReconcileLock.Lock()
+			close(lockAcquired)
+			cloud.localServiceNameToServiceInfoMap.Delete("default/svc1")
+			cloud.serviceReconcileLock.Unlock()
+			close(lockDone)
+		}()
+
+		// Verify lock is NOT acquired while process() is mid-flight.
+		select {
+		case <-lockAcquired:
+			t.Fatal("serviceReconcileLock acquired while process() is mid-flight")
+		case <-time.After(200 * time.Millisecond):
+			// Expected: blocked.
+		}
+
+		// Unblock ARM; returns 409, requeues, then releases lock.
+		close(armUnblock)
+		<-processDone
+
+		// Wait for lock goroutine to fully complete.
+		select {
+		case <-lockDone:
+		case <-time.After(5 * time.Second):
+			t.Fatal("lock goroutine did not complete")
+		}
+
+		// Op was requeued by process (queue == 1), map delete happened after.
+		assert.Equal(t, 1, u.countOperations())
+
+		// Next tick: groupOperations filters the stale op.
+		u.process(context.Background())
+		assert.Equal(t, 0, u.countOperations())
+	})
+
+	for _, tc := range []struct {
+		name              string
+		createOrUpdateErr error
+	}{
+		{
+			name:              "context canceled during ARM call drops op without event",
+			createOrUpdateErr: &azcore.ResponseError{StatusCode: http.StatusConflict},
+		},
+		{
+			name:              "ARM call returns context.Canceled on shutdown and op is dropped without event",
+			createOrUpdateErr: context.Canceled,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cloud, recorder, mockBP, _ := setupRetryTest(t, 3)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			mockBP.EXPECT().Get(gomock.Any(), gomock.Any(), "lb1", "pool1").Return(
+				getTestBackendAddressPoolWithIPs("lb1", "pool1", []string{}), nil,
+			).Times(1)
+			mockBP.EXPECT().CreateOrUpdate(gomock.Any(), gomock.Any(), "lb1", "pool1", gomock.Any()).DoAndReturn(
+				func(_ context.Context, _, _, _ string, _ armnetwork.BackendAddressPool) (*armnetwork.BackendAddressPool, error) {
+					cancel()
+					return nil, tc.createOrUpdateErr
+				},
+			).Times(1)
+
+			u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+			u.addOperation(getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"}))
+
+			latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+			u.process(ctx)
+
+			assert.Equal(t, 0, u.countOperations())
+			assert.Empty(t, drainEvents(recorder), "expected no events")
+
+			latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+			assert.Equal(t, latencyBefore, latencyAfter, "dropped operation should not record any metric")
+			assert.Equal(t, failureBefore, failureAfter, "dropped operation should not increment failure counter")
+		})
+	}
+
+	t.Run("shutdown with parked ops drops all without event", func(t *testing.T) {
+		cloud, recorder, _, _ := setupRetryTest(t, 3)
+
+		// No ARM mock expectations: parked ops with canceled context should never reach ARM.
+		u := newLoadBalancerBackendPoolUpdater(cloud, time.Second)
+
+		op := getAddIPsToBackendPoolOperation("default/svc1", "svc1", "lb1", "pool1", []string{"10.0.0.1"})
+		op.nextEligibleAt = time.Now().Add(5 * time.Minute)
+		op.retryAttempts = 1
+		u.addOperation(op)
+
+		// Cancel context before calling process (simulates shutdown).
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		latencyBefore, failureBefore := getBackendPoolUpdaterMetrics(t)
+
+		u.process(ctx)
+
+		// Op was drained and discarded (not requeued).
+		assert.Equal(t, 0, u.countOperations())
+		assert.Empty(t, drainEvents(recorder), "expected no events on shutdown")
+
+		latencyAfter, failureAfter := getBackendPoolUpdaterMetrics(t)
+		assert.Equal(t, latencyBefore, latencyAfter, "dropped operation should not record any metric")
+		assert.Equal(t, failureBefore, failureAfter, "dropped operation should not increment failure counter")
+	})
 }
