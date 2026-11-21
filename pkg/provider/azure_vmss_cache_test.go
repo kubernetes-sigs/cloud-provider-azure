@@ -260,6 +260,9 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 		DisableAvailabilitySetNodes bool
 		EnableVmssFlexNodes         bool
 		vmListErr                   error
+		vmGetResult                 *armcompute.VirtualMachine
+		vmGetErr                    error
+		expectVMGet                 bool
 		expectedVMManagementType    VMManagementType
 		expectedErr                 error
 	}{
@@ -309,6 +312,42 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 			expectedVMManagementType: ManagedByUnknownVMSet,
 			expectedErr:              fmt.Errorf("failed to list VMs"),
 		},
+		{
+			description:              "getVMManagementTypeByProviderID should return the generic error for a providerID not in the cache and not in the standalone VM format",
+			providerID:               "fakeName",
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              fmt.Errorf("getVMManagementTypeByProviderID : failed to check the providerID fakeName management type"),
+		},
+		{
+			description:              "getVMManagementTypeByProviderID should return InstanceNotFound if the VM is not in the cache and has been deleted",
+			providerID:               "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/deletedvm",
+			vmGetErr:                 &azcore.ResponseError{StatusCode: http.StatusNotFound},
+			expectVMGet:              true,
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              cloudprovider.InstanceNotFound,
+		},
+		{
+			description:              "getVMManagementTypeByProviderID should return ManagedByVmssFlex if the VM is not in the cache but is a vmss flex VM in ARM",
+			providerID:               "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/newflexvm",
+			vmGetResult:              &armcompute.VirtualMachine{Properties: &armcompute.VirtualMachineProperties{VirtualMachineScaleSet: &armcompute.SubResource{ID: ptr.To("vmss")}}},
+			expectVMGet:              true,
+			expectedVMManagementType: ManagedByVmssFlex,
+		},
+		{
+			description:              "getVMManagementTypeByProviderID should return ManagedByAvSet if the VM is not in the cache but is a standalone VM in ARM",
+			providerID:               "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/newvm",
+			vmGetResult:              &armcompute.VirtualMachine{Properties: &armcompute.VirtualMachineProperties{}},
+			expectVMGet:              true,
+			expectedVMManagementType: ManagedByAvSet,
+		},
+		{
+			description:              "getVMManagementTypeByProviderID should return an error if the VM is not in the cache and getting it from ARM fails",
+			providerID:               "azure:///subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/newvm",
+			vmGetErr:                 &azcore.ResponseError{StatusCode: http.StatusInternalServerError, ErrorCode: "InternalError"},
+			expectVMGet:              true,
+			expectedVMManagementType: ManagedByUnknownVMSet,
+			expectedErr:              fmt.Errorf("InternalError"),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -324,11 +363,20 @@ func TestGetVMManagementTypeByProviderID(t *testing.T) {
 
 			mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
 			mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVMList, tc.vmListErr).AnyTimes()
+			if tc.expectVMGet {
+				mockVMClient.EXPECT().Get(gomock.Any(), "rg", gomock.Any(), gomock.Any()).Return(tc.vmGetResult, tc.vmGetErr).Times(1)
+			}
 
 			vmManagementType, err := ss.getVMManagementTypeByProviderID(context.TODO(), tc.providerID, azcache.CacheReadTypeDefault)
 			assert.Equal(t, tc.expectedVMManagementType, vmManagementType, tc.description)
 			if tc.expectedErr != nil {
+				assert.Error(t, err, tc.description)
 				assert.Contains(t, err.Error(), tc.expectedErr.Error(), tc.description)
+				if errors.Is(tc.expectedErr, cloudprovider.InstanceNotFound) {
+					assert.ErrorIs(t, err, cloudprovider.InstanceNotFound, tc.description)
+				}
+			} else {
+				assert.NoError(t, err, tc.description)
 			}
 		})
 	}
