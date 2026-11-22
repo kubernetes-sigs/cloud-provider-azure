@@ -120,7 +120,7 @@ The following configuration is made available for advanced users. There are no d
 | `cloudControllerManager.leaderElectLeaseDuration` | The duration that non-leader candidates will wait after observing a leadership renewal until attempting to acquire leadership of a led but unrenewed leader slot. This is effectively the maximum duration that a leader can be stopped before it is replaced by another candidate. This is only applicable if leader election is enabled.|
 | `cloudControllerManager.leaderElectRenewDeadline` | The interval between attempts by the acting master to renew a leadership slot before it stops leading. This must be less than or equal to the lease duration. This is only applicable if leader election is enabled. |
 | `cloudControllerManager.leaderElectRetryPeriod` | The duration the clients should wait between attempting acquisition and renewal of a leadership. This is only applicable if leader election is enabled. |
-| `cloudControllerManager.leaderElectResourceLock` | The type of resource object that is used for locking during leader election. Supported options are 'endpoints', 'configmaps', 'leases', 'endpointsleases' and 'configmapsleases'.|
+| `cloudControllerManager.leaderElectResourceLock` | The type of resource object used for locking during leader election. Use `leases`, which is the default and the only supported value in current cloud-controller-manager releases. |
 | `cloudControllerManager.master` | The address of the Kubernetes API server (overrides any value in kubeconfig). |
 | `cloudControllerManager.minResyncPeriod` | The resync period in reflectors will be random between MinResyncPeriod and 2*MinResyncPeriod. |
 | `cloudControllerManager.nodeStatusUpdateFrequency` | Specifies how often the controller updates nodes' status. |
@@ -149,6 +149,17 @@ The following configuration is made available for advanced users. There are no d
 | `cloudNodeManager.healthProbeProxyImageWindows` | Windows container image name for the health probe proxy sidecar. [Documentation](../health-probe-proxy/README.md)                                |
 
 # Maintaining the Repo
+
+Run `go test -tags=helm -count=1 ./helm/validation` from the repository root with
+Helm installed to validate rendered chart arguments against this checkout's CCM
+and CNM flag definitions. This also runs as part of `make test-helm`.
+
+The check covers default and optional arguments, including the Windows CNM
+launcher, and rejects unknown, deprecated, duplicate, and invalid flags. It
+renders Kubernetes 1.21 through the chart's minor version without overriding
+the default image mappings, but validates flags against the current source, not
+historical container images. Custom image overrides must separately be checked
+against their actual binary versions.
 
 Whenever changes have been made to the `cloud-provider-azure` Helm chart, a new version of the chart should be released. First, pick an appropriate next, higher version and update the `version` property in `helm/cloud-provider-azure/Chart.yaml`. Then, package the entire set of changes to the chart into a new repo version:
 
