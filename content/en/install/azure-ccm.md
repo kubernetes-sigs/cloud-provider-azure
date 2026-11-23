@@ -17,6 +17,14 @@ Using [cloud-controller-manager](https://kubernetes.io/docs/concepts/overview/co
 
 There is a [helm chart available](https://github.com/kubernetes-sigs/cloud-provider-azure/tree/master/helm/cloud-provider-azure) which can be used to deploy the Azure cloud controller manager.
 
+The latest release of azure-cloud-controller-manager and azure-cloud-node-manager can be found at
+
+* `mcr.microsoft.com/oss/v2/kubernetes/azure-cloud-controller-manager` ([controller-manager tags](https://mcr.microsoft.com/v2/oss/v2/kubernetes/azure-cloud-controller-manager/tags/list))
+* `mcr.microsoft.com/oss/v2/kubernetes/azure-cloud-node-manager` ([node-manager tags](https://mcr.microsoft.com/v2/oss/v2/kubernetes/azure-cloud-node-manager/tags/list))
+
+Choose an image tag that matches your Kubernetes minor version.
+Some older tags are only available under `mcr.microsoft.com/oss/kubernetes`.
+
 To deploy Azure cloud controller manager, the following components need to be configured.
 
 ### kubelet
