@@ -360,10 +360,11 @@ func endpointSliceFromDeleteEvent(logger logr.Logger, obj interface{}) *discover
 }
 
 // setUpEndpointSlicesInformer registers the legacy local-service backend-pool handlers.
-func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInformerFactory) {
+func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInformerFactory) error {
 	logger := log.Background().WithName("setUpEndpointSlicesInformer")
 	endpointSlicesInformer := informerFactory.Discovery().V1().EndpointSlices().Informer()
-	_, _ = endpointSlicesInformer.AddEventHandler(
+	az.endpointSlicesSynced = nil
+	registration, err := endpointSlicesInformer.AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				es := obj.(*discovery_v1.EndpointSlice)
@@ -439,6 +440,49 @@ func (az *Cloud) setUpEndpointSlicesInformer(informerFactory informers.SharedInf
 				az.endpointSlicesCache.Delete(strings.ToLower(fmt.Sprintf("%s/%s", endpointSlice.Namespace, endpointSlice.Name)))
 			},
 		})
+	if err != nil {
+		return fmt.Errorf("register EndpointSlice handler: %w", err)
+	}
+	az.endpointSlicesSynced = registration.HasSyncedChecker().Done()
+	return nil
+}
+
+// waitForEndpointSlicesSync waits for the EndpointSlice handler's initial callbacks
+// to finish in multi-SLB mode. A synced informer store does not guarantee that the
+// handler has populated the provider's cache. Load balancer reconciliation with an
+// incomplete cache could remove NSG rules still needed by other Services.
+func (az *Cloud) waitForEndpointSlicesSync(ctx context.Context) error {
+	if !az.UseMultipleStandardLoadBalancers() {
+		return nil
+	}
+	if az.endpointSlicesSynced == nil {
+		return fmt.Errorf("EndpointSlice handler is not initialized")
+	}
+
+	select {
+	case <-az.endpointSlicesSynced:
+	default:
+		logger := log.FromContextOrBackground(ctx).WithName("waitForEndpointSlicesSync")
+		logger.V(2).Info("Waiting for EndpointSlice handler to sync")
+		select {
+		case <-az.endpointSlicesSynced:
+			logger.V(2).Info("EndpointSlice handler is synced")
+		case <-ctx.Done():
+			return fmt.Errorf("wait for EndpointSlice handler sync: %w", ctx.Err())
+		case <-az.stopCh:
+			return fmt.Errorf("wait for EndpointSlice handler sync: %w", context.Canceled)
+		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("wait for EndpointSlice handler sync: %w", err)
+	}
+	select {
+	case <-az.stopCh:
+		return fmt.Errorf("wait for EndpointSlice handler sync: %w", context.Canceled)
+	default:
+		return nil
+	}
 }
 
 func (az *Cloud) processBatchOperationResult(op batchOperation, res batchOperationResult) {

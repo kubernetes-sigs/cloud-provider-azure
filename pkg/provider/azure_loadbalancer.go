@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/config"
 	providererrors "sigs.k8s.io/cloud-provider-azure/pkg/provider/errors"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace"
 	"sigs.k8s.io/cloud-provider-azure/pkg/trace/attributes"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/errutils"
@@ -227,6 +228,10 @@ func (az *Cloud) EnsureLoadBalancer(ctx context.Context, clusterName string, ser
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
 
+	if err = az.waitForEndpointSlicesSync(ctx); err != nil {
+		return nil, err
+	}
+
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
 	defer az.serviceReconcileLock.Unlock()
@@ -321,6 +326,10 @@ func (az *Cloud) UpdateLoadBalancer(ctx context.Context, clusterName string, ser
 	var err error
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
+
+	if err = az.waitForEndpointSlicesSync(ctx); err != nil {
+		return err
+	}
 
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
@@ -426,6 +435,10 @@ func (az *Cloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName stri
 
 	ctx, span := trace.BeginReconcile(ctx, trace.DefaultTracer(), Operation, attributes.FeatureOfService(service)...)
 	defer func() { span.Observe(ctx, err) }()
+
+	if err = az.waitForEndpointSlicesSync(ctx); err != nil {
+		return err
+	}
 
 	// Serialize service reconcile process
 	az.serviceReconcileLock.Lock()
@@ -3686,8 +3699,6 @@ func (az *Cloud) reconcileSecurityGroup(
 
 	if disableFloatingIP {
 		// use the backend node IPs
-		dstIPv4Addresses = append(dstIPv4Addresses, backendIPv4Addresses...)
-		dstIPv6Addresses = append(dstIPv6Addresses, backendIPv6Addresses...)
 		desiredRuleDstIPv4Addresses = append(slices.Clone(additionalIPv4Addresses), filterAddressesByServiceIPFamilies(service, backendIPv4Addresses)...)
 		desiredRuleDstIPv6Addresses = append(slices.Clone(additionalIPv6Addresses), filterAddressesByServiceIPFamilies(service, backendIPv6Addresses)...)
 	} else {
@@ -3698,13 +3709,31 @@ func (az *Cloud) reconcileSecurityGroup(
 		desiredRuleDstIPv6Addresses = slices.Clone(dstIPv6Addresses)
 	}
 
-	var backendNodeIPs []netip.Addr
-	if disableFloatingIP {
-		backendNodeIPs = append(backendNodeIPs, backendIPv4Addresses...)
-		backendNodeIPs = append(backendNodeIPs, backendIPv6Addresses...)
+	dstIPv4Addresses = append(dstIPv4Addresses, backendIPv4Addresses...)
+	dstIPv6Addresses = append(dstIPv6Addresses, backendIPv6Addresses...)
+
+	// Service status is updated after LB and NSG reconciliation, so it may still
+	// contain removed additional IPs or replaced frontend IPs. Include these in
+	// cleanup only, not desired rules. Current frontend rules can also become
+	// unused when floating IP is disabled; retain only access still needed by
+	// another Service.
+	for _, ingress := range service.Status.LoadBalancer.Ingress {
+		address, err := netip.ParseAddr(ingress.IP)
+		if err != nil {
+			continue
+		}
+		if address.Is4() {
+			dstIPv4Addresses = append(dstIPv4Addresses, address)
+		} else {
+			dstIPv6Addresses = append(dstIPv6Addresses, address)
+		}
 	}
 
-	retainPortRanges, denyAllDestinations, err := az.listSharedIPPortMapping(
+	var backendNodeIPs []netip.Addr
+	backendNodeIPs = append(backendNodeIPs, backendIPv4Addresses...)
+	backendNodeIPs = append(backendNodeIPs, backendIPv6Addresses...)
+
+	otherServicePorts, denyAllDestinations, err := az.listSharedIPPortMapping(
 		ctx, service, append(dstIPv4Addresses, dstIPv6Addresses...), backendNodeIPs,
 	)
 	if err != nil {
@@ -3712,7 +3741,11 @@ func (az *Cloud) reconcileSecurityGroup(
 		return nil, err
 	}
 
-	if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, retainPortRanges); err != nil {
+	desiredRuleDestinations := make(securitygroup.CurrentServiceRuleRequirements)
+	if wantLb && !disableLoadBalancerNSGRule {
+		accessControl.RecordDesiredRuleDestinations(desiredRuleDestinations, desiredRuleDstIPv4Addresses, desiredRuleDstIPv6Addresses)
+	}
+	if err := accessControl.CleanSecurityGroup(dstIPv4Addresses, dstIPv6Addresses, otherServicePorts, desiredRuleDestinations); err != nil {
 		logger.Error(err, "Failed to clean security group")
 		return nil, err
 	}

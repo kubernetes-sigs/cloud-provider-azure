@@ -20,32 +20,32 @@ import (
 	"context"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
 	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/pkg/log"
 	"sigs.k8s.io/cloud-provider-azure/pkg/provider/loadbalancer"
+	"sigs.k8s.io/cloud-provider-azure/pkg/provider/securitygroup"
 	fnutil "sigs.k8s.io/cloud-provider-azure/pkg/util/collectionutil"
 	"sigs.k8s.io/cloud-provider-azure/pkg/util/iputil"
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
 
-// filterServicesSharingDestinations returns the Services that may have rules for any of the
-// destinations. disableFloatingIP means destinations can hold backend node IPs. The ingress status
-// does not carry the nodes a Service targets, so every LoadBalancer Service with the floating IP
-// disabled is taken instead.
-func filterServicesSharingDestinations(services []*v1.Service, destinations []netip.Addr, disableFloatingIP bool) []*v1.Service {
+// filterServicesSharingDestinations returns LoadBalancer Services whose ingress IPs overlap
+// destinations. When includeFloatingIPDisabled is true, it also includes Services with floating
+// IP disabled because ingress status does not identify their backend nodes.
+func filterServicesSharingDestinations(services []*v1.Service, destinations []netip.Addr, includeFloatingIPDisabled bool) []*v1.Service {
 	targetIPs := fnutil.Map(func(ip netip.Addr) string { return ip.String() }, destinations)
 
 	return fnutil.Filter(func(svc *v1.Service) bool {
 		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 			return false
 		}
-		if disableFloatingIP && consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
+		if includeFloatingIPDisabled && consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) {
 			return true
 		}
 
@@ -104,16 +104,17 @@ func (az *Cloud) backendNodeIPsOfService(svc *v1.Service) []netip.Addr {
 // There are scenarios where multiple services share the same public IP,
 // and in order to clean up the security rules, we need to know the port mapping of the shared IP.
 // The deny all rules are shared the same way, so a destination has to survive the cleanup while any
-// of those services still requires it. backendNodeIPs are the nodes behind svc.
+// of those services still requires it. Only destinations in dstAddresses are included.
+// backendNodeIPs are the nodes behind svc.
 func (az *Cloud) listSharedIPPortMapping(
 	ctx context.Context,
 	svc *v1.Service,
 	dstAddresses []netip.Addr,
 	backendNodeIPs []netip.Addr,
-) (map[armnetwork.SecurityRuleProtocol][]int32, []netip.Addr, error) {
+) (securitygroup.OtherServiceAccessRequirements, []netip.Addr, error) {
 	var (
 		logger = log.FromContextOrBackground(ctx).WithName("listSharedIPPortMapping")
-		rv     = make(map[armnetwork.SecurityRuleProtocol][]int32)
+		rv     = make(securitygroup.OtherServiceAccessRequirements)
 
 		isDstAddress = make(map[netip.Addr]bool, len(dstAddresses))
 		// The same address may be appended more than once. SetDestinationPrefixes will deduplicate.
@@ -143,61 +144,64 @@ func (az *Cloud) listSharedIPPortMapping(
 		}
 		logger.V(5).Info("Listed all services", "num-all-services", len(services))
 
-		// Filter services by ingress IPs, or by the floating IP being disabled when svc disables it
-		disableFloatingIP := consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc)
-		if disableFloatingIP {
-			logger.V(5).Info("Filter service by disableFloatingIP")
-		} else {
-			logger.V(5).Info("Filter service by external IPs")
-		}
-		services = filterServicesSharingDestinations(services, dstAddresses, disableFloatingIP)
+		// Include Services with floating IP disabled because they can share backend
+		// nodes without sharing frontend IPs. When this Service disables floating IP,
+		// also include them if backend lookup is empty.
+		includeFloatingIPDisabled := consts.IsK8sServiceDisableLoadBalancerFloatingIP(svc) || len(backendNodeIPs) > 0
+		logger.V(5).Info("Filtering services by destination IPs",
+			"include-floating-ip-disabled", includeFloatingIPDisabled)
+		services = filterServicesSharingDestinations(services, dstAddresses, includeFloatingIPDisabled)
 	}
 	logger.V(5).Info("Filtered services", "num-filtered-services", len(services))
 
-	for _, s := range services {
-		logger.V(5).Info("Iterating service", "service", s.Name, "namespace", s.Namespace)
-		if svc.Namespace == s.Namespace && svc.Name == s.Name {
+	for _, otherSvc := range services {
+		logger.V(5).Info("Iterating service", "service", otherSvc.Name, "namespace", otherSvc.Namespace)
+		if svc.Namespace == otherSvc.Namespace && svc.Name == otherSvc.Name {
 			// skip the service itself
 			continue
 		}
-
-		portsByProtocol, err := loadbalancer.SecurityRuleDestinationPortsByProtocol(s)
-		if err != nil {
-			return nil, nil, fmt.Errorf("fetch security rule dst ports for %s: %w", s.Name, err)
-		}
-
-		for protocol, ports := range portsByProtocol {
-			rv[protocol] = append(rv[protocol], ports...)
-		}
-
-		if consts.IsK8sServiceDisableLoadBalancerNSGRule(s) || !loadbalancer.RequiresDenyAllExceptSourceRanges(s) {
+		if consts.IsK8sServiceDisableLoadBalancerNSGRule(otherSvc) {
 			continue
 		}
 
-		if additionalIPs, err := loadbalancer.AdditionalPublicIPs(s); err == nil {
-			for _, addr := range additionalIPs {
-				if isDstAddress[addr] {
-					denyAllDestinations = append(denyAllDestinations, addr)
+		additionalIPs, additionalIPsErr := loadbalancer.AdditionalPublicIPs(otherSvc)
+		otherSvcDestinations := append([]netip.Addr{}, additionalIPs...)
+		disableFloatingIP := consts.IsK8sServiceDisableLoadBalancerFloatingIP(otherSvc)
+		// A service that disables the floating IP has no rule for its frontend IP.
+		// Its rules target the nodes backing it instead.
+		if disableFloatingIP {
+			nodeIPs := sharedBackendNodeIPs(otherSvc)
+			otherSvcDestinations = append(otherSvcDestinations, nodeIPs...)
+		}
+		// With floating IP enabled, the Service's rules use its ingress IPs.
+		// If azure-additional-public-ips cannot be parsed, also use published ingress
+		// when floating IP is disabled to avoid removing existing additional-IP access.
+		// This can retain unused frontend destinations until the other Service
+		// successfully reconciles after the annotation is corrected or removed.
+		if !disableFloatingIP || additionalIPsErr != nil {
+			for _, ingress := range otherSvc.Status.LoadBalancer.Ingress {
+				if address, err := netip.ParseAddr(ingress.IP); err == nil {
+					otherSvcDestinations = append(otherSvcDestinations, address)
 				}
 			}
 		}
+		// Only collect allow and deny requirements for destinations this Service's cleanup
+		// will examine. Requirements for other destinations cannot affect that cleanup.
+		otherSvcDestinations = slices.DeleteFunc(otherSvcDestinations, func(address netip.Addr) bool {
+			return !isDstAddress[address]
+		})
+		if len(otherSvcDestinations) == 0 {
+			continue
+		}
+		if err := loadbalancer.AddOtherServiceRulePortsToRetain(logger, otherSvc, otherSvcDestinations, rv); err != nil {
+			return nil, nil, fmt.Errorf("fetch security rule dst ports for %s: %w", otherSvc.Name, err)
+		}
 
-		// A service that disables the floating IP has no rule for its frontend IP; its rules
-		// target the nodes backing it instead.
-		if consts.IsK8sServiceDisableLoadBalancerFloatingIP(s) {
-			for _, addr := range sharedBackendNodeIPs(s) {
-				if isDstAddress[addr] {
-					denyAllDestinations = append(denyAllDestinations, addr)
-				}
-			}
+		if !loadbalancer.RequiresDenyAllExceptSourceRanges(otherSvc) {
 			continue
 		}
 
-		for _, ing := range s.Status.LoadBalancer.Ingress {
-			if addr, err := netip.ParseAddr(ing.IP); err == nil && isDstAddress[addr] {
-				denyAllDestinations = append(denyAllDestinations, addr)
-			}
-		}
+		denyAllDestinations = append(denyAllDestinations, otherSvcDestinations...)
 	}
 
 	logger.V(5).Info("Retain port mapping", "port-mapping", rv, "deny-all-destinations", denyAllDestinations)

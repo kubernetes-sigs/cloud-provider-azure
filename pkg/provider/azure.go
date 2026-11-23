@@ -125,6 +125,7 @@ type Cloud struct {
 	refreshZonesLock sync.RWMutex
 
 	KubeClient         clientset.Interface
+	stopCh             <-chan struct{}
 	eventBroadcaster   record.EventBroadcaster
 	eventRecorder      record.EventRecorder
 	routeUpdater       batchProcessor
@@ -156,6 +157,7 @@ type Cloud struct {
 	multipleStandardLoadBalancersActiveNodesLock    sync.Mutex
 	localServiceNameToServiceInfoMap                sync.Map
 	endpointSlicesCache                             sync.Map
+	endpointSlicesSynced                            <-chan struct{}
 
 	azureResourceLocker *AzureResourceLocker
 
@@ -652,7 +654,8 @@ func (az *Cloud) setCloudProviderBackoffDefaults(config *azureconfig.Config) wai
 }
 
 // Initialize passes a Kubernetes clientBuilder interface to the cloud provider
-func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, _ <-chan struct{}) {
+func (az *Cloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stopCh <-chan struct{}) {
+	az.stopCh = stopCh
 	if az.KubeClient == nil {
 		az.KubeClient = clientBuilder.ClientOrDie("azure-cloud-provider")
 	}
@@ -769,7 +772,9 @@ func (az *Cloud) SetInformers(informerFactory informers.SharedInformerFactory) {
 
 	// ServiceGateway registers its own EndpointSlice handlers when its runtime starts.
 	if az.serviceGatewayRuntime == nil {
-		az.setUpEndpointSlicesInformer(informerFactory)
+		if err := az.setUpEndpointSlicesInformer(informerFactory); err != nil {
+			logger.Error(err, "Could not set up EndpointSlice informer")
+		}
 	}
 }
 
