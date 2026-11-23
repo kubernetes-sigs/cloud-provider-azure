@@ -17,8 +17,11 @@ This is the "external" or "out-of-tree" cloud provider for Azure. The "in-tree" 
 
 The latest release of azure-cloud-controller-manager and azure-cloud-node-manager can be found at
 
-* `mcr.microsoft.com/oss/v2/kubernetes/azure-cloud-controller-manager:v1.34.3`
-* `mcr.microsoft.com/oss/v2/kubernetes/azure-cloud-node-manager:v1.34.3`
+* `mcr.microsoft.com/oss/v2/kubernetes/azure-cloud-controller-manager` ([controller-manager tags](https://mcr.microsoft.com/v2/oss/v2/kubernetes/azure-cloud-controller-manager/tags/list))
+* `mcr.microsoft.com/oss/v2/kubernetes/azure-cloud-node-manager` ([node-manager tags](https://mcr.microsoft.com/v2/oss/v2/kubernetes/azure-cloud-node-manager/tags/list))
+
+Choose an image tag that matches your Kubernetes minor version.
+Some older tags are only available under `mcr.microsoft.com/oss/kubernetes`.
 
 ### Version matrix
 

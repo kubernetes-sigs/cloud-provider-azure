@@ -8,8 +8,10 @@ This Helm chart enables installation and maintenance of Azure cloud provider com
 
 By default the chart will choose the correct, latest released version of `cloud-controller-manager` and `cloud-node-manager` that corresponds with the cloud-provider-azure-supported version of Kubernetes that you are running.
 
+Available image tags can be found in the [MCR tag lists](../../README.md#current-status).
+
 ```bash
-$ helm install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo cloud-provider-azure --generate-name --set cloudControllerManager.imageRepository=mcr.microsoft.com/oss/kubernetes --set cloudControllerManager.imageName=azure-cloud-controller-manager --set cloudNodeManager.imageRepository=mcr.microsoft.com/oss/kubernetes --set cloudNodeManager.imageName=azure-cloud-node-manager
+$ helm install --repo https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-azure/master/helm/repo cloud-provider-azure --generate-name
 ```
 
 If you are running a version of Kubernetes prior to 1.21, then you must provide a known-working image URI that references a build of the cloud-provider-azure runtimes that works with your version of Kubernetes. For example:
@@ -67,7 +69,7 @@ Below is the complete set of configuration that you may include when invoking `h
 | `cloudControllerManager.cloudConfig`                              | `"/etc/kubernetes/azure.json"`       | The path to the cloud provider configuration file. Empty string for no configuration file.                                                                                       |
 | `cloudControllerManager.clusterCIDR`                              | `"10.244.0.0/16"`                    | set to the network CIDR for pod IP addresses                                                                                                                                     |
 | `cloudControllerManager.configureCloudRoutes`                     | `"true"`                             | if you're using Azure CNI set to `"false"`                                                                                                                                       |
-| `cloudControllerManager.imageRepository`                          | `"mcr.microsoft.com/oss/v2/kubernetes" for Kubernetes 1.32 and later, `"mcr.microsoft.com/oss/kubernetes"` for Kubernetes 1.31 and prior | container image repository (including any image project directories) location where the Azure `cloud-controller-manager` container image is hosted                               |
+| `cloudControllerManager.imageRepository`                          | `"mcr.microsoft.com/oss/v2/kubernetes"` for Kubernetes 1.32 and later, `"mcr.microsoft.com/oss/kubernetes"` for Kubernetes 1.31 and prior | container image repository (including any image project directories) location where the Azure `cloud-controller-manager` container image is hosted                               |
 | `cloudControllerManager.imageName`                                | `"azure-cloud-controller-manager"`   | container image name for the Azure `cloud-controller-manager` runtime                                                                                                            |
 | `cloudControllerManager.imagePullPolicy`                          | `"IfNotPresent"`                     | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
 | `cloudControllerManager.logVerbosity`                             | `"2"`                                | set to a higher number when debugging the azure-cloud-controller-manager runtime                                                                                                 |
@@ -85,7 +87,7 @@ Below is the complete set of configuration that you may include when invoking `h
 | configuration value | default value | description |
 | --- | --- | --- |
 | `cloudNodeManager.enabled` | `true` | Enable or disable the azure-cloud-node-manager deployment. |
-| `cloudNodeManager.imageRepository` | `"mcr.microsoft.com/oss/kubernetes"` | container image repository (including any image project directories) location where the Azure `cloud-node-manager` container image is hosted |
+| `cloudNodeManager.imageRepository` | `"mcr.microsoft.com/oss/v2/kubernetes"` for Kubernetes 1.32 and later, `"mcr.microsoft.com/oss/kubernetes"` for Kubernetes 1.31 and prior | container image repository (including any image project directories) location where the Azure `cloud-node-manager` container image is hosted |
 | `cloudNodeManager.imageName` | `"azure-cloud-node-manager"` | container image name for the Azure `cloud-node-manager` runtime |
 | `cloudControllerManager.imagePullPolicy` | `"IfNotPresent"` | you may change to`"Always"` or `"Never"` if appropriate for your environment, see [here](https://kubernetes.io/docs/concepts/containers/images/#image-pull-policy) for more info |
 | `cloudNodeManager.logVerbosity`                            | `"2"`                                | set to a higher number when debugging the azure-cloud-node-manager runtime                                                                                                 |
