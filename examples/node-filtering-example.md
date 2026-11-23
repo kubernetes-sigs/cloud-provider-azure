@@ -54,6 +54,8 @@ When `--node-filter-requirements` is specified:
 
 ## Deployment Example
 
+Choose a [CCM image tag](../README.md#current-status) that matches your Kubernetes minor version and supports `--node-filter-requirements`.
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -65,7 +67,7 @@ spec:
     spec:
       containers:
       - name: cloud-controller-manager
-        image: mcr.microsoft.com/oss/kubernetes/azure-cloud-controller-manager:latest
+        image: mcr.microsoft.com/oss/v2/kubernetes/azure-cloud-controller-manager:v1.37.5
         command:
         - cloud-controller-manager
         - --node-filter-requirements=environment=production,!maintenance
