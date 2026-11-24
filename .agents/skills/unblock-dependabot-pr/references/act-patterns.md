@@ -51,6 +51,7 @@ shows one of:
 - `PublicIPCountLimitReached`
 - `PublicIPPrefixCountLimitReached`
 - `IPv4StandardSkuPublicIpCountLimitReached`
+- `IPv6StandardSkuPublicIpCountLimitReached`
 
 Confirm the failure text from the job's current Prow log before retesting. If
 the row matches, follow
