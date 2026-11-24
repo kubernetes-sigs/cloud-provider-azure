@@ -30,8 +30,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
-
-	. "github.com/onsi/gomega"
 )
 
 const (
@@ -101,15 +99,19 @@ func WaitServiceExposureAndGetIPs(cs clientset.Interface, namespace string, name
 
 // WaitServiceExposureAndValidateConnectivity returns IPs of the service and check the connectivity if they are public IPs.
 // Service should have been created before calling this function.
+// On failure it deletes the Service and waits for finalization; on success the caller owns cleanup.
 func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, ipFamily IPFamily, namespace string, name string, targetIPs []*string) ([]*string, error) {
+	return waitServiceExposureAndValidateConnectivity(cs, namespace, name, targetIPs, ValidateServiceConnectivity)
+}
+
+func waitServiceExposureAndValidateConnectivity(cs clientset.Interface, namespace string, name string, targetIPs []*string, validateConnectivity func(string, string, string, int, v1.Protocol) error) (ips []*string, err error) {
 	var service *v1.Service
-	var err error
-	var ips []*string
 
 	defer func() {
 		if err != nil {
-			deleteSvcErr := DeleteService(cs, namespace, name)
-			Expect(deleteSvcErr).NotTo(HaveOccurred())
+			if deleteSvcErr := DeleteService(cs, namespace, name); deleteSvcErr != nil {
+				Logf("Failed to clean up Service %q in namespace %q after error %v: %v", name, namespace, err, deleteSvcErr)
+			}
 		}
 	}()
 
@@ -136,7 +138,7 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, ipFamily
 	defer func() {
 		deletePodErr := DeletePod(cs, namespace, ExecAgnhostPod)
 		if deletePodErr != nil {
-			Logf("failed to delete ExecAgnhostPod, error: %v", err)
+			Logf("failed to delete ExecAgnhostPod, error: %v", deletePodErr)
 		}
 	}()
 	if !result || err != nil {
@@ -149,7 +151,7 @@ func WaitServiceExposureAndValidateConnectivity(cs clientset.Interface, ipFamily
 	for _, port := range service.Spec.Ports {
 		for _, ip := range ips {
 			Logf("checking the connectivity of address %q %d with protocol %v", *ip, int(port.Port), port.Protocol)
-			if err := ValidateServiceConnectivity(namespace, ExecAgnhostPod, *ip, int(port.Port), port.Protocol); err != nil {
+			if err := validateConnectivity(namespace, ExecAgnhostPod, *ip, int(port.Port), port.Protocol); err != nil {
 				return ips, err
 			}
 		}
