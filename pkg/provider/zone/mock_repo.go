@@ -55,6 +55,21 @@ func (m *MockRepository) EXPECT() *MockRepositoryMockRecorder {
 	return m.recorder
 }
 
+// ListNetworkResourceZones mocks base method.
+func (m *MockRepository) ListNetworkResourceZones(ctx context.Context, resourceType string) (map[string][]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNetworkResourceZones", ctx, resourceType)
+	ret0, _ := ret[0].(map[string][]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNetworkResourceZones indicates an expected call of ListNetworkResourceZones.
+func (mr *MockRepositoryMockRecorder) ListNetworkResourceZones(ctx, resourceType any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNetworkResourceZones", reflect.TypeOf((*MockRepository)(nil).ListNetworkResourceZones), ctx, resourceType)
+}
+
 // ListZones mocks base method.
 func (m *MockRepository) ListZones(ctx context.Context) (map[string][]string, error) {
 	m.ctrl.T.Helper()
