@@ -24,10 +24,14 @@ import (
 	"strings"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/fake"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	armnetwork "github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
+
+	"sigs.k8s.io/cloud-provider-azure/pkg/azclient/utils"
 )
 
 var beforeAllFunc func(context.Context)
@@ -106,6 +110,24 @@ var _ = ginkgo.Describe("PublicIPAddressesClient", ginkgo.Ordered, func() {
 			var responseError *azcore.ResponseError
 			gomega.Expect(errors.As(err, &responseError)).To(gomega.BeTrue())
 			gomega.Expect(responseError.StatusCode).To(gomega.Equal(http.StatusPreconditionFailed))
+		})
+		ginkgo.It("should send the ETag as an If-Match precondition", func(ctx context.Context) {
+			resource := *newResource
+			resource.Etag = to.Ptr("etag")
+			intercepted := errors.New("request intercepted after ETag validation")
+			options := utils.GetDefaultOption()
+			options.Retry.MaxRetries = -1
+			options.PerRetryPolicies = append(options.PerRetryPolicies, utils.FuncPolicyWrapper(
+				func(req *policy.Request) (*http.Response, error) {
+					gomega.Expect(req.Raw().Method).To(gomega.Equal(http.MethodPut))
+					gomega.Expect(req.Raw().Header.Get("If-Match")).To(gomega.Equal(*resource.Etag))
+					return nil, intercepted
+				},
+			))
+			client, err := New(subscriptionID, &fake.TokenCredential{}, options)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			_, err = client.CreateOrUpdate(ctx, resourceGroupName, resourceName, resource)
+			gomega.Expect(errors.Is(err, intercepted)).To(gomega.BeTrue())
 		})
 	})
 
