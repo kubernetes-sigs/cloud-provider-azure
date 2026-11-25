@@ -291,6 +291,16 @@ func testIMDSInstanceBody(ipv4, ipv4Public, ipv6 string) string {
 		testIMDSNodeName, testIMDSVMSize, testIMDSResourceID, imdsIPEntry(ipv4, ipv4Public), imdsIPEntry(ipv6, ""))
 }
 
+// testIMDSInstanceBodyWithZone returns instance metadata for the local node
+// including zone, location and fault domain information.
+func testIMDSInstanceBodyWithZone(ipv4, ipv4Public, ipv6, zone, location, faultDomain string) string {
+	return fmt.Sprintf(`{"compute":{"name":%q,"vmSize":%q,"subscriptionId":"sub","resourceGroupName":"rg","resourceId":%q,`+
+		`"zone":%q,"location":%q,"platformFaultDomain":%q},`+
+		`"network":{"interface":[{"ipv4":{"ipAddress":[%s]},"ipv6":{"ipAddress":[%s]}}]}}`,
+		testIMDSNodeName, testIMDSVMSize, testIMDSResourceID, zone, location, faultDomain,
+		imdsIPEntry(ipv4, ipv4Public), imdsIPEntry(ipv6, ""))
+}
+
 func testIMDSLBBody(frontendIP, privateIP string) string {
 	return fmt.Sprintf(`{"loadbalancer":{"publicIpAddresses":[{"frontendIpAddress":%q,"privateIpAddress":%q}]}}`, frontendIP, privateIP)
 }

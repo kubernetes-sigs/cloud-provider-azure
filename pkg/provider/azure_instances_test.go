@@ -1233,11 +1233,9 @@ func TestInstanceMetadataWithLBStatus(t *testing.T) {
 			defer ctrl.Finish()
 			cloud := GetTestCloud(ctrl)
 			cloud.UseInstanceMetadata = true
-			f := newFakeIMDS(t, testIMDSInstanceBody("10.0.0.5", "", ""), tc.lbHandler)
+			f := newFakeIMDS(t, testIMDSInstanceBodyWithZone("10.0.0.5", "", "", "1", "eastus", "0"), tc.lbHandler)
 			cloud.Metadata = newTestIMDSService(t, f)
-			mockVMSet := NewMockVMSet(ctrl)
-			mockVMSet.EXPECT().GetZoneByNodeName(gomock.Any(), testIMDSNodeName).Return(cloudprovider.Zone{FailureDomain: "eastus-1", Region: "eastus"}, nil)
-			cloud.VMSet = mockVMSet
+			cloud.VMSet = NewMockVMSet(ctrl)
 
 			node := &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: testIMDSNodeName},
@@ -1503,5 +1501,68 @@ func TestCloud_InstanceExists(t *testing.T) {
 		exist, err := cloud.InstanceExists(ctx, node)
 		assert.NoError(t, err)
 		assert.False(t, exist)
+	})
+}
+
+func TestInstanceMetadataZoneFromIMDS(t *testing.T) {
+	t.Run("local node uses IMDS without ARM", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		cloud := GetTestCloud(ctrl)
+		cloud.UseInstanceMetadata = true
+		f := newFakeIMDS(t, testIMDSInstanceBodyWithZone("10.0.0.5", "", "", "1", "eastus", "0"), imdsLBStatus(http.StatusNotFound))
+		cloud.Metadata = newTestIMDSService(t, f)
+		mockVMSet := NewMockVMSet(ctrl)
+		cloud.VMSet = mockVMSet
+
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: testIMDSNodeName}}
+
+		meta, err := cloud.InstanceMetadata(context.Background(), node)
+		assert.NoError(t, err)
+		assert.Equal(t, "eastus-1", meta.Zone)
+		assert.Equal(t, "eastus", meta.Region)
+	})
+
+	t.Run("non-local node falls back to ARM", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		cloud := GetTestCloud(ctrl)
+		cloud.UseInstanceMetadata = true
+		f := newFakeIMDS(t, testIMDSInstanceBodyWithZone("10.0.0.5", "", "", "1", "eastus", "0"), imdsLBStatus(http.StatusNotFound))
+		cloud.Metadata = newTestIMDSService(t, f)
+		mockVMSet := NewMockVMSet(ctrl)
+		mockVMSet.EXPECT().GetInstanceIDByNodeName(gomock.Any(), "vm2").Return(testIMDSResourceID, nil)
+		mockVMSet.EXPECT().GetInstanceTypeByNodeName(gomock.Any(), "vm2").Return(testIMDSVMSize, nil)
+		mockVMSet.EXPECT().GetIPByNodeName(gomock.Any(), "vm2").Return("10.0.0.6", "", nil)
+		mockVMSet.EXPECT().GetZoneByNodeName(gomock.Any(), "vm2").Return(cloudprovider.Zone{FailureDomain: "westus-2", Region: "westus"}, nil)
+		cloud.VMSet = mockVMSet
+
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: "vm2"}}
+
+		meta, err := cloud.InstanceMetadata(context.Background(), node)
+		assert.NoError(t, err)
+		assert.Equal(t, "westus-2", meta.Zone)
+		assert.Equal(t, "westus", meta.Region)
+	})
+
+	t.Run("local node without zone falls back to fault domain", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		cloud := GetTestCloud(ctrl)
+		cloud.UseInstanceMetadata = true
+		f := newFakeIMDS(t, testIMDSInstanceBodyWithZone("10.0.0.5", "", "", "", "eastus", "2"), imdsLBStatus(http.StatusNotFound))
+		cloud.Metadata = newTestIMDSService(t, f)
+		mockVMSet := NewMockVMSet(ctrl)
+		cloud.VMSet = mockVMSet
+
+		node := &v1.Node{ObjectMeta: metav1.ObjectMeta{Name: testIMDSNodeName}}
+
+		meta, err := cloud.InstanceMetadata(context.Background(), node)
+		assert.NoError(t, err)
+		assert.Equal(t, "2", meta.Zone)
+		assert.Equal(t, "eastus", meta.Region)
 	})
 }
