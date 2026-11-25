@@ -52,6 +52,9 @@ type VMSet interface {
 	// GetZoneByNodeName gets cloudprovider.Zone by node name.
 	GetZoneByNodeName(ctx context.Context, name string) (cloudprovider.Zone, error)
 
+	// GetPlatformFaultDomainByNodeName gets the platform fault domain by node name.
+	GetPlatformFaultDomainByNodeName(ctx context.Context, name string) (string, error)
+
 	// GetPrimaryVMSetName returns the VM set name depending on the configured vmType.
 	// It returns config.PrimaryScaleSetName for vmss and config.PrimaryAvailabilitySetName for standard vmType.
 	GetPrimaryVMSetName() string

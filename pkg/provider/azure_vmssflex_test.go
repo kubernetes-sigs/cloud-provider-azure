@@ -444,13 +444,13 @@ func TestGetZoneByNodeNameVmssFlex(t *testing.T) {
 			expectedErr:                    cloudprovider.InstanceNotFound,
 		},
 		{
-			description:                    "GetZoneByNodeName should return the correct zone if zone is nil but fault domain is not nil",
+			description:                    "GetZoneByNodeName should return empty FailureDomain if zone is nil but fault domain is not nil",
 			nodeName:                       "vmssflex1000002",
 			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
 			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
 			vmListErr:                      nil,
 			expectedZone: cloudprovider.Zone{
-				FailureDomain: "1",
+				FailureDomain: "",
 				Region:        "eastus",
 			},
 			expectedErr: nil,
@@ -481,7 +481,65 @@ func TestGetZoneByNodeNameVmssFlex(t *testing.T) {
 		assert.Equal(t, tc.expectedZone, zone)
 		assert.Equal(t, tc.expectedErr, err)
 	}
+}
 
+func TestGetPlatformFaultDomainByNodeNameVmssFlex(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	testCases := []struct {
+		description                    string
+		nodeName                       string
+		testVMListWithoutInstanceView  []*armcompute.VirtualMachine
+		testVMListWithOnlyInstanceView []*armcompute.VirtualMachine
+		vmListErr                      error
+		expectedFD                     string
+		expectedErr                    error
+	}{
+		{
+			description:                    "GetPlatformFaultDomainByNodeName should return fault domain from instance view",
+			nodeName:                       "vmssflex1000002",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedFD:                     "1",
+			expectedErr:                    nil,
+		},
+		{
+			description:                    "GetPlatformFaultDomainByNodeName should return 0 if instance view is nil",
+			nodeName:                       "vmssflex1000003",
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedFD:                     "0",
+			expectedErr:                    nil,
+		},
+		{
+			description:                    "GetPlatformFaultDomainByNodeName should return error if node not found",
+			nodeName:                       nonExistingNodeName,
+			testVMListWithoutInstanceView:  testVMListWithoutInstanceView,
+			testVMListWithOnlyInstanceView: testVMListWithOnlyInstanceView,
+			vmListErr:                      nil,
+			expectedFD:                     "",
+			expectedErr:                    cloudprovider.InstanceNotFound,
+		},
+	}
+
+	for _, tc := range testCases {
+		fs, err := NewTestFlexScaleSet(ctrl)
+		assert.NoError(t, err, "unexpected error when creating test FlexScaleSet")
+
+		mockVMSSClient := fs.ComputeClientFactory.GetVirtualMachineScaleSetClient().(*mock_virtualmachinescalesetclient.MockInterface)
+		mockVMSSClient.EXPECT().List(gomock.Any(), gomock.Any()).Return(testVmssFlexList, nil).AnyTimes()
+
+		mockVMClient := fs.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+		mockVMClient.EXPECT().ListVmssFlexVMsWithOutInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithoutInstanceView, tc.vmListErr).AnyTimes()
+		mockVMClient.EXPECT().ListVmssFlexVMsWithOnlyInstanceView(gomock.Any(), gomock.Any(), gomock.Any()).Return(tc.testVMListWithOnlyInstanceView, tc.vmListErr).AnyTimes()
+
+		fd, err := fs.GetPlatformFaultDomainByNodeName(context.TODO(), tc.nodeName)
+		assert.Equal(t, tc.expectedFD, fd, tc.description)
+		assert.Equal(t, tc.expectedErr, err, tc.description)
+	}
 }
 
 func TestGetProvisioningStateByNodeNameVmssFlex(t *testing.T) {
