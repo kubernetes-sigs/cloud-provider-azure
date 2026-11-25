@@ -184,6 +184,21 @@ func TestConvertResourceGroupNameToLower(t *testing.T) {
 			expected:   "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroupname/providers/Microsoft.Compute/virtualMachines/k8s-agent-AAAAAAAA-0",
 		},
 		{
+			desc:       "resource group name matching a preceding path segment should be converted",
+			resourceID: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Groups/providers/Microsoft.Compute/virtualMachines/MyVM",
+			expected:   "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/groups/providers/Microsoft.Compute/virtualMachines/MyVM",
+		},
+		{
+			desc:       "resource group name matching the subscription ID should be converted",
+			resourceID: consts.CloudProviderName + ":///subscriptions/ABCDEF00-0000-0000-0000-000000000000/resourceGroups/ABC/providers/Microsoft.Compute/virtualMachines/ABC",
+			expected:   consts.CloudProviderName + ":///subscriptions/ABCDEF00-0000-0000-0000-000000000000/resourceGroups/abc/providers/Microsoft.Compute/virtualMachines/ABC",
+		},
+		{
+			desc:       "lowercase resource group name should be preserved",
+			resourceID: "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myrg/providers/Microsoft.Compute/virtualMachines/MyVM",
+			expected:   "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myrg/providers/Microsoft.Compute/virtualMachines/MyVM",
+		},
+		{
 			desc:       "resource group name in VMSS providerID should be converted",
 			resourceID: consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myResourceGroupName/providers/Microsoft.Compute/virtualMachineScaleSets/myScaleSetName/virtualMachines/156",
 			expected:   consts.CloudProviderName + ":///subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/myresourcegroupname/providers/Microsoft.Compute/virtualMachineScaleSets/myScaleSetName/virtualMachines/156",
