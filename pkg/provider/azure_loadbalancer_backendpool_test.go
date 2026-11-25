@@ -30,6 +30,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	v1 "k8s.io/api/core/v1"
+	discovery_v1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	cloudprovider "k8s.io/cloud-provider"
@@ -43,6 +44,8 @@ import (
 )
 
 func TestEnsureHostsInPoolNodeIP(t *testing.T) {
+	const currentSvcUID = "current-service-uid"
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -106,6 +109,41 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 		},
 	}
 
+	staleEndpointSlice := getTestEndpointSlice("eps", "default", "svc-1", "vmss-0", "vmss-1")
+	staleEndpointSlice.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "v1", Kind: "Service", Name: "svc-1", UID: "other-service-uid",
+	}}
+	emptyEndpointSlice := getTestEndpointSlice("eps", "default", "svc-1")
+	emptyEndpointSlice.OwnerReferences = []metav1.OwnerReference{{
+		APIVersion: "v1", Kind: "Service", Name: "svc-1", UID: currentSvcUID,
+	}}
+	expectedAllNodesBackendPool := &armnetwork.BackendAddressPool{
+		Name: ptr.To("default-svc-1"),
+		Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+			VirtualNetwork: &armnetwork.SubResource{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+			LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
+				{
+					Name: ptr.To("vmss-0"),
+					Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+						IPAddress: ptr.To("10.0.0.2"),
+					},
+				},
+				{
+					Name: ptr.To("vmss-1"),
+					Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+						IPAddress: ptr.To("10.0.0.1"),
+					},
+				},
+				{
+					Name: ptr.To("vmss-2"),
+					Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+						IPAddress: ptr.To("10.0.0.4"),
+					},
+				},
+			},
+		},
+	}
+
 	testcases := []struct {
 		desc                string
 		backendPool         *armnetwork.BackendAddressPool
@@ -115,6 +153,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 		skip                bool
 		cache               bool
 		namespace           string
+		endpointSlice       *discovery_v1.EndpointSlice
 		expectedBackendPool *armnetwork.BackendAddressPool
 	}{
 		{
@@ -373,6 +412,55 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			cache:     true,
 			namespace: "another",
 		},
+		{
+			desc:  "local service adds all eligible nodes when no matching EndpointSlices are cached",
+			local: true,
+			backendPool: &armnetwork.BackendAddressPool{
+				Name:       ptr.To("default-svc-1"),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{},
+			},
+			multiSLBConfigs:     []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+			expectedBackendPool: expectedAllNodesBackendPool,
+		},
+		{
+			desc:  "local service adds all eligible nodes when the only cached EndpointSlice matching its namespace and name has a Service owner UID different from the current Service UID",
+			local: true,
+			cache: true,
+			backendPool: &armnetwork.BackendAddressPool{
+				Name:       ptr.To("default-svc-1"),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{},
+			},
+			multiSLBConfigs:     []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+			endpointSlice:       staleEndpointSlice,
+			expectedBackendPool: expectedAllNodesBackendPool,
+		},
+		{
+			desc:  "local service removes backend node IPs when its cached EndpointSlice has zero endpoints",
+			local: true,
+			cache: true,
+			backendPool: &armnetwork.BackendAddressPool{
+				Name: ptr.To("default-svc-1"),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{
+						{
+							Name: ptr.To("vmss-0"),
+							Properties: &armnetwork.LoadBalancerBackendAddressPropertiesFormat{
+								IPAddress: ptr.To("10.0.0.2"),
+							},
+						},
+					},
+				},
+			},
+			multiSLBConfigs: []config.MultipleStandardLoadBalancerConfiguration{{Name: "kubernetes"}},
+			endpointSlice:   emptyEndpointSlice,
+			expectedBackendPool: &armnetwork.BackendAddressPool{
+				Name: ptr.To("default-svc-1"),
+				Properties: &armnetwork.BackendAddressPoolPropertiesFormat{
+					VirtualNetwork:               &armnetwork.SubResource{ID: ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/virtualNetworks/vnet")},
+					LoadBalancerBackendAddresses: []*armnetwork.LoadBalancerBackendAddress{},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -414,7 +502,10 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			}
 
 			var kubeClient *fake.Clientset
-			eps := getTestEndpointSlice("eps", "default", "svc-1", "vmss-0", "vmss-1")
+			eps := tc.endpointSlice
+			if eps == nil {
+				eps = getTestEndpointSlice("eps", "default", "svc-1", "vmss-0", "vmss-1")
+			}
 			epsInAnotherNamespace := getTestEndpointSlice("eps", "another", "svc-1", "vmss-0", "vmss-2")
 			if !tc.cache {
 				kubeClient = fake.NewSimpleClientset(eps)
@@ -430,6 +521,7 @@ func TestEnsureHostsInPoolNodeIP(t *testing.T) {
 			}
 
 			service := getTestServiceDualStack("svc-1", v1.ProtocolTCP, nil, 80)
+			service.UID = currentSvcUID
 			if tc.local {
 				service.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyTypeLocal
 			}

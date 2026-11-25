@@ -7149,6 +7149,104 @@ func TestReconcileLoadBalancerCommon(t *testing.T) {
 	}
 }
 
+func TestReconcileLoadBalancerLocalToClusterMultiSLB(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		poolDeleteErr error
+	}{
+		{name: "deletes local backend pools and switches load-balancing rules to shared backend pools"},
+		{name: "stops reconciliation when local backend pool deletion fails", poolDeleteErr: errors.New("backend pool deletion failed")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			az := GetTestCloud(ctrl)
+			az.LoadBalancerSKU = consts.LoadBalancerSKUStandard
+			az.MultipleStandardLoadBalancerConfigurations = []config.MultipleStandardLoadBalancerConfiguration{
+				{Name: "testCluster"},
+				{Name: "lb2"},
+			}
+			az.multipleStandardLoadBalancerConfigurationsSynced = true
+
+			svc := getTestServiceDualStack("service1", v1.ProtocolTCP, nil, 80)
+			svc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyCluster
+			localPoolNames := []string{"default-service1", "default-service1-IPv6"}
+			previousLocalLB := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), svc, "Standard")
+			lbAfterLocalPoolDeletion := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), svc, "Standard")
+			expectedClusterLB := getTestLoadBalancerDualStack(ptr.To("testCluster"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aservice1"), svc, "Standard")
+			// Keep Local pool references in the post-deletion rules so the final LB
+			// update must switch them to shared pools.
+			for poolIndex, poolName := range localPoolNames {
+				poolID := az.getBackendPoolID("testCluster", poolName)
+				previousLocalLB.Properties.BackendAddressPools = append(previousLocalLB.Properties.BackendAddressPools, &armnetwork.BackendAddressPool{
+					Name: ptr.To(poolName), ID: ptr.To(poolID),
+				})
+				previousLocalLB.Properties.LoadBalancingRules[poolIndex].Properties.BackendAddressPool.ID = ptr.To(poolID)
+				lbAfterLocalPoolDeletion.Properties.LoadBalancingRules[poolIndex].Properties.BackendAddressPool.ID = ptr.To(poolID)
+			}
+			// Other Services' pools must survive on both this LB and the second managed LB.
+			for _, lb := range []*armnetwork.LoadBalancer{previousLocalLB, lbAfterLocalPoolDeletion, expectedClusterLB} {
+				lb.Properties.BackendAddressPools = append(lb.Properties.BackendAddressPools, &armnetwork.BackendAddressPool{Name: ptr.To("default-other-service")})
+			}
+
+			otherSvc := getTestService("other-service", v1.ProtocolTCP, nil, false, 80)
+			otherSvc.Spec.ExternalTrafficPolicy = v1.ServiceExternalTrafficPolicyLocal
+			otherLB := getTestLoadBalancer(ptr.To("lb2"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aother-service"), otherSvc, "Standard")
+			expectedOtherLB := getTestLoadBalancer(ptr.To("lb2"), ptr.To("rg"), ptr.To("testCluster"), ptr.To("aother-service"), otherSvc, "Standard")
+			otherPoolID := az.getBackendPoolID("lb2", "default-other-service")
+			for _, lb := range []*armnetwork.LoadBalancer{otherLB, expectedOtherLB} {
+				frontend := lb.Properties.FrontendIPConfigurations[0]
+				frontend.Properties.PublicIPAddress.ID = ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/publicIPAddresses/other-service-pip")
+				lb.Properties.BackendAddressPools = append(lb.Properties.BackendAddressPools, &armnetwork.BackendAddressPool{
+					Name: ptr.To("default-other-service"), ID: ptr.To(otherPoolID),
+				})
+				rule := lb.Properties.LoadBalancingRules[0]
+				rule.Properties.FrontendIPConfiguration.ID = frontend.ID
+				rule.Properties.BackendAddressPool.ID = ptr.To(otherPoolID)
+				rule.Properties.Probe.ID = ptr.To("/subscriptions/subscription/resourceGroups/rg/providers/Microsoft.Network/loadBalancers/lb2/probes/aother-service-TCP-80")
+			}
+
+			lbClient := az.NetworkClientFactory.GetLoadBalancerClient().(*mock_loadbalancerclient.MockInterface)
+			poolClient := az.NetworkClientFactory.GetBackendAddressPoolClient().(*mock_backendaddresspoolclient.MockInterface)
+			lbClient.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.LoadBalancer{otherLB, previousLocalLB}, nil).Times(1)
+			poolClient.EXPECT().Delete(gomock.Any(), "rg", "testCluster", localPoolNames[0]).Return(tc.poolDeleteErr).Times(1)
+			if tc.poolDeleteErr == nil {
+				poolClient.EXPECT().Delete(gomock.Any(), "rg", "testCluster", localPoolNames[1]).Return(nil).Times(1)
+				lbClient.EXPECT().List(gomock.Any(), "rg").Return([]*armnetwork.LoadBalancer{otherLB, lbAfterLocalPoolDeletion}, nil).Times(1)
+				lbClient.EXPECT().Get(gomock.Any(), "rg", "testCluster", gomock.Any()).Return(lbAfterLocalPoolDeletion, nil).AnyTimes()
+				lbClient.EXPECT().CreateOrUpdate(gomock.Any(), "rg", "testCluster", *expectedClusterLB).Return(nil, nil).Times(1)
+
+				backendPool := az.LoadBalancerBackendPool.(*MockBackendPool)
+				backendPool.EXPECT().ReconcileBackendPools(gomock.Any(), "testCluster", gomock.Any(), gomock.Any()).DoAndReturn(
+					func(_ context.Context, _ string, _ *v1.Service, lb *armnetwork.LoadBalancer) (bool, bool, *armnetwork.LoadBalancer, error) {
+						return false, false, lb, nil
+					},
+				).Times(1)
+				for _, pool := range expectedClusterLB.Properties.BackendAddressPools[:2] {
+					backendPool.EXPECT().EnsureHostsInPool(gomock.Any(), &svc, gomock.Any(), gomock.Any(), gomock.Any(), "testCluster", "testCluster", pool).Return(nil).Times(1)
+				}
+				backendPool.EXPECT().EnsureHostsInPool(gomock.Any(), &svc, gomock.Any(), gomock.Any(), gomock.Any(), "testCluster", "lb2", expectedOtherLB.Properties.BackendAddressPools[0]).Return(nil).Times(1)
+				az.plsRepo.(*privatelinkservice.MockRepository).EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&armnetwork.PrivateLinkService{ID: ptr.To(consts.PrivateLinkServiceNotExistID)}, nil,
+				).AnyTimes()
+			}
+
+			clusterResources, expectedInterfaces, expectedVirtualMachines := getClusterResources(az, 3, 3)
+			setMockEnvDualStack(az, expectedInterfaces, expectedVirtualMachines, 1)
+
+			lb, needRetry, err := az.reconcileLoadBalancer(context.Background(), "testCluster", &svc, clusterResources.nodes, true)
+
+			assert.ErrorIs(t, err, tc.poolDeleteErr)
+			assert.False(t, needRetry)
+			assert.Equal(t, expectedOtherLB, otherLB)
+			if tc.poolDeleteErr != nil {
+				assert.Nil(t, lb)
+			} else {
+				assert.Equal(t, expectedClusterLB, lb)
+			}
+		})
+	}
+}
+
 func TestGetServiceLoadBalancerStatus(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
