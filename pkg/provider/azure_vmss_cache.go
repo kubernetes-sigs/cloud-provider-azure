@@ -54,6 +54,7 @@ type NonVmssUniformNodesEntry struct {
 	AvSetVMNodeNames      *utilsets.IgnoreCaseSet
 	AvSetVMProviderIDs    *utilsets.IgnoreCaseSet
 	ClusterNodeNames      *utilsets.IgnoreCaseSet
+	AvSetVMNICIDs         *utilsets.IgnoreCaseSet
 }
 
 type VMManagementType string
@@ -341,6 +342,7 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 		vmssFlexVMProviderIDs := utilsets.NewString()
 		avSetVMNodeNames := utilsets.NewString()
 		avSetVMProviderIDs := utilsets.NewString()
+		avSetVMNICIDs := utilsets.NewString()
 		resourceGroups, err := ss.GetResourceGroups()
 		if err != nil {
 			return nil, err
@@ -364,6 +366,13 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 						if vm.ID != nil {
 							avSetVMProviderIDs.Insert(ss.ProviderName() + "://" + ptr.Deref(vm.ID, ""))
 						}
+						if vm.Properties.NetworkProfile != nil {
+							for _, nic := range vm.Properties.NetworkProfile.NetworkInterfaces {
+								if nic != nil && nic.ID != nil {
+									avSetVMNICIDs.Insert(*nic.ID)
+								}
+							}
+						}
 					}
 				}
 			}
@@ -381,6 +390,7 @@ func (ss *ScaleSet) newNonVmssUniformNodesCache() (azcache.Resource, error) {
 			AvSetVMNodeNames:      avSetVMNodeNames,
 			AvSetVMProviderIDs:    avSetVMProviderIDs,
 			ClusterNodeNames:      nodeNames,
+			AvSetVMNICIDs:         avSetVMNICIDs,
 		}
 
 		return localCache, nil
@@ -484,8 +494,8 @@ func (ss *ScaleSet) getVMManagementTypeByProviderID(ctx context.Context, provide
 
 // getVMManagementTypeByIPConfigurationID determines the VM type by the following steps:
 //  1. If the ipConfigurationID is in the format of vmssIPConfigurationRE, returns vmss uniform.
-//  2. If the name of the VM can be obtained by trimming the `-nic` suffix from the nic name, and the VM name is in the
-//     VMAS cache, returns availability set.
+//  2. If the NIC ID is in the VMAS cache, or the name of the VM can be obtained by trimming the `-nic` suffix from the
+//     nic name and the VM name is in the VMAS cache, returns availability set.
 //  3. If the VM name obtained from step 2 is not in the VMAS cache, try to get the VM name from NIC.VirtualMachine.ID.
 //  4. If the VM name obtained from step 3 is in the VMAS cache, returns availability set. Or, returns vmss flex.
 func (ss *ScaleSet) getVMManagementTypeByIPConfigurationID(ctx context.Context, ipConfigurationID string, crt azcache.AzureCacheReadType) (VMManagementType, error) {
@@ -515,8 +525,12 @@ func (ss *ScaleSet) getVMManagementTypeByIPConfigurationID(ctx context.Context, 
 		return ManagedByUnknownVMSet, fmt.Errorf("can not extract nic name from ipConfigurationID (%s)", ipConfigurationID)
 	}
 
+	nicID := getNICIDFromIPConfigurationID(ipConfigurationID)
 	vmName := strings.Replace(nicName, "-nic", "", 1)
 
+	if cached.(NonVmssUniformNodesEntry).AvSetVMNICIDs.Has(nicID) {
+		return ManagedByAvSet, nil
+	}
 	cachedAvSetVMs := cached.(NonVmssUniformNodesEntry).AvSetVMNodeNames
 	if cachedAvSetVMs.Has(vmName) {
 		return ManagedByAvSet, nil
@@ -528,6 +542,9 @@ func (ss *ScaleSet) getVMManagementTypeByIPConfigurationID(ctx context.Context, 
 		return ManagedByUnknownVMSet, err
 	}
 
+	if cached.(NonVmssUniformNodesEntry).AvSetVMNICIDs.Has(nicID) {
+		return ManagedByAvSet, nil
+	}
 	cachedAvSetVMs = cached.(NonVmssUniformNodesEntry).AvSetVMNodeNames
 	if cachedAvSetVMs.Has(vmName) {
 		return ManagedByAvSet, nil

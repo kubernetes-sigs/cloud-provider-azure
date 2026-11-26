@@ -478,3 +478,32 @@ func TestGetVMManagementTypeByIPConfigurationID(t *testing.T) {
 		})
 	}
 }
+
+// Standalone VMs whose NIC name is not `<vmName>-nic` (e.g. AKS node auto provisioning names it
+// `<vmName>nic-<hash>`) must be resolved from the cache, without a forced VM list or a NIC GET per call.
+func TestGetVMManagementTypeByIPConfigurationIDNonStandardNICName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	ss, err := NewTestScaleSet(ctrl)
+	assert.NoError(t, err)
+
+	nicID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/aks-pool-12345678-vmnic-c7ee1387"
+	vm := generateVmssFlexTestVMWithoutInstanceView(VmssFlexTestVMSpec{
+		VMName:       "aks-pool-12345678-vm",
+		VMID:         "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/aks-pool-12345678-vm",
+		ComputerName: "aks-pool-12345678-vm",
+		NicID:        nicID,
+	})
+	vm.Properties.VirtualMachineScaleSet = nil
+
+	// One VM list to populate the cache; no NIC GET is expected (the mock fails on an unexpected call).
+	mockVMClient := ss.ComputeClientFactory.GetVirtualMachineClient().(*mock_virtualmachineclient.MockInterface)
+	mockVMClient.EXPECT().List(gomock.Any(), gomock.Any()).Return([]*armcompute.VirtualMachine{vm}, nil).Times(1)
+
+	for i := 0; i < 3; i++ {
+		vmManagementType, err := ss.getVMManagementTypeByIPConfigurationID(context.TODO(), nicID+"/ipConfigurations/ipconfig1", azcache.CacheReadTypeUnsafe)
+		assert.NoError(t, err)
+		assert.Equal(t, ManagedByAvSet, vmManagementType)
+	}
+}
