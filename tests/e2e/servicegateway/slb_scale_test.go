@@ -209,14 +209,14 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 
 		By("Waiting for Azure to provision resources")
 		Eventually(func() error {
-			return serviceReconciledErr(string(createdService.UID), numPods)
+			return servicePodsReconciledErr(cs, ns.Name, string(createdService.UID), numPods)
 		}, azureWaitTime, 10*time.Second).Should(Succeed(),
 			"service should be reconciled in Azure and the Service Gateway")
 
 		// Azure names resources based on the service UID
 		serviceUID := string(createdService.UID)
-		publicIPName := fmt.Sprintf("%s-pip", serviceUID)
-		loadBalancerName := serviceUID
+		loadBalancerName := inboundServiceName(serviceUID)
+		publicIPName := loadBalancerName + "-pip"
 
 		By("Verifying Public IP in Azure")
 		pipOutput, err := runAz("network", "public-ip", "list",
@@ -297,7 +297,7 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 		// Find our service by matching the service UID
 		var ourService *ServiceGatewayService
 		for i := range sgResponse.Value {
-			if sgResponse.Value[i].Name == serviceUID {
+			if sgResponse.Value[i].Name == inboundServiceName(serviceUID) {
 				ourService = &sgResponse.Value[i]
 				break
 			}
@@ -357,12 +357,8 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 		utils.Logf("Found %d address location(s) in Service Gateway", len(alResponse.Value))
 
 		// Build mapping of expected node IP -> pod IPs
-		expectedNodeToPods := make(map[string][]string)
-		for _, pod := range podListAfterReady.Items {
-			nodeIP := pod.Status.HostIP
-			podIP := pod.Status.PodIP
-			expectedNodeToPods[nodeIP] = append(expectedNodeToPods[nodeIP], podIP)
-		}
+		expectedNodeToPods, err := inboundPodAddressLocations(cs, podListAfterReady.Items, createdService.Spec.IPFamilies)
+		Expect(err).NotTo(HaveOccurred())
 
 		utils.Logf("Expected address locations (Node IP -> Pod IPs):")
 		for nodeIP, podIPs := range expectedNodeToPods {
@@ -404,7 +400,7 @@ var _ = Describe("SLB - Pod Scaling", Label(slbTestLabel), func() {
 				// Verify the address references our service
 				serviceReferenced := false
 				for _, svc := range addr.Services {
-					if svc == serviceUID {
+					if svc == inboundServiceName(serviceUID) {
 						serviceReferenced = true
 						break
 					}

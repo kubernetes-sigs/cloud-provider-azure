@@ -119,17 +119,17 @@ func TestValidateServiceGatewayControllerConfiguration(t *testing.T) {
 		},
 		{
 			name:        "ServiceGateway disabled",
-			cloud:       &fakeServiceGatewayRuntimeProvider{runtime: servicegateway.NewRuntime(providerconfig.Config{}, nil, nil)},
+			cloud:       &fakeServiceGatewayRuntimeProvider{runtime: servicegateway.NewRuntime(providerconfig.Config{}, nil, nil, nil, nil)},
 			controllers: []string{"-service-lb-controller"},
 		},
 		{
 			name:        "service controller enabled",
-			cloud:       &fakeServiceGatewayRuntimeProvider{runtime: servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, nil)},
+			cloud:       &fakeServiceGatewayRuntimeProvider{runtime: servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, nil, nil, nil)},
 			controllers: []string{"*"},
 		},
 		{
 			name:        "service controller disabled",
-			cloud:       &fakeServiceGatewayRuntimeProvider{runtime: servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, nil)},
+			cloud:       &fakeServiceGatewayRuntimeProvider{runtime: servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, nil, nil, nil)},
 			controllers: []string{"-service-lb-controller"},
 			wantErr:     `ServiceGateway requires "service-lb-controller" to be enabled`,
 		},
@@ -154,7 +154,7 @@ func TestStartServiceControllerPropagatesServiceGatewayStartFailure(t *testing.T
 		ClientBuilder:        staticControllerClientBuilder{client: kubeClient},
 		SharedInformers:      informers.NewSharedInformerFactory(kubeClient, 0),
 	}).Complete()
-	runtime := servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, kubeClient)
+	runtime := servicegateway.NewRuntime(providerconfig.Config{ServiceGatewayEnabled: true}, nil, nil, nil, kubeClient)
 	runtime.SetEventRecorder(record.NewFakeRecorder(1))
 	cloud := &fakeServiceGatewayRuntimeProvider{runtime: runtime}
 	loadBalancer, supported := runtime.LoadBalancer()

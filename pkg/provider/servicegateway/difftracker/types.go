@@ -18,11 +18,13 @@ package difftracker
 
 import (
 	"errors"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -36,8 +38,8 @@ import (
 // ================================================================================================
 
 var (
-	// ErrServiceUIDEmpty is returned when a service UID is empty
-	ErrServiceUIDEmpty = errors.New("service UID cannot be empty")
+	// ErrServiceNameEmpty is returned when a ServiceGateway service name is empty.
+	ErrServiceNameEmpty = errors.New("service name cannot be empty")
 )
 
 // ================================================================================================
@@ -119,6 +121,9 @@ type InboundConfig struct {
 	// cannot be resolved to a PodIP backend port here, so their presence is rejected as a
 	// terminal error in buildInboundServiceResources rather than silently mis-routing traffic.
 	NamedTargetPorts []string
+	// AllowedIPRanges is nil when the Service has no source policy.
+	AllowedIPRanges      []netip.Prefix
+	InvalidAllowedRanges string
 }
 
 // OutboundConfig contains NAT Gateway configuration for outbound services
@@ -232,13 +237,14 @@ func healthProbeEqual(a, b *HealthProbeConfig) bool {
 
 // ServiceConfig encapsulates all configuration needed for a service
 type ServiceConfig struct {
-	UID            string
+	// ServiceName is the canonical ServiceGateway service name.
+	ServiceName    string
 	IsInbound      bool
 	InboundConfig  *InboundConfig  // nil allowed for defaults
 	OutboundConfig *OutboundConfig // nil allowed for defaults
 
 	// Namespace and Name identify the originating Kubernetes Service. They let the engine
-	// resolve a UID to a cached serviceLister read instead of scanning every Service. They
+	// resolve an SGW name through the cached serviceLister instead of scanning every Service. They
 	// are empty for entries recovered from NRP without a Service object.
 	Namespace string
 	Name      string
@@ -246,26 +252,26 @@ type ServiceConfig struct {
 
 // Validate checks if the ServiceConfig is valid
 func (c *ServiceConfig) Validate() error {
-	if c.UID == "" {
-		return ErrServiceUIDEmpty
+	if c.ServiceName == "" {
+		return ErrServiceNameEmpty
 	}
 	// A nil InboundConfig or OutboundConfig is allowed; defaults are applied downstream.
 	return nil
 }
 
 // NewInboundServiceConfig creates a ServiceConfig for an inbound service
-func NewInboundServiceConfig(uid string, inboundConfig *InboundConfig) ServiceConfig {
+func NewInboundServiceConfig(serviceName string, inboundConfig *InboundConfig) ServiceConfig {
 	return ServiceConfig{
-		UID:           uid,
+		ServiceName:   serviceName,
 		IsInbound:     true,
 		InboundConfig: inboundConfig,
 	}
 }
 
 // NewOutboundServiceConfig creates a ServiceConfig for an outbound service
-func NewOutboundServiceConfig(uid string, outboundConfig *OutboundConfig) ServiceConfig {
+func NewOutboundServiceConfig(serviceName string, outboundConfig *OutboundConfig) ServiceConfig {
 	return ServiceConfig{
-		UID:            uid,
+		ServiceName:    serviceName,
 		IsInbound:      false,
 		OutboundConfig: outboundConfig,
 	}
@@ -288,27 +294,30 @@ type NRPLocation struct {
 	// Addresses is keyed by pod IP. Each pod IP is added to the ServiceGateway
 	// as an address under this location once the pod is created.
 	Addresses map[string]NRPAddress
+	nodeOwner *nsgLocationOwner
 }
 
 type NRPState struct {
-	// LoadBalancers holds the UIDs of inbound services that have a LoadBalancer
-	// registered on the NRP side. These are SGW service identities, not Azure
-	// LoadBalancer resource names.
+	// LoadBalancers holds registered canonical inbound SGW names, also used as managed LB names.
 	LoadBalancers *utilsets.IgnoreCaseSet
-	// NATGateways holds the UIDs of outbound/egress services that have a NAT
-	// Gateway registered on the NRP side (SGW service identities, not Azure
-	// resource names).
+	// NATGateways holds registered canonical outbound SGW names. BYO resource names may differ.
 	NATGateways *utilsets.IgnoreCaseSet
+	// Startup snapshot with lowercase identities; live cleanup uses byoNATGateways.
+	OutboundNATGatewayIDs map[string]string
+	// Startup orphan-sweep exclusions; normal reconciliation rechecks ownership.
+	UnmanagedNATGateways *utilsets.IgnoreCaseSet
+	// ReservedOutboundServices contains RP-owned default ServiceGateway names.
+	ReservedOutboundServices *utilsets.IgnoreCaseSet
 	// Locations is keyed by node/VM IP (e.g. "10.0.0.1"). "Location" here is
 	// an SGW concept identifying a node, not an Azure region (e.g. "eastus2").
 	Locations map[string]NRPLocation
 }
 
 type Pod struct {
-	// InboundIdentities holds the UIDs of the inbound ServiceGateway services
+	// InboundIdentities holds the canonical names of the inbound ServiceGateway services
 	// (LoadBalancers) this pod backs. A pod may back several, hence a set.
 	InboundIdentities *utilsets.IgnoreCaseSet
-	// PublicOutboundIdentity is the UID of the single outbound/egress ServiceGateway
+	// PublicOutboundIdentity is the canonical name of the single outbound/egress ServiceGateway
 	// service (NAT Gateway) this pod uses for egress; empty if the pod has no egress.
 	PublicOutboundIdentity string
 	// OutboundPodKey is the namespace/name of the Kubernetes pod that owns this outbound address.
@@ -344,7 +353,7 @@ type K8sState struct {
 
 // ServiceOperationState tracks the lifecycle state of a service being created or deleted
 type ServiceOperationState struct {
-	ServiceUID string
+	ServiceName string
 	// Config is the desired configuration. For update flows it is overwritten by
 	// the latest Update call before the updater goroutine picks it up.
 	Config ServiceConfig
@@ -357,9 +366,13 @@ type ServiceOperationState struct {
 	// LastAppliedConfig is the configuration last successfully applied to Azure.
 	// Used by UpdateService to short-circuit no-op updates.
 	LastAppliedConfig *ServiceConfig
-	State             ResourceState
-	RetryCount        int
-	LastAttempt       string // timestamp as string for serialization
+	// NSGPrepared permits a protected LB update for the current accepted configuration.
+	NSGPrepared bool
+	// RetainedBackendPorts covers recovered and retired-attempt ports, not a confirmed LB configuration.
+	RetainedBackendPorts []PortMapping
+	State                ResourceState
+	RetryCount           int
+	LastAttempt          string // timestamp as string for serialization
 
 	// NextRetryAt is the earliest time the dispatcher may re-dispatch this operation after a
 	// transient failure. Set in the failure branches of OnServiceCreationComplete to now+backoff;
@@ -376,6 +389,10 @@ type ServiceOperationState struct {
 	// port out of range). The dispatcher skips such entries instead of retrying
 	// forever; a later UpdateService with a changed spec clears it.
 	CreationFailedTerminal bool
+
+	// CreationRejected marks rejected egress configuration or confirmed member absence.
+	// Backoff in StateNotStarted does not block initial sync; a dispatched retry still does.
+	CreationRejected bool
 
 	// CreatedAt is when this operation was first enqueued. Never overwritten on retry.
 	// Used by the oldest-age metric to detect stuck operations.
@@ -411,9 +428,9 @@ type PendingEndpointUpdate struct {
 
 // PendingServiceDeletion tracks a service waiting for locations to clear before deletion
 type PendingServiceDeletion struct {
-	ServiceUID string
-	IsInbound  bool
-	Timestamp  string
+	ServiceName string
+	IsInbound   bool
+	Timestamp   string
 }
 
 // DiffTracker is the main struct that contains the state of the K8s and NRP services
@@ -435,11 +452,18 @@ type DiffTracker struct {
 	// Configuration and clients
 	config               Config
 	networkClientFactory azclient.ClientFactory
+	computeClientFactory azclient.ClientFactory
+	nodeProvider         NSGNodeProvider
 	kubeClient           kubernetes.Interface
+
+	dirtyNICPolicies        sets.Set[string]
+	pendingLocationUpdates  map[string]NRPLocation
+	mayHaveNICPolicies      bool
+	locationRecoveryPending bool
 
 	// serviceLister is the provider's shared-informer-backed Service lister, published via
 	// SetServiceLister once SetInformers has run. It is nil until then (and in tests), in which
-	// case getServiceByUID falls back to a direct apiserver read. Guarded by mu.
+	// case getServiceBySGWName falls back to a direct apiserver read. Guarded by mu.
 	serviceLister corelisters.ServiceLister
 	// nodeLister is the provider's shared-informer-backed Node lister used to resolve EndpointSlice
 	// node names to InternalIPs. Guarded by mu.
@@ -448,8 +472,12 @@ type DiffTracker struct {
 	// eventRecorder emits Service Gateway pod events; set post-init before the egress informer starts.
 	eventRecorder record.EventRecorder
 	// endpointSlicesCache is owned by difftracker and stores snapshots from forwarded informer
-	// events. It is replayed when a service is registered and by ReconcileNodeIPChange.
+	// events. It is replayed when a service is registered and by ReconcileNodeChange.
 	endpointSlicesCache sync.Map
+	// startupNodeIPs maps each node initialization listed, until its first informer Add is replayed,
+	// to the InternalIPs its endpoints are registered under. Cleared by CompleteStartupReconciliation.
+	// Guarded by mu.
+	startupNodeIPs map[string][]string
 
 	// Engine state management
 	pendingServiceOps       map[string]*ServiceOperationState
@@ -457,11 +485,15 @@ type DiffTracker struct {
 	pendingPods             map[string][]PendingPodUpdate
 	pendingServiceDeletions map[string]*PendingServiceDeletion
 	pendingPodDeletions     map[string]*PendingPodDeletion // key = "namespace/name"
+	podFinalizerGuards      map[string]*podFinalizerGuard
 
 	// recoveredServiceFinalizers holds the UIDs of Services whose stuck finalizer startup left to
 	// the diff. An entry is cleared when that finalizer is actually removed, which is what closes
 	// the finalizers_recovery_scheduled_total / finalizers_recovered_total gap.
 	recoveredServiceFinalizers map[string]struct{}
+
+	// Selected BYO resource IDs retained through cleanup; guarded by mu.
+	byoNATGateways map[string]string
 
 	// Communication channels
 	serviceUpdaterTrigger   chan bool

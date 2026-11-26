@@ -46,7 +46,7 @@ func natGatewayPublicIPRefs(egressName string) (v4Names, v6Names []string, err e
 		return nil, nil, err
 	}
 	for _, svc := range sgResponse.Value {
-		if svc.Properties.ServiceType == "Outbound" && strings.EqualFold(svc.Name, egressName) {
+		if svc.Properties.ServiceType == "Outbound" && strings.EqualFold(svc.Name, outboundServiceName(egressName)) {
 			natID = svc.Properties.PublicNatGatewayID
 			break
 		}
@@ -117,7 +117,9 @@ func publicIPVersionAndAddress(publicIPName string) (version, address string, er
 func podRegisteredAddressCount(cs clientset.Interface, namespace, podName string) int {
 	ready, err := cs.CoreV1().Pods(namespace).Get(context.TODO(), podName, metav1.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
-	return len(ready.Status.PodIPs)
+	addresses, err := egressPodIPSet([]v1.Pod{*ready})
+	Expect(err).NotTo(HaveOccurred())
+	return len(addresses)
 }
 
 // dualStackAttachmentErr asserts the exact ARM shape of a dual-stack egress NAT Gateway: exactly
@@ -130,7 +132,7 @@ func dualStackAttachmentErr(egressName string) error {
 	if err != nil {
 		return err
 	}
-	wantV4, wantV6 := egressName+"-pip", egressName+"-pip-v6"
+	wantV4, wantV6 := PublicIPNameForEgress(egressName), PublicIPNameForEgress(egressName)+"-v6"
 	if len(v4Refs) != 1 || !strings.EqualFold(v4Refs[0], wantV4) {
 		return fmt.Errorf("publicIpAddresses = %v, want [%s]", v4Refs, wantV4)
 	}
@@ -221,11 +223,13 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 	// one per family - so passing a pod count here silently asserts the wrong number on a
 	// dual-stack cluster and the wait times out before the spec reaches what it means to verify.
 	registeredAddressCount := func(pods ...*v1.Pod) int {
-		total := 0
+		items := make([]v1.Pod, 0, len(pods))
 		for _, p := range pods {
-			total += len(p.Status.PodIPs)
+			items = append(items, *p)
 		}
-		return total
+		addresses, err := egressPodIPSet(items)
+		Expect(err).NotTo(HaveOccurred())
+		return len(addresses)
 	}
 
 	requireIPv6Cluster := func() {
@@ -252,13 +256,13 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		}, waitTime, defaultPollInterval).Should(Succeed())
 
 		By("Verifying each Public IP carries its declared family and an allocated address")
-		v4Version, v4Addr, err := publicIPVersionAndAddress(egressName + "-pip")
+		v4Version, v4Addr, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressName))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(v4Version).To(Equal("IPv4"))
 		Expect(net.ParseIP(v4Addr)).NotTo(BeNil(), "the IPv4 address must actually be allocated")
 		Expect(net.ParseIP(v4Addr).To4()).NotTo(BeNil(), "the V4 address must be a v4 address")
 
-		v6Version, v6Addr, err := publicIPVersionAndAddress(egressName + "-pip-v6")
+		v6Version, v6Addr, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressName) + "-v6")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(v6Version).To(Equal("IPv6"),
 			"an IPv4 address on the V6 list carries no IPv6 traffic")
@@ -314,9 +318,9 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		Eventually(func() error { return dualStackAttachmentErr(egressB) }, waitTime, defaultPollInterval).Should(Succeed())
 
 		By("Verifying the two identities do not share an address")
-		_, aV6, err := publicIPVersionAndAddress(egressA + "-pip-v6")
+		_, aV6, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressA) + "-v6")
 		Expect(err).NotTo(HaveOccurred())
-		_, bV6, err := publicIPVersionAndAddress(egressB + "-pip-v6")
+		_, bV6, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressB) + "-v6")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(aV6).NotTo(Equal(bV6), "each identity must own its own IPv6 address")
 
@@ -396,7 +400,7 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		}, waitTime, defaultPollInterval).Should(Succeed())
 
 		By("Verifying no IPv6 Public IP resource was created at all")
-		Expect(azurePublicIPNamedAbsentErr(egressName+"-pip-v6")).To(Succeed(),
+		Expect(azurePublicIPNamedAbsentErr(PublicIPNameForEgress(egressName)+"-v6")).To(Succeed(),
 			"an IPv4-only cluster must not be billed for an IPv6 address")
 
 		Expect(cs.CoreV1().Pods(ns.Name).Delete(context.TODO(), pod.Name, metav1.DeleteOptions{})).To(Succeed())
@@ -426,10 +430,10 @@ var _ = Describe("SLB - Dual-stack egress", Label(slbTestLabel, "SLB-DualStackEg
 		if !hasV6 {
 			Skip(fmt.Sprintf("pod has no IPv6 address (PodIPs=%v); IPv6 SNAT cannot be observed", ready.Status.PodIPs))
 		}
-		eventuallyEgressRegistered(egressName, len(ready.Status.PodIPs), waitTime)
+		eventuallyEgressRegistered(egressName, registeredAddressCount(ready), waitTime)
 		Eventually(func() error { return dualStackAttachmentErr(egressName) }, waitTime, defaultPollInterval).Should(Succeed())
 
-		_, wantV6Addr, err := publicIPVersionAndAddress(egressName + "-pip-v6")
+		_, wantV6Addr, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressName) + "-v6")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(wantV6Addr).NotTo(BeEmpty())
 
@@ -571,9 +575,9 @@ var _ = Describe("SLB - Dual-stack egress across CCM restart", Label(slbTestLabe
 		eventuallyEgressRegistered(egressName, podRegisteredAddressCount(cs, ns.Name, "ds-survive-pod"), waitTime)
 		Eventually(func() error { return dualStackAttachmentErr(egressName) }, waitTime, defaultPollInterval).Should(Succeed())
 
-		_, beforeV4, err := publicIPVersionAndAddress(egressName + "-pip")
+		_, beforeV4, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressName))
 		Expect(err).NotTo(HaveOccurred())
-		_, beforeV6, err := publicIPVersionAndAddress(egressName + "-pip-v6")
+		_, beforeV6, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressName) + "-v6")
 		Expect(err).NotTo(HaveOccurred())
 
 		By("Restarting CCM")
@@ -590,9 +594,9 @@ var _ = Describe("SLB - Dual-stack egress across CCM restart", Label(slbTestLabe
 		}, 90*time.Second, defaultPollInterval).Should(Succeed(),
 			"a restart must not detach or delete either address of a live egress identity")
 
-		_, afterV4, err := publicIPVersionAndAddress(egressName + "-pip")
+		_, afterV4, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressName))
 		Expect(err).NotTo(HaveOccurred())
-		_, afterV6, err := publicIPVersionAndAddress(egressName + "-pip-v6")
+		_, afterV6, err := publicIPVersionAndAddress(PublicIPNameForEgress(egressName) + "-v6")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(afterV4).To(Equal(beforeV4), "the IPv4 address must survive a restart unchanged")
 		Expect(afterV6).To(Equal(beforeV6), "the IPv6 address must survive a restart unchanged")

@@ -17,7 +17,10 @@ limitations under the License.
 package difftracker
 
 import (
+	"slices"
+
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	utilsets "sigs.k8s.io/cloud-provider-azure/pkg/util/sets"
 )
@@ -51,7 +54,7 @@ func (dt *DiffTracker) GetSyncLoadBalancerServices() SyncServicesReturnType {
 
 // getSyncLoadBalancerServicesLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncLoadBalancerServicesLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.logger, dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
+	return dt.getSyncServicesLocked(dt.K8sResources.Services, dt.NRPResources.LoadBalancers)
 }
 
 func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
@@ -63,7 +66,14 @@ func (dt *DiffTracker) GetSyncNRPNATGateways() SyncServicesReturnType {
 
 // getSyncNRPNATGatewaysLocked is the lock-free body. Callers must hold dt.mu.
 func (dt *DiffTracker) getSyncNRPNATGatewaysLocked() SyncServicesReturnType {
-	return GetServicesToSync(dt.logger, dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+	return dt.getSyncServicesLocked(dt.K8sResources.Egresses, dt.NRPResources.NATGateways)
+}
+
+func (dt *DiffTracker) getSyncServicesLocked(desired, registered *utilsets.IgnoreCaseSet) SyncServicesReturnType {
+	result := GetServicesToSync(dt.logger, desired, registered)
+	result.Additions.Delete(DefaultOutboundNATGatewayName)
+	result.Removals.Delete(DefaultOutboundNATGatewayName)
+	return result
 }
 
 func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
@@ -71,6 +81,36 @@ func (dt *DiffTracker) GetSyncLocationsAddresses() LocationData {
 	defer dt.mu.Unlock()
 
 	return dt.getSyncLocationsAddressesLocked()
+}
+
+// Recompute affected locations under the current policy before recording the request.
+func (dt *DiffTracker) applyNICPoliciesToLocationSync(baseline LocationData, preparation map[string]*nsgPreparedNIC) LocationData {
+	dt.mu.Lock()
+	defer dt.mu.Unlock()
+
+	locations := sets.New[string]()
+	for location := range baseline.Locations {
+		locations.Insert(location)
+	}
+	for location := range dt.dirtyNICPolicies {
+		locations.Insert(location)
+	}
+	for location := range dt.pendingLocationUpdates {
+		locations.Insert(location)
+	}
+	if dt.locationRecoveryPending {
+		for location := range dt.K8sResources.Nodes {
+			locations.Insert(location)
+		}
+	}
+	for location, previous := range dt.NRPResources.Locations {
+		if dt.locationRecoveryPending || previous.nodeOwner != nil && previous.nodeOwner.draining {
+			locations.Insert(location)
+		}
+	}
+	result := dt.getSyncNICPolicyLocationsLocked(preparation, locations)
+	dt.noteLocationAttemptLocked(result, preparation)
+	return result
 }
 
 // getSyncLocationsAddressesLocked is the lock-free body. Callers must hold dt.mu.
@@ -142,6 +182,117 @@ func (dt *DiffTracker) getSyncLocationsAddressesLocked() LocationData {
 	return result
 }
 
+func (dt *DiffTracker) getSyncNICPolicyLocationsLocked(preparation map[string]*nsgPreparedNIC, locations sets.Set[string]) LocationData {
+	result := LocationData{
+		Action:    PartialUpdate,
+		Locations: make(map[string]Location),
+	}
+	if dt.locationRecoveryPending {
+		result.Action = FullUpdate
+	}
+	for location := range locations {
+		node, nodeExists := dt.K8sResources.Nodes[location]
+		previous, known := dt.NRPResources.Locations[location]
+		pending, uncertain := dt.pendingLocationUpdates[location]
+		full := result.Action == FullUpdate || uncertain || !known
+		change := Location{AddressUpdateAction: PartialUpdate, Addresses: make(map[string]Address)}
+		if full {
+			change.AddressUpdateAction = FullUpdate
+		}
+		hasTarget := false
+		visitAddress := func(address string, pod Pod) {
+			refs := dt.createServiceRefFiltered(pod)
+			for _, uid := range pod.InboundIdentities.UnsortedList() {
+				if refs.Has(uid) && !dt.canPublishInboundLocked(preparation, location, address, uid) {
+					refs.Delete(uid)
+				}
+			}
+			for _, uid := range previous.Addresses[address].Services.UnsortedList() {
+				if dt.isReservedServiceLocked(uid) {
+					refs.Insert(uid)
+				}
+			}
+			hasTarget = hasTarget || refs.Len() > 0
+			if full {
+				if refs.Len() > 0 {
+					change.Addresses[address] = Address{ServiceRef: refs}
+				}
+			} else if !refs.Equals(previous.Addresses[address].Services) {
+				change.Addresses[address] = Address{ServiceRef: refs}
+			}
+		}
+		for address, pod := range node.Pods {
+			visitAddress(address, pod)
+		}
+		for address := range previous.Addresses {
+			if _, desired := node.Pods[address]; !desired {
+				visitAddress(address, Pod{})
+			}
+		}
+		if uncertain {
+			for address := range pending.Addresses {
+				_, desired := node.Pods[address]
+				_, acknowledged := previous.Addresses[address]
+				if !desired && !acknowledged {
+					visitAddress(address, Pod{})
+				}
+			}
+		}
+		if !hasTarget && result.Action == FullUpdate {
+			continue
+		}
+		if !hasTarget && (uncertain || !nodeExists) {
+			if known || uncertain {
+				result.Locations[location] = Location{AddressUpdateAction: PartialUpdate, Addresses: make(map[string]Address)}
+			}
+		} else if len(change.Addresses) > 0 {
+			result.Locations[location] = change
+		}
+	}
+	return result
+}
+
+func (dt *DiffTracker) noteLocationAttemptLocked(data LocationData, preparation map[string]*nsgPreparedNIC) {
+	for location, change := range data.Locations {
+		pending := dt.pendingLocationUpdates[location]
+		if pending.nodeOwner == nil {
+			pending.nodeOwner = dt.NRPResources.Locations[location].nodeOwner
+		}
+		if plan := preparation[location]; pending.nodeOwner == nil && plan != nil && !plan.lbOnly && slices.Contains(plan.currentLocations, location) {
+			owner := plan.owner
+			pending.nodeOwner = &owner
+		}
+		if pending.Addresses == nil {
+			pending.Addresses = make(map[string]NRPAddress)
+		}
+		for address, value := range change.Addresses {
+			additions := value.ServiceRef.Difference(dt.NRPResources.Locations[location].Addresses[address].Services)
+			if additions.Len() == 0 {
+				continue
+			}
+			known := pending.Addresses[address]
+			if known.Services == nil {
+				known.Services = utilsets.NewString()
+			}
+			for _, uid := range additions.UnsortedList() {
+				known.Services.Insert(uid)
+			}
+			pending.Addresses[address] = known
+		}
+		dt.pendingLocationUpdates[location] = pending
+	}
+}
+
+func (dt *DiffTracker) completeLocationSyncLocked(data LocationData) {
+	if data.Action == FullUpdate {
+		clear(dt.pendingLocationUpdates)
+		dt.locationRecoveryPending = false
+	}
+	for location := range data.Locations {
+		delete(dt.pendingLocationUpdates, location)
+	}
+}
+
 // countTrackedLocationsAndAddresses returns the total number of locations (nodes) and pod IP
 // addresses currently tracked in NRP. These back the locations_total / addresses_total gauges,
 // which are documented and alerted on as live totals (not per-sync diff sizes). It acquires
@@ -177,9 +328,9 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 	serviceRef := utilsets.NewString()
 
 	// Check inbound services (LoadBalancers)
-	for _, serviceUID := range pod.InboundIdentities.UnsortedList() {
-		if dt.isServiceReadyToSync(serviceUID, true) {
-			serviceRef.Insert(serviceUID)
+	for _, serviceName := range pod.InboundIdentities.UnsortedList() {
+		if dt.isServiceReadyToSync(serviceName, true) {
+			serviceRef.Insert(serviceName)
 		}
 	}
 
@@ -198,11 +349,11 @@ func (dt *DiffTracker) createServiceRefFiltered(pod Pod) *utilsets.IgnoreCaseSet
 // update) or still being created, so the live resource keeps tracking endpoint changes instead of
 // having its backend pool drained. A service with no NRP resource yet is not synced.
 // Must be called with dt.mu held
-func (dt *DiffTracker) isServiceReadyToSync(serviceUID string, isInbound bool) bool {
-	existsInNRP := (isInbound && dt.NRPResources.LoadBalancers.Has(serviceUID)) ||
-		(!isInbound && dt.NRPResources.NATGateways.Has(serviceUID))
+func (dt *DiffTracker) isServiceReadyToSync(serviceName string, isInbound bool) bool {
+	existsInNRP := (isInbound && dt.NRPResources.LoadBalancers.Has(serviceName)) ||
+		(!isInbound && dt.NRPResources.NATGateways.Has(serviceName))
 
-	if opState, exists := dt.pendingServiceOps[serviceUID]; exists {
+	if opState, exists := dt.pendingServiceOps[serviceName]; exists {
 		// The key is shared by inbound (Service UID) and outbound (egress label) identities, so this
 		// entry may belong to the other kind. Answering from it would let an egress identity ride an
 		// inbound service's readiness. Fall back to the NRP resource of the kind asked about.

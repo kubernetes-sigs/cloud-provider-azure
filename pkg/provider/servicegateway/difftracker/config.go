@@ -16,7 +16,10 @@ limitations under the License.
 
 package difftracker
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Config holds the configuration values needed by DiffTracker
 // to perform Azure operations without depending on the entire AzureCloud struct
@@ -45,6 +48,14 @@ type Config struct {
 	// assumed to live in ResourceGroup (the common case). Set this for BYO-VNet clusters whose
 	// VNet is in a separate resource group (mirrors the cloud config's vnetResourceGroup).
 	VNetResourceGroup string
+
+	// LocationsUpdateInterval is the minimum time between the return of an address-location update sent
+	// to NRP and the start of the next LocationsUpdater run. Zero disables the spacing.
+	LocationsUpdateInterval time.Duration
+
+	// SecurityGroupName identifies the cluster NSG whose NIC association SGW may replace.
+	SecurityGroupName          string
+	SecurityGroupResourceGroup string
 }
 
 func (c *Config) networkResourceSubscriptionID() string {
@@ -81,6 +92,9 @@ func (c *Config) Validate() error {
 	}
 	if c.VNetName == "" {
 		return fmt.Errorf("config validation failed: VNetName is required")
+	}
+	if c.LocationsUpdateInterval < 0 {
+		return fmt.Errorf("config validation failed: LocationsUpdateInterval must not be negative (got %s)", c.LocationsUpdateInterval)
 	}
 	return nil
 }

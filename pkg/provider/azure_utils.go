@@ -24,7 +24,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v9"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v12"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -48,7 +48,7 @@ var strToExtendedLocationType = map[string]armnetwork.ExtendedLocationTypes{
 
 var (
 	// Resource group naming rules: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftresources
-	resourceGroupNameRE = regexp.MustCompile(`^[\p{L}\p{Nd}_().-]{0,89}[\p{L}\p{Nd}_()-]$`) // codespell:ignore nd
+	resourceGroupNameRE = regexp.MustCompile(consts.ResourceGroupNamePattern)
 
 	// Private Link Service naming rules: https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/resource-name-rules#microsoftnetwork
 	privateLinkServiceNameRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}[a-zA-Z0-9_]$`)

@@ -21,7 +21,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
+	"testing"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -114,14 +118,14 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		Expect(utils.WaitPodsToBeReady(cs, ns.Name)).To(Succeed())
 
 		By("Waiting for the NAT gateway to be provisioned and pods registered")
-		eventuallyEgressRegistered(egressName, numPods, waitTime)
+		eventuallyEgressPodsRegistered(cs, ns.Name, egressName, numPods, waitTime)
 
 		By("Resolving the NAT gateway public IP(s) from Azure")
 		natGatewayID := ""
 		sgResponse, err := queryServiceGatewayServices()
 		Expect(err).NotTo(HaveOccurred())
 		for _, svc := range sgResponse.Value {
-			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				break
 			}
@@ -134,10 +138,10 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		utils.Logf("NAT gateway %s public IP(s): %v", natGatewayID, natGatewayPIPs)
 
 		By("Confirming all egress pod IPs are registered as Service Gateway address locations")
-		registered, err := countRegisteredEndpoints(egressName)
+		registered, err := countRegisteredEndpoints(outboundServiceName(egressName))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(registered).To(Equal(numPods),
-			"all egress pod IPs should be registered for the outbound service")
+		Expect(egressPodsRegisteredErr(cs, ns.Name, egressName, numPods)).To(Succeed(),
+			"all eligible egress pod IPs should be registered for the outbound service")
 
 		// Best-effort dataplane observation only. The actual SNAT through the NAT gateway is
 		// programmed by Azure NRP from the registrations above and is not part of the
@@ -209,7 +213,7 @@ var _ = Describe("SLB - Egress SNAT Connectivity", Label(slbTestLabel), func() {
 		sgResponse, err := queryServiceGatewayServices()
 		Expect(err).NotTo(HaveOccurred())
 		for _, svc := range sgResponse.Value {
-			if svc.Properties.ServiceType == "Outbound" && svc.Name == egressName {
+			if svc.Properties.ServiceType == "Outbound" && svc.Name == outboundServiceName(egressName) {
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				break
 			}
@@ -304,9 +308,48 @@ func getNatGatewayPublicIPs(natGatewayID string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolve public IP %s: %v, output: %s", pip.ID, err, string(ipOut))
 		}
-		if ip := ipv4Regexp.FindString(string(ipOut)); ip != "" {
-			ips = append(ips, ip)
+		if ip := net.ParseIP(strings.TrimSpace(string(ipOut))); ip != nil {
+			ips = append(ips, ip.String())
 		}
 	}
 	return ips, nil
+}
+
+func TestGetNatGatewayPublicIPs(t *testing.T) {
+	for _, tt := range []struct {
+		name, ipv4, ipv6 string
+		want             []string
+	}{
+		{"IPv4", "198.51.100.1", "", []string{"198.51.100.1"}},
+		{"IPv6", "", "2001:db8::1", []string{"2001:db8::1"}},
+		{"dual-stack", "198.51.100.1", "2001:db8::1", []string{"198.51.100.1", "2001:db8::1"}},
+		{"canonical addresses", " 198.51.100.1 ", "2001:0db8:0:0:0:0:0:1", []string{"198.51.100.1", "2001:db8::1"}},
+		{"pending allocation", "", "", nil},
+		{"invalid output", "not-an-address", "999.1.1.1", nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			directory := t.TempDir()
+			script := fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "rest" ]; then
+    printf '%%s\n' '{"properties":{"publicIpAddresses":[{"id":"/publicIPAddresses/ipv4"}],"publicIpAddressesV6":[{"id":"/publicIPAddresses/ipv6"}]}}'
+elif [ "$1" = "network" ]; then
+    case "$*" in
+        */ipv4*) printf '%%s\n' '%s' ;;
+        */ipv6*) printf '%%s\n' '%s' ;;
+        *) echo "unexpected public IP request" >&2; exit 9 ;;
+    esac
+else
+    echo "unexpected Azure CLI request" >&2
+    exit 9
+fi
+`, tt.ipv4, tt.ipv6)
+			// #nosec G306 -- this owner-only test fixture must be executable by runAz.
+			g.Expect(os.WriteFile(filepath.Join(directory, "az"), []byte(script), 0o700)).To(Succeed())
+			t.Setenv("PATH", directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+			got, err := getNatGatewayPublicIPs("/subscriptions/test/resourceGroups/test/providers/Microsoft.Network/natGateways/test")
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(got).To(Equal(tt.want))
+		})
+	}
 }

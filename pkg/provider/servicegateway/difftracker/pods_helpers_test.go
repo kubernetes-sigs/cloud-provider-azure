@@ -48,6 +48,8 @@ func seedDiffTracker(t *testing.T, clientFactory *mock_azclient.MockClientFactor
 			ServiceGatewayResourceName: "sgw",
 		},
 		clientFactory,
+		clientFactory,
+		&nsgTestCloud{},
 		kubeClient,
 	)
 	if !assert.NoError(t, err) {

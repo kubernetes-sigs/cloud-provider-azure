@@ -124,7 +124,7 @@ var _ = Describe("SLB - Status Backfill", Label(slbTestLabel), func() {
 				return err
 			}
 			if externalIP == "" {
-				return fmt.Errorf("public IP %s-pip not yet provisioned", serviceUID)
+				return fmt.Errorf("public IP %s-pip not yet provisioned", inboundServiceName(serviceUID))
 			}
 			svc, err := cs.CoreV1().Services(ns.Name).Get(context.TODO(), serviceName, metav1.GetOptions{})
 			if err != nil {
@@ -144,9 +144,9 @@ var _ = Describe("SLB - Status Backfill", Label(slbTestLabel), func() {
 })
 
 // getServicePublicIPAddress returns the IP address of the Public IP that the difftracker
-// provisions for a service (named "<uid>-pip"), or an empty string if it does not yet exist.
+// provisions for a service (named "<uid>-lb-pip"), or an empty string if it does not yet exist.
 func getServicePublicIPAddress(serviceUID string) (string, error) {
-	expectedPIPName := fmt.Sprintf("%s-pip", serviceUID)
+	expectedPIPName := inboundServiceName(serviceUID) + "-pip"
 	out, err := runAz("network", "public-ip", "list",
 		"--resource-group", resourceGroupName,
 		"--output", "json")

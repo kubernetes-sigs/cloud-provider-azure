@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	clientset "k8s.io/client-go/kubernetes"
 
+	"sigs.k8s.io/cloud-provider-azure/pkg/consts"
 	"sigs.k8s.io/cloud-provider-azure/tests/e2e/utils"
 )
 
@@ -118,6 +119,25 @@ var _ = Describe("SLB - Service Validation", Label(slbTestLabel), func() {
 			return nil
 		}, 45*time.Second, defaultPollInterval).Should(Succeed(), why)
 	}
+
+	It("should reject empty or malformed NIC source ranges without provisioning resources", Label("SLB-NIC-NSG"), func() {
+		for i, value := range []string{"", "not-a-prefix", "20.0.0.0/8,not-a-prefix"} {
+			service := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: fmt.Sprintf("invalid-sources-%d", i), Namespace: ns.Name,
+					Annotations: map[string]string{consts.ServiceAnnotationAllowedIPRanges: value},
+				},
+				Spec: v1.ServiceSpec{
+					Type:  v1.ServiceTypeLoadBalancer,
+					Ports: []v1.ServicePort{{Port: 80, TargetPort: intstr.FromInt32(8080), Protocol: v1.ProtocolTCP}},
+				},
+			}
+			created, err := cs.CoreV1().Services(ns.Name).Create(context.Background(), service, metav1.CreateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			expectTerminallyRejected(created.Name, string(created.UID), consts.ServiceGatewayInvalidSourceRangesReason,
+				"an invalid source list must not be partially applied")
+		}
+	})
 
 	It("should terminally reject a service with a named targetPort", func() {
 		const serviceName = "named-port-service"

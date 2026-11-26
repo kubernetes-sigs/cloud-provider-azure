@@ -29,16 +29,16 @@ func TestCheckPendingServiceDeletions_NoLocations(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	// Setup: Service marked for deletion with no locations in NRP
-	serviceUID := "service-1"
-	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
-		ServiceUID: serviceUID,
-		IsInbound:  true,
+	serviceName := "service-1"
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{
+		ServiceName: serviceName,
+		IsInbound:   true,
 	}
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewInboundServiceConfig(serviceUID, nil),
-		State:      StateDeletionPending,
-		RetryCount: 0,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateDeletionPending,
+		RetryCount:  0,
 	}
 
 	// Call CheckPendingServiceDeletions
@@ -46,7 +46,7 @@ func TestCheckPendingServiceDeletions_NoLocations(t *testing.T) {
 
 	// Verify: Service should be moved to DeletionInProgress
 	dt.mu.Lock()
-	opState, exists := dt.pendingServiceOps[serviceUID]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	dt.mu.Unlock()
 
 	assert.True(t, exists, "Service should still be in pendingServiceOps")
@@ -54,7 +54,7 @@ func TestCheckPendingServiceDeletions_NoLocations(t *testing.T) {
 
 	// Verify: Service removed from pendingServiceDeletions
 	dt.mu.Lock()
-	_, stillPending := dt.pendingServiceDeletions[serviceUID]
+	_, stillPending := dt.pendingServiceDeletions[serviceName]
 	dt.mu.Unlock()
 
 	assert.False(t, stillPending, "Service should be removed from pendingServiceDeletions")
@@ -73,23 +73,23 @@ func TestCheckPendingServiceDeletions_WithLocations(t *testing.T) {
 	dt := newTestDiffTracker()
 
 	// Setup: Service marked for deletion but still has locations in NRP
-	serviceUID := "service-2"
-	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
-		ServiceUID: serviceUID,
-		IsInbound:  true,
+	serviceName := "service-2"
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{
+		ServiceName: serviceName,
+		IsInbound:   true,
 	}
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewInboundServiceConfig(serviceUID, nil),
-		State:      StateDeletionPending,
-		RetryCount: 0,
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateDeletionPending,
+		RetryCount:  0,
 	}
 
 	// Add locations that reference this service
 	dt.NRPResources.Locations["eastus"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
 			"10.0.1.5": {
-				Services: utilsets.NewString(serviceUID),
+				Services: utilsets.NewString(serviceName),
 			},
 		},
 	}
@@ -99,7 +99,7 @@ func TestCheckPendingServiceDeletions_WithLocations(t *testing.T) {
 
 	// Verify: Service should remain in DeletionPending state (not moved to DeletionInProgress)
 	dt.mu.Lock()
-	opState, exists := dt.pendingServiceOps[serviceUID]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	dt.mu.Unlock()
 
 	assert.True(t, exists, "Service should still be in pendingServiceOps")
@@ -107,7 +107,7 @@ func TestCheckPendingServiceDeletions_WithLocations(t *testing.T) {
 
 	// Verify: Service remains in pendingServiceDeletions
 	dt.mu.Lock()
-	_, stillPending := dt.pendingServiceDeletions[serviceUID]
+	_, stillPending := dt.pendingServiceDeletions[serviceName]
 	dt.mu.Unlock()
 
 	assert.True(t, stillPending, "Service should remain in pendingServiceDeletions")
@@ -131,21 +131,21 @@ func TestCheckPendingServiceDeletions_MultipleServices(t *testing.T) {
 	service3 := "service-ready2"
 
 	// Service 1: No locations, ready for deletion
-	dt.pendingServiceDeletions[service1] = &PendingServiceDeletion{ServiceUID: service1, IsInbound: true}
+	dt.pendingServiceDeletions[service1] = &PendingServiceDeletion{ServiceName: service1, IsInbound: true}
 	dt.pendingServiceOps[service1] = &ServiceOperationState{
-		ServiceUID: service1,
-		Config:     NewInboundServiceConfig(service1, nil),
-		State:      StateDeletionPending,
-		RetryCount: 0,
+		ServiceName: service1,
+		Config:      NewInboundServiceConfig(service1, nil),
+		State:       StateDeletionPending,
+		RetryCount:  0,
 	}
 
 	// Service 2: Has locations, blocked from deletion
-	dt.pendingServiceDeletions[service2] = &PendingServiceDeletion{ServiceUID: service2, IsInbound: true}
+	dt.pendingServiceDeletions[service2] = &PendingServiceDeletion{ServiceName: service2, IsInbound: true}
 	dt.pendingServiceOps[service2] = &ServiceOperationState{
-		ServiceUID: service2,
-		Config:     NewInboundServiceConfig(service2, nil),
-		State:      StateDeletionPending,
-		RetryCount: 0,
+		ServiceName: service2,
+		Config:      NewInboundServiceConfig(service2, nil),
+		State:       StateDeletionPending,
+		RetryCount:  0,
 	}
 	dt.NRPResources.Locations["eastus"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
@@ -156,12 +156,12 @@ func TestCheckPendingServiceDeletions_MultipleServices(t *testing.T) {
 	}
 
 	// Service 3: No locations, ready for deletion
-	dt.pendingServiceDeletions[service3] = &PendingServiceDeletion{ServiceUID: service3, IsInbound: false}
+	dt.pendingServiceDeletions[service3] = &PendingServiceDeletion{ServiceName: service3, IsInbound: false}
 	dt.pendingServiceOps[service3] = &ServiceOperationState{
-		ServiceUID: service3,
-		Config:     NewOutboundServiceConfig(service3, nil),
-		State:      StateDeletionPending,
-		RetryCount: 0,
+		ServiceName: service3,
+		Config:      NewOutboundServiceConfig(service3, nil),
+		State:       StateDeletionPending,
+		RetryCount:  0,
 	}
 
 	// Call CheckPendingServiceDeletions
@@ -228,10 +228,10 @@ func TestCheckPendingServiceDeletions_MissingFromPendingServiceOps(t *testing.T)
 	dt := newTestDiffTracker()
 
 	// Setup: Service in pendingServiceDeletions but NOT in pendingServiceOps
-	serviceUID := "orphaned-service"
-	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{
-		ServiceUID: serviceUID,
-		IsInbound:  true,
+	serviceName := "orphaned-service"
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{
+		ServiceName: serviceName,
+		IsInbound:   true,
 	}
 
 	// Call CheckPendingServiceDeletions
@@ -239,17 +239,17 @@ func TestCheckPendingServiceDeletions_MissingFromPendingServiceOps(t *testing.T)
 
 	// Verify: Service should be added to pendingServiceOps with DeletionInProgress state
 	dt.mu.Lock()
-	opState, exists := dt.pendingServiceOps[serviceUID]
+	opState, exists := dt.pendingServiceOps[serviceName]
 	dt.mu.Unlock()
 
 	assert.True(t, exists, "Service should be added to pendingServiceOps")
 	assert.Equal(t, StateDeletionInProgress, opState.State, "Service state should be DeletionInProgress")
-	assert.Equal(t, serviceUID, opState.ServiceUID, "ServiceUID should match")
+	assert.Equal(t, serviceName, opState.ServiceName, "ServiceName should match")
 	assert.True(t, opState.Config.IsInbound, "IsInbound should be true")
 
 	// Verify: Service removed from pendingServiceDeletions
 	dt.mu.Lock()
-	_, stillPending := dt.pendingServiceDeletions[serviceUID]
+	_, stillPending := dt.pendingServiceDeletions[serviceName]
 	dt.mu.Unlock()
 
 	assert.False(t, stillPending, "Service should be removed from pendingServiceDeletions")
@@ -259,11 +259,11 @@ func TestCheckPendingServiceDeletions_MissingFromPendingServiceOps(t *testing.T)
 func TestServiceHasLocationsInNRP(t *testing.T) {
 	dt := newTestDiffTracker()
 
-	serviceUID := "service-test"
+	serviceName := "service-test"
 
 	// Initially no locations
 	dt.mu.Lock()
-	hasLocs := dt.serviceHasLocationsInNRP(serviceUID)
+	hasLocs := dt.serviceHasLocationsInNRP(serviceName)
 	dt.mu.Unlock()
 	assert.False(t, hasLocs, "Service should have no locations initially")
 
@@ -271,13 +271,13 @@ func TestServiceHasLocationsInNRP(t *testing.T) {
 	dt.NRPResources.Locations["westus"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
 			"10.0.2.10": {
-				Services: utilsets.NewString(serviceUID, "other-service"),
+				Services: utilsets.NewString(serviceName, "other-service"),
 			},
 		},
 	}
 
 	dt.mu.Lock()
-	hasLocs = dt.serviceHasLocationsInNRP(serviceUID)
+	hasLocs = dt.serviceHasLocationsInNRP(serviceName)
 	dt.mu.Unlock()
 	assert.True(t, hasLocs, "Service should have locations")
 
@@ -291,7 +291,7 @@ func TestServiceHasLocationsInNRP(t *testing.T) {
 	}
 
 	dt.mu.Lock()
-	hasLocs = dt.serviceHasLocationsInNRP(serviceUID)
+	hasLocs = dt.serviceHasLocationsInNRP(serviceName)
 	dt.mu.Unlock()
 	assert.True(t, hasLocs, "Service should still have locations (from westus)")
 
@@ -305,7 +305,7 @@ func TestServiceHasLocationsInNRP(t *testing.T) {
 	}
 
 	dt.mu.Lock()
-	hasLocs = dt.serviceHasLocationsInNRP(serviceUID)
+	hasLocs = dt.serviceHasLocationsInNRP(serviceName)
 	dt.mu.Unlock()
 	assert.False(t, hasLocs, "Service should have no locations after removal")
 }
@@ -314,20 +314,20 @@ func TestServiceHasLocationsInNRP(t *testing.T) {
 func TestCheckPendingServiceDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	dt := newTestDiffTracker()
 
-	serviceUID := "service-flow"
+	serviceName := "service-flow"
 
 	// Setup: Service with locations
-	dt.pendingServiceDeletions[serviceUID] = &PendingServiceDeletion{ServiceUID: serviceUID, IsInbound: true}
-	dt.pendingServiceOps[serviceUID] = &ServiceOperationState{
-		ServiceUID: serviceUID,
-		Config:     NewInboundServiceConfig(serviceUID, nil),
-		State:      StateDeletionPending,
-		RetryCount: 0,
+	dt.pendingServiceDeletions[serviceName] = &PendingServiceDeletion{ServiceName: serviceName, IsInbound: true}
+	dt.pendingServiceOps[serviceName] = &ServiceOperationState{
+		ServiceName: serviceName,
+		Config:      NewInboundServiceConfig(serviceName, nil),
+		State:       StateDeletionPending,
+		RetryCount:  0,
 	}
 	dt.NRPResources.Locations["eastus"] = NRPLocation{
 		Addresses: map[string]NRPAddress{
 			"10.0.1.5": {
-				Services: utilsets.NewString(serviceUID),
+				Services: utilsets.NewString(serviceName),
 			},
 		},
 	}
@@ -336,8 +336,8 @@ func TestCheckPendingServiceDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	dt.CheckPendingServiceDeletions()
 
 	dt.mu.Lock()
-	op := dt.pendingServiceOps[serviceUID]
-	_, pending := dt.pendingServiceDeletions[serviceUID]
+	op := dt.pendingServiceOps[serviceName]
+	_, pending := dt.pendingServiceDeletions[serviceName]
 	dt.mu.Unlock()
 
 	assert.Equal(t, StateDeletionPending, op.State, "Should remain in DeletionPending")
@@ -360,8 +360,8 @@ func TestCheckPendingServiceDeletions_LocationsClearedAfterCheck(t *testing.T) {
 	dt.CheckPendingServiceDeletions()
 
 	dt.mu.Lock()
-	op2 := dt.pendingServiceOps[serviceUID]
-	_, pending2 := dt.pendingServiceDeletions[serviceUID]
+	op2 := dt.pendingServiceOps[serviceName]
+	_, pending2 := dt.pendingServiceDeletions[serviceName]
 	dt.mu.Unlock()
 
 	assert.Equal(t, StateDeletionInProgress, op2.State, "Should move to DeletionInProgress")

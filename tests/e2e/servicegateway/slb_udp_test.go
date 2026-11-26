@@ -43,11 +43,11 @@ type udpLBRule struct {
 	EnableTCPReset *bool  `json:"enableTcpReset"`
 }
 
-// getLoadBalancerRules returns all load-balancing rules on the LB named serviceUID.
+// getLoadBalancerRules returns all load-balancing rules for the raw service UID.
 func getLoadBalancerRules(serviceUID string) ([]udpLBRule, error) {
 	output, err := runAz("network", "lb", "rule", "list",
 		"--resource-group", resourceGroupName,
-		"--lb-name", serviceUID,
+		"--lb-name", inboundServiceName(serviceUID),
 		"--output", "json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list LB rules for %s: %w, output: %s", serviceUID, err, string(output))
@@ -159,7 +159,7 @@ var _ = Describe("SLB - UDP Service", Label(slbTestLabel), func() {
 		// A successful reconcile already proves Azure accepted the UDP LB rule, which it would
 		// not if TCP reset were (incorrectly) enabled on a UDP rule.
 		Eventually(func() error {
-			return serviceReconciledErr(serviceUID, numPods)
+			return servicePodsReconciledErr(cs, ns.Name, serviceUID, numPods)
 		}, 90*time.Second, 10*time.Second).Should(Succeed(),
 			"UDP service should be reconciled in Azure and the Service Gateway")
 

@@ -258,18 +258,18 @@ var _ = Describe("Container Load Balancer Stress Tests", Label(slbTestLabel), fu
 		By("Waiting for Azure provisioning")
 		var registeredPods int
 		Eventually(func() error {
-			count, err := countRegisteredEndpoints(serviceUID)
+			want, podCount, err := livePodIPsForSelector(cs, ns.Name, createdService.Spec.Selector, createdService.Spec.IPFamilies)
 			if err != nil {
 				return err
 			}
-			registeredPods = count
+			registeredPods = podCount
 			if registeredPods < healthyPods {
 				return fmt.Errorf("registered pods %d, want at least %d", registeredPods, healthyPods)
 			}
 			if registeredPods > healthyPods+5 {
 				return fmt.Errorf("registered pods %d, want at most %d", registeredPods, healthyPods+5)
 			}
-			return nil
+			return registeredAddressesMatchErr(inboundServiceName(serviceUID), want)
 		}, waitTime, 10*time.Second).Should(Succeed(),
 			"Service Gateway should only register healthy/ready pods")
 
@@ -326,7 +326,7 @@ var _ = Describe("Container Load Balancer Stress Tests", Label(slbTestLabel), fu
 			// satisfied even if the pods were never registered, so the deregistration path
 			// would not be exercised at all.
 			Eventually(func() error {
-				return egressRegisteredErr(egressName, podsPerCycle)
+				return egressPodsRegisteredErr(cs, ns.Name, egressName, podsPerCycle)
 			}, waitTime, 10*time.Second).Should(Succeed(),
 				"NAT Gateway for '%s' should exist with all %d pods registered", egressName, podsPerCycle)
 
@@ -339,7 +339,7 @@ var _ = Describe("Container Load Balancer Stress Tests", Label(slbTestLabel), fu
 			}
 
 			Eventually(func() error {
-				egressPodCount, err := countRegisteredEndpoints(egressName)
+				egressPodCount, err := countRegisteredEndpoints(outboundServiceName(egressName))
 				if err != nil {
 					return err
 				}

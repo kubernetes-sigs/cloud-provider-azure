@@ -56,8 +56,8 @@ func hasFinalizer(finalizers []string, finalizer string) bool {
 
 // verifyAzureLBAndPIPExist checks if Load Balancer and Public IP exist for a service
 func verifyAzureLBAndPIPExist(serviceUID string) error {
-	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
-	loadBalancerName := serviceUID
+	loadBalancerName := inboundServiceName(serviceUID)
+	publicIPName := loadBalancerName + "-pip"
 
 	// Query Public IPs
 	pipOutput, err := runAz("network", "public-ip", "list",
@@ -104,8 +104,8 @@ func verifyAzureLBAndPIPExist(serviceUID string) error {
 
 // verifyAzureLBAndPIPDeleted checks if Load Balancer and Public IP have been deleted
 func verifyAzureLBAndPIPDeleted(serviceUID string) error {
-	publicIPName := fmt.Sprintf("%s-pip", serviceUID)
-	loadBalancerName := serviceUID
+	loadBalancerName := inboundServiceName(serviceUID)
+	publicIPName := loadBalancerName + "-pip"
 
 	// Check Public IP is deleted
 	pipOutput, err := runAz("network", "public-ip", "show",
@@ -188,8 +188,11 @@ func verifyNATGatewayAndPIPDeleted(natGatewayID string) error {
 
 	// The NAT Gateway's Public IP follows the same <name>-pip convention as the inbound path and
 	// must be torn down with it.
-	if err := azurePublicIPAbsentErr(natGatewayName); err != nil {
+	if err := azurePublicIPNamedAbsentErr(natGatewayName + "-pip"); err != nil {
 		return fmt.Errorf("NAT Gateway %s was deleted but its Public IP leaked: %w", natGatewayName, err)
+	}
+	if err := azurePublicIPNamedAbsentErr(natGatewayName + "-pip-v6"); err != nil {
+		return fmt.Errorf("NAT Gateway %s was deleted but its IPv6 Public IP leaked: %w", natGatewayName, err)
 	}
 
 	utils.Logf("  NAT Gateway %s and its Public IP confirmed deleted", natGatewayName)
@@ -323,7 +326,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 				if !hasFinalizer(svc.Finalizers, k8sLoadBalancerFinalizer) {
 					return fmt.Errorf("service %s should have K8s LB finalizer (%s)", serviceName, k8sLoadBalancerFinalizer)
 				}
-				if err := serviceReconciledErr(string(svc.UID), podsPerSvc); err != nil {
+				if err := servicePodsReconciledErr(cs, ns.Name, string(svc.UID), podsPerSvc); err != nil {
 					return fmt.Errorf("service %s: %w", serviceName, err)
 				}
 			}
@@ -493,7 +496,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 
 		By("Waiting for Azure NAT Gateway provisioning")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, numPods)
+			return egressPodsRegisteredErr(cs, ns.Name, egressName, numPods)
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"egress service should be reconciled with NAT Gateway and registered pods")
 
@@ -518,7 +521,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 		var foundEgress bool
 		var natGatewayID string
 		for _, svc := range sgResponse.Value {
-			if svc.Name == egressName && svc.Properties.ServiceType == "Outbound" {
+			if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
 				foundEgress = true
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				utils.Logf("Found egress service '%s' with NAT Gateway: %s", egressName, natGatewayID)
@@ -564,7 +567,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 
 		foundEgress = false
 		for _, svc := range sgResponse.Value {
-			if svc.Name == egressName && svc.Properties.ServiceType == "Outbound" {
+			if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
 				foundEgress = true
 				utils.Logf("NAT Gateway still exists for egress '%s' (last pod keeping it alive)", egressName)
 				break
@@ -630,7 +633,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 				return false
 			}
 			for _, svc := range sgResponse.Value {
-				if svc.Name == egressName {
+				if svc.Name == outboundServiceName(egressName) {
 					utils.Logf("NAT Gateway '%s' still exists in Service Gateway", egressName)
 					return false
 				}
@@ -694,7 +697,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 
 		By("Waiting for Azure NAT Gateway provisioning and pod registration")
 		Eventually(func() error {
-			return egressRegisteredErr(egressName, 1)
+			return egressPodsRegisteredErr(cs, ns.Name, egressName, 1)
 		}, provisionTime, 10*time.Second).Should(Succeed(),
 			"egress service should be reconciled with NAT Gateway and the registered pod")
 
@@ -703,7 +706,7 @@ var _ = Describe("Container Load Balancer Finalizer Tests", Label(slbTestLabel, 
 		Expect(err).NotTo(HaveOccurred())
 		var natGatewayID string
 		for _, svc := range sgResponse.Value {
-			if svc.Name == egressName && svc.Properties.ServiceType == "Outbound" {
+			if svc.Name == outboundServiceName(egressName) && svc.Properties.ServiceType == "Outbound" {
 				natGatewayID = svc.Properties.PublicNatGatewayID
 				break
 			}
