@@ -620,6 +620,15 @@ func getResourceGroupAndNameFromNICID(ipConfigurationID string) (string, string,
 	return nicResourceGroup, nicName, nil
 }
 
+// getNICIDFromIPConfigurationID trims the `/ipConfigurations/<name>` suffix from a NIC ip configuration ID.
+func getNICIDFromIPConfigurationID(ipConfigurationID string) string {
+	idx := strings.Index(strings.ToLower(ipConfigurationID), "/ipconfigurations/")
+	if idx < 0 {
+		return ""
+	}
+	return ipConfigurationID[:idx]
+}
+
 func isInternalLoadBalancer(lb *armnetwork.LoadBalancer) bool {
 	return strings.HasSuffix(strings.ToLower(*lb.Name), consts.InternalLoadBalancerNameSuffix)
 }

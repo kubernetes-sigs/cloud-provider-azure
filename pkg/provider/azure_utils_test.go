@@ -1566,6 +1566,25 @@ func TestGetResourceIDPrefix(t *testing.T) {
 	}
 }
 
+func TestGetNICIDFromIPConfigurationID(t *testing.T) {
+	nicID := "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/aks-pool-12345678-vmnic-c7ee1387"
+	testcases := []struct {
+		desc              string
+		ipConfigurationID string
+		expectedNICID     string
+	}{
+		{"ip configuration ID", nicID + "/ipConfigurations/ipconfig1", nicID},
+		{"mixed case segment", nicID + "/IPConfigurations/ipconfig1", nicID},
+		{"NIC ID without ip configuration", nicID, ""},
+		{"empty", "", ""},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			assert.Equal(t, tc.expectedNICID, getNICIDFromIPConfigurationID(tc.ipConfigurationID))
+		})
+	}
+}
+
 func TestIsInternalLoadBalancer(t *testing.T) {
 	tests := []struct {
 		name     string
