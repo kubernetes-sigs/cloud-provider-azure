@@ -74,13 +74,13 @@ func (az *Cloud) IsNodeUnmanagedByProviderID(providerID string) bool {
 
 // ConvertResourceGroupNameToLower converts the resource group name in the resource ID to be lowered.
 func ConvertResourceGroupNameToLower(resourceID string) (string, error) {
-	matches := azureResourceGroupNameRE.FindStringSubmatch(resourceID)
-	if len(matches) != 2 {
+	matches := azureResourceGroupNameRE.FindStringSubmatchIndex(resourceID)
+	if len(matches) != 4 {
 		return "", fmt.Errorf("%q isn't in Azure resource ID format %q", resourceID, azureResourceGroupNameRE.String())
 	}
 
-	resourceGroup := matches[1]
-	return strings.Replace(resourceID, resourceGroup, strings.ToLower(resourceGroup), 1), nil
+	start, end := matches[2], matches[3]
+	return resourceID[:start] + strings.ToLower(resourceID[start:end]) + resourceID[end:], nil
 }
 
 func (az *Cloud) useSharedLoadBalancerHealthProbeMode() bool {
